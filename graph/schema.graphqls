@@ -1,0 +1,69 @@
+# in the schema we will be doing Query and Mutations
+schema { 
+  query: Query
+  mutation: Mutation
+}
+
+# These are the two queries we will be doing
+type Query {
+  search(input: [SearchInput]): [SearchResult]
+  messages : [Message]
+  searchSchema: Map
+  savedSearches: [userSearch]
+  searchComplete(property: String!, query: SearchInput, limit: Int): [String]
+
+}
+
+# This is a mutation we will be doing
+type Mutation {
+    # Delete search query for the current user.
+    deleteSearch(resource: String): String
+    # Save a search query for the current user.
+    saveSearch(resource: String): String
+}
+
+input SearchFilter {
+    property: String!
+    values: [String]
+  }
+input SearchInput {
+    keywords: [String]
+    filters: [SearchFilter]
+    # Max number of results. Default limit: 10,000. For unlimited results use -1.
+    limit: Int
+    # Filter relationships to the specified kinds.
+    # If empty, all relationships will be included. This filter is used with the 'related' field on SearchResult.
+    relatedKinds: [String]
+  }
+
+
+type SearchResult {
+    count: Int
+    items: [Map]
+    related: [SearchRelatedResult]
+  }
+
+type SearchRelatedResult {
+    kind: String!
+    count: Int
+    items: [Map]
+  }
+
+
+type userSearch {
+  id: String
+  name: String
+  description: String
+  searchText: String
+}
+
+type Message {
+    # Unique identifier for each message.
+    id: String!
+    # Describes the type of message. Expected values are: information, warning, error.
+    kind: String
+    # Message text.
+    description: String
+}
+
+scalar Map
