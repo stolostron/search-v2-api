@@ -2,6 +2,7 @@ package schema
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 
 	"github.com/SherinV/search-api/graph/model"
 	db "github.com/SherinV/search-api/pkg/database"
+	"github.com/jackc/pgx/v4"
 	"github.com/lib/pq"
 )
 
@@ -134,4 +136,83 @@ func searchResults(query string, args []interface{}) (*model.SearchResult, error
 		Related: srchrelatedresult,
 	}
 	return &srchresult1, nil
+}
+
+func getRelations(srchresult1, ctx context.Context) pgx.Rows {
+
+	// fmt.Println("datatype for srchresult1", srchresult1)
+
+	//need to get keys from srchresult1 items to use those uids in query..
+	uids := make([]int, 0, len(srchresult1))
+	for k := range srchresult1 {
+		uids = append(uids, k)
+		fmt.Println(uids)
+	}
+
+	pool := db.GetConnection()
+	relations, _ := pool.Query(context.Background(),
+		// relations, err  := pool.Query(context.Background(),
+		`with recursive 
+	search_graph(uid, data, sourcekind, destkind, sourceid, destid, path, level)
+	as (
+	SELECT r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] as path, 1 as level
+		from resources r
+		INNER JOIN
+			edges e ON (r.uid = e.sourceid) 
+		 where r.uid in ("%s")
+	union
+	select r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 as level 
+		from resources r
+		INNER JOIN
+			edges e ON (r.uid = e.sourceid)
+		, search_graph sg
+		where (e.sourceid = sg.destid or e.destid = sg.sourceid)
+		and r.uid <> all(sg.path)
+		) 
+
+	select data, destid, destkind from search_graph where level= 1 or destid in ("%s")`, uids)
+
+	//destid = uid of related resource,
+	//destkind = kind of related resource,
+	//count = count of related resource
+
+	defer relations.Close()
+
+	var destkind, destid string
+	var data map[string]interface{}
+	items := []map[string]interface{}{}
+
+	for relations.Next() {
+		err := relations.Scan(&destid, &destkind)
+		if err != nil {
+			klog.Errorf("Error %s retrieving rows for relationships:%s", err.Error(), relations)
+		}
+	}
+	currItem := make(map[string]interface{})
+	for k, myInterface := range data {
+		switch v := myInterface.(type) {
+		case string:
+			currItem[k] = strings.ToLower(v)
+		default:
+			// klog.Info("Not string type.", k, v)
+			continue
+		}
+
+	}
+	currdestUid := destid
+	currItem["destid"] = currdestUid
+	currdestKind := destkind
+	currItem["destkind"] = currdestKind
+	items = append(items, currItem)
+
+	klog.Info("len items: ", len(items))
+	totalCount := len(items)
+
+	relatedSearch := model.SearchRelatedResult{
+
+		Kind:  currdestKind,
+		Count: &totalCount,
+		Items: items,
+	}
+	return relations
 }
