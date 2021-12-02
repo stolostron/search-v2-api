@@ -7,9 +7,9 @@ import (
 
 	klog "k8s.io/klog/v2"
 
-	"github.com/SherinV/search-api/graph/model"
-	db "github.com/SherinV/search-api/pkg/database"
 	"github.com/lib/pq"
+	"github.com/open-cluster-management/search-api/graph/model"
+	db "github.com/open-cluster-management/search-api/pkg/database"
 )
 
 var trimAND string = " AND "

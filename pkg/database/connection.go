@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/SherinV/search-api/pkg/config"
 	pgxpool "github.com/jackc/pgx/v4/pgxpool"
+	"github.com/open-cluster-management/search-api/pkg/config"
 	klog "k8s.io/klog/v2"
 )
 

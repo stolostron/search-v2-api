@@ -4,9 +4,9 @@ import (
 	"flag"
 	"os"
 
-	"github.com/SherinV/search-api/pkg/config"
-	"github.com/SherinV/search-api/pkg/database"
-	"github.com/SherinV/search-api/pkg/server"
+	"github.com/open-cluster-management/search-api/pkg/config"
+	"github.com/open-cluster-management/search-api/pkg/database"
+	"github.com/open-cluster-management/search-api/pkg/server"
 
 	klog "k8s.io/klog/v2"
 )

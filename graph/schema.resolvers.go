@@ -7,9 +7,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/SherinV/search-api/graph/generated"
-	"github.com/SherinV/search-api/graph/model"
-	"github.com/SherinV/search-api/pkg/schema"
+	"github.com/open-cluster-management/search-api/graph/generated"
+	"github.com/open-cluster-management/search-api/graph/model"
+	"github.com/open-cluster-management/search-api/pkg/schema"
 	klog "k8s.io/klog/v2"
 )
 
