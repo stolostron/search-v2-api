@@ -3,6 +3,7 @@ package schema
 import (
 	"context"
 	"fmt"
+	"log"
 
 	// "fmt"
 	"strconv"
@@ -124,9 +125,11 @@ func searchResults(query string, args []interface{}) (*model.SearchResult, error
 		currItem["cluster"] = currCluster
 		items = append(items, currItem)
 		uidArray = append(uidArray, currUid)
-		fmt.Println(uidArray)
+
 	}
-	klog.Info("len items: ", len(items))
+	fmt.Println(uidArray[1])
+	fmt.Println(items[1])
+	klog.Info("len search result items: ", len(items))
 	totalCount := len(items)
 
 	srchrelatedresult := getRelations(uidArray)
@@ -139,19 +142,18 @@ func searchResults(query string, args []interface{}) (*model.SearchResult, error
 	return &srchresult1, nil
 }
 
-func getRelations(uidArray []string) model.SearchRelatedResult {
+func getRelations(uidArray []string) (relatedSearch []*model.SearchRelatedResult) {
 
 	pool := db.GetConnection()
-	relations, _ := pool.Query(context.Background(),
-		// relations, err  := pool.Query(context.Background(),
-		`with recursive
+
+	recrusiveQuery := `with recursive
 	search_graph(uid, data, sourcekind, destkind, sourceid, destid, path, level)
 	as (
 	SELECT r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] as path, 1 as level
 		from resources r
 		INNER JOIN
 			edges e ON (r.uid = e.sourceid)
-		 where r.uid in ("%s")
+		 where r.uid in ($1)
 	union
 	select r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 as level
 		from resources r
@@ -162,49 +164,64 @@ func getRelations(uidArray []string) model.SearchRelatedResult {
 		and r.uid <> all(sg.path)
 		)
 
-	select data, destid, destkind from search_graph where level= 1 or destid in ("%s")`, uidArray)
+	select data, destid, destkind from search_graph where level= 1 or destid in ($1)`
 
-	//destid = uid of related resource,
-	//destkind = kind of related resource,
-	//count = count of related resource
+	relations, QueryError := pool.Query(context.Background(), recrusiveQuery, "cluster0/636213bc-abeb-4f9e-923a-2834ffd26fe3")
+	//need to give more context:
+	if QueryError != nil {
+		log.Fatal("query error :", QueryError)
+	}
 
 	defer relations.Close()
 
-	var destkind, destid string
-	var data map[string]interface{}
 	items := []map[string]interface{}{}
+	// var destKindList []string
+
+	fmt.Printf("%T", relations)
 
 	for relations.Next() {
-		relatedResultError := relations.Scan(&destid, &destkind)
+		var destkind, destid string
+		var data map[string]interface{}
+		relatedResultError := relations.Scan(&data, &destid, &destkind)
 		if relatedResultError != nil {
 			klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
 		}
-	}
-	currItem := make(map[string]interface{})
-	for k, myInterface := range data {
-		switch v := myInterface.(type) {
-		case string:
-			currItem[k] = strings.ToLower(v)
-		default:
-			// klog.Info("Not string type.", k, v)
-			continue
+		// fmt.Println("destid:", destid, "destkind:", destkind)
+		currItem := make(map[string]interface{})
+		for k, myInterface := range data {
+			switch v := myInterface.(type) {
+			case string:
+				currItem[k] = strings.ToLower(v)
+			default:
+				// klog.Info("Not string type.", k, v)
+				continue
+			}
 		}
 
+		currKind := destkind
+		currItem["kind"] = currKind
+		currUid := destid
+		currItem["_id"] = currUid
+		items = append(items, currItem)
+		uidArray = append(uidArray, currUid)
+
+		fmt.Println("CurrItem:", currItem)
+		fmt.Println("CurrUid:", currUid)
+		fmt.Println("CurrKind:", currKind)
 	}
-	currdestUid := destid
-	currItem["destid"] = currdestUid
-	currdestKind := destkind
-	currItem["destkind"] = currdestKind
-	items = append(items, currItem)
-
-	klog.Info("len items: ", len(items))
+	// fmt.Println("items:", items)
 	totalCount := len(items)
+	klog.Info("len related result items: ", len(items))
 
-	relatedSearch := model.SearchRelatedResult{
+	fmt.Println(totalCount)
 
-		Kind:  currdestKind,
+	// relatedSearch = make([]*model.SearchRelatedResult, 0)
+
+	relatedSearch := []*model.SearchRelatedResult{
+		Kind:  kinds,
 		Count: &totalCount,
 		Items: items,
 	}
+
 	return relatedSearch
 }
