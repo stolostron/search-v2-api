@@ -127,8 +127,6 @@ func searchResults(query string, args []interface{}) (*model.SearchResult, error
 		uidArray = append(uidArray, currUid)
 
 	}
-	fmt.Println(uidArray[1])
-	fmt.Println(items[1])
 	klog.Info("len search result items: ", len(items))
 	totalCount := len(items)
 
@@ -142,9 +140,11 @@ func searchResults(query string, args []interface{}) (*model.SearchResult, error
 	return &srchresult1, nil
 }
 
-func getRelations(uidArray []string) (relatedSearch []*model.SearchRelatedResult) {
+func getRelations(uidArray []string) []*model.SearchRelatedResult {
 
 	pool := db.GetConnection()
+
+	// fmt.Printf("UIDARRAY: %T", uidArray)
 
 	recrusiveQuery := `with recursive
 	search_graph(uid, data, sourcekind, destkind, sourceid, destid, path, level)
@@ -166,7 +166,10 @@ func getRelations(uidArray []string) (relatedSearch []*model.SearchRelatedResult
 
 	select data, destid, destkind from search_graph where level= 1 or destid in ($1)`
 
-	relations, QueryError := pool.Query(context.Background(), recrusiveQuery, "cluster0/636213bc-abeb-4f9e-923a-2834ffd26fe3")
+	// need to find a way to improve performance when a list of uids is passed into uidArray
+	// idea: we can save values into a CTE and create a second join.
+	relations, QueryError := pool.Query(context.Background(), recrusiveQuery, uidArray[1])
+	// "cluster0/636213bc-abeb-4f9e-923a-2834ffd26fe3"
 	//need to give more context:
 	if QueryError != nil {
 		log.Fatal("query error :", QueryError)
@@ -175,9 +178,10 @@ func getRelations(uidArray []string) (relatedSearch []*model.SearchRelatedResult
 	defer relations.Close()
 
 	items := []map[string]interface{}{}
-	// var destKindList []string
+	var kindSlice []string
+	var totalCount []int
 
-	fmt.Printf("%T", relations)
+	// fmt.Printf("%T", relations)
 
 	for relations.Next() {
 		var destkind, destid string
@@ -199,29 +203,69 @@ func getRelations(uidArray []string) (relatedSearch []*model.SearchRelatedResult
 		}
 
 		currKind := destkind
-		currItem["kind"] = currKind
+		currItem["Kind"] = currKind
+
+		counter := 1
+		if kindInSlice(currKind, kindSlice) == true {
+			fmt.Println(currKind, "kind already exists.")
+			counter++
+
+		} else {
+			kindSlice = append(kindSlice, currKind)
+		}
+		totalCount = append(totalCount, counter)
 		currUid := destid
 		currItem["_id"] = currUid
 		items = append(items, currItem)
-		uidArray = append(uidArray, currUid)
 
-		fmt.Println("CurrItem:", currItem)
-		fmt.Println("CurrUid:", currUid)
-		fmt.Println("CurrKind:", currKind)
+		// fmt.Println("current kindSlice:", kindSlice)
+		// fmt.Println("current totalCount:", totalCount)
+		// fmt.Println("current items:", items)
+
 	}
+
 	// fmt.Println("items:", items)
-	totalCount := len(items)
-	klog.Info("len related result items: ", len(items))
+	// totalCount := len(items)
+	// klog.Info("len related result items: ", len(items))
 
-	fmt.Println(totalCount)
+	// fmt.Println(totalCount)
 
-	// relatedSearch = make([]*model.SearchRelatedResult, 0)
+	// relatedData := []*model.SearchRelatedResult{
+	// 	Kind: kindSlice, Count: totalCount, Item: items}
+	// var relatedSearch []*model.SearchRelatedResult
 
-	relatedSearch := []*model.SearchRelatedResult{
-		Kind:  kinds,
-		Count: &totalCount,
-		Items: items,
+	relatedSearch := make([]*model.SearchRelatedResult, len(kindSlice))
+
+	for i := range kindSlice {
+
+		kind := kindSlice[i]
+		count := totalCount[i]
+		// items := items[i]
+
+		relatedSearch[i] = &model.SearchRelatedResult{kind, &count, items}
+		fmt.Println("Output: ", relatedSearch)
 	}
+
+	// for i, _ := range kindSlice{
+
+	// 	results := []*model.SearchRelatedResult{&model.SearchRelatedResult{Kind: append(i), Count: totalCount[i], Items: items[i]}}
+	// }
+
+	// results := []*model.SearchRelatedResult{&model.SearchRelatedResult{Kind:kindSlice, Count: totalCount, Items: items}}
+
+	// relatedResults := []*model.SearchRelatedResult{Kind:kindSlice, }
+
+	// relatedSearch = []*model.SearchRelatedResult{&model.SearchRelatedResult{Kind: kindSlice, Count: totalCount, Items: items}}
+	// fmt.Println("RelatedSearch:", relatedSearch)
 
 	return relatedSearch
+}
+
+func kindInSlice(destkind string, kindList []string) bool {
+	for _, b := range kindList {
+		if b == destkind {
+			return true
+		}
+	}
+	return false
 }
