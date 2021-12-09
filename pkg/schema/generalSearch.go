@@ -97,7 +97,9 @@ func searchResults(query string, args []interface{}) (*model.SearchResult, error
 	var uid, cluster string
 	var data map[string]interface{}
 	items := []map[string]interface{}{}
+	//used for getRelations function:
 	uidArray := make([]string, 0, len(items))
+	// var level int
 
 	for rows.Next() {
 
@@ -143,10 +145,22 @@ func searchResults(query string, args []interface{}) (*model.SearchResult, error
 
 func getRelations(uidArray []string) []*model.SearchRelatedResult {
 
+	//defining variables
+	items := []map[string]interface{}{}
+	var kindSlice []string
+	var kindList []string
+	var countList []int
+
+	//connecting to db
 	pool := db.GetConnection()
 
-	fmt.Println("FIRST UIDARRAY: ", uidArray[0])
+	// TODO: levels will need to be a set default level to 4 otherwise set case scenarios:
+	// level cases:
+	// (1) Saved search to get all the relationship for all resources , this is only 1 HOP
+	// (2) we need to compute relationships for ALL the pods this may be in the range of 300-1000 , 4 HOPS is fine
+	// (3) Application Queries , we may have to go greater than 5 HOPs ,, for this we may use for loop to get results
 
+	// LEARNING: IN is equivalent to = ANY and performance is not deteriorated when we replace IN with =ANY
 	recrusiveQuery := `with recursive
 	search_graph(uid, data, sourcekind, destkind, sourceid, destid, path, level)
 	as (
@@ -154,7 +168,7 @@ func getRelations(uidArray []string) []*model.SearchRelatedResult {
 		from resources r
 		INNER JOIN
 			edges e ON (r.uid = e.sourceid)
-		 where r.uid in ($1)
+		 where r.uid = ANY($1)
 	union
 	select r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 as level
 		from resources r
@@ -163,37 +177,26 @@ func getRelations(uidArray []string) []*model.SearchRelatedResult {
 		, search_graph sg
 		where (e.sourceid = sg.destid or e.destid = sg.sourceid)
 		and r.uid <> all(sg.path)
+		and level < 4
 		)
+	select data, destid, destkind from search_graph where level= 1 or destid = ANY($2)`
 
-	select data, destid, destkind from search_graph where level= 1 or destid in ($1)`
-
-	// TO-DO:need to find a way to improve performance when a list of uids is passed into uidArray
-	// idea: we can save values into a CTE and create a second join.
-	relations, QueryError := pool.Query(context.Background(), recrusiveQuery, uidArray[1])
-	// cluster0/ee447c21-2360-4c8f-a673-5752df348e2f -uidArray[0]
-	// "cluster0/636213bc-abeb-4f9e-923a-2834ffd26fe3"
-	//need to give more context:
+	relations, QueryError := pool.Query(context.Background(), recrusiveQuery, uidArray, uidArray) // how to deal with defaults.
 	if QueryError != nil {
 		log.Fatal("query error :", QueryError)
 	}
 
 	defer relations.Close()
 
-	items := []map[string]interface{}{}
-	var kindSlice []string
-	var totalCount []int
-	// counter := make(map[string]int)
-	// fmt.Printf("%T", relations)
-
+	// iterating through resulting rows and scaning data, destid  and destkind
 	for relations.Next() {
 		var destkind, destid string
 		var data map[string]interface{}
 		relatedResultError := relations.Scan(&data, &destid, &destkind)
 		if relatedResultError != nil {
 			klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
-		} else {
-			fmt.Println("No error with retrieving row results.")
 		}
+		// creating currItem variable to keep data and converting strings in data to lowercase
 		currItem := make(map[string]interface{})
 		for k, myInterface := range data {
 			switch v := myInterface.(type) {
@@ -204,81 +207,43 @@ func getRelations(uidArray []string) []*model.SearchRelatedResult {
 				continue
 			}
 		}
-		fmt.Println("Got the first item.")
+		// creating currKind variable to store kind and appending to list
 		currKind := destkind
 		currItem["Kind"] = currKind
-
 		kindSlice = append(kindSlice, currKind)
 
-		// // counter := 1
-		// if kindInSlice(currKind, kindSlice) == true {
-		// 	fmt.Println(currKind, "kind already exists.")
-		// 	// kindSlice = append(kindSlice, currKind)
-		// // counter++
-		// // totalCount = append(totalCount, counter)
-
-		// } else {
-		// 	kindSlice = append(kindSlice, currKind)
-		// // totalCount = append(totalCount, counter)
-		// }
-
-		// fmt.Println("counter:", counter)
-
-		// totalCount = append(totalCount, counter)
-		currUid := destid
-		currItem["_id"] = currUid
+		// currUid := destid
+		// currItem["_id"] = currUid
 		items = append(items, currItem)
-		fmt.Println("appended items")
-
-		fmt.Println("current kindSlice:", kindSlice)
-		fmt.Println("current totalCount:", totalCount)
-		fmt.Println("current items:", items)
+		// fmt.Println("appended items")
 
 	}
 
+	//calling function to get map which contains unique values from kindSlice and counts the number occurances ex: map[key:Pod, value:2] if pod occurs 2x in kindSlice
 	count := printUniqueValue(kindSlice)
 
-	fmt.Println("Count:", count)
-
-	relatedSearch := make([]*model.SearchRelatedResult, len(count))
-
-	// fmt.Println("total len of kindslice", len(kindSlice))
-	// fmt.Println("total len of totalCount", len(totalCount))
-	var kindList []string
-	var countList []int
-
+	//iterating over count and appending to new lists (kindList and countList)
 	for k, v := range count {
-
 		fmt.Println("Keys:", k)
 		kindList = append(kindList, k)
 		fmt.Println("Values:", v)
 		countList = append(countList, v)
 	}
 
-	// kind := count[k]
-	// // fmt.Println(kind)
-	// count := count[v]
-	// // fmt.Println(totalCount)
-	for i := range kindList {
+	//instantiating composite literal
+	relatedSearch := make([]*model.SearchRelatedResult, len(count))
 
+	//iterating and sending values to relatedSearch
+	for i := range kindList {
 		kind := kindList[i]
 		count := countList[i]
 		relatedSearch[i] = &model.SearchRelatedResult{kind, &count, items}
-		// fmt.Println("Output: ", relatedSearch)
 	}
 
 	return relatedSearch
 }
 
-// func kindInSlice(destkind string, kindList []string) bool {
-// 	for _, b := range kindList {
-// 		if b == destkind {
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
-
+//helper function TODO: make helper.go module to store these if needed.
 func printUniqueValue(arr []string) map[string]int {
 	//Create a   dictionary of values for each element
 	dict := make(map[string]int)
