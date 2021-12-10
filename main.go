@@ -16,7 +16,7 @@ func main() {
 	klog.InitFlags(nil)
 	flag.Parse()
 	defer klog.Flush()
-	klog.Info("Starting search-api.")
+	klog.Info("Starting search-v2-api.")
 
 	// Read the config from the environment.
 	config := config.New()
