@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	pgxpool "github.com/jackc/pgx/v4/pgxpool"
-	"github.com/open-cluster-management/search-api/pkg/config"
+	"github.com/open-cluster-management/search-v2-api/pkg/config"
 	klog "k8s.io/klog/v2"
 )
 

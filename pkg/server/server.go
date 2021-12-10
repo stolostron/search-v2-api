@@ -9,9 +9,9 @@ import (
 
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
-	"github.com/open-cluster-management/search-api/graph"
-	"github.com/open-cluster-management/search-api/graph/generated"
-	"github.com/open-cluster-management/search-api/pkg/config"
+	"github.com/open-cluster-management/search-v2-api/graph"
+	"github.com/open-cluster-management/search-v2-api/graph/generated"
+	"github.com/open-cluster-management/search-v2-api/pkg/config"
 )
 
 // const defaultPort = "8080"
