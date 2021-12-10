@@ -24,7 +24,7 @@ const (
 	RBAC_POLL_INTERVAL       = 60000
 	RBAC_INACTIVITY_TIMEOUT  = 600000
 	SERVICEACCT_TOKEN        = ""
-	DEFAULT_DB_PASSWORD      = "P1{zoPopgjA4>Hw4^zP;C^=g"
+	DEFAULT_DB_PASSWORD      = ""
 	DEFAULT_DB_HOST          = "localhost"
 	DEFAULT_DB_USER          = "hippo"
 	DEFAULT_DB_NAME          = "hippo"

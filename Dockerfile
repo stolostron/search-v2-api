@@ -2,7 +2,7 @@
 
 FROM registry.ci.openshift.org/open-cluster-management/builder:go1.16-linux AS builder
 
-WORKDIR /go/src/github.com/open-cluster-management/search-api
+WORKDIR /go/src/github.com/open-cluster-management/search-v2-api
 COPY . .
 RUN CGO_ENABLED=0 GOGC=25 go build -trimpath -o main main.go
 
@@ -43,7 +43,7 @@ RUN microdnf update &&\
     microdnf install ca-certificates vi --nodocs &&\
     microdnf clean all
 
-COPY --from=builder /go/src/github.com/open-cluster-management/search-api/main /bin/main
+COPY --from=builder /go/src/github.com/open-cluster-management/search-v2-api/main /bin/main
 
 ENV VCS_REF="$VCS_REF" \
     USER_UID=1001
