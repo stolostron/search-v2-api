@@ -151,6 +151,8 @@ func getRelations(uidArray []string) []*model.SearchRelatedResult {
 	var kindList []string
 	var countList []int
 
+	fmt.Println("uids that need relations:", uidArray)
+
 	//connecting to db
 	pool := db.GetConnection()
 
@@ -177,11 +179,12 @@ func getRelations(uidArray []string) []*model.SearchRelatedResult {
 		, search_graph sg
 		where (e.sourceid = sg.destid or e.destid = sg.sourceid)
 		and r.uid <> all(sg.path)
-		and level < 4
+		and level = 1 
 		)
-	select data, destid, destkind from search_graph where level= 1 or destid = ANY($2)`
+	select data, destid, destkind from search_graph where level=1`
+	//  where level= 1 or destid = ANY($2)`
 
-	relations, QueryError := pool.Query(context.Background(), recrusiveQuery, uidArray, uidArray) // how to deal with defaults.
+	relations, QueryError := pool.Query(context.Background(), recrusiveQuery, uidArray) // how to deal with defaults.
 	if QueryError != nil {
 		log.Fatal("query error :", QueryError)
 	}
@@ -211,13 +214,13 @@ func getRelations(uidArray []string) []*model.SearchRelatedResult {
 		currKind := destkind
 		currItem["Kind"] = currKind
 		kindSlice = append(kindSlice, currKind)
-
-		// currUid := destid
-		// currItem["_id"] = currUid
 		items = append(items, currItem)
-		// fmt.Println("appended items")
 
 	}
+	// saving relationships:
+	// json_items, _ := json.Marshal(items)
+	// fmt.Println("All related results", string(json_items))
+	// ioutil.WriteFile("rel_data.json", json_items, os.ModePerm)
 
 	//calling function to get map which contains unique values from kindSlice and counts the number occurances ex: map[key:Pod, value:2] if pod occurs 2x in kindSlice
 	count := printUniqueValue(kindSlice)
