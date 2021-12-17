@@ -4,8 +4,8 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/SherinV/search-api/graph/model"
-	db "github.com/SherinV/search-api/pkg/database"
+	"github.com/open-cluster-management/search-v2-api/graph/model"
+	db "github.com/open-cluster-management/search-v2-api/pkg/database"
 	klog "k8s.io/klog/v2"
 )
 

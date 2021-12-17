@@ -21,5 +21,5 @@ coverage: test ## Run unit tests and show code coverage.
 	open cover.html
 
 docker-build: ## Build the docker image.
-	docker build -f Dockerfile . -t search-api
+	docker build -f Dockerfile . -t search-v2-api
 

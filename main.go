@@ -4,9 +4,9 @@ import (
 	"flag"
 	"os"
 
-	"github.com/SherinV/search-api/pkg/config"
-	"github.com/SherinV/search-api/pkg/database"
-	"github.com/SherinV/search-api/pkg/server"
+	"github.com/open-cluster-management/search-v2-api/pkg/config"
+	"github.com/open-cluster-management/search-v2-api/pkg/database"
+	"github.com/open-cluster-management/search-v2-api/pkg/server"
 
 	klog "k8s.io/klog/v2"
 )
@@ -16,7 +16,7 @@ func main() {
 	klog.InitFlags(nil)
 	flag.Parse()
 	defer klog.Flush()
-	klog.Info("Starting search-api.")
+	klog.Info("Starting search-v2-api.")
 
 	// Read the config from the environment.
 	config := config.New()

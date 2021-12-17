@@ -7,9 +7,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/SherinV/search-api/graph/generated"
-	"github.com/SherinV/search-api/graph/model"
-	"github.com/SherinV/search-api/pkg/schema"
+	"github.com/open-cluster-management/search-v2-api/graph/generated"
+	"github.com/open-cluster-management/search-v2-api/graph/model"
+	"github.com/open-cluster-management/search-v2-api/pkg/schema"
 	klog "k8s.io/klog/v2"
 )
 
@@ -32,7 +32,7 @@ func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) 
 
 	messages := make([]*model.Message, 0)
 	kind := "Informational"
-	desc := "Trial search-api"
+	desc := "Trial search-v2-api"
 	message1 := model.Message{ID: "1", Kind: &kind, Description: &desc}
 	messages = append(messages, &message1)
 	return messages, nil
@@ -50,7 +50,7 @@ func (r *queryResolver) SavedSearches(ctx context.Context) ([]*model.UserSearch,
 	// id := "1"
 	// name := "savedSrch1"
 	// srchText := "Trial savedSrch1"
-	// desc := "Trial search-api savedSrch1"
+	// desc := "Trial search-v2-api savedSrch1"
 	// savedSrch1 := model.UserSearch{ID: &id, Name: &name, Description: &desc, SearchText: &srchText}
 	// savedSrches = append(savedSrches, &savedSrch1)
 	// return savedSrches, nil

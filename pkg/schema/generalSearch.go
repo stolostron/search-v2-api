@@ -2,20 +2,14 @@ package schema
 
 import (
 	"context"
-	"fmt"
-	"log"
-
-	// "fmt"
 	"strconv"
 	"strings"
 
 	klog "k8s.io/klog/v2"
 
-	"github.com/SherinV/search-api/graph/model"
-	db "github.com/SherinV/search-api/pkg/database"
-
-	// "github.com/jackc/pgx/v4"
 	"github.com/lib/pq"
+	"github.com/open-cluster-management/search-v2-api/graph/model"
+	db "github.com/open-cluster-management/search-v2-api/pkg/database"
 )
 
 var trimAND string = " AND "
@@ -185,7 +179,7 @@ func getRelations(uidArray []string) []*model.SearchRelatedResult {
 
 	relations, QueryError := pool.Query(context.Background(), recrusiveQuery, uidArray, uidArray) // how to deal with defaults.
 	if QueryError != nil {
-		log.Fatal("query error :", QueryError)
+		klog.Errorf("query error :", QueryError)
 	}
 
 	defer relations.Close()
@@ -226,9 +220,9 @@ func getRelations(uidArray []string) []*model.SearchRelatedResult {
 
 	//iterating over count and appending to new lists (kindList and countList)
 	for k, v := range count {
-		fmt.Println("Keys:", k)
+		// fmt.Println("Keys:", k)
 		kindList = append(kindList, k)
-		fmt.Println("Values:", v)
+		// fmt.Println("Values:", v)
 		countList = append(countList, v)
 	}
 
