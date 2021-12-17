@@ -151,7 +151,7 @@ func getRelations(uidArray []string) []*model.SearchRelatedResult {
 	var kindList []string
 	var countList []int
 
-	fmt.Println("uids that need relations:", uidArray)
+	// fmt.Println("uids that need relations:", uidArray)
 
 	//connecting to db
 	pool := db.GetConnection()
@@ -181,10 +181,9 @@ func getRelations(uidArray []string) []*model.SearchRelatedResult {
 		and r.uid <> all(sg.path)
 		and level = 1 
 		)
-	select data, destid, destkind from search_graph where level=1`
-	//  where level= 1 or destid = ANY($2)`
+	select distinct on (destid) data, destid, destkind from search_graph where level=1 or destid = ANY($2)`
 
-	relations, QueryError := pool.Query(context.Background(), recrusiveQuery, uidArray) // how to deal with defaults.
+	relations, QueryError := pool.Query(context.Background(), recrusiveQuery, uidArray, uidArray) // how to deal with defaults.
 	if QueryError != nil {
 		log.Fatal("query error :", QueryError)
 	}
