@@ -1,0 +1,17 @@
+# Copyright Contributors to the Open Cluster Management project
+
+-include /opt/build-harness/makefile.prow
+
+.phony: build
+build: ## Build the docker image.
+	docker build -f Dockerfile . -t search-v2-api
+
+.phony: lint
+lint:
+	go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.38.0
+	# flag gogc=25 needed to run garbage collection more often and avoid out of memory issue.
+	gogc=25 golangci-lint run --timeout=3m
+
+.phony: unit-test
+unit-test:
+	go test ./... -v -coverprofile cover.out
