@@ -128,7 +128,12 @@ func searchResults(query string, args []interface{}) (*model.SearchResult, error
 	totalCount := len(items)
 
 	srchrelatedresult := getRelations(uidArray)
+	for i, result := range srchrelatedresult {
+		klog.Infof("THIS IS VARIABLE: %d %d %s", i, result.Count, result.Kind)
 
+	}
+
+	klog.Infof("%+v\n", srchrelatedresult)
 	srchresult1 := model.SearchResult{
 		Count:   &totalCount,
 		Items:   items,
@@ -164,7 +169,7 @@ func getRelations(uidArray []string) []*model.SearchRelatedResult {
 		from resources r
 		INNER JOIN
 			edges e ON (r.uid = e.sourceid)
-		 where r.uid = ANY($1)
+		 where r.uid = ANY($1) or e.destid = ANY($2)
 	union
 	select r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 as level
 		from resources r
@@ -175,9 +180,9 @@ func getRelations(uidArray []string) []*model.SearchRelatedResult {
 		and r.uid <> all(sg.path)
 		and level = 1 
 		)
-	select distinct on (destid) data, destid, destkind from search_graph where level=1 or destid = ANY($2)`
+	select distinct on (destid) data, destid, destkind from search_graph where level=1 or destid = ANY($3)`
 
-	relations, QueryError := pool.Query(context.Background(), recrusiveQuery, uidArray, uidArray) // how to deal with defaults.
+	relations, QueryError := pool.Query(context.Background(), recrusiveQuery, uidArray, uidArray, uidArray) // how to deal with defaults.
 	if QueryError != nil {
 		klog.Errorf("query error :", QueryError)
 	}
