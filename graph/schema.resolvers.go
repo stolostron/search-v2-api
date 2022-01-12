@@ -45,7 +45,7 @@ func (r *queryResolver) SearchSchema(ctx context.Context) (map[string]interface{
 
 func (r *queryResolver) SavedSearches(ctx context.Context) ([]*model.UserSearch, error) {
 	klog.Infoln("Received SavedSearches query")
-
+	savedSrches := []*model.UserSearch{}
 	// savedSrches := make([]*model.UserSearch, 0)
 	// id := "1"
 	// name := "savedSrch1"
@@ -54,7 +54,7 @@ func (r *queryResolver) SavedSearches(ctx context.Context) ([]*model.UserSearch,
 	// savedSrch1 := model.UserSearch{ID: &id, Name: &name, Description: &desc, SearchText: &srchText}
 	// savedSrches = append(savedSrches, &savedSrch1)
 	// return savedSrches, nil
-	return nil, nil
+	return savedSrches, nil
 }
 
 func (r *queryResolver) SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error) {
