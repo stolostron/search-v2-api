@@ -22,9 +22,8 @@ func (r *mutationResolver) SaveSearch(ctx context.Context, resource *string) (*s
 }
 
 func (r *queryResolver) Search(ctx context.Context, input []*model.SearchInput) ([]*model.SearchResult, error) {
-	// var count int
 	klog.Infof("--------- Received Search query with %d inputs ---------\n", len(input))
-	return schema.Search(ctx, input)
+	return model.Search(ctx, input)
 }
 
 func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) {

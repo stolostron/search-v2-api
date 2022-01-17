@@ -20,18 +20,6 @@ type SearchInput struct {
 	RelatedKinds []*string       `json:"relatedKinds"`
 }
 
-type SearchRelatedResult struct {
-	Kind  string                   `json:"kind"`
-	Count *int                     `json:"count"`
-	Items []map[string]interface{} `json:"items"`
-}
-
-type SearchResult struct {
-	Count   *int                     `json:"count"`
-	Items   []map[string]interface{} `json:"items"`
-	Related []*SearchRelatedResult   `json:"related"`
-}
-
 type UserSearch struct {
 	ID          *string `json:"id"`
 	Name        *string `json:"name"`
