@@ -9,6 +9,7 @@ import (
 
 	"github.com/open-cluster-management/search-v2-api/graph/generated"
 	"github.com/open-cluster-management/search-v2-api/graph/model"
+	"github.com/open-cluster-management/search-v2-api/pkg/resolver"
 	"github.com/open-cluster-management/search-v2-api/pkg/schema"
 	klog "k8s.io/klog/v2"
 )
@@ -21,9 +22,9 @@ func (r *mutationResolver) SaveSearch(ctx context.Context, resource *string) (*s
 	panic(fmt.Errorf("not implemented"))
 }
 
-func (r *queryResolver) Search(ctx context.Context, input []*model.SearchInput) ([]*model.SearchResult, error) {
+func (r *queryResolver) Search(ctx context.Context, input []*model.SearchInput) ([]*resolver.SearchResult, error) {
 	klog.Infof("--------- Received Search query with %d inputs ---------\n", len(input))
-	return model.Search(ctx, input)
+	return resolver.Search(ctx, input)
 }
 
 func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) {

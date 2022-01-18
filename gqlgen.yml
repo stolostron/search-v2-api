@@ -55,6 +55,6 @@ models:
       - github.com/99designs/gqlgen/graphql.Int64
       - github.com/99designs/gqlgen/graphql.Int32
   SearchResult:
-    model: github.com/open-cluster-management/search-v2-api/graph/model.SearchResult
+    model: github.com/open-cluster-management/search-v2-api/pkg/resolver.SearchResult
   SearchRelatedResult:
-    model: github.com/open-cluster-management/search-v2-api/graph/model.SearchRelatedResult
+    model: github.com/open-cluster-management/search-v2-api/pkg/resolver.SearchRelatedResult

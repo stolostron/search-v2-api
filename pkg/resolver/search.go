@@ -1,4 +1,4 @@
-package model
+package resolver
 
 import (
 	"context"
@@ -6,24 +6,30 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/lib/pq"
+	"github.com/open-cluster-management/search-v2-api/graph/model"
 	db "github.com/open-cluster-management/search-v2-api/pkg/database"
 	"k8s.io/klog/v2"
 )
 
 type SearchResult struct {
-	input *SearchInput
+	input *model.SearchInput
+	pool  *pgxpool.Pool
 	// 	Count   int
 	// 	Items   []map[string]interface{}
 	//  Related []SearchRelatedResult
 }
 
-func Search(ctx context.Context, input []*SearchInput) ([]*SearchResult, error) {
+func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
 	// For each input, create a SearchResult resolver.
 	srchResult := make([]*SearchResult, len(input))
 	if len(input) > 0 {
 		for index, in := range input {
-			srchResult[index] = &SearchResult{input: in}
+			srchResult[index] = &SearchResult{
+				input: in,
+				pool:  db.GetConnection(),
+			}
 		}
 	}
 	return srchResult, nil
@@ -31,7 +37,7 @@ func Search(ctx context.Context, input []*SearchInput) ([]*SearchResult, error) 
 
 func (s *SearchResult) Count() int {
 	qString, qArgs := s.buildSearchQuery(context.Background(), true)
-	count, e := resolveCount(qString, qArgs)
+	count, e := s.resolveCount(qString, qArgs)
 
 	if e != nil {
 		klog.Error("Error resolving count.", e)
@@ -41,7 +47,7 @@ func (s *SearchResult) Count() int {
 
 func (s *SearchResult) Items() []map[string]interface{} {
 	qString, qArgs := s.buildSearchQuery(context.Background(), false)
-	r, e := resolveItems(qString, qArgs)
+	r, e := s.resolveItems(qString, qArgs)
 	if e != nil {
 		klog.Error("Error resolving items.", e)
 	}
@@ -113,9 +119,9 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool) (string
 	return query, args
 }
 
-func resolveCount(query string, args []interface{}) (int, error) {
-	pool := db.GetConnection()
-	rows := pool.QueryRow(context.Background(), query, args...)
+func (s *SearchResult) resolveCount(query string, args []interface{}) (int, error) {
+	// pool := db.GetConnection()
+	rows := s.pool.QueryRow(context.Background(), query, args...)
 
 	var count int
 	err := rows.Scan(&count)
@@ -123,9 +129,9 @@ func resolveCount(query string, args []interface{}) (int, error) {
 	return count, err
 }
 
-func resolveItems(query string, args []interface{}) ([]map[string]interface{}, error) {
-	pool := db.GetConnection()
-	rows, _ := pool.Query(context.Background(), query, args...)
+func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[string]interface{}, error) {
+	// pool := db.GetConnection()
+	rows, _ := s.pool.Query(context.Background(), query, args...)
 	//TODO: Handle error
 	defer rows.Close()
 	var uid, cluster string

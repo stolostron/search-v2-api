@@ -1,12 +1,13 @@
-package model
+package resolver
 
 import (
+	"github.com/open-cluster-management/search-v2-api/graph/model"
 	klog "k8s.io/klog/v2"
 )
 
 type SearchRelatedResult struct {
-	Input *SearchInput
-	// *SearchResult
+	input *model.SearchInput
+
 	// Kind string `json:"kind"`
 	// Count *int                     `json:"count"`
 	// Items []map[string]interface{} `json:"items"`
