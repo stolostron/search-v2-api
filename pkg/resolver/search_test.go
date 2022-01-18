@@ -1,12 +1,11 @@
 package resolver
 
 import (
-	"fmt"
-	"github.com/open-cluster-management/search-v2-api/graph/model"
 	"testing"
 
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/golang/mock/gomock"
+	"github.com/open-cluster-management/search-v2-api/graph/model"
 )
 
 type Row struct{}
