@@ -1,7 +1,7 @@
 package resolver
 
 import (
-	"github.com/open-cluster-management/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/graph/model"
 	klog "k8s.io/klog/v2"
 )
 

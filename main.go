@@ -4,9 +4,9 @@ import (
 	"flag"
 	"os"
 
-	"github.com/open-cluster-management/search-v2-api/pkg/config"
-	"github.com/open-cluster-management/search-v2-api/pkg/database"
-	"github.com/open-cluster-management/search-v2-api/pkg/server"
+	"github.com/stolostron/search-v2-api/pkg/config"
+	"github.com/stolostron/search-v2-api/pkg/database"
+	"github.com/stolostron/search-v2-api/pkg/server"
 
 	klog "k8s.io/klog/v2"
 )

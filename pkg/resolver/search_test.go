@@ -5,7 +5,7 @@ import (
 
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/golang/mock/gomock"
-	"github.com/open-cluster-management/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/graph/model"
 )
 
 type Row struct {

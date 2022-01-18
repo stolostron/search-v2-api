@@ -4,8 +4,8 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/open-cluster-management/search-v2-api/graph/model"
-	db "github.com/open-cluster-management/search-v2-api/pkg/database"
+	"github.com/stolostron/search-v2-api/graph/model"
+	db "github.com/stolostron/search-v2-api/pkg/database"
 	klog "k8s.io/klog/v2"
 )
 

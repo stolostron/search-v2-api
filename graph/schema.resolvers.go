@@ -7,10 +7,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/open-cluster-management/search-v2-api/graph/generated"
-	"github.com/open-cluster-management/search-v2-api/graph/model"
-	"github.com/open-cluster-management/search-v2-api/pkg/resolver"
-	"github.com/open-cluster-management/search-v2-api/pkg/schema"
+	"github.com/stolostron/search-v2-api/graph/generated"
+	"github.com/stolostron/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/pkg/resolver"
+	"github.com/stolostron/search-v2-api/pkg/schema"
 	klog "k8s.io/klog/v2"
 )
 

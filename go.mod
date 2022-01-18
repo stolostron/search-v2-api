@@ -1,4 +1,4 @@
-module github.com/open-cluster-management/search-v2-api
+module github.com/stolostron/search-v2-api
 
 go 1.17
 
