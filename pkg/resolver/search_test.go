@@ -9,26 +9,26 @@ import (
 )
 
 type Row struct {
-	MockResponse int
+	MockValue int
 }
 
 func (r *Row) Scan(dest ...interface{}) error {
-	*dest[0].(*int) = r.MockResponse
+	*dest[0].(*int) = r.MockValue
 	return nil
 }
 
 func Test_SearchResolver_Count(t *testing.T) {
-	// Mock the database connection.
+	// Mock the database connection
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 
-	mockRow := &Row{MockResponse: 10}
+	mockRow := &Row{MockValue: 10}
 	mockPool.EXPECT().QueryRow(gomock.Any(),
 		gomock.Eq("SELECT count(uid) FROM resources  WHERE lower(data->> 'kind')=$1"),
-		gomock.Eq("pod")).Return(row)
+		gomock.Eq("pod")).Return(mockRow)
 
-	// Build search resolver.
+	// Build search resolver
 	val1 := "pod"
 	resolver := &SearchResult{
 		pool: mockPool,
@@ -40,11 +40,11 @@ func Test_SearchResolver_Count(t *testing.T) {
 		},
 	}
 
-	// Execute function.
+	// Execute function
 	r := resolver.Count()
 
 	// Verify response
-	if r != mockRow.MockResponse {
-		t.Errorf("Incorrect Count() expected [%d] got [%d]", row.MockResponse, r)
+	if r != mockRow.MockValue {
+		t.Errorf("Incorrect Count() expected [%d] got [%d]", mockRow.MockValue, r)
 	}
 }
