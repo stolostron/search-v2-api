@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/lib/pq"
 	"github.com/open-cluster-management/search-v2-api/graph/model"
 	db "github.com/open-cluster-management/search-v2-api/pkg/database"
@@ -15,7 +15,7 @@ import (
 
 type SearchResult struct {
 	input *model.SearchInput
-	pool  *pgxpool.Pool
+	pool  pgxpoolmock.PgxPool
 	// 	Count   int
 	// 	Items   []map[string]interface{}
 	//  Related []SearchRelatedResult
@@ -120,7 +120,6 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool) (string
 }
 
 func (s *SearchResult) resolveCount(query string, args []interface{}) (int, error) {
-	// pool := db.GetConnection()
 	rows := s.pool.QueryRow(context.Background(), query, args...)
 
 	var count int
@@ -130,7 +129,6 @@ func (s *SearchResult) resolveCount(query string, args []interface{}) (int, erro
 }
 
 func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[string]interface{}, error) {
-	// pool := db.GetConnection()
 	rows, _ := s.pool.Query(context.Background(), query, args...)
 	//TODO: Handle error
 	defer rows.Close()
