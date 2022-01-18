@@ -67,10 +67,10 @@ var trimAND string = " AND "
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool) (string, []interface{}) {
 	var selectClause, whereClause, limitClause, limitStr, query string
 	var args []interface{}
-	// SELECT uid, cluster, data FROM resources  WHERE lower(data->> 'kind') IN (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 10000
-	selectClause = "SELECT uid, cluster, data FROM resources "
+	// SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 10000
+	selectClause = "SELECT uid, cluster, data FROM search.resources "
 	if count {
-		selectClause = "SELECT count(uid) FROM resources "
+		selectClause = "SELECT count(uid) FROM search.resources "
 	}
 	limitClause = " LIMIT "
 
@@ -93,8 +93,8 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool) (string
 				values = append(values, strings.ToLower(*val))
 				//TODO: Here, assuming value is string. Check for other cases.
 				//TODO: Remove lower() conversion once data is correctly loaded from indexer
-				// "SELECT id FROM resources WHERE status = any($1)"
-				//SELECT id FROM resources WHERE status = ANY('{"Running", "Error"}');
+				// "SELECT id FROM search.resources WHERE status = any($1)"
+				//SELECT id FROM search.resources WHERE status = ANY('{"Running", "Error"}');
 			}
 			whereClause = whereClause + "=any($" + strconv.Itoa(i+1) + ") AND "
 			args = append(args, pq.Array(values))
