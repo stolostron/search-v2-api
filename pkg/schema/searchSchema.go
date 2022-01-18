@@ -16,7 +16,7 @@ func SearchSchema(ctx context.Context) (map[string]interface{}, error) {
 
 func searchSchemaQuery(ctx context.Context) string {
 	var selectClause, query string
-	selectClause = "SELECT distinct jsonb_object_keys(data) FROM resources "
+	selectClause = "SELECT distinct jsonb_object_keys(data) FROM search.resources "
 
 	query = selectClause
 	klog.Info("SearchSchema Query: ", query)

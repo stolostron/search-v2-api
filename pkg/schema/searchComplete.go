@@ -21,10 +21,10 @@ func searchCompleteQuery(ctx context.Context, property string, input *model.Sear
 		klog.Infof("property: %s and limit:%d", property, limit)
 		if property == "cluster" {
 			//Adding WHERE clause to filter out NULL values and ORDER by sort results
-			selectClause = "SELECT DISTINCT " + property + " FROM resources WHERE " + property + " IS NOT NULL ORDER BY " + property
+			selectClause = "SELECT DISTINCT " + property + " FROM search.resources WHERE " + property + " IS NOT NULL ORDER BY " + property
 		} else {
 			//Adding WHERE clause to filter out NULL values and ORDER by sort results
-			selectClause = "SELECT DISTINCT data->>'" + property + "' FROM resources WHERE data->>'" + property + "' IS NOT NULL ORDER BY data->>'" + property + "'"
+			selectClause = "SELECT DISTINCT data->>'" + property + "' FROM search.resources WHERE data->>'" + property + "' IS NOT NULL ORDER BY data->>'" + property + "'"
 		}
 		if limit != nil {
 			limitStr = strconv.Itoa(*limit)
