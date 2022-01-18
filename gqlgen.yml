@@ -35,7 +35,7 @@ resolver:
 # gqlgen will search for any type names in the schema in these go packages
 # if they match it will use them, otherwise it will generate them.
 autobind:
-  - "github.com/open-cluster-management/search-v2-api/graph/model"
+  - "github.com/stolostron/search-v2-api/graph/model"
 
 # This section declares type mapping between the GraphQL and go type systems
 #
@@ -55,6 +55,6 @@ models:
       - github.com/99designs/gqlgen/graphql.Int64
       - github.com/99designs/gqlgen/graphql.Int32
   SearchResult:
-    model: github.com/open-cluster-management/search-v2-api/pkg/resolver.SearchResult
+    model: github.com/stolostron/search-v2-api/pkg/resolver.SearchResult
   SearchRelatedResult:
-    model: github.com/open-cluster-management/search-v2-api/pkg/resolver.SearchRelatedResult
+    model: github.com/stolostron/search-v2-api/pkg/resolver.SearchRelatedResult

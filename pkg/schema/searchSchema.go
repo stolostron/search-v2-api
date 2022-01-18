@@ -5,7 +5,7 @@ import (
 
 	klog "k8s.io/klog/v2"
 
-	db "github.com/open-cluster-management/search-v2-api/pkg/database"
+	db "github.com/stolostron/search-v2-api/pkg/database"
 )
 
 func SearchSchema(ctx context.Context) (map[string]interface{}, error) {
