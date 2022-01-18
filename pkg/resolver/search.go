@@ -1,45 +1,82 @@
-package schema
+package resolver
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
-	klog "k8s.io/klog/v2"
-
+	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/lib/pq"
 	"github.com/open-cluster-management/search-v2-api/graph/model"
 	db "github.com/open-cluster-management/search-v2-api/pkg/database"
+	"k8s.io/klog/v2"
 )
 
-var trimAND string = " AND "
+type SearchResult struct {
+	input *model.SearchInput
+	pool  pgxpoolmock.PgxPool
+	// 	Count   int
+	// 	Items   []map[string]interface{}
+	//  Related []SearchRelatedResult
+}
 
-func Search(ctx context.Context, input []*model.SearchInput) ([]*model.SearchResult, error) {
-	limit := 0
-	srchResult := make([]*model.SearchResult, 0)
-
+func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
+	// For each input, create a SearchResult resolver.
+	srchResult := make([]*SearchResult, len(input))
 	if len(input) > 0 {
-		for _, in := range input {
-			query, args := searchQuery(ctx, in, &limit)
-			klog.Infof("Search Query:", query)
-			//TODO: Check error
-			srchRes, _ := searchResults(query, args)
-			srchResult = append(srchResult, srchRes)
+		for index, in := range input {
+			srchResult[index] = &SearchResult{
+				input: in,
+				pool:  db.GetConnection(),
+			}
 		}
 	}
 	return srchResult, nil
 }
 
-func searchQuery(ctx context.Context, input *model.SearchInput, limit *int) (string, []interface{}) {
+func (s *SearchResult) Count() int {
+	qString, qArgs := s.buildSearchQuery(context.Background(), true)
+	count, e := s.resolveCount(qString, qArgs)
+
+	if e != nil {
+		klog.Error("Error resolving count.", e)
+	}
+	return count
+}
+
+func (s *SearchResult) Items() []map[string]interface{} {
+	qString, qArgs := s.buildSearchQuery(context.Background(), false)
+	r, e := s.resolveItems(qString, qArgs)
+	if e != nil {
+		klog.Error("Error resolving items.", e)
+	}
+	return r
+}
+
+func (s *SearchResult) Related() []SearchRelatedResult {
+	fmt.Printf("Resolving SearchResult:Related() - input: %+v\n", s.input)
+	r := make([]SearchRelatedResult, 1)
+	return r
+}
+
+//=====================
+
+var trimAND string = " AND "
+
+func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool) (string, []interface{}) {
 	var selectClause, whereClause, limitClause, limitStr, query string
 	var args []interface{}
 	// SELECT uid, cluster, data FROM resources  WHERE lower(data->> 'kind') IN (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 10000
 	selectClause = "SELECT uid, cluster, data FROM resources "
+	if count {
+		selectClause = "SELECT count(uid) FROM resources "
+	}
 	limitClause = " LIMIT "
 
 	whereClause = " WHERE "
 
-	for i, filter := range input.Filters {
+	for i, filter := range s.input.Filters {
 		klog.Infof("Filters%d: %+v", i, *filter)
 		// TODO: Handle other column names like kind and namespace
 		if filter.Property == "cluster" {
@@ -67,8 +104,8 @@ func searchQuery(ctx context.Context, input *model.SearchInput, limit *int) (str
 			args = append(args, strings.ToLower(*val))
 		}
 	}
-	if input.Limit != nil {
-		limitStr = strconv.Itoa(*input.Limit)
+	if s.input.Limit != nil {
+		limitStr = strconv.Itoa(*s.input.Limit)
 	}
 	if limitStr != "" {
 		limitClause = " LIMIT " + limitStr
@@ -77,15 +114,22 @@ func searchQuery(ctx context.Context, input *model.SearchInput, limit *int) (str
 	} else {
 		query = selectClause + strings.TrimRight(whereClause, trimAND)
 	}
-	klog.Infof("args: %+v", args)
+	klog.Infof("query: %s\nargs: %+v", query, args)
 
 	return query, args
 }
 
-func searchResults(query string, args []interface{}) (*model.SearchResult, error) {
+func (s *SearchResult) resolveCount(query string, args []interface{}) (int, error) {
+	rows := s.pool.QueryRow(context.Background(), query, args...)
 
-	pool := db.GetConnection()
-	rows, _ := pool.Query(context.Background(), query, args...)
+	var count int
+	err := rows.Scan(&count)
+
+	return count, err
+}
+
+func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[string]interface{}, error) {
+	rows, _ := s.pool.Query(context.Background(), query, args...)
 	//TODO: Handle error
 	defer rows.Close()
 	var uid, cluster string
@@ -93,7 +137,6 @@ func searchResults(query string, args []interface{}) (*model.SearchResult, error
 	items := []map[string]interface{}{}
 
 	for rows.Next() {
-		// rowValues, _ := rows.Values()
 		err := rows.Scan(&uid, &cluster, &data)
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), query)
@@ -118,20 +161,6 @@ func searchResults(query string, args []interface{}) (*model.SearchResult, error
 		items = append(items, currItem)
 	}
 	klog.Info("len items: ", len(items))
-	totalCount := len(items)
-	srchrelatedresult := make([]*model.SearchRelatedResult, 0)
-	nodecount := 2
-	clustercount := 1
 
-	srchrelatedresult1 := model.SearchRelatedResult{Kind: "Node", Count: &nodecount}
-	srchrelatedresult2 := model.SearchRelatedResult{Kind: "Cluster", Count: &clustercount}
-	srchrelatedresult = append(srchrelatedresult, &srchrelatedresult1)
-	srchrelatedresult = append(srchrelatedresult, &srchrelatedresult2)
-
-	srchresult1 := model.SearchResult{
-		Count:   &totalCount,
-		Items:   items,
-		Related: srchrelatedresult,
-	}
-	return &srchresult1, nil
+	return items, nil
 }
