@@ -7,6 +7,7 @@ import (
 
 	klog "k8s.io/klog/v2"
 
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/lib/pq"
 	"github.com/open-cluster-management/search-v2-api/graph/model"
 	db "github.com/open-cluster-management/search-v2-api/pkg/database"
@@ -127,7 +128,7 @@ func searchResults(query string, args []interface{}) (*model.SearchResult, error
 	klog.Info("len search result items: ", len(items))
 	totalCount := len(items)
 
-	srchrelatedresult := getRelations(uidArray)
+	srchrelatedresult := getRelations(pool, uidArray)
 	for i, result := range srchrelatedresult {
 		klog.Infof("THIS IS VARIABLE: %d %d %s", i, result.Count, result.Kind)
 
@@ -142,24 +143,13 @@ func searchResults(query string, args []interface{}) (*model.SearchResult, error
 	return &srchresult1, nil
 }
 
-func getRelations(uidArray []string) []*model.SearchRelatedResult {
+func getRelations(pool *pgxpool.Pool, uidArray []string) []*model.SearchRelatedResult {
 
 	//defining variables
 	items := []map[string]interface{}{}
 	var kindSlice []string
 	var kindList []string
 	var countList []int
-
-	// fmt.Println("uids that need relations:", uidArray)
-
-	//connecting to db
-	pool := db.GetConnection()
-
-	// TODO: levels will need to be a set default level to 4 otherwise set case scenarios:
-	// level cases:
-	// (1) Saved search to get all the relationship for all resources , this is only 1 HOP
-	// (2) we need to compute relationships for ALL the pods this may be in the range of 300-1000 , 4 HOPS is fine
-	// (3) Application Queries , we may have to go greater than 5 HOPs ,, for this we may use for loop to get results
 
 	// LEARNING: IN is equivalent to = ANY and performance is not deteriorated when we replace IN with =ANY
 	recrusiveQuery := `with recursive
@@ -168,8 +158,8 @@ func getRelations(uidArray []string) []*model.SearchRelatedResult {
 	SELECT r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] as path, 1 as level
 		from resources r
 		INNER JOIN
-			edges e ON (r.uid = e.sourceid)
-		 where r.uid = ANY($1) or e.destid = ANY($2)
+			edges e ON (r.uid = e.sourceid) or (r.uid = e.destid)
+		 where r.uid = ANY($1)
 	union
 	select r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 as level
 		from resources r
@@ -180,9 +170,9 @@ func getRelations(uidArray []string) []*model.SearchRelatedResult {
 		and r.uid <> all(sg.path)
 		and level = 1 
 		)
-	select distinct on (destid) data, destid, destkind from search_graph where level=1 or destid = ANY($3)`
+	select distinct on (destid) data, destid, destkind from search_graph where level=1 or destid = ANY($2)`
 
-	relations, QueryError := pool.Query(context.Background(), recrusiveQuery, uidArray, uidArray, uidArray) // how to deal with defaults.
+	relations, QueryError := pool.Query(context.Background(), recrusiveQuery, uidArray, uidArray) // how to deal with defaults.
 	if QueryError != nil {
 		klog.Errorf("query error :", QueryError)
 	}
