@@ -8,21 +8,22 @@ import (
 	"github.com/open-cluster-management/search-v2-api/graph/model"
 )
 
-type Row struct{}
+type Row struct {
+	MockResponse int
+}
 
 func (r *Row) Scan(dest ...interface{}) error {
-	dest[0] = 99
+	*dest[0].(*int) = r.MockResponse
 	return nil
 }
 
-func Test_SearchResolver(t *testing.T) {
-
-	// Mock database connection.
+func Test_SearchResolver_Count(t *testing.T) {
+	// Mock the database connection.
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 
-	row := &Row{}
+	mockRow := &Row{MockResponse: 10}
 	mockPool.EXPECT().QueryRow(gomock.Any(),
 		gomock.Eq("SELECT count(uid) FROM resources  WHERE lower(data->> 'kind')=$1"),
 		gomock.Eq("pod")).Return(row)
@@ -31,7 +32,7 @@ func Test_SearchResolver(t *testing.T) {
 	val1 := "pod"
 	resolver := &SearchResult{
 		pool: mockPool,
-		// Filter kind:pod
+		// Filter 'kind:pod'
 		input: &model.SearchInput{
 			Filters: []*model.SearchFilter{
 				&model.SearchFilter{Property: "kind", Values: []*string{&val1}},
@@ -39,5 +40,11 @@ func Test_SearchResolver(t *testing.T) {
 		},
 	}
 
-	resolver.Count()
+	// Execute function.
+	r := resolver.Count()
+
+	// Verify response
+	if r != mockRow.MockResponse {
+		t.Errorf("Incorrect Count() expected [%d] got [%d]", row.MockResponse, r)
+	}
 }
