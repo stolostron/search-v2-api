@@ -6,7 +6,7 @@ import (
 )
 
 type SearchRelatedResult struct {
-	input *model.SearchInput
+	input *model.SearchInput //nolint: errcheck
 
 	// Kind string `json:"kind"`
 	// Count *int                     `json:"count"`

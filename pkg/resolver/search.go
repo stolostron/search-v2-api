@@ -72,7 +72,6 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool) (string
 	if count {
 		selectClause = "SELECT count(uid) FROM search.resources "
 	}
-	limitClause = " LIMIT "
 
 	whereClause = " WHERE "
 
