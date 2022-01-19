@@ -87,3 +87,5 @@ spec:
       - name: my-quay-image-pull-secret
       - name: multiclusterhub-operator-pull-secret
 ```
+
+Rebuild Date: 01-19-2022
