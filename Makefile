@@ -12,9 +12,16 @@ setup: ## Generate ssl certificate for development.
 gqlgen: ## Generate graphql model. See: https://gqlgen.com/
 	go run github.com/99designs/gqlgen generate
 
+.PHONY: run
 run: ## Run the service locally.
 	go run main.go playground -v=9
 
+.PHONY: lint
+lint: ## Run lint tool.
+	go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.38.0
+	golangci-lint run
+
+.PHONY: test
 test: ## Run unit tests.
 	go test ./... -v -coverprofile cover.out
 
