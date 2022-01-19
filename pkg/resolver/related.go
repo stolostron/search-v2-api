@@ -5,8 +5,8 @@ import (
 	klog "k8s.io/klog/v2"
 )
 
-type SearchRelatedResult struct {
-	input *model.SearchInput
+type SearchRelatedResult struct { //nolint: structcheck
+	input *model.SearchInput //nolint: unused,structcheck
 
 	// Kind string `json:"kind"`
 	// Count *int                     `json:"count"`
