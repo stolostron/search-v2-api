@@ -156,15 +156,15 @@ func getRelations(pool *pgxpool.Pool, uidArray []string) []*model.SearchRelatedR
 	search_graph(uid, data, sourcekind, destkind, sourceid, destid, path, level)
 	as (
 	SELECT r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] as path, 1 as level
-		from resources r
+		from search.resources r
 		INNER JOIN
-			edges e ON (r.uid = e.sourceid) or (r.uid = e.destid)
+			search.edges e ON (r.uid = e.sourceid) or (r.uid = e.destid)
 		 where r.uid = ANY($1)
 	union
 	select r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 as level
-		from resources r
+		from search.resources r
 		INNER JOIN
-			edges e ON (r.uid = e.sourceid)
+			search.edges e ON (r.uid = e.sourceid)
 		, search_graph sg
 		where (e.sourceid = sg.destid or e.destid = sg.sourceid)
 		and r.uid <> all(sg.path)
