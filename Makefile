@@ -17,9 +17,11 @@ run: ## Run the service locally.
 	go run main.go playground -v=9
 
 .PHONY: lint
-lint: ## Run lint tool.
+lint: ## Run lint and gosec tools.
 	go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.38.0
 	golangci-lint run
+	go mod tidy
+	gosec ./...
 
 .PHONY: test
 test: ## Run unit tests.
