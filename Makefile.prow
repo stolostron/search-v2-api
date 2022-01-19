@@ -9,8 +9,7 @@ build: ## Build the docker image.
 .phony: lint
 lint:
 	go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.38.0
-	# flag gogc=25 needed to run garbage collection more often and avoid out of memory issue.
-	gogc=25 golangci-lint run --timeout=3m
+	golangci-lint run
 
 .phony: unit-test
 unit-test:
