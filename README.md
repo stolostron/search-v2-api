@@ -88,4 +88,4 @@ spec:
       - name: multiclusterhub-operator-pull-secret
 ```
 
-Rebuild Date: 01-19-2022
+Rebuild Date: 01-21-2022
