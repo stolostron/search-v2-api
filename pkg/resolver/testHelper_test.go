@@ -5,17 +5,37 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"strings"
+	"sync"
+	"testing"
 
+	"github.com/driftprogramming/pgxpoolmock"
+	"github.com/golang/mock/gomock"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgproto3/v2"
+	"github.com/stolostron/search-v2-api/graph/model"
 )
+
+func newMockSearchResolver(t *testing.T, input *model.SearchInput) (*SearchResult, *pgxpoolmock.MockPgxPool) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
+
+	mockResolver := &SearchResult{
+		input: input,
+		pool:  mockPool,
+		uids:  []string{},
+		wg:    sync.WaitGroup{},
+	}
+
+	return mockResolver, mockPool
+}
 
 // ====================================================
 // Mock the Rows interface defined in the pgx library.
 // https://github.com/jackc/pgx/blob/master/rows.go#L24
 // ====================================================
 
-func BuildMockRows(mockDataFile string) *MockRows {
+func newMockRows(mockDataFile string) *MockRows {
 	// Read json file and build mock data
 	bytes, _ := ioutil.ReadFile("./mocks/mock.json") //read data into Items struct which is []map[string]interface{}
 	var resources map[string]interface{}
@@ -25,17 +45,19 @@ func BuildMockRows(mockDataFile string) *MockRows {
 
 	items := resources["addResources"].([]interface{})
 
-	mockRows := make([]map[string]interface{}, len(items))
+	mockData := make([]map[string]interface{}, len(items))
 	for i, item := range items {
 		uid := item.(map[string]interface{})["uid"]
-		cluster := strings.Split(uid.(string), "/")[0]
-		properties := item.(map[string]interface{})["properties"]
-		mockRows[i] = map[string]interface{}{"uid": uid, "cluster": cluster, "data": properties}
+		mockData[i] = map[string]interface{}{
+			"uid":     uid,
+			"cluster": strings.Split(uid.(string), "/")[0],
+			"data":    item.(map[string]interface{})["properties"],
+		}
 	}
 
 	return &MockRows{
 		index:    0,
-		mockData: mockRows,
+		mockData: mockData,
 	}
 }
 
