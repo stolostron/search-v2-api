@@ -1,7 +1,11 @@
+// Copyright Contributors to the Open Cluster Management project
 package resolver
 
 import (
 	"context"
+	"fmt"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -64,6 +68,7 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 
 	// FIXME: WORKAROUND when the query doesn't request Items() we must use a more efficient query to get the uids.
 	if s.uids == nil {
+		klog.Warning("TODO: Use a query that only selects the UIDs.")
 		s.Items()
 	}
 	s.wg.Wait() // WORKAROUND wait to complete execution of Items()
@@ -157,32 +162,24 @@ func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[str
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), query)
 		}
 
-		// TODO: To be removed when indexer handles this. Currently only string type is handled.
-		currItem := make(map[string]interface{})
-		for k, myInterface := range data {
-			switch v := myInterface.(type) {
-			case string:
-				currItem[k] = strings.ToLower(v)
-			default:
-				// klog.Info("Not string type.", k, v)
-				continue
-			}
+		currItem := formatDataMap(data)
+		currItem["_uid"] = uid
+		currItem["cluster"] = cluster
 
-		}
-		currUid := uid
-		currItem["_uid"] = currUid
-		currCluster := cluster
-		currItem["cluster"] = currCluster
 		items = append(items, currItem)
-		s.uids = append(s.uids, currUid)
+		s.uids = append(s.uids, uid)
 	}
-	klog.Info("len items: ", len(items))
 
 	return items, nil
 }
 
 func (s *SearchResult) getRelations() []SearchRelatedResult {
 	klog.Infof("Resolving relationships for [%d] uids.\n", len(s.uids))
+
+	if len(s.input.RelatedKinds) > 0 {
+		// TODO: Use the RelatedKinds filter in the SQL query.
+		klog.Warning("TODO: The relationships query must use the provided kind filters.")
+	}
 
 	//defining variables
 	items := []map[string]interface{}{}
@@ -226,28 +223,15 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		if relatedResultError != nil {
 			klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
 		}
+
 		// creating currItem variable to keep data and converting strings in data to lowercase
-		currItem := make(map[string]interface{})
-		for k, myInterface := range data {
-			switch v := myInterface.(type) {
-			case string:
-				currItem[k] = strings.ToLower(v)
-			default:
-				// klog.Info("Not string type.", k, v)
-				continue
-			}
-		}
-		// creating currKind variable to store kind and appending to list
-		currKind := destkind
-		currItem["Kind"] = currKind
-		kindSlice = append(kindSlice, currKind)
+		currItem := formatDataMap(data)
+
+		// currItem["Kind"] = destkind
+		kindSlice = append(kindSlice, destkind)
 		items = append(items, currItem)
 
 	}
-	// saving relationships:
-	// json_items, _ := json.Marshal(items)
-	// fmt.Println("All related results", string(json_items))
-	// ioutil.WriteFile("rel_data.json", json_items, os.ModePerm)
 
 	//calling function to get map which contains unique values from kindSlice and counts the number occurances ex: map[key:Pod, value:2] if pod occurs 2x in kindSlice
 	count := printUniqueValue(kindSlice)
@@ -273,12 +257,48 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	return relatedSearch
 }
 
-//helper function TODO: make helper.go module to store these if needed.
+// helper function TODO: make helper.go module to store these if needed.
 func printUniqueValue(arr []string) map[string]int {
-	//Create a   dictionary of values for each element
+	// Create a dictionary of values for each element
 	dict := make(map[string]int)
 	for _, num := range arr {
 		dict[num] = dict[num] + 1
 	}
 	return dict
+}
+
+// Labels are sorted alphabetically to ensure consistency, then encoded in a
+// string with the following format.
+// key1:value1,key2:value2,...
+func formatLabels(labels map[string]interface{}) string {
+	keys := make([]string, 0)
+	labelStrings := make([]string, 0)
+	for k := range labels {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		labelStrings = append(labelStrings, fmt.Sprintf("%s:%s", k, labels[k]))
+	}
+	return strings.Join(labelStrings, ",")
+}
+
+func formatDataMap(data map[string]interface{}) map[string]interface{} {
+	item := make(map[string]interface{})
+	for key, value := range data {
+		switch v := value.(type) {
+		case string:
+			item[key] = strings.ToLower(v)
+		case bool:
+			item[key] = strconv.FormatBool(v)
+		case float64:
+			item[key] = strconv.FormatInt(int64(v), 10)
+		case map[string]interface{}:
+			item[key] = formatLabels(v)
+		default:
+			klog.Warningf("Error formatting property with key: %+v  type: %+v\n", key, reflect.TypeOf(v))
+			continue
+		}
+	}
+	return item
 }
