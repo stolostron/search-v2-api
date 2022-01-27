@@ -31,6 +31,19 @@ func newMockSearchResolver(t *testing.T, input *model.SearchInput) (*SearchResul
 }
 
 // ====================================================
+// Mock the Row interface defined in the pgx library.
+// https://github.com/jackc/pgx/blob/master/rows.go#L24
+// ====================================================
+type Row struct {
+	MockValue int
+}
+
+func (r *Row) Scan(dest ...interface{}) error {
+	*dest[0].(*int) = r.MockValue
+	return nil
+}
+
+// ====================================================
 // Mock the Rows interface defined in the pgx library.
 // https://github.com/jackc/pgx/blob/master/rows.go#L24
 // ====================================================
@@ -89,16 +102,3 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 func (r *MockRows) Values() ([]interface{}, error) { return nil, nil }
 
 func (r *MockRows) RawValues() [][]byte { return nil }
-
-// ====================================================
-// Mock the Row interface defined in the pgx library.
-// https://github.com/jackc/pgx/blob/master/rows.go#L24
-// ====================================================
-type Row struct {
-	MockValue int
-}
-
-func (r *Row) Scan(dest ...interface{}) error {
-	*dest[0].(*int) = r.MockValue
-	return nil
-}
