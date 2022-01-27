@@ -285,18 +285,18 @@ func formatLabels(labels map[string]interface{}) string {
 
 func formatDataMap(data map[string]interface{}) map[string]interface{} {
 	item := make(map[string]interface{})
-	for k, prop := range data {
-		switch v := prop.(type) {
+	for key, value := range data {
+		switch v := value.(type) {
 		case string:
-			item[k] = strings.ToLower(v)
+			item[key] = strings.ToLower(v)
 		case bool:
-			item[k] = strconv.FormatBool(v)
+			item[key] = strconv.FormatBool(v)
 		case float64:
-			item[k] = strconv.FormatInt(int64(v), 10)
+			item[key] = strconv.FormatInt(int64(v), 10)
 		case map[string]interface{}:
-			item[k] = formatLabels(v)
+			item[key] = formatLabels(v)
 		default:
-			klog.Warningf("Error formatting property with key: %+v  type: %+v\n", k, reflect.TypeOf(v))
+			klog.Warningf("Error formatting property with key: %+v  type: %+v\n", key, reflect.TypeOf(v))
 			continue
 		}
 	}
