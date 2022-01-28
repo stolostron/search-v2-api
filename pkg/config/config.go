@@ -24,7 +24,7 @@ const (
 	RBAC_POLL_INTERVAL       = 60000
 	RBAC_INACTIVITY_TIMEOUT  = 600000
 	SERVICEACCT_TOKEN        = ""
-	DEFAULT_DB_PASSWORD      = ""
+	DEFAULT_DB_PASS          = ""
 	DEFAULT_DB_HOST          = "localhost"
 	DEFAULT_DB_USER          = "hippo"
 	DEFAULT_DB_NAME          = "hippo"
@@ -44,7 +44,7 @@ type Config struct {
 	DB_HOST                 string
 	DB_USER                 string
 	DB_NAME                 string
-	DB_PASSWORD             string
+	DB_PASS                 string
 	DB_PORT                 int
 }
 
@@ -62,8 +62,8 @@ func New() Config {
 	setDefaultInt(&Cfg.RBAC_POLL_INTERVAL, "RBAC_POLL_INTERVAL", RBAC_POLL_INTERVAL)
 	setDefaultInt(&Cfg.RBAC_INACTIVITY_TIMEOUT, "RBAC_INACTIVITY_TIMEOUT", RBAC_INACTIVITY_TIMEOUT)
 	setDefault(&Cfg.SERVICEACCT_TOKEN, "SERVICEACCT_TOKEN", SERVICEACCT_TOKEN)
-	setDefault(&Cfg.DB_PASSWORD, "DB_PASSWORD", DEFAULT_DB_PASSWORD)
-	Cfg.DB_PASSWORD = url.QueryEscape(Cfg.DB_PASSWORD)
+	setDefault(&Cfg.DB_PASS, "DB_PASS", DEFAULT_DB_PASS)
+	Cfg.DB_PASS = url.QueryEscape(Cfg.DB_PASS)
 	setDefault(&Cfg.DB_HOST, "DB_HOST", DEFAULT_DB_HOST)
 	setDefault(&Cfg.DB_NAME, "DB_NAME", DEFAULT_DB_NAME)
 	setDefault(&Cfg.DB_USER, "DB_USER", DEFAULT_DB_USER)
@@ -76,7 +76,7 @@ func New() Config {
 func (cfg *Config) PrintConfig() {
 	// Make a copy to redact secrets and sensitive information.
 	tmp := cfg
-	// tmp.DB_PASSWORD = "[REDACTED]"
+	// tmp.DB_PASS = "[REDACTED]"
 
 	// Convert to JSON for nicer formatting.
 	cfgJSON, err := json.MarshalIndent(tmp, "", "\t")
@@ -89,7 +89,7 @@ func (cfg *Config) PrintConfig() {
 
 func setDefault(field *string, env, defaultVal string) {
 	if val := os.Getenv(env); val != "" {
-		if env == "DB_PASSWORD" {
+		if env == "DB_PASS" {
 			klog.Infof("Using %s from environment", env)
 		} else {
 			klog.Infof("Using %s from environment: %s", env, val)
