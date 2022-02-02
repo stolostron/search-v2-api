@@ -43,8 +43,9 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 
 func (s *SearchResult) Count() int {
 	qString, qArgs := s.buildSearchQuery(context.Background(), true)
+	fmt.Println("Count() function called")
 	count, e := s.resolveCount(qString, qArgs)
-
+	fmt.Println("Count() function finished")
 	if e != nil {
 		klog.Error("Error resolving count.", e)
 	}
@@ -79,13 +80,17 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 
 //=====================
 
+//rows:=s.pool.QueryRow(context.Background(), query, args...)
 var trimAND string = " AND "
 
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool) (string, []interface{}) {
 	var selectClause, whereClause, limitClause, limitStr, query string
+	var values []string
 	var args []interface{}
 	// SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 10000
+
 	selectClause = "SELECT uid, cluster, data FROM search.resources "
+
 	if count {
 		selectClause = "SELECT count(uid) FROM search.resources "
 	}
@@ -94,58 +99,83 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool) (string
 
 	for i, filter := range s.input.Filters {
 		klog.Infof("Filters%d: %+v", i, *filter)
-		// TODO: Handle other column names like kind and namespace
+
 		if filter.Property == "cluster" {
-			whereClause = whereClause + filter.Property
+			whereClause = selectClause + whereClause + filter.Property
+			// fmt.Println("when filter.Property = cluster query is:", whereClause)
 		} else {
-			// TODO: To be removed when indexer handles this as adding lower hurts index scans
-			whereClause = whereClause + "lower(data->> '" + filter.Property + "')"
+			whereClause = selectClause + whereClause + "data->>$1"
+			args = append(args, strings.ToLower(filter.Property))
+			fmt.Println("NOT CLUSTER input properties:", args)
+			// props = filter.Property
+			// fmt.Println("props: ", props)
+			// fmt.Printf("when filter.Property != cluster query is %s and props is %s:", whereClause, props)
 		}
-		var values []string
 
 		if len(filter.Values) > 1 {
 			for _, val := range filter.Values {
+
+				if _, err := strconv.Atoi(*val); err == nil {
+
+					// val = strconv.Itoa(*val)
+				}
+				if *val == "" {
+					//	klog.Error(http.StatusText(400))
+				}
+
 				klog.Infof("Filter value: %s", *val)
-				values = append(values, strings.ToLower(*val))
-				//TODO: Here, assuming value is string. Check for other cases.
-				//TODO: Remove lower() conversion once data is correctly loaded from indexer
-				// "SELECT id FROM search.resources WHERE status = any($1)"
-				//SELECT id FROM search.resources WHERE status = ANY('{"Running", "Error"}');
+				values = append(values, strings.ToLower(*val)) //values = ["pod", "search-operator",..]
+
 			}
-			whereClause = whereClause + "=any($" + strconv.Itoa(i+1) + ") AND "
+			whereClause = whereClause + "=any($" + strconv.Itoa(i+2) + ")" // WHERE any($1,$2,$3..) AND (Just building query no inputs)
+			// fmt.Println(whereClause)
+			//queryList = append(queryList, "=any($" + strconv.Itoa(i+1) + ") AND ")
 			args = append(args, pq.Array(values))
 		} else if len(filter.Values) == 1 {
-			whereClause = whereClause + "=$" + strconv.Itoa(i+1) + " AND "
+			whereClause = whereClause + "=$" + strconv.Itoa(i+2)
+			// fmt.Println(whereClause)
 			val := filter.Values[0]
 			args = append(args, strings.ToLower(*val))
+			fmt.Println(args...)
 		}
 	}
 	if s.input.Limit != nil {
-		limitStr = strconv.Itoa(*s.input.Limit)
+		limitStr = strconv.Itoa(*s.input.Limit) //if datatype is wrong then convert limit to int
 	}
 	if limitStr != "" {
-		limitClause = " LIMIT " + limitStr
-		query = selectClause + strings.TrimRight(whereClause, trimAND) + limitClause
+		limitClause = "AND LIMIT " + limitStr //if limit is non empty string then assign limit
+		// query = selectClause + strings.TrimRight(whereClause, trimAND) + limitClause
+		query = whereClause + limitClause
 
-	} else {
-		query = selectClause + strings.TrimRight(whereClause, trimAND)
+	} else { //else if no limit than no limit attached
+		// query = selectClause + strings.TrimRight(whereClause, trimAND)
+		query = whereClause
 	}
-	klog.Infof("query: %s\nargs: %+v", query, args)
-
+	klog.Infof("query: %s\nargs: %v", query, args)
 	return query, args
 }
 
 func (s *SearchResult) resolveCount(query string, args []interface{}) (int, error) {
-	rows := s.pool.QueryRow(context.Background(), query, args...)
+	fmt.Println("hello")
+	// fmt.Printf("arg[0] datatype is: %T", args[0])
+	fmt.Println("query is: ", query)
+	fmt.Println("args... is:", args)
 
+	rows := s.pool.QueryRow(context.Background(), query, args...) //<--error
+	// if err != nil{
+	// 	klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, args, err)
+	// }
 	var count int
 	err := rows.Scan(&count)
+	if err != nil {
+		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, args, err)
+	}
 
 	return count, err
 }
 
 func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[string]interface{}, error) {
-	rows, err := s.pool.Query(context.Background(), query, args...)
+	rows, err := s.pool.Query(context.Background(), query, args)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, args, err)
 	}
