@@ -48,14 +48,13 @@ func (r *Row) Scan(dest ...interface{}) error {
 // https://github.com/jackc/pgx/blob/master/rows.go#L24
 // ====================================================
 
-func newMockRows(mockDataFile string) *MockRows {
+func newMockRows(mockDataFile string, test string) *MockRows {
 	// Read json file and build mock data
-	bytes, _ := ioutil.ReadFile("./mocks/mock.json") //read data into Items struct which is []map[string]interface{}
+	bytes, _ := ioutil.ReadFile(mockDataFile) //read data into Items struct which is []map[string]interface{}
 	var resources map[string]interface{}
 	if err := json.Unmarshal(bytes, &resources); err != nil {
 		panic(err)
 	}
-
 	items := resources["addResources"].([]interface{})
 
 	mockData := make([]map[string]interface{}, len(items))
@@ -68,10 +67,39 @@ func newMockRows(mockDataFile string) *MockRows {
 		}
 	}
 
+	// build mock edges data if using relationships:
+	if mockDataFile == "./mocks/mock-rel.json" {
+		var edges map[string]interface{}
+		if err := json.Unmarshal(bytes, &edges); err != nil {
+			panic(err)
+		}
+		rels := edges["addEdges"].([]interface{})
+
+		mockEdgeData := make([]map[string]interface{}, len(rels))
+		for i, rel := range rels {
+			mockEdgeData[i] = map[string]interface{}{
+				"edgeType":  rel.(map[string]interface{})["EdgeType"],
+				"sourceuid": rel.(map[string]interface{})["SourceUID"],
+				"destuid":   rel.(map[string]interface{})["DestUID"],
+			}
+		}
+
+		return &MockRows{
+			index:    0,
+			mockData: mockEdgeData,
+		}
+	}
+
 	return &MockRows{
 		index:    0,
 		mockData: mockData,
 	}
+
+}
+
+type MockRowsEdges struct {
+	mockData []map[string]interface{}
+	index    int
 }
 
 type MockRows struct {
@@ -96,6 +124,7 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 	*dest[0].(*string) = r.mockData[r.index-1]["uid"].(string)
 	*dest[1].(*string) = r.mockData[r.index-1]["cluster"].(string)
 	*dest[2].(*map[string]interface{}) = r.mockData[r.index-1]["data"].(map[string]interface{})
+
 	return nil
 }
 

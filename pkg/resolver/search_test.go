@@ -17,7 +17,7 @@ func Test_SearchResolver_Count(t *testing.T) {
 	// Mock the database query
 	mockRow := &Row{MockValue: 10}
 	mockPool.EXPECT().QueryRow(gomock.Any(),
-		gomock.Eq("SELECT count(uid) FROM search.resources  WHERE lower(data->> 'kind')=$1"),
+		gomock.Eq("SELECT count(uid) FROM search.resources WHERE lower(data->> 'kind')=$1"),
 		gomock.Eq("pod")).Return(mockRow)
 
 	// Execute function
@@ -36,9 +36,9 @@ func Test_SearchResolver_Items(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput)
 
 	// Mock the database queries.
-	mockRows := newMockRows("./mocks/mock.json")
+	mockRows := newMockRows("./mocks/mock.json", "Test_SearchResolver_Items")
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq("SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind')=$1"),
+		gomock.Eq("SELECT uid, cluster, data FROM search.resources WHERE lower(data->> 'kind')=$1"),
 		gomock.Eq("template"),
 	).Return(mockRows, nil)
 
@@ -67,4 +67,71 @@ func Test_SearchResolver_Items(t *testing.T) {
 			}
 		}
 	}
+}
+
+func Test_SearchResolver_Relationships(t *testing.T) {
+
+	val1 := "Pod"
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "kind", Values: []*string{&val1}}}}
+	resolver, mockPool := newMockSearchResolver(t, searchInput)
+
+	// Mock the database queries.
+	mockRows := newMockRows("./mocks/mock.json", "Test_SearchResolver_Relationships")
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq("SELECT uid FROM search.resources WHERE lower(data->> 'kind')=$1"), //we want the output of this query to be the input of the relatinship query
+		gomock.Eq("pod"),
+	).Return(mockRows, nil)
+
+	//execute the function:
+
+	results := resolver.Uids()
+
+	// verify number of uids == mock uids:
+	if len(results) != len(mockRows.mockData) {
+		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(results))
+
+	}
+
+	//mocking the relationship query results and verifying:
+	//val2 := []*string{results}//take the uids from above as input to the searchinput model to get related..
+	// searchInput2 := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Values: *results}}}
+	// resolver, mockPool := newMockSearchResolver(t, searchInput2)
+
+	mockRows = newMockRows("./mocks/mock-rel.json", "Test_SearchResolver_Relationships")
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`WITH RECURSIVE 
+		search_graph(uid, data, sourcekind, destkind, sourceid, destid, path, level)
+		AS (
+		SELECT r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] AS path, 1 AS level
+			FROM search.resources r
+			INNER JOIN
+				search.edges e ON (r.uid = e.sourceid) OR (r.uid = e.destid)
+			 WHERE r.uid = ANY($1)
+		UNION
+		SELECT r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 AS level
+			FROM search.resources r
+			INNER JOIN
+				search.edges e ON (r.uid = e.sourceid)
+			, search_graph sg
+			WHERE (e.sourceid = sg.destid OR e.destid = sg.sourceid)
+			AND r.uid <> all(sg.path)
+			AND level = 1 
+			)
+		SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($2)`),
+		gomock.Eq(results),
+	).Return(mockRows, nil)
+
+	result2 := resolver.Related()
+
+	// verify number of uids == mock uids:
+	if len(result2) != len(mockRows.mockData) {
+		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result2))
+
+	}
+
+	// Verify properties for each returned item.
+	// destid
+	// data <---don't need?..
+	// destkind
+
 }

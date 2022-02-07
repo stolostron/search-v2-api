@@ -42,7 +42,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 }
 
 func (s *SearchResult) Count() int {
-	qString, qArgs := s.buildSearchQuery(context.Background(), true)
+	qString, qArgs := s.buildSearchQuery(context.Background(), true, false)
 	count, e := s.resolveCount(qString, qArgs)
 
 	if e != nil {
@@ -51,11 +51,21 @@ func (s *SearchResult) Count() int {
 	return count
 }
 
+func (s *SearchResult) Uids() []string {
+	qString, qArgs := s.buildSearchQuery(context.Background(), false, true)
+	uidArray, e := s.resolveUids(qString, qArgs)
+
+	if e != nil {
+		klog.Error("Error resolving uids.", e)
+	}
+	return uidArray
+}
+
 func (s *SearchResult) Items() []map[string]interface{} {
 	s.wg.Add(1)
 	defer s.wg.Done()
 	klog.Info("Resolving SearchResult:Items()")
-	qString, qArgs := s.buildSearchQuery(context.Background(), false)
+	qString, qArgs := s.buildSearchQuery(context.Background(), false, false)
 	r, e := s.resolveItems(qString, qArgs)
 	if e != nil {
 		klog.Error("Error resolving items.", e)
@@ -81,13 +91,16 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 
 var trimAND string = " AND "
 
-func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool) (string, []interface{}) {
+func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) (string, []interface{}) {
 	var selectClause, whereClause, limitClause, limitStr, query string
 	var args []interface{}
 	// SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 10000
 	selectClause = "SELECT uid, cluster, data FROM search.resources "
 	if count {
 		selectClause = "SELECT count(uid) FROM search.resources "
+	}
+	if uid {
+		selectClause = "SELECT uid FROM search.resources"
 	}
 
 	whereClause = " WHERE "
@@ -144,6 +157,26 @@ func (s *SearchResult) resolveCount(query string, args []interface{}) (int, erro
 	return count, err
 }
 
+func (s *SearchResult) resolveUids(query string, args []interface{}) ([]string, error) {
+	rows, err := s.pool.Query(context.Background(), query, args...)
+	if err != nil {
+		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, args, err)
+	}
+	var uid string
+
+	defer rows.Close()
+	for rows.Next() {
+		err = rows.Scan(&uid)
+		if err != nil {
+			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), query)
+		}
+		s.uids = append(s.uids, uid)
+	}
+
+	return s.uids, err
+
+}
+
 func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[string]interface{}, error) {
 	rows, err := s.pool.Query(context.Background(), query, args...)
 	if err != nil {
@@ -188,25 +221,25 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	var countList []int
 
 	// LEARNING: IN is equivalent to = ANY and performance is not deteriorated when we replace IN with =ANY
-	recrusiveQuery := `with recursive
+	recrusiveQuery := `WITH RECURSIVE 
 	search_graph(uid, data, sourcekind, destkind, sourceid, destid, path, level)
-	as (
-	SELECT r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] as path, 1 as level
-		from search.resources r
+	AS (
+	SELECT r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] AS path, 1 AS level
+		FROM search.resources r
 		INNER JOIN
-			search.edges e ON (r.uid = e.sourceid) or (r.uid = e.destid)
-		 where r.uid = ANY($1)
-	union
-	select r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 as level
-		from search.resources r
+			search.edges e ON (r.uid = e.sourceid) OR (r.uid = e.destid)
+		 WHERE r.uid = ANY($1)
+	UNION
+	SELECT r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 AS level
+		FROM search.resources r
 		INNER JOIN
 			search.edges e ON (r.uid = e.sourceid)
 		, search_graph sg
-		where (e.sourceid = sg.destid or e.destid = sg.sourceid)
-		and r.uid <> all(sg.path)
-		and level = 1 
+		WHERE (e.sourceid = sg.destid OR e.destid = sg.sourceid)
+		AND r.uid <> all(sg.path)
+		AND level = 1 
 		)
-	select distinct on (destid) data, destid, destkind from search_graph where level=1 or destid = ANY($2)`
+	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($2)`
 
 	relations, QueryError := s.pool.Query(context.Background(), recrusiveQuery, s.uids, s.uids) // how to deal with defaults.
 	if QueryError != nil {
