@@ -2,6 +2,7 @@
 package resolver
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -36,7 +37,7 @@ func Test_SearchResolver_Items(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput)
 
 	// Mock the database queries.
-	mockRows := newMockRows("./mocks/mock.json", "Test_SearchResolver_Items")
+	mockRows := newMockRows("./mocks/mock.json")
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq("SELECT uid, cluster, data FROM search.resources WHERE lower(data->> 'kind')=$1"),
 		gomock.Eq("template"),
@@ -76,15 +77,15 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput)
 
 	// Mock the database queries.
-	mockRows := newMockRows("./mocks/mock.json", "Test_SearchResolver_Relationships")
+	mockRows := newMockRows("./mocks/mock.json")
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq("SELECT uid FROM search.resources WHERE lower(data->> 'kind')=$1"), //we want the output of this query to be the input of the relatinship query
 		gomock.Eq("pod"),
 	).Return(mockRows, nil)
 
 	//execute the function:
-
 	results := resolver.Uids()
+	// fmt.Println(results)
 
 	// verify number of uids == mock uids:
 	if len(results) != len(mockRows.mockData) {
@@ -93,11 +94,11 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	}
 
 	//mocking the relationship query results and verifying:
-	//val2 := []*string{results}//take the uids from above as input to the searchinput model to get related..
-	// searchInput2 := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Values: *results}}}
-	// resolver, mockPool := newMockSearchResolver(t, searchInput2)
+	//take the uids from above as input to the searchinput model to get related..
+	searchInput2 := &model.SearchInput{RelatedKinds: results}
+	resolver, mockPool := newMockSearchResolver(t, searchInput2)
 
-	mockRows = newMockRows("./mocks/mock-rel.json", "Test_SearchResolver_Relationships")
+	mockRows = newMockRows("./mocks/mock-rel.json")
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`WITH RECURSIVE 
 		search_graph(uid, data, sourcekind, destkind, sourceid, destid, path, level)
@@ -121,17 +122,25 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 		gomock.Eq(results),
 	).Return(mockRows, nil)
 
+	fmt.Println("hello")
+
 	result2 := resolver.Related()
 
+	fmt.Println(result2)
 	// verify number of uids == mock uids:
 	if len(result2) != len(mockRows.mockData) {
 		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result2))
-
 	}
-
 	// Verify properties for each returned item.
-	// destid
-	// data <---don't need?..
-	// destkind
+	//  for i, item := range result2 {
+	// 	mockRow := mockRows.mockData[i]
+	// 	expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
+	// 	expectedRow["destkind"] = mockRow["destkind"]
+	// 	expectedRow["destid"] = mockRow["destid"]
 
+	// for key, val := range item {
+	// 	if val != expectedRow[key] {
+	// 		t.Errorf("Value of key [%s] does not match for item [%d].\nExpected: %s\nGot: %s", key, i, expectedRow[key], val)
+	// 	}
+	// }
 }

@@ -48,7 +48,7 @@ func (r *Row) Scan(dest ...interface{}) error {
 // https://github.com/jackc/pgx/blob/master/rows.go#L24
 // ====================================================
 
-func newMockRows(mockDataFile string, test string) *MockRows {
+func newMockRows(mockDataFile string) *MockRows {
 	// Read json file and build mock data
 	bytes, _ := ioutil.ReadFile(mockDataFile) //read data into Items struct which is []map[string]interface{}
 	var resources map[string]interface{}
@@ -122,8 +122,10 @@ func (r *MockRows) Next() bool {
 
 func (r *MockRows) Scan(dest ...interface{}) error {
 	*dest[0].(*string) = r.mockData[r.index-1]["uid"].(string)
-	*dest[1].(*string) = r.mockData[r.index-1]["cluster"].(string)
-	*dest[2].(*map[string]interface{}) = r.mockData[r.index-1]["data"].(map[string]interface{})
+	// *dest[1].(*string) = r.mockData[r.index-1]["cluster"].(string)
+	// *dest[2].(*map[string]interface{}) = r.mockData[r.index-1]["data"].(map[string]interface{})
+	// *dest[3].(*string) = r.mockData[r.index-1]["destid"].(string)
+	// *dest[4].(*string) = r.mockData[r.index-1]["destkind"].(string)
 
 	return nil
 }
