@@ -13,6 +13,7 @@ import (
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/lib/pq"
 	"github.com/stolostron/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"k8s.io/klog/v2"
 )
@@ -77,61 +78,39 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 	return r
 }
 
-//=====================
-
 var trimAND string = " AND "
 
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool) (string, []interface{}) {
-	var selectClause, whereClause, limitClause, limitStr, query string
+	var selectClause, whereClause, query string
+	var limit int
 	var args []interface{}
-	// SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 10000
-	selectClause = "SELECT uid, cluster, data FROM search.resources "
+	// Example query: SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN
+	// (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 10000
+	selectClause = "SELECT uid, cluster, data FROM search.resources"
 	if count {
-		selectClause = "SELECT count(uid) FROM search.resources "
+		selectClause = "SELECT count(uid) FROM search.resources"
 	}
+	argCount := 1
+	whereClause, args, argCount = s.WhereClauseFilter(args, argCount)
 
-	whereClause = " WHERE "
-
-	for i, filter := range s.input.Filters {
-		klog.Infof("Filters%d: %+v", i, *filter)
-		// TODO: Handle other column names like kind and namespace
-		if filter.Property == "cluster" {
-			whereClause = whereClause + filter.Property
-		} else {
-			// TODO: To be removed when indexer handles this as adding lower hurts index scans
-			whereClause = whereClause + "lower(data->> '" + filter.Property + "')"
-		}
-		var values []string
-
-		if len(filter.Values) > 1 {
-			for _, val := range filter.Values {
-				klog.Infof("Filter value: %s", *val)
-				values = append(values, strings.ToLower(*val))
-				//TODO: Here, assuming value is string. Check for other cases.
-				//TODO: Remove lower() conversion once data is correctly loaded from indexer
-				// "SELECT id FROM search.resources WHERE status = any($1)"
-				//SELECT id FROM search.resources WHERE status = ANY('{"Running", "Error"}');
-			}
-			whereClause = whereClause + "=any($" + strconv.Itoa(i+1) + ") AND "
-			args = append(args, pq.Array(values))
-		} else if len(filter.Values) == 1 {
-			whereClause = whereClause + "=$" + strconv.Itoa(i+1) + " AND "
-			val := filter.Values[0]
-			args = append(args, strings.ToLower(*val))
-		}
-	}
-	if s.input.Limit != nil {
-		limitStr = strconv.Itoa(*s.input.Limit)
-	}
-	if limitStr != "" {
-		limitClause = " LIMIT " + limitStr
-		query = selectClause + strings.TrimRight(whereClause, trimAND) + limitClause
-
+	if s.input.Limit != nil && *s.input.Limit != 0 {
+		limit = *s.input.Limit
 	} else {
-		query = selectClause + strings.TrimRight(whereClause, trimAND)
+		limit = config.DEFAULT_QUERY_LIMIT
 	}
-	klog.Infof("query: %s\nargs: %+v", query, args)
+	args = append(args, limit)
+	// if limitStr != "" {
+	// 	limitClause = " LIMIT " + limitStr
+	// 	query = selectClause + strings.TrimRight(whereClause, trimAND) + limitClause
 
+	// } else {
+	// 	query = selectClause + strings.TrimRight(whereClause, trimAND)
+	// }
+
+	query = fmt.Sprintf("%s %s LIMIT $%d", selectClause, strings.TrimRight(whereClause, trimAND), argCount)
+
+	klog.Infof("query: %s\nargs: %+v", query, args)
+	klog.Infof("querySher: %s\nargs: %s", query, args)
 	return query, args
 }
 
@@ -301,4 +280,48 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 		}
 	}
 	return item
+}
+
+func (s *SearchResult) WhereClauseFilter(args []interface{}, argCount int) (string, []interface{}, int) {
+	whereClause := " WHERE "
+
+	for i, filter := range s.input.Filters {
+		klog.Infof("Filters%d: %+v", i, *filter)
+		// TODO: Handle other column names like kind and namespace
+		if filter.Property == "cluster" {
+			// whereClause = whereClause + filter.Property
+			whereClause = fmt.Sprintf("%s $%d", whereClause, argCount)
+			args = append(args, filter.Property)
+			argCount++
+		} else {
+			// TODO: To be removed when indexer handles this as adding lower hurts index scans
+			// whereClause = whereClause + "lower(data->> '" + filter.Property + "')"
+			whereClause = fmt.Sprintf("%s lower(data->>'$%d')", whereClause, argCount)
+			args = append(args, filter.Property)
+			argCount++
+		}
+		var values []string
+
+		if len(filter.Values) > 1 {
+			for _, val := range filter.Values {
+				klog.Infof("Filter value: %s", *val)
+				values = append(values, strings.ToLower(*val))
+				//TODO: Here, assuming value is string. Check for other cases.
+				//TODO: Remove lower() conversion once data is correctly loaded from indexer
+				// "SELECT id FROM search.resources WHERE status = any($1)"
+				//SELECT id FROM search.resources WHERE status = ANY('{"Running", "Error"}');
+			}
+			whereClause = fmt.Sprintf("%s=any($%d) AND ", whereClause, argCount)
+			// whereClause = whereClause + "=any($" + strconv.Itoa(i+1) + ") AND "
+			args = append(args, pq.Array(values))
+			argCount++
+		} else if len(filter.Values) == 1 {
+			// whereClause = whereClause + "=$" + strconv.Itoa(i+1) + " AND "
+			whereClause = fmt.Sprintf("%s=$%d AND ", whereClause, argCount)
+			val := filter.Values[0]
+			args = append(args, strings.ToLower(*val))
+			argCount++
+		}
+	}
+	return whereClause, args, argCount
 }
