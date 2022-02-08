@@ -78,7 +78,7 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput)
 
 	// Mock the database queries.
-	mockRows := newMockRows("./mocks/mock-rel.json")
+	mockRows := newMockRows("non-rel")
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq("SELECT uid FROM search.resources WHERE lower(data->> 'kind')=$1"), //we want the output of this query to be the input of the relatinship query
 		gomock.Eq("pod"),
@@ -87,18 +87,21 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	//execute the function/ this will need to be passed to the recursive query:
 	results := resolver.Uids()
 	// fmt.Println(results)
-
+	fmt.Println("After results")
 	// verify number of uids == mock uids:
 	if len(results) != len(mockRows.mockData) {
 		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(results))
 
 	}
 
+	fmt.Println("after uid results")
+
 	//take the uids from above as input
 	searchInput2 := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "uid", Values: results}}}
 	resolver2, mockPool2 := newMockSearchResolver(t, searchInput2)
 
-	mockRows = newMockRows("./mocks/mock-rel.json")
+	mockRows = newMockRows("rel")
+	fmt.Println("Mock Rows are:", mockRows)
 	mockPool2.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`WITH RECURSIVE 
 		search_graph(uid, data, sourcekind, destkind, sourceid, destid, path, level)

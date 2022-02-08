@@ -48,53 +48,90 @@ func (r *Row) Scan(dest ...interface{}) error {
 // https://github.com/jackc/pgx/blob/master/rows.go#L24
 // ====================================================
 
-func newMockRows(mockDataFile string) *MockRows {
-	// Read json file and build mock data
-	bytes, _ := ioutil.ReadFile(mockDataFile) //read data into Items struct which is []map[string]interface{}
-	var resources map[string]interface{}
-	if err := json.Unmarshal(bytes, &resources); err != nil {
-		panic(err)
-	}
-	items := resources["addResources"].([]interface{})
+func newMockRows(testType string) *MockRows {
+	if testType == "non-rel" {
 
-	mockData := make([]map[string]interface{}, len(items))
-	for i, item := range items {
-		uid := item.(map[string]interface{})["uid"]
-		mockData[i] = map[string]interface{}{
-			"uid":     uid,
-			"cluster": strings.Split(uid.(string), "/")[0],
-			"data":    item.(map[string]interface{})["properties"],
-		}
-	}
-
-	// build mock edges data if using relationships:
-	if mockDataFile == "./mocks/mock-rel.json" {
-		var edges map[string]interface{}
-		if err := json.Unmarshal(bytes, &edges); err != nil {
+		dataDir := "./mocks/mock.json"
+		bytes, _ := ioutil.ReadFile(dataDir)
+		var data map[string]interface{}
+		if err := json.Unmarshal(bytes, &data); err != nil {
 			panic(err)
 		}
-		rels := edges["addEdges"].([]interface{})
+		items := data["addResources"].([]interface{})
+		mockData := make([]map[string]interface{}, len(items))
+		for i, item := range items {
+			uid := item.(map[string]interface{})["uid"]
+			mockData[i] = map[string]interface{}{
+				"uid":     uid,
+				"cluster": strings.Split(uid.(string), "/")[0],
+				"data":    item.(map[string]interface{})["properties"],
+			}
+		}
+		return &MockRows{
+			mockData: mockData,
+			index:    0,
+		}
+	} else if testType == "rel" {
+		dataDir := "./mocks/mock-rel.json"
 
-		mockEdgeData := make([]map[string]interface{}, len(rels))
-		for i, rel := range rels {
+		bytes, _ := ioutil.ReadFile(dataDir)
+		var data map[string]interface{}
+		if err := json.Unmarshal(bytes, &data); err != nil {
+			panic(err)
+		}
+		items := data["addResources"].([]interface{})
+		edges := data["addEdges"].([]interface{})
+
+		findEdges := func(sourceUID string) string {
+			result := make(map[string][]string)
+			for _, edge := range edges {
+				edgeMap := edge.(map[string]interface{})
+				if edgeMap["SourceUID"] == sourceUID {
+					edgeType := edgeMap["EdgeType"].(string)
+					destUIDs, exist := result[edgeType]
+					if exist {
+						result[edgeType] = append(destUIDs, edgeMap["DestUID"].(string))
+					} else {
+						result[edgeType] = []string{edgeMap["DestUID"].(string)}
+					}
+				}
+			}
+			edgeJSON, _ := json.Marshal(result)
+			return string(edgeJSON)
+		}
+
+		mockData := make([]map[string]interface{}, len(items))
+		for i, item := range items {
+			uid := item.(map[string]interface{})["uid"]
+			e := findEdges(uid.(string))
+			mockData[i] = map[string]interface{}{
+				"uid":     uid,
+				"cluster": strings.Split(uid.(string), "/")[0],
+				"data":    item.(map[string]interface{})["properties"],
+				"edges":   e,
+			}
+		}
+		mockEdgeData := make([]map[string]interface{}, len(edges))
+		for i, edge := range edges {
 			mockEdgeData[i] = map[string]interface{}{
-				"edgeType":  rel.(map[string]interface{})["EdgeType"],
-				"sourceuid": rel.(map[string]interface{})["SourceUID"],
-				"destuid":   rel.(map[string]interface{})["DestUID"],
+				"edgeType":  edge.(map[string]interface{})["EdgeType"],
+				"sourceuid": edge.(map[string]interface{})["SourceUID"],
+				"destuid":   edge.(map[string]interface{})["DestUID"],
 			}
 		}
 
+		allMockData := make([]map[string]interface{}, len(items)+len(edges))
+		allMockData = append(allMockData, mockData...)
+		allMockData = append(allMockData, mockEdgeData...)
+
 		return &MockRows{
+			mockData: allMockData,
 			index:    0,
-			mockData: mockEdgeData,
 		}
-	}
 
-	return &MockRows{
-		index:    0,
-		mockData: mockData,
+	} else {
+		return nil
 	}
-
 }
 
 type MockRowsEdges struct {
