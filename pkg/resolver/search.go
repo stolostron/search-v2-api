@@ -20,7 +20,7 @@ import (
 type SearchResult struct {
 	input *model.SearchInput
 	pool  pgxpoolmock.PgxPool
-	uids  []string       // List of uids from search result to be used to get relatioinships.
+	uids  []*string      // List of uids from search result to be used to get relatioinships.
 	wg    sync.WaitGroup // WORKAROUND: Used to serialize search query and relatioinships query.
 	// 	Count   int
 	// 	Items   []map[string]interface{}
@@ -51,7 +51,7 @@ func (s *SearchResult) Count() int {
 	return count
 }
 
-func (s *SearchResult) Uids() []string {
+func (s *SearchResult) Uids() []*string {
 	qString, qArgs := s.buildSearchQuery(context.Background(), false, true)
 	uidArray, e := s.resolveUids(qString, qArgs)
 
@@ -157,12 +157,12 @@ func (s *SearchResult) resolveCount(query string, args []interface{}) (int, erro
 	return count, err
 }
 
-func (s *SearchResult) resolveUids(query string, args []interface{}) ([]string, error) {
+func (s *SearchResult) resolveUids(query string, args []interface{}) ([]*string, error) {
 	rows, err := s.pool.Query(context.Background(), query, args...)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, args, err)
 	}
-	var uid string
+	var uid *string
 
 	defer rows.Close()
 	for rows.Next() {
@@ -184,10 +184,11 @@ func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[str
 	}
 	defer rows.Close()
 
-	var uid, cluster string
+	var uid *string
+	var cluster string
 	var data map[string]interface{}
 	items := []map[string]interface{}{}
-	s.uids = make([]string, len(items))
+	s.uids = make([]*string, len(items))
 
 	for rows.Next() {
 		err = rows.Scan(&uid, &cluster, &data)

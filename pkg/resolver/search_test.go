@@ -72,18 +72,19 @@ func Test_SearchResolver_Items(t *testing.T) {
 
 func Test_SearchResolver_Relationships(t *testing.T) {
 
+	//mock input, build mockResovler and mockPool
 	val1 := "Pod"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "kind", Values: []*string{&val1}}}}
 	resolver, mockPool := newMockSearchResolver(t, searchInput)
 
 	// Mock the database queries.
-	mockRows := newMockRows("./mocks/mock.json")
+	mockRows := newMockRows("./mocks/mock-rel.json")
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq("SELECT uid FROM search.resources WHERE lower(data->> 'kind')=$1"), //we want the output of this query to be the input of the relatinship query
 		gomock.Eq("pod"),
 	).Return(mockRows, nil)
 
-	//execute the function:
+	//execute the function/ this will need to be passed to the recursive query:
 	results := resolver.Uids()
 	// fmt.Println(results)
 
@@ -93,13 +94,12 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 
 	}
 
-	//mocking the relationship query results and verifying:
-	//take the uids from above as input to the searchinput model to get related..
-	searchInput2 := &model.SearchInput{RelatedKinds: results}
-	resolver, mockPool := newMockSearchResolver(t, searchInput2)
+	//take the uids from above as input
+	searchInput2 := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "uid", Values: results}}}
+	resolver2, mockPool2 := newMockSearchResolver(t, searchInput2)
 
 	mockRows = newMockRows("./mocks/mock-rel.json")
-	mockPool.EXPECT().Query(gomock.Any(),
+	mockPool2.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`WITH RECURSIVE 
 		search_graph(uid, data, sourcekind, destkind, sourceid, destid, path, level)
 		AS (
@@ -124,13 +124,14 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 
 	fmt.Println("hello")
 
-	result2 := resolver.Related()
+	result2 := resolver2.Related()
 
 	fmt.Println(result2)
 	// verify number of uids == mock uids:
 	if len(result2) != len(mockRows.mockData) {
 		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result2))
 	}
+
 	// Verify properties for each returned item.
 	//  for i, item := range result2 {
 	// 	mockRow := mockRows.mockData[i]

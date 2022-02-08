@@ -23,7 +23,7 @@ func newMockSearchResolver(t *testing.T, input *model.SearchInput) (*SearchResul
 	mockResolver := &SearchResult{
 		input: input,
 		pool:  mockPool,
-		uids:  []string{},
+		uids:  []*string{},
 		wg:    sync.WaitGroup{},
 	}
 
@@ -122,10 +122,10 @@ func (r *MockRows) Next() bool {
 
 func (r *MockRows) Scan(dest ...interface{}) error {
 	*dest[0].(*string) = r.mockData[r.index-1]["uid"].(string)
-	// *dest[1].(*string) = r.mockData[r.index-1]["cluster"].(string)
-	// *dest[2].(*map[string]interface{}) = r.mockData[r.index-1]["data"].(map[string]interface{})
-	// *dest[3].(*string) = r.mockData[r.index-1]["destid"].(string)
-	// *dest[4].(*string) = r.mockData[r.index-1]["destkind"].(string)
+	*dest[1].(*string) = r.mockData[r.index-1]["cluster"].(string)
+	*dest[2].(*map[string]interface{}) = r.mockData[r.index-1]["data"].(map[string]interface{})
+	*dest[3].(*string) = r.mockData[r.index-1]["destid"].(string)
+	*dest[4].(*string) = r.mockData[r.index-1]["destkind"].(string)
 
 	return nil
 }
