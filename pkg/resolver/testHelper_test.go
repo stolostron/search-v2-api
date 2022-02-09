@@ -67,9 +67,11 @@ func newMockRows(testType string) *MockRows {
 				"data":    item.(map[string]interface{})["properties"],
 			}
 		}
+		columnHeaders := []string{"uid string", "cluster string", "data *map[string]interface{}"}
 		return &MockRows{
-			mockData: mockData,
-			index:    0,
+			mockData:      mockData,
+			index:         0,
+			columnHeaders: columnHeaders,
 		}
 	} else if testType == "rel" {
 		dataDir := "./mocks/mock-rel.json"
@@ -82,51 +84,28 @@ func newMockRows(testType string) *MockRows {
 		items := data["addResources"].([]interface{})
 		edges := data["addEdges"].([]interface{})
 
-		findEdges := func(sourceUID string) string {
-			result := make(map[string][]string)
-			for _, edge := range edges {
-				edgeMap := edge.(map[string]interface{})
-				if edgeMap["SourceUID"] == sourceUID {
-					edgeType := edgeMap["EdgeType"].(string)
-					destUIDs, exist := result[edgeType]
-					if exist {
-						result[edgeType] = append(destUIDs, edgeMap["DestUID"].(string))
-					} else {
-						result[edgeType] = []string{edgeMap["DestUID"].(string)}
-					}
-				}
-			}
-			edgeJSON, _ := json.Marshal(result)
-			return string(edgeJSON)
-		}
-
-		mockData := make([]map[string]interface{}, len(items))
+		mockResources := make([]map[string]interface{}, len(items))
 		for i, item := range items {
 			uid := item.(map[string]interface{})["uid"]
-			e := findEdges(uid.(string))
-			mockData[i] = map[string]interface{}{
-				"uid":     uid,
-				"cluster": strings.Split(uid.(string), "/")[0],
-				"data":    item.(map[string]interface{})["properties"],
-				"edges":   e,
+			mockResources[i] = map[string]interface{}{
+				"uid":  uid,
+				"data": item.(map[string]interface{})["properties"],
 			}
 		}
 		mockEdgeData := make([]map[string]interface{}, len(edges))
 		for i, edge := range edges {
 			mockEdgeData[i] = map[string]interface{}{
-				"edgeType":  edge.(map[string]interface{})["EdgeType"],
-				"sourceuid": edge.(map[string]interface{})["SourceUID"],
-				"destuid":   edge.(map[string]interface{})["DestUID"],
+				"sourceid": edge.(map[string]interface{})["SourceUID"],
+				"destid":   edge.(map[string]interface{})["DestUID"],
+				"destkind": edge.(map[string]interface{})["DestKind"],
 			}
 		}
-
-		allMockData := make([]map[string]interface{}, len(items)+len(edges))
-		allMockData = append(allMockData, mockData...)
-		allMockData = append(allMockData, mockEdgeData...)
-
+		mockData := append(mockResources, mockEdgeData...)
+		columnHeaders := []string{"uid string", "data *map[string]interface{}", "sourceid string", "destid string", "destkind string"}
 		return &MockRows{
-			mockData: allMockData,
-			index:    0,
+			mockData:      mockData,
+			index:         0,
+			columnHeaders: columnHeaders,
 		}
 
 	} else {
@@ -134,14 +113,10 @@ func newMockRows(testType string) *MockRows {
 	}
 }
 
-type MockRowsEdges struct {
-	mockData []map[string]interface{}
-	index    int
-}
-
 type MockRows struct {
-	mockData []map[string]interface{}
-	index    int
+	mockData      []map[string]interface{}
+	index         int
+	columnHeaders []string
 }
 
 func (r *MockRows) Close() {}
@@ -158,15 +133,29 @@ func (r *MockRows) Next() bool {
 }
 
 func (r *MockRows) Scan(dest ...interface{}) error {
-	*dest[0].(*string) = r.mockData[r.index-1]["uid"].(string)
-	// *dest[1].(*string) = r.mockData[r.index-1]["cluster"].(string)
-	// *dest[2].(*map[string]interface{}) = r.mockData[r.index-1]["data"].(map[string]interface{})
-	// *dest[3].(*string) = r.mockData[r.index-1]["destid"].(string)
-	// *dest[4].(*string) = r.mockData[r.index-1]["destkind"].(string)
-
+	for _, value := range dest {
+		switch v := value.(type) {
+		// case int:
+		// 	*value.(*int) = r.mockData[r.index-1][v].(int)
+		case string:
+			*value.(*string) = r.mockData[r.index-1][v].(string)
+		case map[string]interface{}:
+			*value.(*map[string]interface{}) = r.mockData[r.index-1]["data"].(map[string]interface{})
+		}
+	}
 	return nil
 }
 
 func (r *MockRows) Values() ([]interface{}, error) { return nil, nil }
 
 func (r *MockRows) RawValues() [][]byte { return nil }
+
+func mergeMaps(maps ...[]map[string]interface{}) []map[string]interface{} {
+	result := make([]map[string]interface{}, len(maps))
+	for _, m := range maps {
+		for k, v := range m {
+			result[k] = v
+		}
+	}
+	return result
+}

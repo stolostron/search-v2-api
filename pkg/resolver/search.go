@@ -223,15 +223,15 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 
 	// LEARNING: IN is equivalent to = ANY and performance is not deteriorated when we replace IN with =ANY
 	recrusiveQuery := `WITH RECURSIVE 
-	search_graph(uid, data, sourcekind, destkind, sourceid, destid, path, level)
+	search_graph(uid, data, destkind, sourceid, destid, path, level)
 	AS (
-	SELECT r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] AS path, 1 AS level
+	SELECT r.uid, r.data, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] AS path, 1 AS level
 		FROM search.resources r
 		INNER JOIN
 			search.edges e ON (r.uid = e.sourceid) OR (r.uid = e.destid)
 		 WHERE r.uid = ANY($1)
 	UNION
-	SELECT r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 AS level
+	SELECT r.uid, r.data, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 AS level
 		FROM search.resources r
 		INNER JOIN
 			search.edges e ON (r.uid = e.sourceid)
@@ -240,9 +240,9 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		AND r.uid <> all(sg.path)
 		AND level = 1 
 		)
-	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($2)`
+	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`
 
-	relations, QueryError := s.pool.Query(context.Background(), recrusiveQuery, s.uids, s.uids) // how to deal with defaults.
+	relations, QueryError := s.pool.Query(context.Background(), recrusiveQuery, s.uids) // how to deal with defaults.
 	if QueryError != nil {
 		klog.Errorf("query error :", QueryError)
 	}

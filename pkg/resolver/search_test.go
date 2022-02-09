@@ -40,6 +40,7 @@ func Test_SearchResolver_Items(t *testing.T) {
 
 	// Mock the database queries.
 	mockRows := newMockRows("non-rel")
+	t.Logf("MOCK ROWS TYPE IS: %T", mockRows)
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq("SELECT uid, cluster, data FROM search.resources WHERE lower(data->> 'kind')=$1"),
 		gomock.Eq("template"),
@@ -75,49 +76,53 @@ func Test_SearchResolver_Items(t *testing.T) {
 func Test_SearchResolver_Relationships(t *testing.T) {
 
 	//mock input, build mockResovler and mockPool
-	val1 := "Pod"
-	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "kind", Values: []*string{&val1}}}}
-	resolver, mockPool := newMockSearchResolver(t, searchInput)
-	fmt.Println("After creating a resolver and mockpool for mock search input.")
+	// val1 := "Pod"
+	// searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "kind", Values: []*string{&val1}}}}
+	// resolver, mockPool := newMockSearchResolver(t, searchInput)
+	// fmt.Println("After creating a resolver and mockpool for mock search input.")
 
-	// Mock the database queries.
-	mockRows := newMockRows("non-rel")
-	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq("SELECT uid FROM search.resources WHERE lower(data->> 'kind')=$1"), //we want the output of this query to be the input of the relatinship query
-		gomock.Eq("pod"),
-	).Return(mockRows, nil)
-	fmt.Println("After mocking data queries for initial query.")
+	// // Mock the database queries.
+	// mockRows := newMockRows("non-rel")
+	// mockPool.EXPECT().Query(gomock.Any(),
+	// 	gomock.Eq("SELECT uid FROM search.resources WHERE lower(data->> 'kind')=$1"), //we want the output of this query to be the input of the relatinship query
+	// 	gomock.Eq("pod"),
+	// ).Return(mockRows, nil)
+	// fmt.Println("After mocking data queries for initial query.")
 
-	//execute the function/ this will need to be passed to the recursive query:
-	results := resolver.Uids()
-	fmt.Println(results)
-	fmt.Println("After results")
-	// verify number of uids == mock uids:
-	if len(results) != len(mockRows.mockData) {
-		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(results))
+	// //execute the function/ this will need to be passed to the recursive query:
+	// results := resolver.Uids()
+	// fmt.Println(results)
+	// fmt.Println("After results")
+	// // verify number of uids == mock uids:
+	// if len(results) != len(mockRows.mockData) {
+	// 	t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(results))
 
-	}
-	fmt.Println("After verifying.")
+	// }
+	// fmt.Println("After verifying.")
 
 	resultString := "[local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd, local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b]"
+
+	var resultList []string
+
+	resultList = append(resultList, "local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd", "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b")
 
 	// //take the uids from above as input
 	searchInput2 := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "uid", Values: []*string{&resultString}}}}
 	resolver2, mockPool2 := newMockSearchResolver(t, searchInput2)
 
-	mockRows = newMockRows("rel")
+	mockRows := newMockRows("rel")
 	fmt.Println("Mock Rows are:", mockRows)
 	mockPool2.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`WITH RECURSIVE
-		search_graph(uid, data, sourcekind, destkind, sourceid, destid, path, level)
+		search_graph(uid, data, destkind, sourceid, destid, path, level)
 		AS (
-		SELECT r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] AS path, 1 AS level
+		SELECT r.uid, r.data, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] AS path, 1 AS level
 			FROM search.resources r
 			INNER JOIN
 				search.edges e ON (r.uid = e.sourceid) OR (r.uid = e.destid)
 			 WHERE r.uid = ANY($1)
 		UNION
-		SELECT r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 AS level
+		SELECT r.uid, r.data, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 AS level
 			FROM search.resources r
 			INNER JOIN
 				search.edges e ON (r.uid = e.sourceid)
@@ -126,13 +131,11 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 			AND r.uid <> all(sg.path)
 			AND level = 1
 			)
-		SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($2)`),
-		gomock.Eq(results),
+		SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`),
+		gomock.Eq(resultList),
 	).Return(mockRows, nil)
 
-	fmt.Println("hello")
-
-	result2 := resolver2.Related()
+	result2 := resolver2.Related() //here it fails
 
 	fmt.Printf("%T", result2)
 
