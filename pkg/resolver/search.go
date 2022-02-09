@@ -91,7 +91,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool) (string
 		selectClause = "SELECT count(uid) FROM search.resources"
 	}
 	argCount := 1
-	whereClause, args, argCount = s.WhereClauseFilter(args, argCount)
+	whereClause, args, argCount = WhereClauseFilter(args, s.input, argCount)
 
 	if s.input.Limit != nil && *s.input.Limit != 0 {
 		limit = *s.input.Limit
@@ -99,18 +99,10 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool) (string
 		limit = config.DEFAULT_QUERY_LIMIT
 	}
 	args = append(args, limit)
-	// if limitStr != "" {
-	// 	limitClause = " LIMIT " + limitStr
-	// 	query = selectClause + strings.TrimRight(whereClause, trimAND) + limitClause
-
-	// } else {
-	// 	query = selectClause + strings.TrimRight(whereClause, trimAND)
-	// }
 
 	query = fmt.Sprintf("%s %s LIMIT $%d", selectClause, strings.TrimRight(whereClause, trimAND), argCount)
 
-	klog.Infof("query: %s\nargs: %+v", query, args)
-	klog.Infof("querySher: %s\nargs: %s", query, args)
+	klog.Infof("query: %s\nargs: %s", query, args)
 	return query, args
 }
 
@@ -282,11 +274,9 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 	return item
 }
 
-func (s *SearchResult) WhereClauseFilter(args []interface{}, argCount int) (string, []interface{}, int) {
+func WhereClauseFilter(args []interface{}, input *model.SearchInput, argCount int) (string, []interface{}, int) {
 	whereClause := " WHERE "
-
-	for i, filter := range s.input.Filters {
-		klog.Infof("Filters%d: %+v", i, *filter)
+	for _, filter := range input.Filters {
 		// TODO: Handle other column names like kind and namespace
 		if filter.Property == "cluster" {
 			// whereClause = whereClause + filter.Property

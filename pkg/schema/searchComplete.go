@@ -2,61 +2,101 @@ package schema
 
 import (
 	"context"
-	"strconv"
+	"fmt"
 
+	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/stolostron/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
+	res "github.com/stolostron/search-v2-api/pkg/resolver"
 	klog "k8s.io/klog/v2"
 )
 
-func SearchComplete(ctx context.Context, property string, srchInput *model.SearchInput, limit *int) ([]*string, error) {
-	query := searchCompleteQuery(ctx, property, srchInput, limit)
-	klog.Infof("SearchComplete Query: ", query)
-	return searchCompleteResults(query)
+type SearchCompleteResult struct {
+	input    *model.SearchInput
+	pool     pgxpoolmock.PgxPool
+	property string
+	limit    *int
 }
 
-func searchCompleteQuery(ctx context.Context, property string, input *model.SearchInput, limit *int) string {
-	var selectClause, limitClause, limitStr, query string
-	if property != "" {
-		klog.Infof("property: %s and limit:%d", property, limit)
-		if property == "cluster" {
-			//Adding WHERE clause to filter out NULL values and ORDER by sort results
-			selectClause = "SELECT DISTINCT " + property + " FROM search.resources WHERE " + property + " IS NOT NULL ORDER BY " + property
-		} else {
-			//Adding WHERE clause to filter out NULL values and ORDER by sort results
-			selectClause = "SELECT DISTINCT data->>'" + property + "' FROM search.resources WHERE data->>'" + property + "' IS NOT NULL ORDER BY data->>'" + property + "'"
-		}
-		if limit != nil {
-			limitStr = strconv.Itoa(*limit)
-		}
+func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, error) {
+	query, args := s.searchCompleteQuery(ctx)
+	res, autoCompleteErr := s.searchCompleteResults(query, args)
+	if autoCompleteErr != nil {
+		klog.Error("Error resolving properties in autoComplete", autoCompleteErr)
+	}
+	return res, autoCompleteErr
+}
 
-		if limitStr != "0" && limitStr != "" {
-			limitClause = " LIMIT " + limitStr
-			query = selectClause + limitClause
+func SearchComplete(ctx context.Context, property string, srchInput *model.SearchInput, limit *int) ([]*string, error) {
+	var searchCompleteResult *SearchCompleteResult
 
-		} else {
-			query = selectClause
+	if srchInput != nil {
+		searchCompleteResult = &SearchCompleteResult{
+			input:    srchInput,
+			pool:     db.GetConnection(),
+			property: property,
+			limit:    limit,
 		}
-		klog.Info("SearchComplete Query: ", query)
-		return query
+	}
+	return searchCompleteResult.autoComplete(ctx)
+
+}
+
+func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) (string, []interface{}) {
+	var selectClause, whereClause, notNullClause, query string
+	var limit int
+	var args []interface{}
+	argCount := 1
+
+	whereClause, args, argCount = res.WhereClauseFilter(args, s.input, argCount)
+
+	if s.property != "" {
+		if s.property == "cluster" {
+			//Adding notNull clause to filter out NULL values and ORDER by sort results
+			selectClause = fmt.Sprintf("%s $%d %s", "SELECT DISTINCT ", argCount, " FROM search.resources")
+			notNullClause = fmt.Sprintf("$%d %s $%d", argCount, " IS NOT NULL ORDER BY ", argCount)
+			args = append(args, s.property)
+			argCount++
+		} else {
+			//Adding notNull clause to filter out NULL values and ORDER by sort results
+			selectClause = fmt.Sprintf("%s '$%d' %s", "SELECT DISTINCT data->>", argCount, " FROM search.resources")
+			notNullClause = fmt.Sprintf("data->>'$%d' %s data->>'$%d'", argCount, " IS NOT NULL ORDER BY ", argCount)
+			args = append(args, s.property)
+			argCount++
+		}
+		if s.input.Limit != nil && *s.input.Limit != 0 {
+			limit = *s.input.Limit
+		} else {
+			limit = config.DEFAULT_QUERY_LIMIT
+		}
+		args = append(args, limit)
+		query = fmt.Sprintf("%s %s %s LIMIT $%d", selectClause, whereClause, notNullClause, argCount)
+		klog.Infof("SearchComplete: %s\nargs: %s", query, args)
+		return query, args
 	}
 
-	return ""
+	return "", nil
 }
 
-func searchCompleteResults(query string) ([]*string, error) {
+func (s *SearchCompleteResult) searchCompleteResults(query string, args []interface{}) ([]*string, error) {
 
-	pool := db.GetConnection()
 	//TODO: Handle error
-	rows, _ := pool.Query(context.Background(), query)
+	rows, err := s.pool.Query(context.Background(), query, args...)
+	if err != nil {
+		klog.Error("Error fetching results from db ", err)
+	}
 	defer rows.Close()
 	var srchCompleteOut []*string
-	prop := ""
+	var prop string
 	for rows.Next() {
-		_ = rows.Scan(&prop)
+		scanErr := rows.Scan(&prop)
+		if scanErr != nil {
+			klog.Info("Error reading searchCompleteResults", scanErr)
+		}
 		tmpProp := prop
+		fmt.Println("Current prop is: ", tmpProp)
 		srchCompleteOut = append(srchCompleteOut, &tmpProp)
-		// klog.Info("Property: ", prop, tmpProp)
 	}
 	return srchCompleteOut, nil
 }
