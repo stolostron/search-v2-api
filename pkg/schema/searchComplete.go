@@ -95,7 +95,6 @@ func (s *SearchCompleteResult) searchCompleteResults(query string, args []interf
 			klog.Info("Error reading searchCompleteResults", scanErr)
 		}
 		tmpProp := prop
-		fmt.Println("Current prop is: ", tmpProp)
 		srchCompleteOut = append(srchCompleteOut, &tmpProp)
 	}
 	return srchCompleteOut, nil

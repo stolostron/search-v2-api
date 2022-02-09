@@ -38,8 +38,8 @@ func Test_SearchComplete_Query(t *testing.T) {
 }
 
 func string_array_equal(result, expected []*string) bool { //, expected []interface{}) bool {
-	for i, _ := range expected {
-		if *result[i] != *expected[i] {
+	for i, exp := range expected {
+		if *result[i] != *exp {
 			return false
 		}
 	}
