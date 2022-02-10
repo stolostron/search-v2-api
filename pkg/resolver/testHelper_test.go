@@ -3,6 +3,7 @@ package resolver
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"strings"
 	"sync"
@@ -15,7 +16,7 @@ import (
 	"github.com/stolostron/search-v2-api/graph/model"
 )
 
-func newMockSearchResolver(t *testing.T, input *model.SearchInput) (*SearchResult, *pgxpoolmock.MockPgxPool) {
+func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*string) (*SearchResult, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
@@ -23,7 +24,7 @@ func newMockSearchResolver(t *testing.T, input *model.SearchInput) (*SearchResul
 	mockResolver := &SearchResult{
 		input: input,
 		pool:  mockPool,
-		uids:  []string{},
+		uids:  uids,
 		wg:    sync.WaitGroup{},
 	}
 
@@ -132,15 +133,45 @@ func (r *MockRows) Next() bool {
 	return r.index <= len(r.mockData)
 }
 
+// func (r *MockRows) Scan(dest ...interface{}) error {
+// 	fmt.Println("VALUES BEING SCANNED:", dest)
+// 	for _, value := range dest {
+// 		switch v := value.(type) {
+// 		// case int:
+// 		// 	*value.(*int) = r.mockData[r.index-1][v].(int)
+// 		case string:
+// 			fmt.Println("value of v:", v)
+// 			*value.(*string) = r.mockData[r.index-1][v].(string)
+// 		case map[string]interface{}:
+// 			fmt.Println("value of v:", v)
+// 			*value.(*map[string]interface{}) = r.mockData[r.index-1]["data"].(map[string]interface{})
+// 		}
+// 	}
+// 	return nil
+// }
+
 func (r *MockRows) Scan(dest ...interface{}) error {
-	for _, value := range dest {
-		switch v := value.(type) {
-		// case int:
-		// 	*value.(*int) = r.mockData[r.index-1][v].(int)
-		case string:
-			*value.(*string) = r.mockData[r.index-1][v].(string)
-		case map[string]interface{}:
-			*value.(*map[string]interface{}) = r.mockData[r.index-1]["data"].(map[string]interface{})
+	for _, col := range r.columnHeaders {
+		for _, value := range dest {
+			switch v := value.(type) {
+			default:
+				fmt.Printf("unexpected type %T", v)
+			case int:
+				fmt.Println("value of v:", v)
+				*value.(*int) = r.mockData[r.index-1][col].(int)
+			case string:
+				fmt.Println("value of v:", v)
+				*value.(*string) = r.mockData[r.index-1][col].(string)
+			case *string:
+				fmt.Println("value of v:", v)
+				*value.(*string) = r.mockData[r.index-1][col].(string)
+			case map[string]interface{}:
+				fmt.Println("value of v:", v)
+				*value.(*map[string]interface{}) = r.mockData[r.index-1][col].(map[string]interface{})
+			case *map[string]interface{}:
+				fmt.Println("value of v:", v)
+				*value.(*map[string]interface{}) = r.mockData[r.index-1][col].(map[string]interface{})
+			}
 		}
 	}
 	return nil

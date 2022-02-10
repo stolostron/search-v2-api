@@ -20,7 +20,7 @@ import (
 type SearchResult struct {
 	input *model.SearchInput
 	pool  pgxpoolmock.PgxPool
-	uids  []string       // List of uids from search result to be used to get relatioinships.
+	uids  []*string      // List of uids from search result to be used to get relatioinships.
 	wg    sync.WaitGroup // WORKAROUND: Used to serialize search query and relatioinships query.
 	// 	Count   int
 	// 	Items   []map[string]interface{}
@@ -51,7 +51,7 @@ func (s *SearchResult) Count() int {
 	return count
 }
 
-func (s *SearchResult) Uids() []string {
+func (s *SearchResult) Uids() []*string {
 	qString, qArgs := s.buildSearchQuery(context.Background(), false, true)
 	uidArray, e := s.resolveUids(qString, qArgs)
 
@@ -157,7 +157,7 @@ func (s *SearchResult) resolveCount(query string, args []interface{}) (int, erro
 	return count, err
 }
 
-func (s *SearchResult) resolveUids(query string, args []interface{}) ([]string, error) {
+func (s *SearchResult) resolveUids(query string, args []interface{}) ([]*string, error) {
 	rows, err := s.pool.Query(context.Background(), query, args...)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, args, err)
@@ -170,7 +170,7 @@ func (s *SearchResult) resolveUids(query string, args []interface{}) ([]string, 
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), query)
 		}
-		s.uids = append(s.uids, uid)
+		s.uids = append(s.uids, &uid)
 	}
 
 	return s.uids, err
@@ -188,7 +188,7 @@ func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[str
 	var cluster string
 	var data map[string]interface{}
 	items := []map[string]interface{}{}
-	s.uids = make([]string, len(items))
+	s.uids = make([]*string, len(items))
 
 	for rows.Next() {
 		err = rows.Scan(&uid, &cluster, &data)
@@ -201,7 +201,7 @@ func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[str
 		currItem["cluster"] = cluster
 
 		items = append(items, currItem)
-		s.uids = append(s.uids, uid)
+		s.uids = append(s.uids, &uid)
 	}
 
 	return items, nil
@@ -220,9 +220,10 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	var kindSlice []string
 	var kindList []string
 	var countList []int
+	var relQuery string
 
 	// LEARNING: IN is equivalent to = ANY and performance is not deteriorated when we replace IN with =ANY
-	recrusiveQuery := `WITH RECURSIVE 
+	relQuery = strings.TrimSpace(`WITH RECURSIVE
 	search_graph(uid, data, destkind, sourceid, destid, path, level)
 	AS (
 	SELECT r.uid, r.data, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] AS path, 1 AS level
@@ -238,11 +239,14 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		, search_graph sg
 		WHERE (e.sourceid = sg.destid OR e.destid = sg.sourceid)
 		AND r.uid <> all(sg.path)
-		AND level = 1 
+		AND level = 1
 		)
-	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`
+	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`)
 
-	relations, QueryError := s.pool.Query(context.Background(), recrusiveQuery, s.uids) // how to deal with defaults.
+	fmt.Println("LENGTH OF QUERY:", len(relQuery))
+	fmt.Println("NUMBER OF UIDS IN RELATED:", len(s.uids))
+
+	relations, QueryError := s.pool.Query(context.Background(), relQuery, s.uids) // how to deal with defaults.
 	if QueryError != nil {
 		klog.Errorf("query error :", QueryError)
 	}
@@ -287,6 +291,8 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		count := countList[i]
 		relatedSearch[i] = SearchRelatedResult{kind, &count, items}
 	}
+
+	fmt.Println("LENGTH OF REALTEDSEARCH:\n", len(relatedSearch))
 
 	return relatedSearch
 }
