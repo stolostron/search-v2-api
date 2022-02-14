@@ -51,15 +51,15 @@ func (s *SearchResult) Count() int {
 	return count
 }
 
-func (s *SearchResult) Uids() []*string {
-	qString, qArgs := s.buildSearchQuery(context.Background(), false, true)
-	uidArray, e := s.resolveUids(qString, qArgs)
+// func (s *SearchResult) Uids() error {
+// 	qString, qArgs := s.buildSearchQuery(context.Background(), false, true)
+// 	e := s.resolveUids(qString, qArgs)
 
-	if e != nil {
-		klog.Error("Error resolving uids.", e)
-	}
-	return uidArray
-}
+// 	if e != nil {
+// 		klog.Error("Error resolving uids.", e)
+// 	}
+// 	return e
+// }
 
 func (s *SearchResult) Items() []map[string]interface{} {
 	s.wg.Add(1)
@@ -157,25 +157,24 @@ func (s *SearchResult) resolveCount(query string, args []interface{}) (int, erro
 	return count, err
 }
 
-func (s *SearchResult) resolveUids(query string, args []interface{}) ([]*string, error) {
-	rows, err := s.pool.Query(context.Background(), query, args...)
-	if err != nil {
-		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, args, err)
-	}
-	var uid string
+// func (s *SearchResult) resolveUids(query string, args []interface{}) error {
+// 	rows, err := s.pool.Query(context.Background(), query, args...)
+// 	if err != nil {
+// 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, args, err)
+// 	}
+// 	var uid string
 
-	defer rows.Close()
-	for rows.Next() {
-		err = rows.Scan(&uid)
-		if err != nil {
-			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), query)
-		}
-		s.uids = append(s.uids, &uid)
-	}
+// 	defer rows.Close()
+// 	for rows.Next() {
+// 		err = rows.Scan(&uid)
+// 		if err != nil {
+// 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), query)
+// 		}
+// 		s.uids = append(s.uids, &uid)
+// 	}
+// 	return err
 
-	return s.uids, err
-
-}
+// }
 
 func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[string]interface{}, error) {
 	rows, err := s.pool.Query(context.Background(), query, args...)
@@ -184,13 +183,14 @@ func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[str
 	}
 	defer rows.Close()
 
-	var uid string
+	// var uid string
 	var cluster string
 	var data map[string]interface{}
 	items := []map[string]interface{}{}
 	s.uids = make([]*string, len(items))
 
 	for rows.Next() {
+		var uid string
 		err = rows.Scan(&uid, &cluster, &data)
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), query)
@@ -243,8 +243,8 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		)
 	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`)
 
-	fmt.Println("LENGTH OF QUERY:", len(relQuery))
-	fmt.Println("NUMBER OF UIDS IN RELATED:", len(s.uids))
+	klog.Info("LENGTH OF QUERY:", len(relQuery))
+	klog.Info("NUMBER OF UIDS IN RELATED:", len(s.uids))
 
 	relations, QueryError := s.pool.Query(context.Background(), relQuery, s.uids) // how to deal with defaults.
 	if QueryError != nil {
@@ -254,13 +254,18 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	defer relations.Close()
 
 	// iterating through resulting rows and scaning data, destid  and destkind
+	counter := 1
 	for relations.Next() {
+		fmt.Println("In relations", counter)
+		counter++
 		var destkind, destid string
 		var data map[string]interface{}
+		// if data != nil {
 		relatedResultError := relations.Scan(&data, &destid, &destkind)
 		if relatedResultError != nil {
 			klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
 		}
+		// }
 
 		// creating currItem variable to keep data and converting strings in data to lowercase
 		currItem := formatDataMap(data)
@@ -293,6 +298,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	}
 
 	fmt.Println("LENGTH OF REALTEDSEARCH:\n", len(relatedSearch))
+	fmt.Println("related kind:", relatedSearch)
 
 	return relatedSearch
 }

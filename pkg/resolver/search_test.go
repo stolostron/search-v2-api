@@ -43,7 +43,7 @@ func Test_SearchResolver_Items(t *testing.T) {
 	mockRows := newMockRows("non-rel")
 	t.Logf("MOCK ROWS TYPE IS: %T", mockRows)
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq("SELECT uid, cluster, data FROM search.resources WHERE lower(data->> 'kind')=$1"),
+		gomock.Eq("SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind')=$1"),
 		gomock.Eq("template"),
 	).Return(mockRows, nil)
 
