@@ -254,18 +254,14 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	defer relations.Close()
 
 	// iterating through resulting rows and scaning data, destid  and destkind
-	counter := 1
 	for relations.Next() {
-		fmt.Println("In relations", counter)
-		counter++
 		var destkind, destid string
 		var data map[string]interface{}
-		// if data != nil {
 		relatedResultError := relations.Scan(&data, &destid, &destkind)
 		if relatedResultError != nil {
 			klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
+
 		}
-		// }
 
 		// creating currItem variable to keep data and converting strings in data to lowercase
 		currItem := formatDataMap(data)
@@ -274,6 +270,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		kindSlice = append(kindSlice, destkind)
 		items = append(items, currItem)
 
+		break
 	}
 
 	//calling function to get map which contains unique values from kindSlice and counts the number occurances ex: map[key:Pod, value:2] if pod occurs 2x in kindSlice
@@ -298,7 +295,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	}
 
 	fmt.Println("LENGTH OF REALTEDSEARCH:\n", len(relatedSearch))
-	fmt.Println("related kind:", relatedSearch)
+	fmt.Println("related kind:", relatedSearch[0].Kind)
 
 	return relatedSearch
 }

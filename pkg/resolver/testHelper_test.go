@@ -165,15 +165,11 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 			fmt.Printf("String value of %+v", v)
 			fmt.Println(" col is", r.columnHeaders[i], i)
 			*dest[i].(*string) = r.mockData[r.index][r.columnHeaders[i]].(string)
-			fmt.Println("INDEX IS:", r.index)
-			fmt.Println("MOCK DATA:", r.mockData[r.index][r.columnHeaders[i]])
 			klog.Infof("scaned %s", v)
 		case *map[string]interface{}:
 			fmt.Printf("map value is %+v", v)
 			fmt.Println(" col is", r.columnHeaders[i], i)
 			*dest[i].(*map[string]interface{}) = r.mockData[r.index-1][r.columnHeaders[i]].(map[string]interface{})
-			fmt.Println("INDEX IS:", r.index-1)
-			fmt.Println("MOCK DATA:", r.mockData[r.index-1][r.columnHeaders[i]])
 			klog.Infof("scaned %s", v)
 		case nil:
 			fmt.Printf("error type %T", v)
