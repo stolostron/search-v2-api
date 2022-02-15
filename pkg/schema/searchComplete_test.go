@@ -22,7 +22,7 @@ func Test_SearchComplete_Query(t *testing.T) {
 	mockRows := newMockRows("../resolver/mocks/mock.json")
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "data"->>'kind' FROM "search"."resources" WHERE ("data"->>'kind' IS NOT NULL) ORDER BY "data"->>'kind' DESC LIMIT 10000`),
+		gomock.Eq(`SELECT DISTINCT "data"->>'kind' FROM "search"."resources" WHERE ("data"->>'kind' IS NOT NULL) ORDER BY "data"->>'kind' ASC LIMIT 10000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
@@ -85,7 +85,7 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 	mockRows := newMockRows("../resolver/mocks/mock.json")
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "cluster" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" = 'local-cluster') AND ("cluster" IS NOT NULL)) ORDER BY "cluster" DESC LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "cluster" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" = 'local-cluster') AND ("cluster" IS NOT NULL)) ORDER BY "cluster" ASC LIMIT 10`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
