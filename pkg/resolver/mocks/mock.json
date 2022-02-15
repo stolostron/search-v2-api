@@ -35,6 +35,7 @@
                 "app.kubernetes.io/version":"0.45.0",
                 "pod-template-hash":"5f5575c669"
             },
+            "image": ["quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:2337b7727c84c75a8cde0ac5e9e2ac8bd70b6dbcb628ee933718ef4899f2e3ef","quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:26cde6bda32fe488c322e60b0de1580ef8321f60a7c24c6c008d8fc0437e5063","quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:4292e3aac0c4439f99b0174707d7d5c5af3b727707a6b15640f1e24270a8e49e","quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:46715676cc783a1a0e574e2df8e2f9fc564784b72afeacdb8ca58caeca796e46"],
             "name":"prometheus-operator-5f5575c669",
             "namespace":"openshift-monitoring"
         },

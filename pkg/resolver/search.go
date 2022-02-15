@@ -10,8 +10,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
-	"github.com/lib/pq"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
@@ -43,6 +44,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 }
 
 func (s *SearchResult) Count() int {
+	klog.Info("Resolving SearchResult:Count()")
 	qString, qArgs := s.buildSearchQuery(context.Background(), true)
 	count, e := s.resolveCount(qString, qArgs)
 
@@ -78,32 +80,36 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 	return r
 }
 
-var trimAND string = " AND "
-
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool) (string, []interface{}) {
-	var selectClause, whereClause, query string
 	var limit int
-	var args []interface{}
+	var selectDs *goqu.SelectDataset
+	var whereDs []exp.Expression
+
 	// Example query: SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN
 	// (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 10000
-	selectClause = "SELECT uid, cluster, data FROM search.resources"
+	//FROM CLAUSE
+	schemaTable := goqu.S("search").Table("resources")
+	ds := goqu.From(schemaTable)
+	//SELECT CLAUSE
+	selectDs = ds.Select("uid", "cluster", "data")
 	if count {
-		selectClause = "SELECT count(uid) FROM search.resources"
+		selectDs = ds.Select(goqu.COUNT("uid"))
 	}
-	argCount := 1
-	whereClause, args, argCount = WhereClauseFilter(args, s.input, argCount)
-
+	//WHERE CLAUSE
+	whereDs = WhereClauseFilter(s.input)
+	//LIMIT CLAUSE
 	if s.input.Limit != nil && *s.input.Limit != 0 {
 		limit = *s.input.Limit
 	} else {
 		limit = config.DEFAULT_QUERY_LIMIT
 	}
-	args = append(args, limit)
-
-	query = fmt.Sprintf("%s %s LIMIT $%d", selectClause, strings.TrimRight(whereClause, trimAND), argCount)
-
-	klog.Infof("query: %s\nargs: %s", query, args)
-	return query, args
+	//Get the query
+	sql, params, err := selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
+	if err != nil {
+		klog.Infof("Error building SearchComplete query: %s", err.Error())
+	}
+	klog.Infof("query: %s\nargs: %s", sql, params)
+	return sql, params
 }
 
 func (s *SearchResult) resolveCount(query string, args []interface{}) (int, error) {
@@ -254,6 +260,15 @@ func formatLabels(labels map[string]interface{}) string {
 	return strings.Join(labelStrings, ",")
 }
 
+func formatArray(labels []interface{}) string {
+	keys := make([]string, 0)
+	for _, k := range labels {
+		keys = append(keys, fmt.Sprintf("%s", k))
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, ",")
+}
+
 func formatDataMap(data map[string]interface{}) map[string]interface{} {
 	item := make(map[string]interface{})
 	for key, value := range data {
@@ -266,6 +281,8 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 			item[key] = strconv.FormatInt(int64(v), 10)
 		case map[string]interface{}:
 			item[key] = formatLabels(v)
+		case []interface{}:
+			item[key] = formatArray(v)
 		default:
 			klog.Warningf("Error formatting property with key: %+v  type: %+v\n", key, reflect.TypeOf(v))
 			continue
@@ -274,44 +291,47 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 	return item
 }
 
-func WhereClauseFilter(args []interface{}, input *model.SearchInput, argCount int) (string, []interface{}, int) {
-	whereClause := " WHERE "
+func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
+	var colDs exp.IdentifierExpression
+	var JsonDs exp.LiteralExpression
+	var whereDs []exp.Expression
 	for _, filter := range input.Filters {
-		// TODO: Handle other column names like kind and namespace
+		colDs = nil
+		JsonDs = nil
 		if filter.Property == "cluster" {
-			// whereClause = whereClause + filter.Property
-			whereClause = fmt.Sprintf("%s $%d", whereClause, argCount)
-			args = append(args, filter.Property)
-			argCount++
+			colDs = goqu.C(filter.Property)
 		} else {
+			JsonDs = goqu.L(`"data"->>?`, filter.Property)
 			// TODO: To be removed when indexer handles this as adding lower hurts index scans
 			// whereClause = whereClause + "lower(data->> '" + filter.Property + "')"
-			whereClause = fmt.Sprintf("%s lower(data->>'$%d')", whereClause, argCount)
-			args = append(args, filter.Property)
-			argCount++
 		}
 		var values []string
 
 		if len(filter.Values) > 1 {
 			for _, val := range filter.Values {
 				klog.Infof("Filter value: %s", *val)
-				values = append(values, strings.ToLower(*val))
+				// values = append(values, strings.ToLower(*val))
+				values = append(values, *val)
+
 				//TODO: Here, assuming value is string. Check for other cases.
 				//TODO: Remove lower() conversion once data is correctly loaded from indexer
-				// "SELECT id FROM search.resources WHERE status = any($1)"
-				//SELECT id FROM search.resources WHERE status = ANY('{"Running", "Error"}');
+				//SELECT id FROM search.resources WHERE status IN ('{"Running", "Error"}');
 			}
-			whereClause = fmt.Sprintf("%s=any($%d) AND ", whereClause, argCount)
-			// whereClause = whereClause + "=any($" + strconv.Itoa(i+1) + ") AND "
-			args = append(args, pq.Array(values))
-			argCount++
+			if JsonDs != nil {
+				whereDs = append(whereDs, JsonDs.In(values).Expression())
+			}
+			if colDs != nil {
+				whereDs = append(whereDs, colDs.In(values).Expression())
+			}
 		} else if len(filter.Values) == 1 {
-			// whereClause = whereClause + "=$" + strconv.Itoa(i+1) + " AND "
-			whereClause = fmt.Sprintf("%s=$%d AND ", whereClause, argCount)
 			val := filter.Values[0]
-			args = append(args, strings.ToLower(*val))
-			argCount++
+			if colDs != nil {
+				whereDs = append(whereDs, colDs.Eq(val).Expression())
+			}
+			if JsonDs != nil {
+				whereDs = append(whereDs, JsonDs.Eq(val).Expression())
+			}
 		}
 	}
-	return whereClause, args, argCount
+	return whereDs
 }

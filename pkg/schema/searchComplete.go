@@ -2,8 +2,9 @@ package schema
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -44,36 +45,39 @@ func SearchComplete(ctx context.Context, property string, srchInput *model.Searc
 }
 
 func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) (string, []interface{}) {
-	var selectClause, whereClause, notNullClause, query string
 	var limit int
-	var args []interface{}
-	argCount := 1
+	var whereDs []exp.Expression
+	var selectDs *goqu.SelectDataset
 
-	whereClause, args, argCount = res.WhereClauseFilter(args, s.input, argCount)
-
+	//FROM CLAUSE
+	schemaTable := goqu.S("search").Table("resources")
+	ds := goqu.From(schemaTable)
+	//WHERE CLAUSE
+	whereDs = res.WhereClauseFilter(s.input)
+	//SELECT CLAUSE
 	if s.property != "" {
 		if s.property == "cluster" {
+			selectDs = ds.SelectDistinct(s.property).Order(goqu.C(s.property).Desc())
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
-			selectClause = fmt.Sprintf("%s $%d %s", "SELECT DISTINCT ", argCount, " FROM search.resources")
-			notNullClause = fmt.Sprintf("$%d %s $%d", argCount, " IS NOT NULL ORDER BY ", argCount)
-			args = append(args, s.property)
-			argCount++
+			whereDs = append(whereDs, goqu.C(s.property).IsNotNull())
 		} else {
+			selectDs = ds.SelectDistinct(goqu.L(`"data"->>?`, s.property)).Order(goqu.L(`"data"->>?`, s.property).Desc())
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
-			selectClause = fmt.Sprintf("%s '$%d' %s", "SELECT DISTINCT data->>", argCount, " FROM search.resources")
-			notNullClause = fmt.Sprintf("data->>'$%d' %s data->>'$%d'", argCount, " IS NOT NULL ORDER BY ", argCount)
-			args = append(args, s.property)
-			argCount++
+			whereDs = append(whereDs, goqu.L(`"data"->>?`, s.property).IsNotNull())
 		}
+		//LIMIT CLAUSE
 		if s.input.Limit != nil && *s.input.Limit != 0 {
 			limit = *s.input.Limit
 		} else {
 			limit = config.DEFAULT_QUERY_LIMIT
 		}
-		args = append(args, limit)
-		query = fmt.Sprintf("%s %s %s LIMIT $%d", selectClause, whereClause, notNullClause, argCount)
-		klog.Infof("SearchComplete: %s\nargs: %s", query, args)
-		return query, args
+		//Get the query
+		sql, params, err := selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
+		if err != nil {
+			klog.Infof("Error building SearchComplete query: %s", err.Error())
+		}
+		klog.Infof("SearchComplete: %s\nargs: %s", sql, params)
+		return sql, params
 	}
 
 	return "", nil
