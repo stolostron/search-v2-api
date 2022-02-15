@@ -56,7 +56,7 @@ func newMockRows(testType string) *MockRows {
 	if err := json.Unmarshal(bytes, &data); err != nil {
 		panic(err)
 	}
-	items := data["addRecords"].([]interface{})
+	items := data["records"].([]interface{})
 
 	mockData := make([]map[string]interface{}, len(items))
 
@@ -70,8 +70,6 @@ func newMockRows(testType string) *MockRows {
 				"data":    item.(map[string]interface{})["properties"],
 			}
 		}
-		fmt.Println("MockData[0]:", mockData[0]["uid"], mockData[0]["cluster"], mockData[0]["data"])
-		fmt.Println("MockData[1]:", mockData[1]["uid"], mockData[1]["cluster"], mockData[1]["data"])
 		columnHeaders := []string{"uid", "cluster", "data"}
 		return &MockRows{
 			mockData:      mockData,
@@ -101,68 +99,6 @@ func newMockRows(testType string) *MockRows {
 	}
 
 }
-
-// 	if testType == "non-rel" {
-
-// 		dataDir := "./mocks/mock.json"
-// 		bytes, _ := ioutil.ReadFile(dataDir)
-// 		var data map[string]interface{}
-// 		if err := json.Unmarshal(bytes, &data); err != nil {
-// 			panic(err)
-// 		}
-// 		items := data["addResources"].([]interface{})
-// 		mockData := make([]map[string]interface{}, len(items))
-// 		for i, item := range items {
-// 			uid := item.(map[string]interface{})["uid"]
-// 			mockData[i] = map[string]interface{}{
-// 				"uid":     uid,
-// 				"cluster": strings.Split(uid.(string), "/")[0],
-// 				"data":    item.(map[string]interface{})["properties"],
-// 			}
-// 		}
-// 		columnHeaders := []string{"uid", "cluster", "data"}
-// 		return &MockRows{
-// 			mockData:      mockData,
-// 			index:         0,
-// 			columnHeaders: columnHeaders,
-// 		}
-// 	} else if testType == "rel" {
-// 		dataDir := "./mocks/mock-rel.json"
-
-// 		bytes, _ := ioutil.ReadFile(dataDir)
-// 		var data map[string]interface{}
-// 		if err := json.Unmarshal(bytes, &data); err != nil {
-// 			panic(err)
-// 		}
-// 		items := data["addResources"].([]interface{})
-// 		edges := data["addEdges"].([]interface{})
-
-// 		mockResources := make([]map[string]interface{}, len(items))
-// 		for i, item := range items {
-// 			mockResources[i] = map[string]interface{}{
-// 				"data": item.(map[string]interface{})["properties"],
-// 			}
-// 		}
-// 		mockEdgeData := make([]map[string]interface{}, len(edges))
-// 		for i, edge := range edges {
-// 			mockEdgeData[i] = map[string]interface{}{
-// 				"destid":   edge.(map[string]interface{})["DestUID"],
-// 				"destkind": edge.(map[string]interface{})["DestKind"],
-// 			}
-// 		}
-
-// 		mockData := append(mockResources, mockEdgeData...)
-// 		columnHeaders := []string{"data", "destid", "destkind"}
-// 		return &MockRows{
-// 			mockData:      mockData,
-// 			index:         0,
-// 			columnHeaders: columnHeaders,
-// 		}
-
-// 	} else {
-// 		return nil
-// 	}
-// }
 
 type MockRows struct {
 	mockData      []map[string]interface{}
