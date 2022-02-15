@@ -199,10 +199,10 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	var kindSlice []string
 	var kindList []string
 	var countList []int
-	var relQuery string
+	// var relQuery string
 
 	// LEARNING: IN is equivalent to = ANY and performance is not deteriorated when we replace IN with =ANY
-	relQuery = strings.TrimSpace(`WITH RECURSIVE
+	relQuery := strings.TrimSpace(`WITH RECURSIVE
 	search_graph(uid, data, destkind, sourceid, destid, path, level)
 	AS (
 	SELECT r.uid, r.data, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] AS path, 1 AS level
@@ -250,7 +250,6 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		if relations.RawValues() == nil {
 			break
 		}
-		break
 	}
 
 	//calling function to get map which contains unique values from kindSlice and counts the number occurances ex: map[key:Pod, value:2] if pod occurs 2x in kindSlice
