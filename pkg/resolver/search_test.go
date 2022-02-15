@@ -19,7 +19,7 @@ func Test_SearchResolver_Count(t *testing.T) {
 	// Mock the database query
 	mockRow := &Row{MockValue: 10}
 	mockPool.EXPECT().QueryRow(gomock.Any(),
-		gomock.Eq("SELECT count(uid) FROM search.resources WHERE lower(data->> 'kind')=$1"),
+		gomock.Eq("SELECT count(uid) FROM search.resources  WHERE lower(data->> 'kind')=$1"),
 		gomock.Eq("pod")).Return(mockRow)
 
 	// Execute function
