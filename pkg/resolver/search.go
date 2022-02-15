@@ -177,7 +177,10 @@ func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[str
 
 		items = append(items, currItem)
 		s.uids = append(s.uids, &uid)
-		break
+		if rows.RawValues() == nil {
+			break
+		}
+
 	}
 
 	return items, nil
@@ -244,7 +247,9 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		// currItem["Kind"] = destkind
 		kindSlice = append(kindSlice, destkind)
 		items = append(items, currItem)
-
+		if relations.RawValues() == nil {
+			break
+		}
 		break
 	}
 
