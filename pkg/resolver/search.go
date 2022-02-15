@@ -51,16 +51,6 @@ func (s *SearchResult) Count() int {
 	return count
 }
 
-// func (s *SearchResult) Uids() error {
-// 	qString, qArgs := s.buildSearchQuery(context.Background(), false, true)
-// 	e := s.resolveUids(qString, qArgs)
-
-// 	if e != nil {
-// 		klog.Error("Error resolving uids.", e)
-// 	}
-// 	return e
-// }
-
 func (s *SearchResult) Items() []map[string]interface{} {
 	s.wg.Add(1)
 	defer s.wg.Done()
@@ -107,6 +97,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 
 	for i, filter := range s.input.Filters {
 		klog.Infof("Filters%d: %+v", i, *filter)
+
 		// TODO: Handle other column names like kind and namespace
 		if filter.Property == "cluster" {
 			whereClause = whereClause + filter.Property
@@ -118,6 +109,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 
 		if len(filter.Values) > 1 {
 			for _, val := range filter.Values {
+				klog.Info("filter VALUE is:", val)
 				klog.Infof("Filter value: %s", *val)
 				values = append(values, strings.ToLower(*val))
 				//TODO: Here, assuming value is string. Check for other cases.
@@ -157,27 +149,9 @@ func (s *SearchResult) resolveCount(query string, args []interface{}) (int, erro
 	return count, err
 }
 
-// func (s *SearchResult) resolveUids(query string, args []interface{}) error {
-// 	rows, err := s.pool.Query(context.Background(), query, args...)
-// 	if err != nil {
-// 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, args, err)
-// 	}
-// 	var uid string
-
-// 	defer rows.Close()
-// 	for rows.Next() {
-// 		err = rows.Scan(&uid)
-// 		if err != nil {
-// 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), query)
-// 		}
-// 		s.uids = append(s.uids, &uid)
-// 	}
-// 	return err
-
-// }
-
 func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[string]interface{}, error) {
 	rows, err := s.pool.Query(context.Background(), query, args...)
+	fmt.Println(query, args)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, args, err)
 	}
@@ -195,13 +169,15 @@ func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[str
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), query)
 		}
-
+		fmt.Println("uid scaned:", uid)
 		currItem := formatDataMap(data)
+		// currItem := data
 		currItem["_uid"] = uid
 		currItem["cluster"] = cluster
 
 		items = append(items, currItem)
 		s.uids = append(s.uids, &uid)
+		break
 	}
 
 	return items, nil
@@ -243,7 +219,6 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		)
 	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`)
 
-	klog.Info("LENGTH OF QUERY:", len(relQuery))
 	klog.Info("NUMBER OF UIDS IN RELATED:", len(s.uids))
 
 	relations, QueryError := s.pool.Query(context.Background(), relQuery, s.uids) // how to deal with defaults.

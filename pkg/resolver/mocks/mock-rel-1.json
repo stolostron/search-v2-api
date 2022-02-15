@@ -1,0 +1,18 @@
+{"addRecords":[
+    {
+        "uid":"local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd",
+        "resourceString":"templates",
+        "properties": {"kind":"Template"}
+    },
+    {
+        "uid":"local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b",
+        "resourceString":"replicasets",
+        "properties":{"kind":"ReplicaSet"},
+        "EdgeType": "ownedBy",
+        "SourceUID": "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b",
+        "DestUID": "local-cluster/411e30e4-f773-41a6-b745-24c93c173f45",
+        "SourceKind": "ReplicaSet",
+        "DestKind": "Deployment"
+    }
+    ]
+} 
