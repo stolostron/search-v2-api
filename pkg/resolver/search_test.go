@@ -54,11 +54,6 @@ func Test_SearchResolver_Items(t *testing.T) {
 	fmt.Println("RESULT IS:", len(result))
 	fmt.Println("MOCKROWS ARE: ", len(mockRows.mockData))
 
-	//Verify returned items.
-	// if len(result) != len(mockRows.mockData[0]) {
-	// 	t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData[0]), len(result))
-	// } //this has same len but formatted differently so error out..
-
 	// Verify properties for each returned item.
 	for i, item := range result {
 		mockRow := mockRows.mockData[i]
