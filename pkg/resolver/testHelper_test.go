@@ -70,7 +70,7 @@ func newMockRows(mockDataFile string) *MockRows {
 
 	for i, item := range items {
 
-		mockRow := make(map[string]interface{}, 0)
+		mockRow := make(map[string]interface{})
 
 		if item.(map[string]interface{})["properties"] != nil {
 			mockRow["data"] = item.(map[string]interface{})["properties"]
@@ -118,22 +118,17 @@ func (r *MockRows) Next() bool {
 
 func (r *MockRows) Scan(dest ...interface{}) error {
 	for i := range dest {
-		// if i > len(r.mockData) {
-		// 	break
-		// }
 		switch v := dest[i].(type) {
 		case *int:
 			fmt.Printf("Integer value of %+v", v)
 			*dest[i].(*int) = r.mockData[r.index][r.columnHeaders[i]].(int)
 			klog.Infof("scaned %s", v)
 		case *string:
-			fmt.Printf("String value of %+v", v)
-			fmt.Println(" col is", r.columnHeaders[i], i)
+			fmt.Printf("String value is %+v", v)
 			*dest[i].(*string) = r.mockData[r.index][r.columnHeaders[i]].(string)
 			klog.Infof("scaned %s", v)
 		case *map[string]interface{}:
-			fmt.Printf("map value is %+v", v)
-			fmt.Println(" col is", r.columnHeaders[i], i)
+			fmt.Printf("Map value is %+v", v)
 			*dest[i].(*map[string]interface{}) = r.mockData[r.index][r.columnHeaders[i]].(map[string]interface{})
 			klog.Infof("scaned %s", v)
 		case nil:
