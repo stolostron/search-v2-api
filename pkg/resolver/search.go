@@ -277,6 +277,7 @@ func formatArray(itemlist []interface{}) string {
 	return strings.Join(keys, ",")
 }
 
+// Convert interface to string format
 func formatItem(data interface{}) string {
 	var item string
 	switch v := data.(type) {
