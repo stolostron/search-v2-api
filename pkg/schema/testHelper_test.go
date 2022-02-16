@@ -36,7 +36,7 @@ type Row struct {
 }
 
 func (r *Row) Scan(dest ...interface{}) error {
-	dest[0] = r.MockValue //Sherin: change
+	dest[0] = r.MockValue
 	return nil
 }
 

@@ -17,7 +17,7 @@ func Test_SearchResolver_Count(t *testing.T) {
 	// Mock the database query
 	mockRow := &Row{MockValue: 10}
 	mockPool.EXPECT().QueryRow(gomock.Any(),
-		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->>'kind' = 'pod') LIMIT 10000`),
+		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->>'kind' IN ('pod')) LIMIT 10000`),
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
@@ -38,7 +38,7 @@ func Test_SearchResolver_Items(t *testing.T) {
 	// Mock the database queries.
 	mockRows := newMockRows("./mocks/mock.json")
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'kind' = 'Template') LIMIT 10000`),
+		gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'kind' IN ('Template')) LIMIT 10000`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 
@@ -81,7 +81,7 @@ func Test_SearchResolver_Items_Multiple_Filter(t *testing.T) {
 	// Mock the database queries.
 	mockRows := newMockRows("./mocks/mock.json")
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" = 'local-cluster')) LIMIT 10`),
+		gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster'))) LIMIT 10`),
 		// gomock.Eq("SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'namespace')=any($1) AND cluster=$2 LIMIT 10"),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)

@@ -18,11 +18,13 @@ type SearchCompleteResult struct {
 	pool     pgxpoolmock.PgxPool
 	property string
 	limit    *int
+	query    string
+	params   []interface{}
 }
 
 func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, error) {
-	query, args := s.searchCompleteQuery(ctx)
-	res, autoCompleteErr := s.searchCompleteResults(query, args)
+	s.searchCompleteQuery(ctx)
+	res, autoCompleteErr := s.searchCompleteResults()
 	if autoCompleteErr != nil {
 		klog.Error("Error resolving properties in autoComplete", autoCompleteErr)
 	}
@@ -30,21 +32,18 @@ func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, err
 }
 
 func SearchComplete(ctx context.Context, property string, srchInput *model.SearchInput, limit *int) ([]*string, error) {
-	var searchCompleteResult *SearchCompleteResult
 
-	if srchInput != nil {
-		searchCompleteResult = &SearchCompleteResult{
-			input:    srchInput,
-			pool:     db.GetConnection(),
-			property: property,
-			limit:    limit,
-		}
+	searchCompleteResult := &SearchCompleteResult{
+		input:    srchInput,
+		pool:     db.GetConnection(),
+		property: property,
+		limit:    limit,
 	}
 	return searchCompleteResult.autoComplete(ctx)
 
 }
 
-func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) (string, []interface{}) {
+func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 	var limit int
 	var whereDs []exp.Expression
 	var selectDs *goqu.SelectDataset
@@ -53,7 +52,9 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) (string,
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 	//WHERE CLAUSE
-	whereDs = res.WhereClauseFilter(s.input)
+	if s.input != nil && len(s.input.Filters) > 0 {
+		whereDs = res.WhereClauseFilter(s.input)
+	}
 	//SELECT CLAUSE
 	if s.property != "" {
 		if s.property == "cluster" {
@@ -66,7 +67,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) (string,
 			whereDs = append(whereDs, goqu.L(`"data"->>?`, s.property).IsNotNull())
 		}
 		//LIMIT CLAUSE
-		if s.input.Limit != nil && *s.input.Limit != 0 {
+		if s.input != nil && s.input.Limit != nil && *s.input.Limit != 0 {
 			limit = *s.input.Limit
 		} else {
 			limit = config.DEFAULT_QUERY_LIMIT
@@ -74,32 +75,31 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) (string,
 		//Get the query
 		sql, params, err := selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
 		if err != nil {
-			klog.Infof("Error building SearchComplete query: %s", err.Error())
+			klog.Errorf("Error building SearchComplete query: %s", err.Error())
 		}
-		klog.Infof("SearchComplete: %s\nargs: %s", sql, params)
-		return sql, params
+		s.query = sql
+		s.params = params
+	} else {
+		s.query = ""
+		s.params = nil
 	}
-
-	return "", nil
 }
 
-func (s *SearchCompleteResult) searchCompleteResults(query string, args []interface{}) ([]*string, error) {
-
-	//TODO: Handle error
-	rows, err := s.pool.Query(context.Background(), query, args...)
+func (s *SearchCompleteResult) searchCompleteResults() ([]*string, error) {
+	klog.V(2).Info("Resolving searchCompleteResults()")
+	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
 	if err != nil {
 		klog.Error("Error fetching results from db ", err)
 	}
 	defer rows.Close()
 	var srchCompleteOut []*string
-	var prop string
 	for rows.Next() {
+		prop := ""
 		scanErr := rows.Scan(&prop)
 		if scanErr != nil {
 			klog.Info("Error reading searchCompleteResults", scanErr)
 		}
-		tmpProp := prop
-		srchCompleteOut = append(srchCompleteOut, &tmpProp)
+		srchCompleteOut = append(srchCompleteOut, &prop)
 	}
 	return srchCompleteOut, nil
 }

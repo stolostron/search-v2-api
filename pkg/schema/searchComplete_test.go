@@ -3,6 +3,7 @@ package schema
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -26,8 +27,8 @@ func Test_SearchComplete_Query(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
-	result, _ := resolver.autoComplete(context.TODO())
-
+	result, err := resolver.autoComplete(context.TODO())
+	fmt.Println("err from autoComplete: ", err)
 	// Verify response
 	if !string_array_equal(result, expectedProps) {
 		t.Errorf("Incorrect Result() expected [%v] got [%v]", expectedProps, result)
@@ -85,7 +86,7 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 	mockRows := newMockRows("../resolver/mocks/mock.json")
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "cluster" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" = 'local-cluster') AND ("cluster" IS NOT NULL)) ORDER BY "cluster" ASC LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "cluster" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster')) AND ("cluster" IS NOT NULL)) ORDER BY "cluster" ASC LIMIT 10`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
