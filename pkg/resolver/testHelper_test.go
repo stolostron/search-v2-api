@@ -50,54 +50,51 @@ func (r *Row) Scan(dest ...interface{}) error {
 // https://github.com/jackc/pgx/blob/master/rows.go#L24
 // ====================================================
 
-func newMockRows(testType string) *MockRows {
-	bytes, _ := ioutil.ReadFile("./mocks/mock-rel-1.json")
+func newMockRows(mockDataFile string) *MockRows {
+	// Read json file and build mock data
+	bytes, _ := ioutil.ReadFile(mockDataFile) //read data into Items struct which is []map[string]interface{}
 	var data map[string]interface{}
 	if err := json.Unmarshal(bytes, &data); err != nil {
 		panic(err)
 	}
+
+	columns := data["columns"].([]interface{})
+	columnHeaders := make([]string, len(columns))
+	for i, col := range columns {
+		columnHeaders[i] = col.(string)
+	}
+
 	items := data["records"].([]interface{})
 
 	mockData := make([]map[string]interface{}, len(items))
 
-	if testType == "non-rel" {
+	for i, item := range items {
 
-		for i, item := range items {
+		mockRow := make(map[string]interface{}, 0)
+
+		if item.(map[string]interface{})["properties"] != nil {
+			mockRow["data"] = item.(map[string]interface{})["properties"]
+		}
+		if item.(map[string]interface{})["uid"] != nil {
 			uid := item.(map[string]interface{})["uid"]
-			mockData[i] = map[string]interface{}{
-				"uid":     uid,
-				"cluster": strings.Split(uid.(string), "/")[0],
-				"data":    item.(map[string]interface{})["properties"],
-			}
+			mockRow["uid"] = uid
+			mockRow["cluster"] = strings.Split(uid.(string), "/")[0]
 		}
-		columnHeaders := []string{"uid", "cluster", "data"}
-		return &MockRows{
-			mockData:      mockData,
-			index:         -1,
-			columnHeaders: columnHeaders,
+		if item.(map[string]interface{})["DestUID"] != nil {
+			mockRow["destid"] = item.(map[string]interface{})["DestUID"]
+		}
+		if item.(map[string]interface{})["DestKind"] != nil {
+			mockRow["destkind"] = item.(map[string]interface{})["DestKind"]
 		}
 
-	} else if testType == "rel" {
-		for i, item := range items {
-			destid := item.(map[string]interface{})["DestUID"]
-			destkind := item.(map[string]interface{})["DestKind"]
-			mockData[i] = map[string]interface{}{
-				"data":     item.(map[string]interface{})["properties"],
-				"destid":   destid,
-				"destkind": destkind,
-			}
-		}
-		columnHeaders := []string{"data", "destid", "destkind"}
-		return &MockRows{
-			mockData:      mockData,
-			index:         0,
-			columnHeaders: columnHeaders,
-		}
-
-	} else {
-		return nil
+		mockData[i] = mockRow
 	}
 
+	return &MockRows{
+		mockData:      mockData,
+		index:         -1,
+		columnHeaders: columnHeaders,
+	}
 }
 
 type MockRows struct {

@@ -38,7 +38,7 @@ func Test_SearchResolver_Items(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 	t.Log("Print")
 	// Mock the database queries.
-	mockRows := newMockRows("non-rel")
+	mockRows := newMockRows("./mocks/mock.json")
 
 	t.Log("MOCK ROWS are:", mockRows.mockData)
 	mockPool.EXPECT().Query(gomock.Any(),
@@ -81,11 +81,9 @@ func Test_SearchResolver_Items(t *testing.T) {
 func Test_SearchResolver_Relationships(t *testing.T) {
 
 	var resultList []*string
-	var uid1 string
-	var uid2 string
 
-	uid1 = "local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd"
-	uid2 = "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b"
+	uid1 := "local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd"
+	uid2 := "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b"
 
 	resultList = append(resultList, &uid1, &uid2)
 
@@ -114,7 +112,8 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 		AND level = 1
 		)
 	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`)
-	mockRows := newMockRows("rel")
+
+	mockRows := newMockRows("./mocks/mock-rel-1.json")
 	fmt.Println("len of Mock Rows are:", len(mockRows.mockData))
 	mockPool2.EXPECT().Query(gomock.Any(),
 		gomock.Eq(relQuery),
@@ -124,9 +123,9 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	result2 := resolver2.Related() // this should return a relatedResults object
 
 	fmt.Println("MOCKDATA:", mockRows.mockData)
-	fmt.Println("MOCKDATA:", mockRows.mockData[1]["destkind"])
+	fmt.Println("MOCKDATA:", mockRows.mockData[0]["destkind"])
 
-	if result2[0].Kind != mockRows.mockData[1]["destkind"] {
+	if result2[0].Kind != mockRows.mockData[0]["destkind"] {
 		t.Errorf("Kind value in mockdata does not match kind value of result")
 	}
 
