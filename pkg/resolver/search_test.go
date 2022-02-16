@@ -2,7 +2,6 @@
 package resolver
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -36,7 +35,6 @@ func Test_SearchResolver_Items(t *testing.T) {
 	val1 := "template"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "kind", Values: []*string{&val1}}}}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
-	t.Log("Print")
 	// Mock the database queries.
 	mockRows := newMockRows("./mocks/mock.json")
 
@@ -46,13 +44,8 @@ func Test_SearchResolver_Items(t *testing.T) {
 		gomock.Eq("template"),
 	).Return(mockRows, nil)
 
-	t.Log("MOCK ROWS are:", mockRows.mockData)
-
 	// Execute the function
 	result := resolver.Items()
-
-	fmt.Println("RESULT IS:", len(result))
-	fmt.Println("MOCKROWS ARE: ", len(mockRows.mockData))
 
 	// Verify properties for each returned item.
 	for i, item := range result {
@@ -84,9 +77,7 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 
 	// //take the uids from above as input
 	searchInput2 := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "uid", Values: resultList}}}
-	fmt.Println("resultslist:\n ", *resultList[1])
 	resolver2, mockPool2 := newMockSearchResolver(t, searchInput2, resultList)
-	fmt.Println("UIDs from resolver are:\n", resolver2.uids)
 
 	relQuery := strings.TrimSpace(`WITH RECURSIVE
 	search_graph(uid, data, destkind, sourceid, destid, path, level)
@@ -109,16 +100,12 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`)
 
 	mockRows := newMockRows("./mocks/mock-rel-1.json")
-	fmt.Println("len of Mock Rows are:", len(mockRows.mockData))
 	mockPool2.EXPECT().Query(gomock.Any(),
 		gomock.Eq(relQuery),
 		gomock.Eq(resultList),
 	).Return(mockRows, nil)
 
 	result2 := resolver2.Related() // this should return a relatedResults object
-
-	fmt.Println("MOCKDATA:", mockRows.mockData)
-	fmt.Println("MOCKDATA:", mockRows.mockData[0]["destkind"])
 
 	if result2[0].Kind != mockRows.mockData[0]["destkind"] {
 		t.Errorf("Kind value in mockdata does not match kind value of result")

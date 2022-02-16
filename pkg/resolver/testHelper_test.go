@@ -3,7 +3,6 @@ package resolver
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"strings"
 	"sync"
@@ -52,7 +51,7 @@ func (r *Row) Scan(dest ...interface{}) error {
 
 func newMockRows(mockDataFile string) *MockRows {
 	// Read json file and build mock data
-	bytes, _ := ioutil.ReadFile(mockDataFile) //read data into Items struct which is []map[string]interface{}
+	bytes, _ := ioutil.ReadFile(mockDataFile)
 	var data map[string]interface{}
 	if err := json.Unmarshal(bytes, &data); err != nil {
 		panic(err)
@@ -120,21 +119,15 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 	for i := range dest {
 		switch v := dest[i].(type) {
 		case *int:
-			fmt.Printf("Integer value of %+v", v)
 			*dest[i].(*int) = r.mockData[r.index][r.columnHeaders[i]].(int)
-			klog.Infof("scaned %s", v)
 		case *string:
-			fmt.Printf("String value is %+v", v)
 			*dest[i].(*string) = r.mockData[r.index][r.columnHeaders[i]].(string)
-			klog.Infof("scaned %s", v)
 		case *map[string]interface{}:
-			fmt.Printf("Map value is %+v", v)
 			*dest[i].(*map[string]interface{}) = r.mockData[r.index][r.columnHeaders[i]].(map[string]interface{})
-			klog.Infof("scaned %s", v)
 		case nil:
-			fmt.Printf("error type %T", v)
+			klog.Info("error type %T", v)
 		default:
-			fmt.Printf("unexpected type %T", v)
+			klog.Info("unexpected type %T", v)
 
 		}
 

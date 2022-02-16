@@ -151,13 +151,11 @@ func (s *SearchResult) resolveCount(query string, args []interface{}) (int, erro
 
 func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[string]interface{}, error) {
 	rows, err := s.pool.Query(context.Background(), query, args...)
-	fmt.Println(query, args)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, args, err)
 	}
 	defer rows.Close()
 
-	// var uid string
 	var cluster string
 	var data map[string]interface{}
 	items := []map[string]interface{}{}
@@ -169,9 +167,7 @@ func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[str
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), query)
 		}
-		fmt.Println("uid scaned:", uid)
 		currItem := formatDataMap(data)
-		// currItem := data
 		currItem["_uid"] = uid
 		currItem["cluster"] = cluster
 
@@ -199,9 +195,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	var kindSlice []string
 	var kindList []string
 	var countList []int
-	// var relQuery string
 
-	// LEARNING: IN is equivalent to = ANY and performance is not deteriorated when we replace IN with =ANY
 	relQuery := strings.TrimSpace(`WITH RECURSIVE
 	search_graph(uid, data, destkind, sourceid, destid, path, level)
 	AS (
@@ -221,8 +215,6 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		AND level = 1
 		)
 	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`)
-
-	klog.Info("NUMBER OF UIDS IN RELATED:", len(s.uids))
 
 	relations, QueryError := s.pool.Query(context.Background(), relQuery, s.uids) // how to deal with defaults.
 	if QueryError != nil {
@@ -257,9 +249,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 
 	//iterating over count and appending to new lists (kindList and countList)
 	for k, v := range count {
-		// fmt.Println("Keys:", k)
 		kindList = append(kindList, k)
-		// fmt.Println("Values:", v)
 		countList = append(countList, v)
 	}
 
@@ -272,9 +262,6 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		count := countList[i]
 		relatedSearch[i] = SearchRelatedResult{kind, &count, items}
 	}
-
-	fmt.Println("LENGTH OF REALTEDSEARCH:\n", len(relatedSearch))
-	fmt.Println("related kind:", relatedSearch[0].Kind)
 
 	return relatedSearch
 }
