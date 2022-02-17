@@ -22,7 +22,7 @@ import (
 type SearchResult struct {
 	input  *model.SearchInput
 	pool   pgxpoolmock.PgxPool
-	uids   []string       // List of uids from search result to be used to get relatioinships.
+	uids   []*string      // List of uids from search result to be used to get relatioinships.
 	wg     sync.WaitGroup // WORKAROUND: Used to serialize search query and relatioinships query.
 	query  string
 	params []interface{}
@@ -47,7 +47,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 
 func (s *SearchResult) Count() int {
 	klog.V(2).Info("Resolving SearchResult:Count()")
-	s.buildSearchQuery(context.Background(), true)
+	s.buildSearchQuery(context.Background(), true, false)
 	count, e := s.resolveCount()
 
 	if e != nil {
@@ -60,7 +60,7 @@ func (s *SearchResult) Items() []map[string]interface{} {
 	s.wg.Add(1)
 	defer s.wg.Done()
 	klog.V(2).Info("Resolving SearchResult:Items()")
-	s.buildSearchQuery(context.Background(), false)
+	s.buildSearchQuery(context.Background(), false, false)
 	r, e := s.resolveItems()
 	if e != nil {
 		klog.Error("Error resolving items.", e)
@@ -82,7 +82,7 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 	return r
 }
 
-func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool) {
+func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) {
 	var limit int
 	var selectDs *goqu.SelectDataset
 	var whereDs []exp.Expression
@@ -95,6 +95,8 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool) {
 	//SELECT CLAUSE
 	if count {
 		selectDs = ds.Select(goqu.COUNT("uid"))
+	} else if uid {
+		selectDs = ds.Select("uid")
 	} else {
 		selectDs = ds.Select("uid", "cluster", "data")
 	}
@@ -134,23 +136,27 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	}
 	defer rows.Close()
 
-	var uid, cluster string
+	var cluster string
 	var data map[string]interface{}
 	items := []map[string]interface{}{}
-	s.uids = make([]string, len(items))
+	s.uids = make([]*string, len(items))
 
 	for rows.Next() {
+		var uid string
 		err = rows.Scan(&uid, &cluster, &data)
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), s.query)
 		}
-
 		currItem := formatDataMap(data)
 		currItem["_uid"] = uid
 		currItem["cluster"] = cluster
 
 		items = append(items, currItem)
-		s.uids = append(s.uids, uid)
+		s.uids = append(s.uids, &uid)
+		if rows.RawValues() == nil {
+			break
+		}
+
 	}
 
 	return items, nil
@@ -170,28 +176,27 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	var kindList []string
 	var countList []int
 
-	// LEARNING: IN is equivalent to = ANY and performance is not deteriorated when we replace IN with =ANY
-	recrusiveQuery := `with recursive
-	search_graph(uid, data, sourcekind, destkind, sourceid, destid, path, level)
-	as (
-	SELECT r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] as path, 1 as level
-		from search.resources r
+	relQuery := strings.TrimSpace(`WITH RECURSIVE
+	search_graph(uid, data, destkind, sourceid, destid, path, level)
+	AS (
+	SELECT r.uid, r.data, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] AS path, 1 AS level
+		FROM search.resources r
 		INNER JOIN
-			search.edges e ON (r.uid = e.sourceid) or (r.uid = e.destid)
-		 where r.uid = ANY($1)
-	union
-	select r.uid, r.data, e.sourcekind, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 as level
-		from search.resources r
+			search.edges e ON (r.uid = e.sourceid) OR (r.uid = e.destid)
+		 WHERE r.uid = ANY($1)
+	UNION
+	SELECT r.uid, r.data, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 AS level
+		FROM search.resources r
 		INNER JOIN
 			search.edges e ON (r.uid = e.sourceid)
 		, search_graph sg
-		where (e.sourceid = sg.destid or e.destid = sg.sourceid)
-		and r.uid <> all(sg.path)
-		and level = 1 
+		WHERE (e.sourceid = sg.destid OR e.destid = sg.sourceid)
+		AND r.uid <> all(sg.path)
+		AND level = 1
 		)
-	select distinct on (destid) data, destid, destkind from search_graph where level=1 or destid = ANY($2)`
+	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`)
 
-	relations, QueryError := s.pool.Query(context.Background(), recrusiveQuery, s.uids, s.uids) // how to deal with defaults.
+	relations, QueryError := s.pool.Query(context.Background(), relQuery, s.uids) // how to deal with defaults.
 	if QueryError != nil {
 		klog.Errorf("query error :", QueryError)
 	}
@@ -205,6 +210,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		relatedResultError := relations.Scan(&data, &destid, &destkind)
 		if relatedResultError != nil {
 			klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
+
 		}
 
 		// creating currItem variable to keep data and converting strings in data to lowercase
@@ -213,7 +219,9 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		// currItem["Kind"] = destkind
 		kindSlice = append(kindSlice, destkind)
 		items = append(items, currItem)
-
+		if relations.RawValues() == nil {
+			break
+		}
 	}
 
 	//calling function to get map which contains unique values from kindSlice and counts the number occurances ex: map[key:Pod, value:2] if pod occurs 2x in kindSlice
@@ -221,9 +229,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 
 	//iterating over count and appending to new lists (kindList and countList)
 	for k, v := range count {
-		// fmt.Println("Keys:", k)
 		kindList = append(kindList, k)
-		// fmt.Println("Values:", v)
 		countList = append(countList, v)
 	}
 

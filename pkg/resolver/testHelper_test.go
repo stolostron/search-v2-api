@@ -13,9 +13,10 @@ import (
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgproto3/v2"
 	"github.com/stolostron/search-v2-api/graph/model"
+	"k8s.io/klog/v2"
 )
 
-func newMockSearchResolver(t *testing.T, input *model.SearchInput) (*SearchResult, *pgxpoolmock.MockPgxPool) {
+func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*string) (*SearchResult, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
@@ -23,7 +24,7 @@ func newMockSearchResolver(t *testing.T, input *model.SearchInput) (*SearchResul
 	mockResolver := &SearchResult{
 		input: input,
 		pool:  mockPool,
-		uids:  []string{},
+		uids:  uids,
 		wg:    sync.WaitGroup{},
 	}
 
@@ -50,33 +51,55 @@ func (r *Row) Scan(dest ...interface{}) error {
 
 func newMockRows(mockDataFile string) *MockRows {
 	// Read json file and build mock data
-	bytes, _ := ioutil.ReadFile("./mocks/mock.json") //read data into Items struct which is []map[string]interface{}
-	var resources map[string]interface{}
-	if err := json.Unmarshal(bytes, &resources); err != nil {
+	bytes, _ := ioutil.ReadFile(mockDataFile)
+	var data map[string]interface{}
+	if err := json.Unmarshal(bytes, &data); err != nil {
 		panic(err)
 	}
 
-	items := resources["addResources"].([]interface{})
+	columns := data["columns"].([]interface{})
+	columnHeaders := make([]string, len(columns))
+	for i, col := range columns {
+		columnHeaders[i] = col.(string)
+	}
+
+	items := data["records"].([]interface{})
 
 	mockData := make([]map[string]interface{}, len(items))
+
 	for i, item := range items {
-		uid := item.(map[string]interface{})["uid"]
-		mockData[i] = map[string]interface{}{
-			"uid":     uid,
-			"cluster": strings.Split(uid.(string), "/")[0],
-			"data":    item.(map[string]interface{})["properties"],
+
+		mockRow := make(map[string]interface{})
+
+		if item.(map[string]interface{})["properties"] != nil {
+			mockRow["data"] = item.(map[string]interface{})["properties"]
 		}
+		if item.(map[string]interface{})["uid"] != nil {
+			uid := item.(map[string]interface{})["uid"]
+			mockRow["uid"] = uid
+			mockRow["cluster"] = strings.Split(uid.(string), "/")[0]
+		}
+		if item.(map[string]interface{})["DestUID"] != nil {
+			mockRow["destid"] = item.(map[string]interface{})["DestUID"]
+		}
+		if item.(map[string]interface{})["DestKind"] != nil {
+			mockRow["destkind"] = item.(map[string]interface{})["DestKind"]
+		}
+
+		mockData[i] = mockRow
 	}
 
 	return &MockRows{
-		index:    0,
-		mockData: mockData,
+		mockData:      mockData,
+		index:         -1,
+		columnHeaders: columnHeaders,
 	}
 }
 
 type MockRows struct {
-	mockData []map[string]interface{}
-	index    int
+	mockData      []map[string]interface{}
+	index         int
+	columnHeaders []string
 }
 
 func (r *MockRows) Close() {}
@@ -93,9 +116,22 @@ func (r *MockRows) Next() bool {
 }
 
 func (r *MockRows) Scan(dest ...interface{}) error {
-	*dest[0].(*string) = r.mockData[r.index-1]["uid"].(string)
-	*dest[1].(*string) = r.mockData[r.index-1]["cluster"].(string)
-	*dest[2].(*map[string]interface{}) = r.mockData[r.index-1]["data"].(map[string]interface{})
+	for i := range dest {
+		switch v := dest[i].(type) {
+		case *int:
+			*dest[i].(*int) = r.mockData[r.index][r.columnHeaders[i]].(int)
+		case *string:
+			*dest[i].(*string) = r.mockData[r.index][r.columnHeaders[i]].(string)
+		case *map[string]interface{}:
+			*dest[i].(*map[string]interface{}) = r.mockData[r.index][r.columnHeaders[i]].(map[string]interface{})
+		case nil:
+			klog.Info("error type %T", v)
+		default:
+			klog.Info("unexpected type %T", v)
+
+		}
+
+	}
 	return nil
 }
 
