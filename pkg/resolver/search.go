@@ -109,7 +109,6 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 
 		if len(filter.Values) > 1 {
 			for _, val := range filter.Values {
-				klog.Info("filter VALUE is:", val)
 				klog.Infof("Filter value: %s", *val)
 				values = append(values, strings.ToLower(*val))
 				//TODO: Here, assuming value is string. Check for other cases.
