@@ -1,9 +1,8 @@
 // Copyright Contributors to the Open Cluster Management project
-package schema
+package resolver
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -28,7 +27,10 @@ func Test_SearchComplete_Query(t *testing.T) {
 
 	// Execute function
 	result, err := resolver.autoComplete(context.TODO())
-	fmt.Println("err from autoComplete: ", err)
+	if err != nil {
+		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
+
+	}
 	// Verify response
 	if !string_array_equal(result, expectedProps) {
 		t.Errorf("Incorrect Result() expected [%v] got [%v]", expectedProps, result)
@@ -58,15 +60,6 @@ func Test_SearchCompleteNoProp_Query(t *testing.T) {
 	if !string_array_equal(result, expectedProps) {
 		t.Errorf("Incorrect Result() expected [%v] got [%v]", expectedProps, result)
 	}
-}
-
-func string_array_equal(result, expected []*string) bool { //, expected []interface{}) bool {
-	for i, exp := range expected {
-		if *result[i] != *exp {
-			return false
-		}
-	}
-	return true
 }
 
 func Test_SearchCompleteWithFilter_Query(t *testing.T) {

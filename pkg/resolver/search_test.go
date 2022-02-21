@@ -38,9 +38,8 @@ func Test_SearchResolver_Items(t *testing.T) {
 	// Mock the database queries.
 	mockRows := newMockRows("./mocks/mock.json")
 
-	t.Log("MOCK ROWS are:", mockRows.mockData)
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'kind' IN ('Template')) LIMIT 10000`),
+		gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'kind' IN ('template')) LIMIT 10000`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 
@@ -197,6 +196,10 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 
 	if result2[0].Kind != mockRows.mockData[0]["destkind"] {
 		t.Errorf("Kind value in mockdata does not match kind value of result")
+	}
+	// Verify returned items.
+	if len(result2) != len(mockRows.mockData) {
+		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result2))
 	}
 
 }

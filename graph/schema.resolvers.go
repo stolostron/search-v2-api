@@ -59,7 +59,7 @@ func (r *queryResolver) SavedSearches(ctx context.Context) ([]*model.UserSearch,
 
 func (r *queryResolver) SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error) {
 	klog.Infof("Received SearchComplete query with input property **%s** and limit %d", property, limit)
-	return schema.SearchComplete(ctx, property, query, limit)
+	return resolver.SearchComplete(ctx, property, query, limit)
 }
 
 // Mutation returns generated.MutationResolver implementation.

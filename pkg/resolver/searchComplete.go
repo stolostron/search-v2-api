@@ -1,4 +1,4 @@
-package schema
+package resolver
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
-	res "github.com/stolostron/search-v2-api/pkg/resolver"
 	klog "k8s.io/klog/v2"
 )
 
@@ -53,7 +52,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 	ds := goqu.From(schemaTable)
 	//WHERE CLAUSE
 	if s.input != nil && len(s.input.Filters) > 0 {
-		whereDs = res.WhereClauseFilter(s.input)
+		whereDs = WhereClauseFilter(s.input)
 	}
 	//SELECT CLAUSE
 	if s.property != "" {

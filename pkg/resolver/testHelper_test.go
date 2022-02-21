@@ -30,6 +30,18 @@ func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*strin
 
 	return mockResolver, mockPool
 }
+func newMockSearchComplete(t *testing.T, input *model.SearchInput, property string) (*SearchCompleteResult, *pgxpoolmock.MockPgxPool) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
+
+	mockResolver := &SearchCompleteResult{
+		input:    input,
+		pool:     mockPool,
+		property: property,
+	}
+	return mockResolver, mockPool
+}
 
 // ====================================================
 // Mock the Row interface defined in the pgx library.
@@ -68,30 +80,19 @@ func newMockRows(mockDataFile string) *MockRows {
 	mockData := make([]map[string]interface{}, len(items))
 
 	for i, item := range items {
-
-		mockRow := make(map[string]interface{})
-
-		if item.(map[string]interface{})["properties"] != nil {
-			mockRow["data"] = item.(map[string]interface{})["properties"]
+		uid := item.(map[string]interface{})["uid"]
+		mockData[i] = map[string]interface{}{
+			"uid":      uid,
+			"cluster":  strings.Split(uid.(string), "/")[0],
+			"data":     item.(map[string]interface{})["properties"],
+			"destid":   item.(map[string]interface{})["DestUID"],
+			"destkind": item.(map[string]interface{})["DestKind"],
 		}
-		if item.(map[string]interface{})["uid"] != nil {
-			uid := item.(map[string]interface{})["uid"]
-			mockRow["uid"] = uid
-			mockRow["cluster"] = strings.Split(uid.(string), "/")[0]
-		}
-		if item.(map[string]interface{})["DestUID"] != nil {
-			mockRow["destid"] = item.(map[string]interface{})["DestUID"]
-		}
-		if item.(map[string]interface{})["DestKind"] != nil {
-			mockRow["destkind"] = item.(map[string]interface{})["DestKind"]
-		}
-
-		mockData[i] = mockRow
 	}
 
 	return &MockRows{
 		mockData:      mockData,
-		index:         -1,
+		index:         0,
 		columnHeaders: columnHeaders,
 	}
 }
@@ -116,21 +117,26 @@ func (r *MockRows) Next() bool {
 }
 
 func (r *MockRows) Scan(dest ...interface{}) error {
-	for i := range dest {
-		switch v := dest[i].(type) {
-		case *int:
-			*dest[i].(*int) = r.mockData[r.index][r.columnHeaders[i]].(int)
-		case *string:
-			*dest[i].(*string) = r.mockData[r.index][r.columnHeaders[i]].(string)
-		case *map[string]interface{}:
-			*dest[i].(*map[string]interface{}) = r.mockData[r.index][r.columnHeaders[i]].(map[string]interface{})
-		case nil:
-			klog.Info("error type %T", v)
-		default:
-			klog.Info("unexpected type %T", v)
+	if len(dest) > 1 { // For search function
+		for i := range dest {
+			switch v := dest[i].(type) {
+			case *int:
+				*dest[i].(*int) = r.mockData[r.index-1][r.columnHeaders[i]].(int)
+			case *string:
+				*dest[i].(*string) = r.mockData[r.index-1][r.columnHeaders[i]].(string)
+			case *map[string]interface{}:
+				*dest[i].(*map[string]interface{}) = r.mockData[r.index-1][r.columnHeaders[i]].(map[string]interface{})
+			case nil:
+				klog.Info("error type %T", v)
+			default:
+				klog.Info("unexpected type %T", v)
+
+			}
 
 		}
-
+	} else if len(dest) == 1 { // For searchComplete function
+		dataMap := r.mockData[r.index-1]["data"].(map[string]interface{})
+		*dest[0].(*string) = dataMap["kind"].(string)
 	}
 	return nil
 }
@@ -138,3 +144,12 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 func (r *MockRows) Values() ([]interface{}, error) { return nil, nil }
 
 func (r *MockRows) RawValues() [][]byte { return nil }
+
+func string_array_equal(result, expected []*string) bool { //, expected []interface{}) bool {
+	for i, exp := range expected {
+		if *result[i] != *exp {
+			return false
+		}
+	}
+	return true
+}

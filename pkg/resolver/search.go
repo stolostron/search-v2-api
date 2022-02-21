@@ -153,10 +153,6 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 
 		items = append(items, currItem)
 		s.uids = append(s.uids, &uid)
-		if rows.RawValues() == nil {
-			break
-		}
-
 	}
 
 	return items, nil
@@ -210,7 +206,6 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		relatedResultError := relations.Scan(&data, &destid, &destkind)
 		if relatedResultError != nil {
 			klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
-
 		}
 
 		// creating currItem variable to keep data and converting strings in data to lowercase
