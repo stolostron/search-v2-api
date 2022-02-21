@@ -32,9 +32,7 @@ func Test_SearchComplete_Query(t *testing.T) {
 
 	}
 	// Verify response
-	if !string_array_equal(result, expectedProps) {
-		t.Errorf("Incorrect Result() expected [%v] got [%v]", expectedProps, result)
-	}
+	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchComplete_Query")
 }
 
 func Test_SearchCompleteNoProp_Query(t *testing.T) {
@@ -57,9 +55,7 @@ func Test_SearchCompleteNoProp_Query(t *testing.T) {
 	result, _ := resolver.autoComplete(context.TODO())
 
 	// Verify response
-	if !string_array_equal(result, expectedProps) {
-		t.Errorf("Incorrect Result() expected [%v] got [%v]", expectedProps, result)
-	}
+	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteNoProp_Query")
 }
 
 func Test_SearchCompleteWithFilter_Query(t *testing.T) {
@@ -86,7 +82,5 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 	result, _ := resolver.autoComplete(context.TODO())
 
 	// Verify response
-	if !string_array_equal(result, expectedProps) {
-		t.Errorf("Incorrect Result() expected [%v] got [%v]", expectedProps, result)
-	}
+	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteWithFilter_Query")
 }

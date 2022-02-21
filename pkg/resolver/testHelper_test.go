@@ -145,11 +145,11 @@ func (r *MockRows) Values() ([]interface{}, error) { return nil, nil }
 
 func (r *MockRows) RawValues() [][]byte { return nil }
 
-func string_array_equal(result, expected []*string) bool { //, expected []interface{}) bool {
+func AssertStringArrayEqual(t *testing.T, result, expected []*string, message string) {
 	for i, exp := range expected {
 		if *result[i] != *exp {
-			return false
+			t.Errorf("%s expected [%v] got [%v]", message, expected, result)
+			return
 		}
 	}
-	return true
 }

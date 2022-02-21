@@ -272,14 +272,14 @@ func formatLabels(labels map[string]interface{}) string {
 func formatArray(itemlist []interface{}) string {
 	keys := make([]string, len(itemlist))
 	for i, k := range itemlist {
-		keys[i] = formatItem(k)
+		keys[i] = convertToString(k)
 	}
 	sort.Strings(keys)
 	return strings.Join(keys, ",")
 }
 
 // Convert interface to string format
-func formatItem(data interface{}) string {
+func convertToString(data interface{}) string {
 	var item string
 	switch v := data.(type) {
 	case string:

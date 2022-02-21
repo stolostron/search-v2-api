@@ -50,12 +50,12 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 	//FROM CLAUSE
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
-	//WHERE CLAUSE
-	if s.input != nil && len(s.input.Filters) > 0 {
-		whereDs = WhereClauseFilter(s.input)
-	}
-	//SELECT CLAUSE
 	if s.property != "" {
+		//WHERE CLAUSE
+		if s.input != nil && len(s.input.Filters) > 0 {
+			whereDs = WhereClauseFilter(s.input)
+		}
+		//SELECT CLAUSE
 		if s.property == "cluster" {
 			selectDs = ds.SelectDistinct(s.property).Order(goqu.C(s.property).Asc())
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
@@ -82,6 +82,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		s.query = ""
 		s.params = nil
 	}
+
 }
 
 func (s *SearchCompleteResult) searchCompleteResults() ([]*string, error) {
