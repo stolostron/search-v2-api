@@ -4,12 +4,46 @@
     {
         "uid":"local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd",
         "resourceString":"templates",
-        "properties": {"kind":"Template"}
+        "properties":{
+            "_clusterNamespace":"local-cluster-ns",
+            "_hubClusterResource":true,
+            "apigroup":"template.openshift.io",
+            "apiversion":"v1",
+            "created":"2021-07-14T10:20:37Z",
+            "kind":"Template",
+            "label":{"samples.operator.openshift.io/managed":"true"},
+            "name":"eap-cd-starter-s2i",
+            "namespace":"openshift"
+        },
+        "Metadata":{"OwnerUID":""}
     },
     {
         "uid":"local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b",
         "resourceString":"replicasets",
-        "properties":{"kind":"ReplicaSet"},
+        "properties":{
+            "_clusterNamespace":"local-cluster-ns",
+            "_hubClusterResource":true,
+            "apigroup":"apps",
+            "apiversion":"v1",
+            "created":"2021-07-14T10:15:20Z",
+            "current":0,
+            "desired":0
+            ,"kind":"ReplicaSet",
+            "label":{
+                "app.kubernetes.io/component":"controller",
+                "app.kubernetes.io/managed-by":"cluster-monitoring-operator",
+                "app.kubernetes.io/name":"prometheus-operator",
+                "app.kubernetes.io/part-of":"openshift-monitoring",
+                "app.kubernetes.io/version":"0.45.0",
+                "pod-template-hash":"5f5575c669"
+            },
+            "image": ["quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:2337b7727c84c75a8cde0ac5e9e2ac8bd70b6dbcb628ee933718ef4899f2e3ef","quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:26cde6bda32fe488c322e60b0de1580ef8321f60a7c24c6c008d8fc0437e5063"],
+            "name":"prometheus-operator-5f5575c669",
+            "namespace":"openshift-monitoring"
+        },
+        "Metadata":{
+            "OwnerUID":"local-cluster/411e30e4-f773-41a6-b745-24c93c173f45"
+        },
         "EdgeType": "ownedBy",
         "SourceUID": "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b",
         "DestUID": "local-cluster/411e30e4-f773-41a6-b745-24c93c173f45",
