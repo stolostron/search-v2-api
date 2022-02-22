@@ -2,6 +2,7 @@
 package resolver
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -79,6 +80,8 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	searchInput2 := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "uid", Values: resultList}}}
 	resolver2, mockPool2 := newMockSearchResolver(t, searchInput2, resultList)
 
+	fmt.Println("Resolver uids are:", resolver2.uids)
+
 	relQuery := strings.TrimSpace(`WITH RECURSIVE
 	search_graph(uid, data, destkind, sourceid, destid, path, level)
 	AS (
@@ -100,6 +103,7 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`)
 
 	mockRows := newMockRows("./mocks/mock-rel-1.json")
+	fmt.Println("MOCK ROWS ARE:", mockRows)
 	mockPool2.EXPECT().Query(gomock.Any(),
 		gomock.Eq(relQuery),
 		gomock.Eq(resultList),

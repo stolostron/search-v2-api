@@ -65,16 +65,24 @@ func (s *SearchResult) Items() []map[string]interface{} {
 
 func (s *SearchResult) Related() []SearchRelatedResult {
 	klog.Info("Resolving SearchResult:Related()")
-
-	// FIXME: WORKAROUND when the query doesn't request Items() we must use a more efficient query to get the uids.
 	if s.uids == nil {
-		klog.Warning("TODO: Use a query that only selects the UIDs.")
-		s.Items()
+		s.Uids()
 	}
-	s.wg.Wait() // WORKAROUND wait to complete execution of Items()
+
+	s.wg.Wait()
 
 	r := s.getRelations()
 	return r
+}
+
+func (s *SearchResult) Uids() []*string {
+	klog.Info("Resolving SearchResult:Uids()")
+	qString, qArgs := s.buildSearchQuery(context.Background(), false, true)
+	uidArray, e := s.resolveUids(qString, qArgs)
+	if e != nil {
+		klog.Error("Error resolving uids.", e)
+	}
+	return uidArray
 }
 
 //=====================
@@ -84,7 +92,6 @@ var trimAND string = " AND "
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) (string, []interface{}) {
 	var selectClause, whereClause, limitClause, limitStr, query string
 	var args []interface{}
-	// SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 10000
 	selectClause = "SELECT uid, cluster, data FROM search.resources "
 	if count {
 		selectClause = "SELECT count(uid) FROM search.resources "
@@ -98,7 +105,6 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	for i, filter := range s.input.Filters {
 		klog.Infof("Filters%d: %+v", i, *filter)
 
-		// TODO: Handle other column names like kind and namespace
 		if filter.Property == "cluster" {
 			whereClause = whereClause + filter.Property
 		} else {
@@ -134,7 +140,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	} else {
 		query = selectClause + strings.TrimRight(whereClause, trimAND)
 	}
-	klog.Infof("query: %s\nargs: %+v", query, args)
+	klog.Infof("query: %s\nargs: %v", query, args)
 
 	return query, args
 }
@@ -146,6 +152,30 @@ func (s *SearchResult) resolveCount(query string, args []interface{}) (int, erro
 	err := rows.Scan(&count)
 
 	return count, err
+}
+
+func (s *SearchResult) resolveUids(query string, args []interface{}) ([]*string, error) {
+	fmt.Println("ok")
+	fmt.Println("query", query)
+	fmt.Println("args", args)
+	rows, err := s.pool.Query(context.Background(), query, args...)
+
+	if err != nil {
+		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, args, err)
+	}
+	var uid string
+
+	defer rows.Close()
+	for rows.Next() {
+		err = rows.Scan(&uid)
+		if err != nil {
+			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), query)
+		}
+		s.uids = append(s.uids, &uid)
+	}
+
+	return s.uids, err
+
 }
 
 func (s *SearchResult) resolveItems(query string, args []interface{}) ([]map[string]interface{}, error) {
