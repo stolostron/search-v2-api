@@ -18,7 +18,7 @@ func Test_SearchResolver_Count(t *testing.T) {
 	// Mock the database query
 	mockRow := &Row{MockValue: 10}
 	mockPool.EXPECT().QueryRow(gomock.Any(),
-		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->>'kind' IN ('pod')) LIMIT 10000`),
+		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->>'kind' IN ('pod'))`),
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
@@ -109,13 +109,13 @@ func Test_SearchResolver_Items_Multiple_Filter(t *testing.T) {
 	}
 }
 
-func Test_SearchWithMultipleClusterFilter_Query(t *testing.T) {
+func Test_SearchWithMultipleClusterFilter_NegativeLimit_Query(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	value1 := "openshift"
 	value2 := "openshift-monitoring"
 	cluster1 := "local-cluster"
 	cluster2 := "remote-1"
-	limit := 10
+	limit := -1
 
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "namespace", Values: []*string{&value1, &value2}}, &model.SearchFilter{Property: "cluster", Values: []*string{&cluster1, &cluster2}}}, Limit: &limit}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
@@ -124,7 +124,7 @@ func Test_SearchWithMultipleClusterFilter_Query(t *testing.T) {
 	mockRows := newMockRows("../resolver/mocks/mock.json")
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster', 'remote-1'))) LIMIT 10`),
+		gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster', 'remote-1')))`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function

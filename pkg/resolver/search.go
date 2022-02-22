@@ -105,10 +105,16 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		whereDs = WhereClauseFilter(s.input)
 	}
 	//LIMIT CLAUSE
-	if s.input != nil && s.input.Limit != nil && *s.input.Limit != 0 {
-		limit = *s.input.Limit
-	} else {
-		limit = config.DEFAULT_QUERY_LIMIT
+	if !count {
+		if s.input != nil && s.input.Limit != nil && *s.input.Limit > 0 {
+			fmt.Println("s.input != nil && s.input.Limit != nil && *s.input.Limit > 0")
+			limit = *s.input.Limit
+		} else if s.input != nil && s.input.Limit != nil && *s.input.Limit == -1 {
+			klog.Warning("No limit set. Fetching all results.")
+		} else {
+			fmt.Println("final ELSE")
+			limit = config.DEFAULT_QUERY_LIMIT
+		}
 	}
 	//Get the query
 	sql, params, err := selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
@@ -192,9 +198,9 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		)
 	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`)
 
-	relations, QueryError := s.pool.Query(context.Background(), relQuery, s.uids) // how to deal with defaults.
-	if QueryError != nil {
-		klog.Errorf("query error :", QueryError)
+	relations, relQueryError := s.pool.Query(context.Background(), relQuery, s.uids) // how to deal with defaults.
+	if relQueryError != nil {
+		klog.Errorf("getRelations query error :%s", relQueryError.Error())
 	}
 
 	defer relations.Close()
@@ -319,16 +325,19 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 	var whereDs []exp.Expression
 	for _, filter := range input.Filters {
-		var values []string
 		if len(filter.Values) > 0 {
-			for _, val := range filter.Values {
-				values = append(values, *val)
+			values := make([]string, len(filter.Values))
+			for i, val := range filter.Values {
+				values[i] = *val
 			}
-		}
-		if filter.Property == "cluster" {
-			whereDs = append(whereDs, goqu.C(filter.Property).In(values).Expression())
+
+			if filter.Property == "cluster" {
+				whereDs = append(whereDs, goqu.C(filter.Property).In(values).Expression())
+			} else {
+				whereDs = append(whereDs, goqu.L(`"data"->>?`, filter.Property).In(values).Expression())
+			}
 		} else {
-			whereDs = append(whereDs, goqu.L(`"data"->>?`, filter.Property).In(values).Expression())
+			klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
 		}
 	}
 	return whereDs

@@ -66,8 +66,10 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			whereDs = append(whereDs, goqu.L(`"data"->>?`, s.property).IsNotNull())
 		}
 		//LIMIT CLAUSE
-		if s.input != nil && s.input.Limit != nil && *s.input.Limit != 0 {
+		if s.input != nil && s.input.Limit != nil && *s.input.Limit > 0 {
 			limit = *s.input.Limit
+		} else if s.input != nil && s.input.Limit != nil && *s.input.Limit == -1 {
+			klog.Warning("No limit set. Fetching all results.")
 		} else {
 			limit = config.DEFAULT_QUERY_LIMIT
 		}
