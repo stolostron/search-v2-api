@@ -107,12 +107,10 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	//LIMIT CLAUSE
 	if !count {
 		if s.input != nil && s.input.Limit != nil && *s.input.Limit > 0 {
-			fmt.Println("s.input != nil && s.input.Limit != nil && *s.input.Limit > 0")
 			limit = *s.input.Limit
 		} else if s.input != nil && s.input.Limit != nil && *s.input.Limit == -1 {
 			klog.Warning("No limit set. Fetching all results.")
 		} else {
-			fmt.Println("final ELSE")
 			limit = config.DEFAULT_QUERY_LIMIT
 		}
 	}
