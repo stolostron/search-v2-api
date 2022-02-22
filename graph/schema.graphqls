@@ -24,7 +24,7 @@ type Mutation {
 
 input SearchFilter {
     property: String!
-    values: [String]
+    values: [String]!
   }
 input SearchInput {
     keywords: [String]
