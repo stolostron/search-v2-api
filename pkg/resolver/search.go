@@ -144,7 +144,6 @@ func (s *SearchResult) resolveCount() (int, error) {
 }
 
 func (s *SearchResult) resolveUids() ([]*string, error) {
-	// rows, err := s.pool.Query(context.Background(), query, args...)
 	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
 
 	if err != nil {
