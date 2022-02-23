@@ -80,14 +80,13 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 	return r
 }
 
-func (s *SearchResult) Uids() []*string {
+func (s *SearchResult) Uids() {
 	klog.Info("Resolving SearchResult:Uids()")
 	s.buildSearchQuery(context.Background(), false, true)
-	uidArray, e := s.resolveUids()
+	_, e := s.resolveUids()
 	if e != nil {
 		klog.Error("Error resolving uids.", e)
 	}
-	return uidArray
 }
 
 //=====================
@@ -149,10 +148,10 @@ func (s *SearchResult) resolveUids() ([]*string, error) {
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
 	}
-	var uid string
 
 	defer rows.Close()
 	for rows.Next() {
+		var uid string
 		err = rows.Scan(&uid)
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), s.query)
