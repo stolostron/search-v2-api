@@ -81,12 +81,9 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 }
 
 func (s *SearchResult) Uids() {
-	klog.Info("Resolving SearchResult:Uids()")
+	klog.V(2).Info("Resolving SearchResult:Uids()")
 	s.buildSearchQuery(context.Background(), false, true)
-	_, e := s.resolveUids()
-	if e != nil {
-		klog.Error("Error resolving uids.", e)
-	}
+	s.resolveUids()
 }
 
 //=====================
@@ -142,13 +139,11 @@ func (s *SearchResult) resolveCount() (int, error) {
 	return count, err
 }
 
-func (s *SearchResult) resolveUids() ([]*string, error) {
+func (s *SearchResult) resolveUids() {
 	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
-
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
 	}
-
 	defer rows.Close()
 	for rows.Next() {
 		var uid string
@@ -158,8 +153,6 @@ func (s *SearchResult) resolveUids() ([]*string, error) {
 		}
 		s.uids = append(s.uids, &uid)
 	}
-
-	return s.uids, err
 
 }
 func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
