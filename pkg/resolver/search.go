@@ -70,17 +70,23 @@ func (s *SearchResult) Items() []map[string]interface{} {
 
 func (s *SearchResult) Related() []SearchRelatedResult {
 	klog.V(2).Info("Resolving SearchResult:Related()")
-
-	// FIXME: WORKAROUND when the query doesn't request Items() we must use a more efficient query to get the uids.
 	if s.uids == nil {
-		klog.Warning("TODO: Use a query that only selects the UIDs.")
-		s.Items()
+		s.Uids()
 	}
-	s.wg.Wait() // WORKAROUND wait to complete execution of Items()
+
+	s.wg.Wait()
 
 	r := s.getRelations()
 	return r
 }
+
+func (s *SearchResult) Uids() {
+	klog.V(2).Info("Resolving SearchResult:Uids()")
+	s.buildSearchQuery(context.Background(), false, true)
+	s.resolveUids()
+}
+
+//=====================
 
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) {
 	var limit int
@@ -133,6 +139,22 @@ func (s *SearchResult) resolveCount() (int, error) {
 	return count, err
 }
 
+func (s *SearchResult) resolveUids() {
+	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
+	if err != nil {
+		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var uid string
+		err = rows.Scan(&uid)
+		if err != nil {
+			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), s.query)
+		}
+		s.uids = append(s.uids, &uid)
+	}
+
+}
 func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
 	if err != nil {
