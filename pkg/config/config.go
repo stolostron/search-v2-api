@@ -25,9 +25,9 @@ const (
 	RBAC_INACTIVITY_TIMEOUT  = 600000
 	SERVICEACCT_TOKEN        = ""
 	DEFAULT_DB_PASS          = ""
-	DEFAULT_DB_HOST          = "localhost"
-	DEFAULT_DB_USER          = "hippo"
-	DEFAULT_DB_NAME          = "hippo"
+	DEFAULT_DB_HOST          = ""
+	DEFAULT_DB_USER          = ""
+	DEFAULT_DB_NAME          = ""
 	DEFAULT_DB_PORT          = int(5432)
 )
 

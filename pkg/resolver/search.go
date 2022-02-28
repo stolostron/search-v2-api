@@ -45,6 +45,11 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 	return srchResult, nil
 }
 
+func (s *SearchResult) KeywordSearch() { //need this function and resolver for tests.
+	klog.V(2).Info("Resolving SearchResult:Keywords()")
+	s.buildSearchQuery(context.Background(), false, false)
+}
+
 func (s *SearchResult) Count() int {
 	klog.V(2).Info("Resolving SearchResult:Count()")
 	s.buildSearchQuery(context.Background(), true, false)
@@ -82,6 +87,8 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 	return r
 }
 
+// SELECT uid, key, value FROM search.resources, jsonb_each_text(data) WHERE value LIKE 'console';
+
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) {
 	var limit int
 	var selectDs *goqu.SelectDataset
@@ -90,19 +97,39 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	// Example query: SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN
 	// (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 10000
 	//FROM CLAUSE
-	schemaTable := goqu.S("search").Table("resources")
-	ds := goqu.From(schemaTable)
-	//SELECT CLAUSE
-	if count {
-		selectDs = ds.Select(goqu.COUNT("uid"))
-	} else if uid {
-		selectDs = ds.Select("uid")
+	if s.input.Keywords != nil {
+		fmt.Println("Keyword is:", s.input.Keywords)
+		schemaTable := goqu.S("search").Table("resources")
+		jsb := goqu.L("jsonb_each_text(?)", goqu.C("data"))
+		ds := goqu.From(schemaTable, jsb)
+		selectDs = ds.Select("uid", "cluster", "data", "key", "value")
 	} else {
-		selectDs = ds.Select("uid", "cluster", "data")
+		schemaTable := goqu.S("search").Table("resources")
+		ds := goqu.From(schemaTable)
+		//SELECT CLAUSE
+		if count {
+			selectDs = ds.Select(goqu.COUNT("uid"))
+		} else if uid {
+			selectDs = ds.Select("uid")
+		} else {
+			selectDs = ds.Select("uid", "cluster", "data")
+		}
 	}
 	//WHERE CLAUSE
 	if s.input != nil && len(s.input.Filters) > 0 {
-		whereDs = WhereClauseFilter(s.input)
+		whereDs = WhereClauseFilter(s.input, false)
+	}
+	if s.input.Keywords != nil { //if keyword is input then
+		if s.input != nil && len(s.input.Keywords) > 0 { //if the input is not nil and the len of keywords is greater than 0
+			whereDs = WhereClauseFilter(s.input, true) //the where clause will be
+			sql, params, err := selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
+			if err != nil {
+				klog.Errorf("Error building SearchComplete query: %s", err.Error())
+			}
+			klog.Infof("query: %s\nargs: %s", sql, params)
+			s.query = sql
+			s.params = params
+		}
 	}
 	//LIMIT CLAUSE
 	if !count {
@@ -138,7 +165,7 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
 	}
-	defer rows.Close()
+	// defer rows.Close()
 
 	var cluster string
 	var data map[string]interface{}
@@ -147,7 +174,13 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 
 	for rows.Next() {
 		var uid string
-		err = rows.Scan(&uid, &cluster, &data)
+		if s.input.Keywords != nil {
+			var key string
+			var value string
+			err = rows.Scan(&uid, &cluster, &data, &key, &value)
+		} else {
+			err = rows.Scan(&uid, &cluster, &data)
+		}
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), s.query)
 		}
@@ -157,6 +190,7 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 
 		items = append(items, currItem)
 		s.uids = append(s.uids, &uid)
+
 	}
 
 	return items, nil
@@ -320,23 +354,42 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 	return item
 }
 
-func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
+func WhereClauseFilter(input *model.SearchInput, keyword bool) []exp.Expression {
 	var whereDs []exp.Expression
-	for _, filter := range input.Filters {
-		if len(filter.Values) > 0 {
-			values := make([]string, len(filter.Values))
-			for i, val := range filter.Values {
-				values[i] = *val
+
+	if keyword {
+		if len(input.Keywords) > 0 {
+			keywords := make([]string, len(input.Keywords))
+			for i, word := range input.Keywords {
+				fmt.Println("keywords are:", word)
+				keywords[i] = "%" + *word + "%"
 			}
 
-			if filter.Property == "cluster" {
-				whereDs = append(whereDs, goqu.C(filter.Property).In(values).Expression())
-			} else {
-				whereDs = append(whereDs, goqu.L(`"data"->>?`, filter.Property).In(values).Expression())
-			}
+			whereDs = append(whereDs, goqu.L(`"value"`).Like(keywords).Expression())
+			fmt.Println("where ds: ", whereDs)
+
 		} else {
-			klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
+			klog.Warningf("Ignoring filter [%s] because it has no values", input.Keywords)
+		}
+	} else {
+		for _, filter := range input.Filters {
+			if len(filter.Values) > 0 {
+				values := make([]string, len(filter.Values))
+				for i, val := range filter.Values {
+					values[i] = *val
+				}
+
+				if filter.Property == "cluster" {
+					whereDs = append(whereDs, goqu.C(filter.Property).In(values).Expression())
+				} else {
+					whereDs = append(whereDs, goqu.L(`"data"->>?`, filter.Property).In(values).Expression())
+				}
+			} else {
+				klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
+			}
+			fmt.Println("where ds: ", whereDs)
 		}
 	}
+
 	return whereDs
 }

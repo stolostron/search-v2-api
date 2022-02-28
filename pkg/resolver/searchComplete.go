@@ -48,12 +48,24 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 	var selectDs *goqu.SelectDataset
 
 	//FROM CLAUSE
+	// if s.input.Keywords != nil && len(s.input.Keywords) > 0 {
+	// 	schemaTable := goqu.S("search").Table("resources")
+	// 	jsb := goqu.L("jsonb_each_text(data)")
+	// 	ds := goqu.From(schemaTable, jsb)
+	// 	selectDs = ds.Select("uid", "cluster", "data", "key", "value")
+	// 	whereDs = WhereClauseFilter(s.input, true)
+	// 	selectDs = ds.SelectDistinct(goqu.L(`"value"`, s.property)).Order(goqu.L(`"value"`, s.property).Asc())
+	// 	whereDs = append(whereDs, goqu.L(`"data"->>?`, s.property).IsNotNull())
+	// 	}
+
+	// }
+
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 	if s.property != "" {
 		//WHERE CLAUSE
 		if s.input != nil && len(s.input.Filters) > 0 {
-			whereDs = WhereClauseFilter(s.input)
+			whereDs = WhereClauseFilter(s.input, false)
 		}
 		//SELECT CLAUSE
 		if s.property == "cluster" {
