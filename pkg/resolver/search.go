@@ -384,8 +384,15 @@ func WhereClauseFilter(input *model.SearchInput, keyword bool) []exp.Expression 
 				fmt.Println("keywords are:", word)
 				keywords[i] = "%" + *word + "%"
 			}
+			if len(input.Keywords) == 1 {
+				whereDs = append(whereDs, goqu.L(`"value"`).Like(keywords).Expression())
+			} else if len(input.Keywords) > 1 {
+				for _, key := range keywords {
+					fmt.Println("KEY: ", key)
+					whereDs = append(whereDs, goqu.L(`"value"`).Like(key).Expression())
+				}
 
-			whereDs = append(whereDs, goqu.L(`"value"`).Like(keywords).Expression())
+			}
 			fmt.Println("where ds: ", whereDs)
 
 		} else {
