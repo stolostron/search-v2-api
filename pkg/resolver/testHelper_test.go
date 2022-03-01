@@ -78,11 +78,9 @@ func newMockRows(mockDataFile string, input *model.SearchInput) *MockRows {
 	items := data["records"].([]interface{})
 
 	mockData := make([]map[string]interface{}, 0)
-	filterDataBeforeLoad := true
 
 	for _, item := range items {
-		filterDataBeforeLoad = useInputFilterToLoadData(mockDataFile, input, item)
-		if filterDataBeforeLoad {
+		if useInputFilterToLoadData(mockDataFile, input, item) {
 			uid := item.(map[string]interface{})["uid"]
 
 			mockDatum := map[string]interface{}{
@@ -93,6 +91,8 @@ func newMockRows(mockDataFile string, input *model.SearchInput) *MockRows {
 				"destkind": item.(map[string]interface{})["DestKind"],
 			}
 			mockData = append(mockData, mockDatum)
+		} else {
+			klog.Warning("useInputFilterToLoadData returned false. No mock data loaded")
 		}
 	}
 
@@ -111,9 +111,9 @@ func stringInSlice(a string, list []string) bool {
 	return false
 }
 
+// Load mock data based on input filters
 func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, item interface{}) bool {
-	flag := true
-	if !strings.Contains(mockDataFile, "rel") {
+	if !strings.Contains(mockDataFile, "rel") { // To load resources file
 		for _, filter := range input.Filters {
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
@@ -121,30 +121,25 @@ func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, ite
 				cluster := strings.Split(uid.(string), "/")[0]
 				if filter.Property == "cluster" {
 					if !stringInSlice(cluster, values) {
-						flag = false
-						return flag
+						return false // If the filter value is not in resource, do not load it
 					}
 				} else {
 					data := item.(map[string]interface{})["properties"].(map[string]interface{})
 
 					if !stringInSlice(data[filter.Property].(string), values) {
-						flag = false
-						return flag
+						return false // If the filter value is not in resource, do not load it
 					}
 				}
 			}
 		}
-	} else {
+	} else { // To load relations file
 		if len(input.RelatedKinds) > 0 {
 			values := pointerToStringArray(input.RelatedKinds)
 			destkind := item.(map[string]interface{})["DestKind"].(string)
 			if !stringInSlice(destkind, values) {
-				flag = false
-				return flag
+				return false // If the resource kind is not in RelatedKinds, do not load it
 			}
-
 		}
-
 	}
 	return true
 }
