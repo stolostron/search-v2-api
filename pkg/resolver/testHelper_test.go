@@ -4,6 +4,7 @@ package resolver
 import (
 	"encoding/json"
 	"io/ioutil"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -91,8 +92,6 @@ func newMockRows(mockDataFile string, input *model.SearchInput) *MockRows {
 				"destkind": item.(map[string]interface{})["DestKind"],
 			}
 			mockData = append(mockData, mockDatum)
-		} else {
-			klog.Warning("useInputFilterToLoadData returned false. No mock data loaded")
 		}
 	}
 
@@ -193,9 +192,14 @@ func (r *MockRows) Values() ([]interface{}, error) { return nil, nil }
 func (r *MockRows) RawValues() [][]byte { return nil }
 
 func AssertStringArrayEqual(t *testing.T, result, expected []*string, message string) {
-	for i, exp := range expected {
-		if *result[i] != *exp {
-			t.Errorf("%s expected [%v] got [%v]", message, expected, result)
+	resultSorted := pointerToStringArray(result)
+	sort.Strings(resultSorted)
+	expectedSorted := pointerToStringArray(expected)
+	sort.Strings(expectedSorted)
+
+	for i, exp := range expectedSorted {
+		if resultSorted[i] != exp {
+			t.Errorf("%s expected [%v] got [%v]", message, expectedSorted, resultSorted)
 			return
 		}
 	}

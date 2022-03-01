@@ -175,9 +175,20 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 
 	result2 := resolver2.Related() // this should return a relatedResults object
 
-	if result2[0].Kind != mockRows.mockData[0]["destkind"] {
-		t.Errorf("Kind value in mockdata does not match kind value of result")
+	resultKinds := make([]*string, len(result2))
+	for i, data := range result2 {
+		kind := data.Kind
+		resultKinds[i] = &kind
 	}
+
+	expectedKinds := make([]*string, len(mockRows.mockData))
+	for i, data := range mockRows.mockData {
+		destKind, _ := data["destkind"].(string)
+		expectedKinds[i] = &destKind
+	}
+	// Verify expected and result kinds
+	AssertStringArrayEqual(t, resultKinds, expectedKinds, "Error in expected destKinds in Test_SearchResolver_Relationships")
+
 	// Verify returned items.
 	if len(result2) != len(mockRows.mockData) {
 		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result2))

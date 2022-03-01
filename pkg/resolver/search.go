@@ -197,7 +197,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		relatedKinds := pointerToStringArray(s.input.RelatedKinds)
 		whereDs = append(whereDs, goqu.C("destkind").In(relatedKinds).Expression())
 	}
-	//TODO: The level can be parameterized later, if needed, for applications
+	//The level can be parameterized later, if needed, for applications
 	whereDs = append(whereDs, goqu.C("level").Eq(1)) // Add filter to select only level 1 relationships
 
 	//defining variables
@@ -208,19 +208,27 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 
 	schema := goqu.S("search")
 	selectBase := make([]interface{}, 0)
-	selectBase = append(selectBase, "r.uid", "r.data", "e.destkind", "e.sourceid", "e.destid", goqu.L("ARRAY[r.uid]").As("path"), goqu.L("1").As("level"))
+	selectBase = append(selectBase, "r.uid", "r.data", "e.destkind", "e.sourceid", "e.destid",
+		goqu.L("ARRAY[r.uid]").As("path"), goqu.L("1").As("level"))
 
 	selectNext := make([]interface{}, 0)
-	selectNext = append(selectNext, "r.uid", "r.data", "e.destkind", "e.sourceid", "e.destid", goqu.L("sg.path||r.uid").As("path"), goqu.L("level+1").As("level"))
+	selectNext = append(selectNext, "r.uid", "r.data", "e.destkind", "e.sourceid", "e.destid",
+		goqu.L("sg.path||r.uid").As("path"), goqu.L("level+1").As("level"))
 
-	sql, params, err := goqu.From("search_graph").WithRecursive("search_graph(uid, data, destkind, sourceid, destid, path, level)",
-		goqu.From(schema.Table("resources").As("r")).InnerJoin(schema.Table("edges").As("e"), goqu.On(goqu.ExOr{"r.uid": []exp.IdentifierExpression{goqu.I("e.sourceid"), goqu.I("e.destid")}})).
-			Select(selectBase...).
-			Where(goqu.I("r.uid").In(s.uids)).
-			Union(goqu.From(schema.Table("resources").As("r")).InnerJoin(schema.Table("edges").As("e"), goqu.On(goqu.Ex{"r.uid": goqu.I("e.sourceid")})).
-				InnerJoin(goqu.T("search_graph").As("sg"), goqu.On(goqu.ExOr{"sg.destid": goqu.I("e.sourceid"), "sg.sourceid": goqu.I("e.destid")})).
-				Select(selectNext...).
-				Where(goqu.Ex{"sg.level": goqu.L("1"), "r.uid": goqu.Op{"neq": goqu.All("{sg.path}")}}))).Select("data", "destid", "destkind").Distinct("destid").
+	sql, params, err := goqu.From("search_graph").
+		WithRecursive("search_graph(uid, data, destkind, sourceid, destid, path, level)",
+			goqu.From(schema.Table("resources").As("r")).InnerJoin(schema.Table("edges").As("e"),
+				goqu.On(goqu.ExOr{"r.uid": []exp.IdentifierExpression{goqu.I("e.sourceid"), goqu.I("e.destid")}})).
+				Select(selectBase...).
+				Where(goqu.I("r.uid").In(s.uids)).
+				Union(goqu.From(schema.Table("resources").As("r")).InnerJoin(schema.Table("edges").As("e"),
+					goqu.On(goqu.Ex{"r.uid": goqu.I("e.sourceid")})).
+					InnerJoin(goqu.T("search_graph").As("sg"),
+						goqu.On(goqu.ExOr{"sg.destid": goqu.I("e.sourceid"), "sg.sourceid": goqu.I("e.destid")})).
+					Select(selectNext...).
+					Where(goqu.Ex{"sg.level": goqu.L("1"),
+						"r.uid": goqu.Op{"neq": goqu.All("{sg.path}")}}))).
+		Select("data", "destid", "destkind").Distinct("destid").
 		Where(whereDs...).ToSQL()
 
 	if err != nil {
@@ -250,7 +258,8 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		items = append(items, currItem)
 	}
 
-	//calling function to get map which contains unique values from kindSlice and counts the number occurances ex: map[key:Pod, value:2] if pod occurs 2x in kindSlice
+	// calling function to get map which contains unique values from kindSlice
+	// and counts the number occurances ex: map[key:Pod, value:2] if pod occurs 2x in kindSlice
 	count := printUniqueValue(kindSlice)
 
 	//iterating over count and appending to new lists (kindList and countList)
