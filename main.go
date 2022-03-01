@@ -19,8 +19,14 @@ func main() {
 	klog.Info("Starting search-v2-api.")
 
 	// Read the config from the environment.
-	config := config.New()
-	config.PrintConfig()
+	config.Cfg.PrintConfig()
+
+	// Validate required configuration to proceed.
+	configError := config.Cfg.Validate()
+	if configError != nil {
+		klog.Fatal(configError)
+	}
+
 	database.GetConnection()
 	if len(os.Args) > 1 && os.Args[1] == "playground" {
 		server.StartAndListen(true)

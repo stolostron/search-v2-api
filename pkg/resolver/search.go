@@ -75,8 +75,13 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 	}
 
 	s.wg.Wait()
+	var r []SearchRelatedResult
 
-	r := s.getRelations()
+	if len(s.uids) > 0 {
+		r = s.getRelations()
+	} else {
+		klog.Warning("No uids selected for query:Related()")
+	}
 	return r
 }
 
@@ -156,6 +161,7 @@ func (s *SearchResult) resolveUids() {
 
 }
 func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
+	items := []map[string]interface{}{}
 	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
@@ -164,7 +170,6 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 
 	var cluster string
 	var data map[string]interface{}
-	items := []map[string]interface{}{}
 	s.uids = make([]*string, len(items))
 
 	for rows.Next() {
@@ -186,11 +191,14 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 
 func (s *SearchResult) getRelations() []SearchRelatedResult {
 	klog.Infof("Resolving relationships for [%d] uids.\n", len(s.uids))
+	var whereDs []exp.Expression
 
 	if len(s.input.RelatedKinds) > 0 {
-		// TODO: Use the RelatedKinds filter in the SQL query.
-		klog.Warning("TODO: The relationships query must use the provided kind filters.")
+		relatedKinds := pointerToStringArray(s.input.RelatedKinds)
+		whereDs = append(whereDs, goqu.C("destkind").In(relatedKinds).Expression())
 	}
+	//TODO: The level can be parameterized later, if needed, for applications
+	whereDs = append(whereDs, goqu.C("level").Eq(1)) // Add filter to select only level 1 relationships
 
 	//defining variables
 	items := []map[string]interface{}{}
@@ -198,27 +206,27 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	var kindList []string
 	var countList []int
 
-	relQuery := strings.TrimSpace(`WITH RECURSIVE
-	search_graph(uid, data, destkind, sourceid, destid, path, level)
-	AS (
-	SELECT r.uid, r.data, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] AS path, 1 AS level
-		FROM search.resources r
-		INNER JOIN
-			search.edges e ON (r.uid = e.sourceid) OR (r.uid = e.destid)
-		 WHERE r.uid = ANY($1)
-	UNION
-	SELECT r.uid, r.data, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 AS level
-		FROM search.resources r
-		INNER JOIN
-			search.edges e ON (r.uid = e.sourceid)
-		, search_graph sg
-		WHERE (e.sourceid = sg.destid OR e.destid = sg.sourceid)
-		AND r.uid <> all(sg.path)
-		AND level = 1
-		)
-	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`)
+	schema := goqu.S("search")
+	selectBase := make([]interface{}, 0)
+	selectBase = append(selectBase, "r.uid", "r.data", "e.destkind", "e.sourceid", "e.destid", goqu.L("ARRAY[r.uid]").As("path"), goqu.L("1").As("level"))
 
-	relations, relQueryError := s.pool.Query(context.Background(), relQuery, s.uids) // how to deal with defaults.
+	selectNext := make([]interface{}, 0)
+	selectNext = append(selectNext, "r.uid", "r.data", "e.destkind", "e.sourceid", "e.destid", goqu.L("sg.path||r.uid").As("path"), goqu.L("level+1").As("level"))
+
+	sql, params, err := goqu.From("search_graph").WithRecursive("search_graph(uid, data, destkind, sourceid, destid, path, level)",
+		goqu.From(schema.Table("resources").As("r")).InnerJoin(schema.Table("edges").As("e"), goqu.On(goqu.ExOr{"r.uid": []exp.IdentifierExpression{goqu.I("e.sourceid"), goqu.I("e.destid")}})).
+			Select(selectBase...).
+			Where(goqu.I("r.uid").In(s.uids)).
+			Union(goqu.From(schema.Table("resources").As("r")).InnerJoin(schema.Table("edges").As("e"), goqu.On(goqu.Ex{"r.uid": goqu.I("e.sourceid")})).
+				InnerJoin(goqu.T("search_graph").As("sg"), goqu.On(goqu.ExOr{"sg.destid": goqu.I("e.sourceid"), "sg.sourceid": goqu.I("e.destid")})).
+				Select(selectNext...).
+				Where(goqu.Ex{"sg.level": goqu.L("1"), "r.uid": goqu.Op{"neq": goqu.All("{sg.path}")}}))).Select("data", "destid", "destkind").Distinct("destid").
+		Where(whereDs...).ToSQL()
+
+	if err != nil {
+		klog.Error("Error creating relation query", err)
+	}
+	relations, relQueryError := s.pool.Query(context.Background(), sql, params...) // how to deal with defaults.
 	if relQueryError != nil {
 		klog.Errorf("getRelations query error :%s", relQueryError.Error())
 	}
@@ -240,9 +248,6 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		// currItem["Kind"] = destkind
 		kindSlice = append(kindSlice, destkind)
 		items = append(items, currItem)
-		if relations.RawValues() == nil {
-			break
-		}
 	}
 
 	//calling function to get map which contains unique values from kindSlice and counts the number occurances ex: map[key:Pod, value:2] if pod occurs 2x in kindSlice
@@ -342,14 +347,20 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 	return item
 }
 
+func pointerToStringArray(pointerArray []*string) []string {
+
+	values := make([]string, len(pointerArray))
+	for i, val := range pointerArray {
+		values[i] = *val
+	}
+	return values
+}
+
 func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 	var whereDs []exp.Expression
 	for _, filter := range input.Filters {
 		if len(filter.Values) > 0 {
-			values := make([]string, len(filter.Values))
-			for i, val := range filter.Values {
-				values[i] = *val
-			}
+			values := pointerToStringArray(filter.Values)
 
 			if filter.Property == "cluster" {
 				whereDs = append(whereDs, goqu.C(filter.Property).In(values).Expression())

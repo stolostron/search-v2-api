@@ -18,7 +18,7 @@ func init() {
 }
 
 func initializePool() {
-	cfg := config.New()
+	cfg := config.Cfg
 
 	database_url := fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", cfg.DB_USER, cfg.DB_PASS, cfg.DB_HOST, cfg.DB_PORT, cfg.DB_NAME)
 	klog.Info("Connecting to PostgreSQL at: ", fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", cfg.DB_USER, "*********", cfg.DB_HOST, cfg.DB_PORT, cfg.DB_NAME))

@@ -3,51 +3,108 @@
 package config
 
 import (
+	"bytes"
 	"os"
+	"strings"
 	"testing"
+
+	klog "k8s.io/klog/v2"
 )
 
 // Should use default value when environment variable does not exist.
-func Test_SetDefault_01(t *testing.T) {
+func Test_getEnv_default(t *testing.T) {
+	res := getEnv("ENV_VARIABLE_NOT_DEFINED", "default-value")
 
-	property := ""
-	setDefault(&property, "ENV_VARIABLE_NOT_DEFINED", "default-value")
-
-	if property != "default-value" {
-		t.Errorf("Failed testing setDefault()  Expected: %s  Got: %s", "default-value", property)
+	if res != "default-value" {
+		t.Errorf("Failed testing getEnv()  Expected: %s  Got: %s", "default-value", res)
 	}
 }
 
-// Should use value from environment variable if it exists.
-func Test_SetDefault_02(t *testing.T) {
+// Should load string value from environment.
+func Test_getEnv(t *testing.T) {
+	os.Setenv("TEST_VARIABLE", "test-value")
+	res := getEnv("TEST_VARIABLE", "default-value")
 
-	os.Setenv("TEST_ENV_VARIABLE", "value-from-env")
-	property := ""
-	setDefault(&property, "TEST_ENV_VARIABLE", "default-value")
-
-	if property != "value-from-env" {
-		t.Errorf("Failed testing setDefault()  Expected: %s  Got: %s", "value-from-env", property)
+	if res != "test-value" {
+		t.Errorf("Failed testing getEnv()  Expected: %s  Got: %s", "test-value", res)
 	}
 }
 
-func Test_SetDefaultInt_01(t *testing.T) {
+// Should use default value when environment variable does not exist.
+func Test_getEnvAsInt_default(t *testing.T) {
+	res := getEnvAsInt("ENV_VARIABLE_NOT_DEFINED", 99)
 
-	var property int
-	setDefaultInt(&property, "ENV_VARIABLE_NOT_DEFINED", 1234)
-
-	if property != 1234 {
-		t.Errorf("Failed testing setDefault()  Expected: %d  Got: %d", 1234, property)
+	if res != 99 {
+		t.Errorf("Failed testing getEnvAsIInt() Expected: %d  Got: %d", 99, res)
 	}
 }
 
-// Should use value from environment variable if it exists.
-func Test_SetDefaultInt_02(t *testing.T) {
+// Should load int value from environment.
+func Test_getEnvAsInt(t *testing.T) {
+	os.Setenv("TEST_VARIABLE", "99")
+	res := getEnvAsInt("TEST_VARIABLE", 0)
 
-	os.Setenv("TEST_ENV_VARIABLE", "9999")
-	var property int
-	setDefaultInt(&property, "TEST_ENV_VARIABLE", 0000)
+	if res != 99 {
+		t.Errorf("Failed testing getEnv()  Expected: %d  Got: %d", 99, res)
+	}
+}
 
-	if property != 9999 {
-		t.Errorf("Failed testing setDefault()  Expected: %d  Got: %d", 9999, property)
+// Should print environment and redact the database password.
+func Test_PrintConfig(t *testing.T) {
+	// Redirect the logger output.
+	var buf bytes.Buffer
+	klog.LogToStderr(false)
+	klog.SetOutput(&buf)
+	defer func() {
+		klog.SetOutput(os.Stderr)
+	}()
+
+	// Call the function.
+	c := new()
+	c.PrintConfig()
+
+	// Verify environment was logged as expected.
+	logMsg := buf.String()
+	if !strings.Contains(logMsg, "\"DB_PASS\": \"[REDACTED]\"") {
+		t.Error("Expected password to be redacted when logging configuration")
+	}
+
+	// Verify that the config wasn't changed when redacting the password.
+	if c.DB_PASS == "[REDACTED]" {
+		t.Error("Expected config.DB_PASS to not be permanently changed when redacting password.")
+	}
+}
+
+// Should validate that DB_NAME, DB_USER, and DB_PASS are required environment variables.
+func Test_Validate(t *testing.T) {
+	os.Setenv("DB_NAME", "test")
+	os.Setenv("DB_USER", "test")
+	os.Setenv("DB_PASS", "test")
+	conf := new()
+
+	result := conf.Validate()
+	if result != nil {
+		t.Errorf("Expected %v Got: %+v", nil, result)
+	}
+
+	os.Setenv("DB_PASS", "")
+	conf = new()
+	result = conf.Validate()
+	if result.Error() != "required environment DB_PASS is not set" {
+		t.Errorf("Expected %s Got: %s", "required environment DB_PASS is not set", result)
+	}
+
+	os.Setenv("DB_USER", "")
+	conf = new()
+	result = conf.Validate()
+	if result.Error() != "required environment DB_USER is not set" {
+		t.Errorf("Expected %s Got: %s", "required environment DB_USER is not set", result)
+	}
+
+	os.Setenv("DB_NAME", "")
+	conf = new()
+	result = conf.Validate()
+	if result.Error() != "required environment DB_NAME is not set" {
+		t.Errorf("Expected %s Got: %s", "required environment DB_NAME is not set", result)
 	}
 }

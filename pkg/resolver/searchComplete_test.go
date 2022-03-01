@@ -19,7 +19,7 @@ func Test_SearchComplete_Query(t *testing.T) {
 	expectedProps := []*string{&val1, &val2}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json")
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "data"->>'kind' FROM "search"."resources" WHERE ("data"->>'kind' IS NOT NULL) ORDER BY "data"->>'kind' ASC LIMIT 10000`),
@@ -45,7 +45,7 @@ func Test_SearchCompleteNoProp_Query(t *testing.T) {
 	expectedProps := []*string{&val1, &val2}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json")
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(""),
@@ -72,7 +72,7 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 	expectedProps := []*string{&val1, &val2}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json")
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "cluster" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster')) AND ("cluster" IS NOT NULL)) ORDER BY "cluster" ASC LIMIT 10`),

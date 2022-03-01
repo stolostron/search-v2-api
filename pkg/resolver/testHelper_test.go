@@ -61,7 +61,7 @@ func (r *Row) Scan(dest ...interface{}) error {
 // https://github.com/jackc/pgx/blob/master/rows.go#L24
 // ====================================================
 
-func newMockRows(mockDataFile string) *MockRows {
+func newMockRows(mockDataFile string, input *model.SearchInput) *MockRows {
 	// Read json file and build mock data
 	bytes, _ := ioutil.ReadFile(mockDataFile)
 	var data map[string]interface{}
@@ -77,16 +77,22 @@ func newMockRows(mockDataFile string) *MockRows {
 
 	items := data["records"].([]interface{})
 
-	mockData := make([]map[string]interface{}, len(items))
+	mockData := make([]map[string]interface{}, 0)
+	filterDataBeforeLoad := true
 
-	for i, item := range items {
-		uid := item.(map[string]interface{})["uid"]
-		mockData[i] = map[string]interface{}{
-			"uid":      uid,
-			"cluster":  strings.Split(uid.(string), "/")[0],
-			"data":     item.(map[string]interface{})["properties"],
-			"destid":   item.(map[string]interface{})["DestUID"],
-			"destkind": item.(map[string]interface{})["DestKind"],
+	for _, item := range items {
+		filterDataBeforeLoad = useInputFilterToLoadData(mockDataFile, input, item)
+		if filterDataBeforeLoad {
+			uid := item.(map[string]interface{})["uid"]
+
+			mockDatum := map[string]interface{}{
+				"uid":      uid,
+				"cluster":  strings.Split(uid.(string), "/")[0],
+				"data":     item.(map[string]interface{})["properties"],
+				"destid":   item.(map[string]interface{})["DestUID"],
+				"destkind": item.(map[string]interface{})["DestKind"],
+			}
+			mockData = append(mockData, mockDatum)
 		}
 	}
 
@@ -95,6 +101,52 @@ func newMockRows(mockDataFile string) *MockRows {
 		index:         0,
 		columnHeaders: columnHeaders,
 	}
+}
+func stringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
+func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, item interface{}) bool {
+	flag := true
+	if !strings.Contains(mockDataFile, "rel") {
+		for _, filter := range input.Filters {
+			if len(filter.Values) > 0 {
+				values := pointerToStringArray(filter.Values)
+				uid := item.(map[string]interface{})["uid"]
+				cluster := strings.Split(uid.(string), "/")[0]
+				if filter.Property == "cluster" {
+					if !stringInSlice(cluster, values) {
+						flag = false
+						return flag
+					}
+				} else {
+					data := item.(map[string]interface{})["properties"].(map[string]interface{})
+
+					if !stringInSlice(data[filter.Property].(string), values) {
+						flag = false
+						return flag
+					}
+				}
+			}
+		}
+	} else {
+		if len(input.RelatedKinds) > 0 {
+			values := pointerToStringArray(input.RelatedKinds)
+			destkind := item.(map[string]interface{})["DestKind"].(string)
+			if !stringInSlice(destkind, values) {
+				flag = false
+				return flag
+			}
+
+		}
+
+	}
+	return true
 }
 
 type MockRows struct {
