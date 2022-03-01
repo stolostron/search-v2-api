@@ -120,7 +120,7 @@ func Test_SearchWithMultipleClusterFilter_NegativeLimit_Query(t *testing.T) {
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "namespace", Values: []*string{&value1, &value2}}, &model.SearchFilter{Property: "cluster", Values: []*string{&cluster1, &cluster2}}}, Limit: &limit}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 
-	// Mock the database queries.
+	// Mock the database data.
 	mockRows := newMockRows("../resolver/mocks/mock.json")
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
@@ -203,3 +203,43 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	}
 
 }
+
+// func Test_SearchResolver_Keywords(t *testing.T) {
+// // Create a SearchResolver instance with a mock connection pool.
+// val1 := "template"
+// searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "kind", Values: []*string{&val1}}}}
+// resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
+// // Mock the database queries.
+// mockRows := newMockRows("./mocks/mock.json")
+
+// mockPool.EXPECT().Query(gomock.Any(),
+// 	gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'kind' IN ('template')) LIMIT 10000`),
+// 	gomock.Eq([]interface{}{}),
+// ).Return(mockRows, nil)
+
+// // Execute the function
+// result := resolver.Items()
+
+// // Verify properties for each returned item.
+// for i, item := range result {
+// 	mockRow := mockRows.mockData[i]
+// 	expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
+// 	expectedRow["_uid"] = mockRow["uid"]
+// 	expectedRow["cluster"] = mockRow["cluster"]
+
+// 	if len(item) != len(expectedRow) {
+// 		t.Errorf("Number of properties don't match for item[%d]. Expected: %d Got: %d", i, len(expectedRow), len(item))
+// 	}
+
+// 	for key, val := range item {
+// 		if val != expectedRow[key] {
+// 			t.Errorf("Value of key [%s] does not match for item [%d].\nExpected: %s\nGot: %s", key, i, expectedRow[key], val)
+// 		}
+// 	}
+// }
+// }
+
+//Create a SearchResovler instance with a mock connection pool.
+// 	searchInput := &model.SearchInput{Keywords: "console"}
+
+// }

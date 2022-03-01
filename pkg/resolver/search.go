@@ -26,8 +26,8 @@ type SearchResult struct {
 	wg     sync.WaitGroup // WORKAROUND: Used to serialize search query and relatioinships query.
 	query  string
 	params []interface{}
-	// 	Count   int
-	// 	Items   []map[string]interface{}
+	count  int
+	items  []map[string]interface{}
 	//  Related []SearchRelatedResult
 }
 
@@ -53,11 +53,8 @@ func (s *SearchResult) KeywordSearch() { //need this function and resolver for t
 func (s *SearchResult) Count() int {
 	klog.V(2).Info("Resolving SearchResult:Count()")
 	s.buildSearchQuery(context.Background(), true, false)
-	count, e := s.resolveCount()
+	count := s.resolveCount()
 
-	if e != nil {
-		klog.Error("Error resolving count.", e)
-	}
 	return count
 }
 
@@ -106,7 +103,14 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		schemaTable := goqu.S("search").Table("resources")
 		jsb := goqu.L("jsonb_each_text(?)", goqu.C("data"))
 		ds := goqu.From(schemaTable, jsb)
-		selectDs = ds.Select("uid", "cluster", "data", "key", "value")
+		if count {
+			selectDs = ds.Select(goqu.COUNT("uid"))
+		} else if uid {
+			selectDs = ds.Select("uid")
+		} else {
+			selectDs = ds.Select("uid", "cluster", "data", "key", "value")
+		}
+
 	} else {
 		schemaTable := goqu.S("search").Table("resources")
 		ds := goqu.From(schemaTable)
@@ -121,11 +125,11 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	}
 	//WHERE CLAUSE
 	if s.input != nil && len(s.input.Filters) > 0 {
-		whereDs = WhereClauseFilter(s.input, false)
+		whereDs = WhereClauseFilter(s.input)
 	}
 	if s.input.Keywords != nil { //if keyword is input then
 		if s.input != nil && len(s.input.Keywords) > 0 { //if the input is not nil and the len of keywords is greater than 0
-			whereDs = WhereClauseFilter(s.input, true) //the where clause will be
+			whereDs = WhereClauseFilter(s.input) //the where clause will be
 			sql, params, err := selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
 			if err != nil {
 				klog.Errorf("Error building SearchComplete query: %s", err.Error())
@@ -155,13 +159,19 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	s.params = params
 }
 
-func (s *SearchResult) resolveCount() (int, error) {
+func (s *SearchResult) resolveCount() int {
 	rows := s.pool.QueryRow(context.Background(), s.query, s.params...)
 
 	var count int
 	err := rows.Scan(&count)
+	if err != nil {
+		klog.Errorf("Error %s resolving count for query:%s", err.Error(), s.query)
+	}
 
-	return count, err
+	s.count = count
+	count = s.count
+
+	return count
 }
 
 func (s *SearchResult) resolveUids() {
@@ -374,31 +384,28 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 	return item
 }
 
-func WhereClauseFilter(input *model.SearchInput, keyword bool) []exp.Expression {
+func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 	var whereDs []exp.Expression
 
-	if keyword {
+	if input.Keywords != nil {
 		if len(input.Keywords) > 0 {
 			keywords := make([]string, len(input.Keywords))
 			for i, word := range input.Keywords {
-				fmt.Println("keywords are:", word)
 				keywords[i] = "%" + *word + "%"
 			}
 			if len(input.Keywords) == 1 {
 				whereDs = append(whereDs, goqu.L(`"value"`).Like(keywords).Expression())
 			} else if len(input.Keywords) > 1 {
 				for _, key := range keywords {
-					fmt.Println("KEY: ", key)
 					whereDs = append(whereDs, goqu.L(`"value"`).Like(key).Expression())
 				}
 
 			}
-			fmt.Println("where ds: ", whereDs)
-
 		} else {
 			klog.Warningf("Ignoring filter [%s] because it has no values", input.Keywords)
 		}
-	} else {
+	}
+	if input.Filters != nil {
 		for _, filter := range input.Filters {
 			if len(filter.Values) > 0 {
 				values := make([]string, len(filter.Values))
@@ -414,7 +421,6 @@ func WhereClauseFilter(input *model.SearchInput, keyword bool) []exp.Expression 
 			} else {
 				klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
 			}
-			fmt.Println("where ds: ", whereDs)
 		}
 	}
 
