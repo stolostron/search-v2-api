@@ -12,7 +12,7 @@ import (
 func Test_SearchResolver_Count(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "pod"
-	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "kind", Values: []*string{&val1}}}}
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 
 	// Mock the database query
@@ -33,7 +33,7 @@ func Test_SearchResolver_Count(t *testing.T) {
 func Test_SearchResolver_Items(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "template"
-	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "kind", Values: []*string{&val1}}}}
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 	// Mock the database queries.
 	mockRows := newMockRows("./mocks/mock.json")
@@ -45,6 +45,11 @@ func Test_SearchResolver_Items(t *testing.T) {
 
 	// Execute the function
 	result := resolver.Items()
+
+	// Verify returned items.
+	if len(result) != len(mockRows.mockData) {
+		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result))
+	}
 
 	// Verify properties for each returned item.
 	for i, item := range result {
@@ -71,7 +76,7 @@ func Test_SearchResolver_Items_Multiple_Filter(t *testing.T) {
 	val2 := "openshift-monitoring"
 	cluster := "local-cluster"
 	limit := 10
-	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "namespace", Values: []*string{&val1, &val2}}, &model.SearchFilter{Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&val1, &val2}}, &model.SearchFilter{Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 
 	// Mock the database queries.
@@ -117,7 +122,7 @@ func Test_SearchWithMultipleClusterFilter_NegativeLimit_Query(t *testing.T) {
 	cluster2 := "remote-1"
 	limit := -1
 
-	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "namespace", Values: []*string{&value1, &value2}}, &model.SearchFilter{Property: "cluster", Values: []*string{&cluster1, &cluster2}}}, Limit: &limit}
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1, &value2}}, &model.SearchFilter{Property: "cluster", Values: []*string{&cluster1, &cluster2}}}, Limit: &limit}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 
 	// Mock the database data.
@@ -163,8 +168,8 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	resultList = append(resultList, &uid1, &uid2)
 
 	// //take the uids from above as input
-	searchInput2 := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "uid", Values: resultList}}}
-	resolver2, mockPool2 := newMockSearchResolver(t, searchInput2, resultList)
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "uid", Values: resultList}}}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, resultList)
 
 	relQuery := strings.TrimSpace(`WITH RECURSIVE
 	search_graph(uid, data, destkind, sourceid, destid, path, level)
@@ -187,59 +192,57 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`)
 
 	mockRows := newMockRows("./mocks/mock-rel-1.json")
-	mockPool2.EXPECT().Query(gomock.Any(),
+	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(relQuery),
 		gomock.Eq(resultList),
 	).Return(mockRows, nil)
 
-	result2 := resolver2.Related() // this should return a relatedResults object
+	result := resolver.Related() // this should return a relatedResults object
 
-	if result2[0].Kind != mockRows.mockData[0]["destkind"] {
+	if result[0].Kind != mockRows.mockData[0]["destkind"] {
 		t.Errorf("Kind value in mockdata does not match kind value of result")
 	}
+
 	// Verify returned items.
-	if len(result2) != len(mockRows.mockData) {
-		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result2))
+	if len(result) != len(mockRows.mockData) {
+		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result))
 	}
 
 }
 
-// func Test_SearchResolver_Keywords(t *testing.T) {
-// // Create a SearchResolver instance with a mock connection pool.
-// val1 := "template"
-// searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "kind", Values: []*string{&val1}}}}
-// resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
-// // Mock the database queries.
-// mockRows := newMockRows("./mocks/mock.json")
+func Test_SearchResolver_Keywords(t *testing.T) {
+	// Create a SearchResolver instance with a mock connection pool.
+	val1 := "Template"
+	limit := 10
+	searchInput := &model.SearchInput{Keywords: []*string{&val1}, Limit: &limit}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 
-// mockPool.EXPECT().Query(gomock.Any(),
-// 	gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'kind' IN ('template')) LIMIT 10000`),
-// 	gomock.Eq([]interface{}{}),
-// ).Return(mockRows, nil)
+	// Mock the database queries.
+	mockRows := newMockRows("./mocks/mock.json")
 
-// // Execute the function
-// result := resolver.Items()
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT "uid", "cluster", "data", "key", "value" FROM "search"."resources", jsonb_each_text("data") WHERE ("value" LIKE ('%Template%')) LIMIT 10`),
+		gomock.Eq([]interface{}{}),
+	).Return(mockRows, nil)
 
-// // Verify properties for each returned item.
-// for i, item := range result {
-// 	mockRow := mockRows.mockData[i]
-// 	expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
-// 	expectedRow["_uid"] = mockRow["uid"]
-// 	expectedRow["cluster"] = mockRow["cluster"]
+	// // Execute the function
+	result := resolver.Items()
 
-// 	if len(item) != len(expectedRow) {
-// 		t.Errorf("Number of properties don't match for item[%d]. Expected: %d Got: %d", i, len(expectedRow), len(item))
-// 	}
+	// Verify properties for each returned item.
+	for i, item := range result {
+		mockRow := mockRows.mockData[i]
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow["_uid"] = mockRow["uid"]
+		expectedRow["cluster"] = mockRow["cluster"]
 
-// 	for key, val := range item {
-// 		if val != expectedRow[key] {
-// 			t.Errorf("Value of key [%s] does not match for item [%d].\nExpected: %s\nGot: %s", key, i, expectedRow[key], val)
-// 		}
-// 	}
-// }
-// }
+		if len(item) != len(expectedRow) {
+			t.Errorf("Number of properties don't match for item[%d]. Expected: %d Got: %d", i, len(expectedRow), len(item))
+		}
 
-//Create a SearchResovler instance with a mock connection pool.
-// 	searchInput := &model.SearchInput{Keywords: "console"}
-
-// }
+		for key, val := range item {
+			if val != expectedRow[key] {
+				t.Errorf("Value of key [%s] does not match for item [%d].\nExpected: %s\nGot: %s", key, i, expectedRow[key], val)
+			}
+		}
+	}
+}

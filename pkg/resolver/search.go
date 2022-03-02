@@ -99,7 +99,6 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	// (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 10000
 	//FROM CLAUSE
 	if s.input.Keywords != nil {
-		fmt.Println("Keyword is:", s.input.Keywords)
 		schemaTable := goqu.S("search").Table("resources")
 		jsb := goqu.L("jsonb_each_text(?)", goqu.C("data"))
 		ds := goqu.From(schemaTable, jsb)
@@ -205,8 +204,8 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	for rows.Next() {
 		var uid string
 		if s.input.Keywords != nil {
-			var key string
-			var value string
+			var key *string
+			var value *interface{}
 			err = rows.Scan(&uid, &cluster, &data, &key, &value)
 		} else {
 			err = rows.Scan(&uid, &cluster, &data)
