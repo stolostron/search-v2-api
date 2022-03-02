@@ -221,7 +221,7 @@ func Test_SearchResolver_Keywords(t *testing.T) {
 	mockRows := newMockRows("./mocks/mock.json")
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT "uid", "cluster", "data", "key", "value" FROM "search"."resources", jsonb_each_text("data") WHERE ("value" LIKE ('%Template%')) LIMIT 10`),
+		gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources", jsonb_each_text("data") WHERE ("value" LIKE '%Template%') LIMIT 10`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 

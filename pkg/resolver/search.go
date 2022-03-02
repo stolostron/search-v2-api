@@ -26,8 +26,6 @@ type SearchResult struct {
 	wg     sync.WaitGroup // WORKAROUND: Used to serialize search query and relatioinships query.
 	query  string
 	params []interface{}
-	count  int
-	// items  []map[string]interface{}
 	//  Related []SearchRelatedResult
 }
 
@@ -43,11 +41,6 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 		}
 	}
 	return srchResult, nil
-}
-
-func (s *SearchResult) KeywordSearch() { //need this function and resolver for tests.
-	klog.V(2).Info("Resolving SearchResult:Keywords()")
-	s.buildSearchQuery(context.Background(), false, false)
 }
 
 func (s *SearchResult) Count() int {
@@ -107,7 +100,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		} else if uid {
 			selectDs = ds.Select("uid")
 		} else {
-			selectDs = ds.Select("uid", "cluster", "data", "key", "value")
+			selectDs = ds.Select("uid", "cluster", "data")
 		}
 
 	} else {
@@ -167,9 +160,6 @@ func (s *SearchResult) resolveCount() int {
 		klog.Errorf("Error %s resolving count for query:%s", err.Error(), s.query)
 	}
 
-	s.count = count
-	count = s.count
-
 	return count
 }
 
@@ -194,7 +184,7 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
 	}
-	// defer rows.Close()
+	defer rows.Close()
 
 	var cluster string
 	var data map[string]interface{}
@@ -203,13 +193,8 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 
 	for rows.Next() {
 		var uid string
-		if s.input.Keywords != nil {
-			var key *string
-			var value *interface{}
-			err = rows.Scan(&uid, &cluster, &data, &key, &value)
-		} else {
-			err = rows.Scan(&uid, &cluster, &data)
-		}
+		err = rows.Scan(&uid, &cluster, &data)
+		// }
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), s.query)
 		}
@@ -392,16 +377,11 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 			for i, word := range input.Keywords {
 				keywords[i] = "%" + *word + "%"
 			}
-			if len(input.Keywords) == 1 {
-				whereDs = append(whereDs, goqu.L(`"value"`).Like(keywords).Expression())
-			} else if len(input.Keywords) > 1 {
-				for _, key := range keywords {
-					whereDs = append(whereDs, goqu.L(`"value"`).Like(key).Expression())
-				}
-
+			for _, key := range keywords {
+				whereDs = append(whereDs, goqu.L(`"value"`).Like(key).Expression())
 			}
 		} else {
-			klog.Warningf("Ignoring filter [%s] because it has no values", input.Keywords)
+			klog.Warningf("Ignoring keyword filter [%s] because it has no values", input.Keywords)
 		}
 	}
 	if input.Filters != nil {

@@ -24,10 +24,10 @@ const (
 	RBAC_POLL_INTERVAL       = 60000
 	RBAC_INACTIVITY_TIMEOUT  = 600000
 	SERVICEACCT_TOKEN        = ""
-	DEFAULT_DB_PASS          = "p6AZ4dPmVxwGzTQG"
+	DEFAULT_DB_PASS          = ""
 	DEFAULT_DB_HOST          = "localhost"
-	DEFAULT_DB_USER          = "searchuser"
-	DEFAULT_DB_NAME          = "search"
+	DEFAULT_DB_USER          = ""
+	DEFAULT_DB_NAME          = ""
 	DEFAULT_DB_PORT          = int(5432)
 )
 
