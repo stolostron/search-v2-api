@@ -196,6 +196,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	if len(s.input.RelatedKinds) > 0 {
 		relatedKinds := pointerToStringArray(s.input.RelatedKinds)
 		whereDs = append(whereDs, goqu.C("destkind").In(relatedKinds).Expression())
+		klog.Warning("TODO: The relationships query must use the provided kind filters effectively.")
 	}
 	//The level can be parameterized later, if needed, for applications
 	whereDs = append(whereDs, goqu.C("level").Eq(1)) // Add filter to select only level 1 relationships
