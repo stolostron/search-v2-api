@@ -27,7 +27,7 @@ type SearchResult struct {
 	query  string
 	params []interface{}
 	count  int
-	items  []map[string]interface{}
+	// items  []map[string]interface{}
 	//  Related []SearchRelatedResult
 }
 
