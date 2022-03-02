@@ -65,7 +65,7 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 	value2 := "openshift-monitoring"
 	cluster := "local-cluster"
 	limit := 10
-	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "namespace", Values: []*string{&value1, &value2}}, &model.SearchFilter{Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1, &value2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
 	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1)
 	val1 := "Template"
 	val2 := "ReplicaSet"

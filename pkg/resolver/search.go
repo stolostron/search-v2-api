@@ -214,7 +214,27 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	selectNext := make([]interface{}, 0)
 	selectNext = append(selectNext, "r.uid", "r.data", "e.destkind", "e.sourceid", "e.destid",
 		goqu.L("sg.path||r.uid").As("path"), goqu.L("level+1").As("level"))
-
+	// Original query to find relations between resources - accepts an array of uids
+	// =============================================================================
+	// relQuery := strings.TrimSpace(`WITH RECURSIVE
+	// 	search_graph(uid, data, destkind, sourceid, destid, path, level)
+	// 	AS (
+	// 	SELECT r.uid, r.data, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] AS path, 1 AS level
+	// 		FROM search.resources r
+	// 		INNER JOIN
+	// 			search.edges e ON (r.uid = e.sourceid) OR (r.uid = e.destid)
+	// 		 WHERE r.uid = ANY($1)
+	// 	UNION
+	// 	SELECT r.uid, r.data, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 AS level
+	// 		FROM search.resources r
+	// 		INNER JOIN
+	// 			search.edges e ON (r.uid = e.sourceid)
+	// 		, search_graph sg
+	// 		WHERE (e.sourceid = sg.destid OR e.destid = sg.sourceid)
+	// 		AND r.uid <> all(sg.path)
+	// 		AND level = 1
+	// 		)
+	// 	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`)
 	sql, params, err := goqu.From("search_graph").
 		WithRecursive("search_graph(uid, data, destkind, sourceid, destid, path, level)",
 			goqu.From(schema.Table("resources").As("r")).InnerJoin(schema.Table("edges").As("e"),
