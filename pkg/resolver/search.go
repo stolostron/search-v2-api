@@ -253,10 +253,11 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 
 	if err != nil {
 		klog.Error("Error creating relation query", err)
+		return nil
 	}
-	relations, relQueryError := s.pool.Query(context.Background(), sql, params...) // how to deal with defaults.
+	relations, relQueryError := s.pool.Query(context.TODO(), sql, params...) // how to deal with defaults.
 	if relQueryError != nil {
-		klog.Errorf("getRelations query error :%s", relQueryError.Error())
+		klog.Errorf("Error while executing getRelations query. Error :%s", relQueryError.Error())
 	}
 
 	defer relations.Close()
