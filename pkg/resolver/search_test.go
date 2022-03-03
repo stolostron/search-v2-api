@@ -12,7 +12,7 @@ import (
 func Test_SearchResolver_Count(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "pod"
-	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "kind", Values: []*string{&val1}}}}
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 
 	// Mock the database query
@@ -33,10 +33,10 @@ func Test_SearchResolver_Count(t *testing.T) {
 func Test_SearchResolver_Items(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "template"
-	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "kind", Values: []*string{&val1}}}}
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 	// Mock the database queries.
-	mockRows := newMockRows("./mocks/mock.json")
+	mockRows := newMockRows("./mocks/mock.json", searchInput)
 
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'kind' IN ('template')) LIMIT 10000`),
@@ -71,11 +71,11 @@ func Test_SearchResolver_Items_Multiple_Filter(t *testing.T) {
 	val2 := "openshift-monitoring"
 	cluster := "local-cluster"
 	limit := 10
-	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "namespace", Values: []*string{&val1, &val2}}, &model.SearchFilter{Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&val1, &val2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 
 	// Mock the database queries.
-	mockRows := newMockRows("./mocks/mock.json")
+	mockRows := newMockRows("./mocks/mock.json", searchInput)
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster'))) LIMIT 10`),
 		// gomock.Eq("SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'namespace')=any($1) AND cluster=$2 LIMIT 10"),
@@ -112,19 +112,18 @@ func Test_SearchResolver_Items_Multiple_Filter(t *testing.T) {
 func Test_SearchWithMultipleClusterFilter_NegativeLimit_Query(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	value1 := "openshift"
-	value2 := "openshift-monitoring"
 	cluster1 := "local-cluster"
 	cluster2 := "remote-1"
 	limit := -1
-
-	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "namespace", Values: []*string{&value1, &value2}}, &model.SearchFilter{Property: "cluster", Values: []*string{&cluster1, &cluster2}}}, Limit: &limit}
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1}}, {Property: "cluster", Values: []*string{&cluster1, &cluster2}}}, Limit: &limit}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json")
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput)
+
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster', 'remote-1')))`),
+		gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift')) AND ("cluster" IN ('local-cluster', 'remote-1')))`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
@@ -163,33 +162,59 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	resultList = append(resultList, &uid1, &uid2)
 
 	// //take the uids from above as input
-	searchInput2 := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "uid", Values: resultList}}}
+	searchInput2 := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "uid", Values: resultList}}}
 	resolver2, mockPool2 := newMockSearchResolver(t, searchInput2, resultList)
 
-	relQuery := strings.TrimSpace(`WITH RECURSIVE
-	search_graph(uid, data, destkind, sourceid, destid, path, level)
-	AS (
-	SELECT r.uid, r.data, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] AS path, 1 AS level
-		FROM search.resources r
-		INNER JOIN
-			search.edges e ON (r.uid = e.sourceid) OR (r.uid = e.destid)
-		 WHERE r.uid = ANY($1)
-	UNION
-	SELECT r.uid, r.data, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 AS level
-		FROM search.resources r
-		INNER JOIN
-			search.edges e ON (r.uid = e.sourceid)
-		, search_graph sg
-		WHERE (e.sourceid = sg.destid OR e.destid = sg.sourceid)
-		AND r.uid <> all(sg.path)
-		AND level = 1
-		)
-	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`)
+	relQuery := strings.TrimSpace(`WITH RECURSIVE search_graph(uid, data, destkind, sourceid, destid, path, level) AS (SELECT "r"."uid", "r"."data", "e"."destkind", "e"."sourceid", "e"."destid", ARRAY[r.uid] AS "path", 1 AS "level" FROM "search"."resources" AS "r" INNER JOIN "search"."edges" AS "e" ON ("r"."uid" IN ("e"."sourceid", "e"."destid")) WHERE ("r"."uid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b')) UNION (SELECT "r"."uid", "r"."data", "e"."destkind", "e"."sourceid", "e"."destid", sg.path||r.uid AS "path", level+1 AS "level" FROM "search"."resources" AS "r" INNER JOIN "search"."edges" AS "e" ON ("r"."uid" = "e"."sourceid") INNER JOIN "search_graph" AS "sg" ON (("sg"."destid" = "e"."sourceid") OR ("sg"."sourceid" = "e"."destid")) WHERE (("r"."uid" != ALL ('{sg.path}')) AND ("sg"."level" = 1)))) SELECT DISTINCT ON ("destid") "data", "destid", "destkind" FROM "search_graph" WHERE ("level" = 1)`)
 
-	mockRows := newMockRows("./mocks/mock-rel-1.json")
+	mockRows := newMockRows("./mocks/mock-rel-1.json", searchInput2)
 	mockPool2.EXPECT().Query(gomock.Any(),
 		gomock.Eq(relQuery),
-		gomock.Eq(resultList),
+		gomock.Eq([]interface{}{}),
+	).Return(mockRows, nil)
+
+	result2 := resolver2.Related() // this should return a relatedResults object
+
+	resultKinds := make([]*string, len(result2))
+	for i, data := range result2 {
+		kind := data.Kind
+		resultKinds[i] = &kind
+	}
+
+	expectedKinds := make([]*string, len(mockRows.mockData))
+	for i, data := range mockRows.mockData {
+		destKind, _ := data["destkind"].(string)
+		expectedKinds[i] = &destKind
+	}
+	// Verify expected and result kinds
+	AssertStringArrayEqual(t, resultKinds, expectedKinds, "Error in expected destKinds in Test_SearchResolver_Relationships")
+
+	// Verify returned items.
+	if len(result2) != len(mockRows.mockData) {
+		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result2))
+	}
+
+}
+
+func Test_SearchResolver_RelatedKindsRelationships(t *testing.T) {
+
+	var resultList []*string
+
+	uid1 := "local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd"
+	uid2 := "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b"
+
+	resultList = append(resultList, &uid1, &uid2)
+	relatedKind1 := "ConfigMap"
+	// //take the uids from above as input
+	searchInput2 := &model.SearchInput{RelatedKinds: []*string{&relatedKind1}, Filters: []*model.SearchFilter{{Property: "uid", Values: resultList}}}
+	resolver2, mockPool2 := newMockSearchResolver(t, searchInput2, resultList)
+
+	relQuery := strings.TrimSpace(`WITH RECURSIVE search_graph(uid, data, destkind, sourceid, destid, path, level) AS (SELECT "r"."uid", "r"."data", "e"."destkind", "e"."sourceid", "e"."destid", ARRAY[r.uid] AS "path", 1 AS "level" FROM "search"."resources" AS "r" INNER JOIN "search"."edges" AS "e" ON ("r"."uid" IN ("e"."sourceid", "e"."destid")) WHERE ("r"."uid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b')) UNION (SELECT "r"."uid", "r"."data", "e"."destkind", "e"."sourceid", "e"."destid", sg.path||r.uid AS "path", level+1 AS "level" FROM "search"."resources" AS "r" INNER JOIN "search"."edges" AS "e" ON ("r"."uid" = "e"."sourceid") INNER JOIN "search_graph" AS "sg" ON (("sg"."destid" = "e"."sourceid") OR ("sg"."sourceid" = "e"."destid")) WHERE (("r"."uid" != ALL ('{sg.path}')) AND ("sg"."level" = 1)))) SELECT DISTINCT ON ("destid") "data", "destid", "destkind" FROM "search_graph" WHERE (("destkind" IN ('ConfigMap')) AND ("level" = 1))`)
+
+	mockRows := newMockRows("./mocks/mock-rel-1.json", searchInput2)
+	mockPool2.EXPECT().Query(gomock.Any(),
+		gomock.Eq(relQuery),
+		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 
 	result2 := resolver2.Related() // this should return a relatedResults object
@@ -201,5 +226,4 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	if len(result2) != len(mockRows.mockData) {
 		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result2))
 	}
-
 }

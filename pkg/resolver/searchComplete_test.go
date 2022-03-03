@@ -19,7 +19,7 @@ func Test_SearchComplete_Query(t *testing.T) {
 	expectedProps := []*string{&val1, &val2}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json")
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "data"->>'kind' FROM "search"."resources" WHERE ("data"->>'kind' IS NOT NULL) ORDER BY "data"->>'kind' ASC LIMIT 10000`),
@@ -45,7 +45,7 @@ func Test_SearchCompleteNoProp_Query(t *testing.T) {
 	expectedProps := []*string{&val1, &val2}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json")
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(""),
@@ -65,14 +65,14 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 	value2 := "openshift-monitoring"
 	cluster := "local-cluster"
 	limit := 10
-	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{&model.SearchFilter{Property: "namespace", Values: []*string{&value1, &value2}}, &model.SearchFilter{Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1, &value2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
 	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1)
 	val1 := "Template"
 	val2 := "ReplicaSet"
 	expectedProps := []*string{&val1, &val2}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json")
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "cluster" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster')) AND ("cluster" IS NOT NULL)) ORDER BY "cluster" ASC LIMIT 10`),
