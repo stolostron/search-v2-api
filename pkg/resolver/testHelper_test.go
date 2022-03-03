@@ -172,6 +172,8 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 				*dest[i].(*string) = r.mockData[r.index-1][r.columnHeaders[i]].(string)
 			case *map[string]interface{}:
 				*dest[i].(*map[string]interface{}) = r.mockData[r.index-1][r.columnHeaders[i]].(map[string]interface{})
+			case *interface{}:
+				*dest[i].(*interface{}) = r.mockData[r.index-1][r.columnHeaders[i]].(interface{})
 			case nil:
 				klog.Info("error type %T", v)
 			default:

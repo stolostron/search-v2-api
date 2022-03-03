@@ -26,8 +26,6 @@ type SearchResult struct {
 	wg     sync.WaitGroup // WORKAROUND: Used to serialize search query and relatioinships query.
 	query  string
 	params []interface{}
-	// 	Count   int
-	// 	Items   []map[string]interface{}
 	//  Related []SearchRelatedResult
 }
 
@@ -48,11 +46,8 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 func (s *SearchResult) Count() int {
 	klog.V(2).Info("Resolving SearchResult:Count()")
 	s.buildSearchQuery(context.Background(), true, false)
-	count, e := s.resolveCount()
+	count := s.resolveCount()
 
-	if e != nil {
-		klog.Error("Error resolving count.", e)
-	}
 	return count
 }
 
@@ -100,9 +95,16 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 
 	// Example query: SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN
 	// (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 10000
-	//FROM CLAUSE
+
+	//define schema table:
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
+
+	if s.input.Keywords != nil {
+		jsb := goqu.L("jsonb_each_text(?)", goqu.C("data"))
+		ds = goqu.From(schemaTable, jsb)
+	}
+
 	//SELECT CLAUSE
 	if count {
 		selectDs = ds.Select(goqu.COUNT("uid"))
@@ -111,10 +113,16 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	} else {
 		selectDs = ds.Select("uid", "cluster", "data")
 	}
+
 	//WHERE CLAUSE
 	if s.input != nil && len(s.input.Filters) > 0 {
 		whereDs = WhereClauseFilter(s.input)
 	}
+
+	if s.input != nil && s.input.Keywords != nil && len(s.input.Keywords) > 0 {
+		whereDs = WhereClauseFilter(s.input)
+	}
+
 	//LIMIT CLAUSE
 	if !count {
 		if s.input != nil && s.input.Limit != nil && *s.input.Limit > 0 {
@@ -135,13 +143,15 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	s.params = params
 }
 
-func (s *SearchResult) resolveCount() (int, error) {
+func (s *SearchResult) resolveCount() int {
 	rows := s.pool.QueryRow(context.Background(), s.query, s.params...)
 
 	var count int
 	err := rows.Scan(&count)
-
-	return count, err
+	if err != nil {
+		klog.Errorf("Error %s resolving count for query:%s", err.Error(), s.query)
+	}
+	return count
 }
 
 func (s *SearchResult) resolveUids() {
@@ -184,6 +194,7 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 
 		items = append(items, currItem)
 		s.uids = append(s.uids, &uid)
+
 	}
 
 	return items, nil
@@ -390,18 +401,34 @@ func pointerToStringArray(pointerArray []*string) []string {
 
 func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 	var whereDs []exp.Expression
-	for _, filter := range input.Filters {
-		if len(filter.Values) > 0 {
-			values := pointerToStringArray(filter.Values)
 
-			if filter.Property == "cluster" {
-				whereDs = append(whereDs, goqu.C(filter.Property).In(values).Expression())
-			} else {
-				whereDs = append(whereDs, goqu.L(`"data"->>?`, filter.Property).In(values).Expression())
+	if input.Keywords != nil {
+		//query example: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data") WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' IN ('Pod')))
+		if len(input.Keywords) > 0 {
+			keywords := pointerToStringArray(input.Keywords)
+			for _, key := range keywords {
+				key = "%" + key + "%"
+				whereDs = append(whereDs, goqu.L(`"value"`).Like(key).Expression())
 			}
 		} else {
-			klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
+			klog.Warningf("Ignoring keyword filter [%s] because it has no values", input.Keywords)
 		}
 	}
+	if input.Filters != nil {
+		for _, filter := range input.Filters {
+			if len(filter.Values) > 0 {
+				values := pointerToStringArray(filter.Values)
+
+				if filter.Property == "cluster" {
+					whereDs = append(whereDs, goqu.C(filter.Property).In(values).Expression())
+				} else {
+					whereDs = append(whereDs, goqu.L(`"data"->>?`, filter.Property).In(values).Expression())
+				}
+			} else {
+				klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
+			}
+		}
+	}
+
 	return whereDs
 }

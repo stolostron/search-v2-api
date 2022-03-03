@@ -47,7 +47,6 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 	var whereDs []exp.Expression
 	var selectDs *goqu.SelectDataset
 
-	//FROM CLAUSE
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 	if s.property != "" {
