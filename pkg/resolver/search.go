@@ -118,11 +118,11 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	if s.input != nil && len(s.input.Filters) > 0 {
 		whereDs = WhereClauseFilter(s.input)
 	}
-	if s.input != nil { //if keyword is input then
-		if s.input.Keywords != nil && len(s.input.Keywords) > 0 { //if the input is not nil and the len of keywords is greater than 0
-			whereDs = WhereClauseFilter(s.input) //the where clause will be
-		}
+
+	if s.input != nil && s.input.Keywords != nil && len(s.input.Keywords) > 0 {
+		whereDs = WhereClauseFilter(s.input)
 	}
+
 	//LIMIT CLAUSE
 	if !count {
 		if s.input != nil && s.input.Limit != nil && *s.input.Limit > 0 {
@@ -185,7 +185,6 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	for rows.Next() {
 		var uid string
 		err = rows.Scan(&uid, &cluster, &data)
-		// }
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), s.query)
 		}
@@ -404,6 +403,7 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 	var whereDs []exp.Expression
 
 	if input.Keywords != nil {
+		//query example: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data") WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' IN ('Pod')))
 		if len(input.Keywords) > 0 {
 			keywords := pointerToStringArray(input.Keywords)
 			for _, key := range keywords {

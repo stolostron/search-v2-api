@@ -47,19 +47,6 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 	var whereDs []exp.Expression
 	var selectDs *goqu.SelectDataset
 
-	//FROM CLAUSE
-	// if s.input.Keywords != nil && len(s.input.Keywords) > 0 {
-	// 	schemaTable := goqu.S("search").Table("resources")
-	// 	jsb := goqu.L("jsonb_each_text(data)")
-	// 	ds := goqu.From(schemaTable, jsb)
-	// 	selectDs = ds.Select("uid", "cluster", "data", "key", "value")
-	// 	whereDs = WhereClauseFilter(s.input, true)
-	// 	selectDs = ds.SelectDistinct(goqu.L(`"value"`, s.property)).Order(goqu.L(`"value"`, s.property).Asc())
-	// 	whereDs = append(whereDs, goqu.L(`"data"->>?`, s.property).IsNotNull())
-	// 	}
-
-	// }
-
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 	if s.property != "" {
@@ -117,54 +104,3 @@ func (s *SearchCompleteResult) searchCompleteResults() ([]*string, error) {
 	}
 	return srchCompleteOut, nil
 }
-
-// func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
-// 	var limit int
-// 	var whereDs []exp.Expression
-// 	var selectDs *goqu.SelectDataset
-
-// 	//WHERE & SELECT CLAUSES
-// 	if s.input.Keywords != nil && len(s.input.Keywords) > 0 {
-// 		schemaTable := goqu.S("search").Table("resources")
-// 		jsb := goqu.L("jsonb_each_text(data)")
-// 		ds := goqu.From(schemaTable, jsb)
-// 		whereDs = WhereClauseFilter(s.input)
-// 		selectDs = ds.SelectDistinct(goqu.L(`"value"`, s.property)).Order(goqu.L(`"value"`, s.property).Asc())
-// 	} else if s.property != "" {
-// 		if s.input != nil && len(s.input.Filters) > 0 {
-// 			schemaTable := goqu.S("search").Table("resources")
-// 			ds := goqu.From(schemaTable)
-// 			whereDs = WhereClauseFilter(s.input)
-// 			if s.property == "cluster" {
-// 				selectDs = ds.SelectDistinct(s.property).Order(goqu.C(s.property).Asc())
-// 				//Adding notNull clause to filter out NULL values and ORDER by sort results
-// 				whereDs = append(whereDs, goqu.C(s.property).IsNotNull())
-// 			} else {
-// 				selectDs = ds.SelectDistinct(goqu.L(`"data"->>?`, s.property)).Order(goqu.L(`"data"->>?`, s.property).Asc())
-// 				//Adding notNull clause to filter out NULL values and ORDER by sort results
-// 				whereDs = append(whereDs, goqu.L(`"data"->>?`, s.property).IsNotNull())
-// 			}
-// 		}
-// 		//LIMIT CLAUSE
-// 		if s.input != nil && s.input.Limit != nil && *s.input.Limit > 0 {
-// 			limit = *s.input.Limit
-// 		} else if s.input != nil && s.input.Limit != nil && *s.input.Limit == -1 {
-// 			klog.Warning("No limit set. Fetching all results.")
-// 		} else {
-// 			limit = config.DEFAULT_QUERY_LIMIT
-// 		}
-
-// 		//Get the query
-// 		sql, params, err := selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
-// 		if err != nil {
-// 			klog.Errorf("Error building SearchComplete query: %s", err.Error())
-// 		}
-
-// 		s.query = sql
-// 		s.params = params
-// 	} else {
-// 		s.query = ""
-// 		s.params = nil
-// 	}
-
-// }
