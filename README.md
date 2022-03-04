@@ -38,10 +38,12 @@ Run within cluster
 ==================
 
 1. Build the search-v2-api code and push to your private repo in quay.
-`make docker-build`
- 
-`docker tag search-v2-api:latest quay.io/<your_id>/search-v2-api:latest`  
-`docker push quay.io/<your_id>/search-v2-api:latest`  
+
+   &nbsp;`make docker-build`
+
+   &nbsp;`docker tag search-v2-api:latest quay.io/<your_id>/search-v2-api:latest`  
+
+   &nbsp;`docker push quay.io/<your_id>/search-v2-api:latest`  
 
 2. Setup Postgres on your cluster using these [instructions](https://access.crunchydata.com/documentation/postgres-operator/v5/quickstart/). Create postgres service by applying the yaml below.
 ```
