@@ -100,7 +100,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 
-	if s.input.Keywords != nil {
+	if s.input.Keywords != nil && len(s.input.Keywords) > 0 {
 		jsb := goqu.L("jsonb_each_text(?)", goqu.C("data"))
 		ds = goqu.From(schemaTable, jsb)
 	}
@@ -115,11 +115,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	}
 
 	//WHERE CLAUSE
-	if s.input != nil && len(s.input.Filters) > 0 {
-		whereDs = WhereClauseFilter(s.input)
-	}
-
-	if s.input != nil && s.input.Keywords != nil && len(s.input.Keywords) > 0 {
+	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 		whereDs = WhereClauseFilter(s.input)
 	}
 
@@ -402,16 +398,12 @@ func pointerToStringArray(pointerArray []*string) []string {
 func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 	var whereDs []exp.Expression
 
-	if input.Keywords != nil {
+	if input.Keywords != nil && len(input.Keywords) > 0 {
 		//query example: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data") WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' IN ('Pod')))
-		if len(input.Keywords) > 0 {
-			keywords := pointerToStringArray(input.Keywords)
-			for _, key := range keywords {
-				key = "%" + key + "%"
-				whereDs = append(whereDs, goqu.L(`"value"`).Like(key).Expression())
-			}
-		} else {
-			klog.Warningf("Ignoring keyword filter [%s] because it has no values", input.Keywords)
+		keywords := pointerToStringArray(input.Keywords)
+		for _, key := range keywords {
+			key = "%" + key + "%"
+			whereDs = append(whereDs, goqu.L(`"value"`).Like(key).Expression())
 		}
 	}
 	if input.Filters != nil {
