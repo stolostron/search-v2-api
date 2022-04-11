@@ -90,17 +90,19 @@ func (s *SearchCompleteResult) searchCompleteResults() ([]*string, error) {
 	klog.V(2).Info("Resolving searchCompleteResults()")
 	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
 	if err != nil {
-		klog.Error("Error fetching results from db ", err)
+		klog.Error("Error fetching search complete results from db ", err)
 	}
 	defer rows.Close()
 	var srchCompleteOut []*string
-	for rows.Next() {
-		prop := ""
-		scanErr := rows.Scan(&prop)
-		if scanErr != nil {
-			klog.Info("Error reading searchCompleteResults", scanErr)
+	if rows != nil {
+		for rows.Next() {
+			prop := ""
+			scanErr := rows.Scan(&prop)
+			if scanErr != nil {
+				klog.Info("Error reading searchCompleteResults", scanErr)
+			}
+			srchCompleteOut = append(srchCompleteOut, &prop)
 		}
-		srchCompleteOut = append(srchCompleteOut, &prop)
 	}
 	return srchCompleteOut, nil
 }

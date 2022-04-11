@@ -10,7 +10,6 @@ import (
 	"github.com/stolostron/search-v2-api/graph/generated"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/resolver"
-	"github.com/stolostron/search-v2-api/pkg/schema"
 	klog "k8s.io/klog/v2"
 )
 
@@ -40,7 +39,7 @@ func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) 
 
 func (r *queryResolver) SearchSchema(ctx context.Context) (map[string]interface{}, error) {
 	klog.Infoln("Received SearchSchema query")
-	return schema.SearchSchema(ctx)
+	return resolver.SearchSchema(ctx)
 }
 
 func (r *queryResolver) SavedSearches(ctx context.Context) ([]*model.UserSearch, error) {
