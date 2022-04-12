@@ -2,12 +2,17 @@ package main
 
 import (
 	"flag"
+	"log"
+	"net/http"
+
+	// "net/http"
 	"os"
 
+	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/go-chi/chi"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/server"
-
 	klog "k8s.io/klog/v2"
 )
 
@@ -27,9 +32,20 @@ func main() {
 		klog.Fatal(configError)
 	}
 
+	//Check and verify token:
+	config.KubeClient()
+
 	database.GetConnection()
+
+	router := chi.NewRouter()
+	router.Use(config.Middleware())
+	router.Handle("/", playground.Handler("search", "/query"))
+	log.Fatal(http.ListenAndServe("localhost:4010", router))
+
 	if len(os.Args) > 1 && os.Args[1] == "playground" {
 		server.StartAndListen(true)
 	}
+
 	server.StartAndListen(false)
+
 }
