@@ -28,13 +28,7 @@ func (r *queryResolver) Search(ctx context.Context, input []*model.SearchInput) 
 
 func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) {
 	klog.Infoln("Received Messages query")
-
-	messages := make([]*model.Message, 0)
-	kind := "Informational"
-	desc := "Trial search-v2-api"
-	message1 := model.Message{ID: "1", Kind: &kind, Description: &desc}
-	messages = append(messages, &message1)
-	return messages, nil
+	return resolver.Messages(ctx)
 }
 
 func (r *queryResolver) SearchSchema(ctx context.Context) (map[string]interface{}, error) {

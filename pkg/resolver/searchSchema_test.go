@@ -21,7 +21,7 @@ func Test_SearchSchema_Query(t *testing.T) {
 
 	// Verify response
 	if resolver.query != sql {
-		t.Errorf("Expected sql guery: %s but got %s", sql, resolver.query)
+		t.Errorf("Expected sql query: %s but got %s", sql, resolver.query)
 	}
 }
 

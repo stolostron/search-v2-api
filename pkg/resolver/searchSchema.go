@@ -9,21 +9,21 @@ import (
 	klog "k8s.io/klog/v2"
 )
 
-type SearchSchemaResult struct {
+type SearchSchemaMessage struct {
 	pool   pgxpoolmock.PgxPool
 	query  string
 	params []interface{}
 }
 
 func SearchSchema(ctx context.Context) (map[string]interface{}, error) {
-	searchSchemaResult := &SearchSchemaResult{
+	searchSchemaResult := &SearchSchemaMessage{
 		pool: db.GetConnection(),
 	}
 	searchSchemaResult.searchSchemaQuery(ctx)
 	return searchSchemaResult.searchSchemaResults()
 }
 
-func (s *SearchSchemaResult) searchSchemaQuery(ctx context.Context) {
+func (s *SearchSchemaMessage) searchSchemaQuery(ctx context.Context) {
 	var selectDs *goqu.SelectDataset
 
 	// schema query sample: "SELECT distinct jsonb_object_keys(jsonb_strip_nulls(data)) FROM search.resources"
@@ -45,7 +45,7 @@ func (s *SearchSchemaResult) searchSchemaQuery(ctx context.Context) {
 	klog.Info("SearchSchema Query: ", sql)
 }
 
-func (s *SearchSchemaResult) searchSchemaResults() (map[string]interface{}, error) {
+func (s *SearchSchemaMessage) searchSchemaResults() (map[string]interface{}, error) {
 	klog.V(2).Info("Resolving searchSchemaResults()")
 	srchSchema := map[string]interface{}{}
 	schemaTop := []string{"cluster", "kind", "label", "name", "namespace", "status"}
