@@ -22,8 +22,8 @@ func (s *SearchSchemaMessage) messageQuery(ctx context.Context) {
 	var selectDs1, selectDs2 *goqu.SelectDataset
 
 	// Get all clusters - exclude local-cluster and managed clusters where search ManagedClusterAddon is not present
-	// messsage query sample: SELECT COUNT(DISTINCT("cluster")) from search.resources where cluster not in ( '' , 'local-cluster')
-	// and cluster not in (
+	// messsage query sample: SELECT COUNT(DISTINCT("cluster")) from search.resources
+	// where cluster not in ( '' , 'local-cluster') and cluster not in (
 	// SELECT distinct data->> 'namespace' as cluster FROM "search"."resources"
 	// where  "data"->>'kind'= 'ManagedClusterAddOn' and "data"->>'name'='search-collector')
 
