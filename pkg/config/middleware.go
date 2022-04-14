@@ -2,9 +2,11 @@ package config
 
 import (
 	"context"
+	"encoding/json"
+	"log"
+
 	// "encoding/json"
 	"fmt"
-	"io"
 
 	// "log"
 	"net/http"
@@ -27,6 +29,7 @@ func KubeClient() string {
 		klog.Fatal(err.Error())
 	}
 	kClientset, err = kubernetes.NewForConfig(config)
+
 	if err != nil {
 		klog.Fatal(err.Error())
 	}
@@ -63,6 +66,7 @@ func getClientConfig() (*rest.Config, error, string) {
 	}
 
 	token := clientConfig.BearerToken
+	fmt.Printf("The bearer token is: %s\n", token)
 
 	return clientConfig, clientConfigError, token
 }
@@ -73,12 +77,15 @@ func Middleware() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 			var token string
-			_, _, token = getClientConfig()
+			token = KubeClient()
+			fmt.Printf("The token is: %s", token)
 			// Read the value of the client identifier from the request header
 			fmt.Fprintf(w, "%s %s %s \n", r.Method, r.URL, r.Proto)
 
 			//Add the token from kubernetes to the request header
 			r.Header.Add("Userid", token)
+
+			fmt.Printf("The userid is:%s\n", r.Header.Get("Userid"))
 
 			//Iterate over all header fields
 			for k, v := range r.Header {
@@ -99,7 +106,7 @@ func Middleware() func(http.Handler) http.Handler {
 				http.Error(w, "Invalid token", http.StatusForbidden)
 				return
 			}
-			io.WriteString(w, "Authentication successful!")
+			fmt.Fprintf(w, "Authentication successful!")
 
 		})
 	}
@@ -112,10 +119,19 @@ func verifyToken(clientId string) (bool, error) {
 			Token: clientId,
 		},
 	}
-	_, err := kClientset.AuthenticationV1().TokenReviews().Create(ctx, &tr, metav1.CreateOptions{})
+	result, err := kClientset.AuthenticationV1().TokenReviews().Create(ctx, &tr, metav1.CreateOptions{})
 	if err != nil {
 		return false, err
 	}
-	return false, nil
 
+	log.Printf("%v\n", prettyPrint(result.Status))
+	if result.Status.Authenticated {
+		return true, nil
+	}
+	return false, nil
+}
+
+func prettyPrint(i interface{}) string {
+	s, _ := json.MarshalIndent(i, "", "\t")
+	return string(s)
 }
