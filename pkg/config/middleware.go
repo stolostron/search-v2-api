@@ -76,8 +76,7 @@ func Middleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-			var token string
-			token = KubeClient()
+			token := KubeClient()
 			fmt.Printf("The token is: %s", token)
 			// Read the value of the client identifier from the request header
 			fmt.Fprintf(w, "%s %s %s \n", r.Method, r.URL, r.Proto)
