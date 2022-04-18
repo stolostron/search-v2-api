@@ -3,7 +3,6 @@ package resolver
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -43,9 +42,7 @@ func Test_SearchSchema_Results(t *testing.T) {
 		gomock.Eq(`SELECT DISTINCT jsonb_object_keys(jsonb_strip_nulls("data")) FROM "search"."resources"`),
 	).Return(mockRows, nil)
 	resolver.searchSchemaQuery(context.TODO())
-	res, _ := resolver.searchSchemaResults()
-	fmt.Println("results: ", res)
-	fmt.Println("expectedRes: ", expectedRes)
+	res, _ := resolver.searchSchemaResults(context.TODO())
 
 	// AssertStringArrayEqual(t, res["allProperties"].([]*string), expectedRes["allProperties"].([]string), "Search schema results doesn't match.")
 	if !reflect.DeepEqual(expectedRes, res) {

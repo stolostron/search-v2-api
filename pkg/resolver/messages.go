@@ -15,58 +15,52 @@ func Messages(ctx context.Context) ([]*model.Message, error) {
 		pool: db.GetConnection(),
 	}
 	searchSchemaResult.messageQuery(ctx)
-	return searchSchemaResult.messageResults()
+	return searchSchemaResult.messageResults(ctx)
 }
 
 func (s *SearchSchemaMessage) messageQuery(ctx context.Context) {
-	var selectDs1, selectDs2 *goqu.SelectDataset
-
-	// Get all clusters - exclude local-cluster and managed clusters where search ManagedClusterAddon is not present
-	// messsage query sample: SELECT COUNT(DISTINCT("cluster")) from search.resources
-	// where cluster not in ( '' , 'local-cluster') and cluster not in (
-	// SELECT distinct data->> 'namespace' as cluster FROM "search"."resources"
-	// where  "data"->>'kind'= 'ManagedClusterAddOn' and "data"->>'name'='search-collector')
+	var selectDs *goqu.SelectDataset
 
 	//FROM CLAUSE
-	schemaTable := goqu.S("search").Table("resources")
-	ds := goqu.From(schemaTable)
+	schemaTable1 := goqu.S("search").Table("resources").As("mcInfo")
+	schemaTable2 := goqu.S("search").Table("resources").As("srchAddon")
+
+	// For each ManagedClusterInfo resource in the hub,
+	// we should have a matching ManagedClusterAddOn
+	// with name=search-collector in the same namespace.
+	ds := goqu.From(schemaTable1).
+		LeftOuterJoin(schemaTable2,
+			goqu.On(goqu.L(`"mcInfo".data->>?`, "name").Eq(goqu.L(`"srchAddon".data->>?`, "namespace")),
+				goqu.L(`"srchAddon".data->>?`, "kind").Eq("ManagedClusterAddOn"),
+				goqu.L(`"srchAddon".data->>?`, "name").Eq("search-collector")))
 
 	//SELECT CLAUSE
-	//Select all clusters
-	cluster := goqu.C("cluster") //remove null fields
-	selectDs1 = ds.Select(goqu.COUNT(goqu.DISTINCT(cluster)))
-	// Select all remote namespaces as clusters
-	remoteNS := goqu.L(`"data"->>?`, "namespace").As("cluster")
-	selectDs2 = ds.SelectDistinct(remoteNS)
+	selectDs = ds.Select(goqu.COUNT(goqu.DISTINCT(goqu.L(`"mcInfo".data->>?`, "name"))))
 
-	var whereDs, whereDsSearchEnabledClusters []exp.Expression
-	//Exclude local-cluster and empty cluster fields
-	clusterIds := []string{"", "local-cluster"}
-	whereDs = append(whereDs, goqu.L(`"cluster"`).NotIn(clusterIds))
+	// WHERE CLAUSE
+	var whereDs []exp.Expression
 
-	//Find clusters where search is enabled
-	whereDsSearchEnabledClusters = append(whereDsSearchEnabledClusters,
-		goqu.L(`"data"->>?`, "kind").Eq("ManagedClusterAddOn"))
-	whereDsSearchEnabledClusters = append(whereDsSearchEnabledClusters,
-		goqu.L(`"data"->>?`, "name").Eq("search-collector"))
-
-	//Exclude clusters where search is enabled
-	whereDs = append(whereDs, goqu.L(`"cluster"`).NotIn(selectDs2.Where(whereDsSearchEnabledClusters...)))
+	// select ManagedClusterInfo
+	whereDs = append(whereDs, goqu.L(`"mcInfo".data->>?`, "kind").Eq("ManagedClusterInfo"))
+	// addon uid will be null if addon is disabled
+	whereDs = append(whereDs, goqu.L(`"srchAddon".uid`).IsNull())
+	// exclude local-cluster
+	whereDs = append(whereDs, goqu.L(`"mcInfo".data->>?`, "name").Neq("local-cluster"))
 
 	//Get the query
-	sql, params, err := selectDs1.Where(whereDs...).ToSQL()
+	sql, params, err := selectDs.Where(whereDs...).ToSQL()
 	if err != nil {
 		klog.Errorf("Error building Messages query: %s", err.Error())
 	}
 	s.query = sql
 	s.params = params
-	klog.Infof("Messages Query: %s\n", sql)
+	klog.V(3).Infof("Messages Query: %s\n", sql)
 }
 
-func (s *SearchSchemaMessage) messageResults() ([]*model.Message, error) {
+func (s *SearchSchemaMessage) messageResults(ctx context.Context) ([]*model.Message, error) {
 	klog.V(2).Info("Resolving Messages()")
 
-	rows := s.pool.QueryRow(context.Background(), s.query)
+	rows := s.pool.QueryRow(ctx, s.query)
 
 	if rows != nil {
 		var count int

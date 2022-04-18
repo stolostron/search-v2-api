@@ -134,7 +134,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	if err != nil {
 		klog.Errorf("Error building SearchComplete query: %s", err.Error())
 	}
-	klog.Infof("query: %s\nargs: %s", sql, params)
+	klog.V(3).Infof("query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
 }
@@ -197,7 +197,7 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 }
 
 func (s *SearchResult) getRelations() []SearchRelatedResult {
-	klog.Infof("Resolving relationships for [%d] uids.\n", len(s.uids))
+	klog.V(3).Infof("Resolving relationships for [%d] uids.\n", len(s.uids))
 	var whereDs []exp.Expression
 
 	if len(s.input.RelatedKinds) > 0 {

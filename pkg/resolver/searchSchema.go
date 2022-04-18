@@ -20,13 +20,21 @@ func SearchSchema(ctx context.Context) (map[string]interface{}, error) {
 		pool: db.GetConnection(),
 	}
 	searchSchemaResult.searchSchemaQuery(ctx)
-	return searchSchemaResult.searchSchemaResults()
+	return searchSchemaResult.searchSchemaResults(ctx)
 }
 
 func (s *SearchSchemaMessage) searchSchemaQuery(ctx context.Context) {
 	var selectDs *goqu.SelectDataset
 
 	// schema query sample: "SELECT distinct jsonb_object_keys(jsonb_strip_nulls(data)) FROM search.resources"
+
+	// This query doesn't show keys with null values but keys with empty string values are not excluded.
+	// The query below should exclude empty values, but will take more time to execute (182 ms vs 241 ms)
+	// - not tested on a large amount of data.
+
+	//     select distinct key from (select (jsonb_each_text(jsonb_strip_nulls(data))).* from search.resources)A
+	//     where value <> '' AND value <> '{}' AND value <> '[]'
+
 	//FROM CLAUSE
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
@@ -42,10 +50,10 @@ func (s *SearchSchemaMessage) searchSchemaQuery(ctx context.Context) {
 	}
 	s.query = sql
 	s.params = params
-	klog.Info("SearchSchema Query: ", sql)
+	klog.V(3).Info("SearchSchema Query: ", sql)
 }
 
-func (s *SearchSchemaMessage) searchSchemaResults() (map[string]interface{}, error) {
+func (s *SearchSchemaMessage) searchSchemaResults(ctx context.Context) (map[string]interface{}, error) {
 	klog.V(2).Info("Resolving searchSchemaResults()")
 	srchSchema := map[string]interface{}{}
 	schemaTop := []string{"cluster", "kind", "label", "name", "namespace", "status"}
@@ -56,7 +64,7 @@ func (s *SearchSchemaMessage) searchSchemaResults() (map[string]interface{}, err
 	schema := []string{}
 	schema = append(schema, schemaTop...)
 
-	rows, err := s.pool.Query(context.Background(), s.query)
+	rows, err := s.pool.Query(ctx, s.query)
 	if err != nil {
 		klog.Error("Error fetching search schema results from db ", err)
 	}

@@ -22,22 +22,22 @@ func (r *mutationResolver) SaveSearch(ctx context.Context, resource *string) (*s
 }
 
 func (r *queryResolver) Search(ctx context.Context, input []*model.SearchInput) ([]*resolver.SearchResult, error) {
-	klog.Infof("--------- Received Search query with %d inputs ---------\n", len(input))
+	klog.V(3).Infof("--------- Received Search query with %d inputs ---------\n", len(input))
 	return resolver.Search(ctx, input)
 }
 
 func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) {
-	klog.Infoln("Received Messages query")
+	klog.V(3).Infoln("Received Messages query")
 	return resolver.Messages(ctx)
 }
 
 func (r *queryResolver) SearchSchema(ctx context.Context) (map[string]interface{}, error) {
-	klog.Infoln("Received SearchSchema query")
+	klog.V(3).Infoln("Received SearchSchema query")
 	return resolver.SearchSchema(ctx)
 }
 
 func (r *queryResolver) SavedSearches(ctx context.Context) ([]*model.UserSearch, error) {
-	klog.Infoln("Received SavedSearches query")
+	klog.V(3).Infoln("Received SavedSearches query")
 
 	savedSrches := make([]*model.UserSearch, 0)
 	// id := "1"
@@ -51,7 +51,7 @@ func (r *queryResolver) SavedSearches(ctx context.Context) ([]*model.UserSearch,
 }
 
 func (r *queryResolver) SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error) {
-	klog.Infof("Received SearchComplete query with input property **%s** and limit %d", property, limit)
+	klog.V(3).Infof("Received SearchComplete query with input property **%s** and limit %d", property, limit)
 	return resolver.SearchComplete(ctx, property, query, limit)
 }
 

@@ -14,7 +14,7 @@ func Test_Messages_Query(t *testing.T) {
 	// Create a SearchSchemaResolver instance with a mock connection pool.
 	resolver, _ := newMockSearchSchema(t)
 
-	sql := `SELECT COUNT(DISTINCT("cluster")) FROM "search"."resources" WHERE (("cluster" NOT IN ('', 'local-cluster')) AND ("cluster" NOT IN ((SELECT DISTINCT "data"->>'namespace' AS "cluster" FROM "search"."resources" WHERE (("data"->>'kind' = 'ManagedClusterAddOn') AND ("data"->>'name' = 'search-collector'))))))`
+	sql := `SELECT COUNT(DISTINCT("mcInfo".data->>'name')) FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`
 	// Execute function
 	resolver.messageQuery(context.TODO())
 
@@ -33,11 +33,11 @@ func Test_Message_Results(t *testing.T) {
 
 	// Mock the database query
 	mockPool.EXPECT().QueryRow(gomock.Any(),
-		gomock.Eq(`SELECT COUNT(DISTINCT("cluster")) FROM "search"."resources" WHERE (("cluster" NOT IN ('', 'local-cluster')) AND ("cluster" NOT IN ((SELECT DISTINCT "data"->>'namespace' AS "cluster" FROM "search"."resources" WHERE (("data"->>'kind' = 'ManagedClusterAddOn') AND ("data"->>'name' = 'search-collector'))))))`),
+		gomock.Eq(`SELECT COUNT(DISTINCT("mcInfo".data->>'name')) FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`),
 	).Return(mockRow)
 	resolver.messageQuery(context.TODO())
 	//Execute the function
-	res, err := resolver.messageResults()
+	res, err := resolver.messageResults(context.TODO())
 
 	messages := make([]*model.Message, 0)
 	kind := "information"

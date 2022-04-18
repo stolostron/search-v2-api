@@ -23,7 +23,7 @@ type SearchCompleteResult struct {
 
 func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, error) {
 	s.searchCompleteQuery(ctx)
-	res, autoCompleteErr := s.searchCompleteResults()
+	res, autoCompleteErr := s.searchCompleteResults(ctx)
 	if autoCompleteErr != nil {
 		klog.Error("Error resolving properties in autoComplete", autoCompleteErr)
 	}
@@ -86,9 +86,9 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 
 }
 
-func (s *SearchCompleteResult) searchCompleteResults() ([]*string, error) {
+func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*string, error) {
 	klog.V(2).Info("Resolving searchCompleteResults()")
-	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
+	rows, err := s.pool.Query(ctx, s.query, s.params...)
 	if err != nil {
 		klog.Error("Error fetching search complete results from db ", err)
 	}
