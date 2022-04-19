@@ -12,7 +12,10 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/database"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"github.com/stolostron/search-v2-api/pkg/server"
+
+	// "k8s.io/client-go/informers/rbac"
 	klog "k8s.io/klog/v2"
 )
 
@@ -33,16 +36,18 @@ func main() {
 	}
 
 	//Check and verify token:
-	config.KubeClient()
+	rbac.KubeClient()
 
 	database.GetConnection()
 
 	router := chi.NewRouter()
-	router.Use(config.Middleware())
-	router.Handle("/", playground.Handler("search", "/query"))
-	log.Fatal(http.ListenAndServe("localhost:4010", router))
+	router.Use(rbac.Middleware())
 
 	if len(os.Args) > 1 && os.Args[1] == "playground" {
+
+		router.Handle("/", playground.Handler("searchapi/graphql", "/playground"))
+		log.Fatal(http.ListenAndServe("localhost:4010", router))
+
 		server.StartAndListen(true)
 	}
 
