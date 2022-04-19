@@ -3,8 +3,6 @@ package rbac
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -34,51 +32,46 @@ func Middleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-			// Read the value of the client identifier from the request header
-			fmt.Fprintf(w, "%s %s %s \n", r.Method, r.URL, r.Proto)
-
-			//if there is cookie in header available use that else use the authorization:
-			var tokenId string
+			//if there is cookie available use that else use the authorization header:
+			var clientToken string
 			if len(r.Cookies()) != 0 {
 				for _, cookie := range r.Cookies() {
 					if cookie.Name == "acm-access-token-cookie" {
-						log.Println("Cookie: ", cookie.Value)
-						tokenId = cookie.Value
+						klog.V(5).Info("Got user token from Cookie")
+						clientToken = cookie.Value
 					}
 				}
+			} else if len(r.Header.Get("Authorization")) != 0 {
+				klog.V(5).Info("Got user token from Authorization header.")
+				clientToken = r.Header.Get("Authorization")
 			} else {
-				if len(r.Header.Get("Authorization")) != 0 {
-					log.Println(w, "Authorization is: %s", r.Header.Get("Authorization"))
-					tokenId = r.Header.Get("Authorization")
-				}
-			}
-			//Iterate over all header fields
-			for k, v := range r.Header {
-				fmt.Fprintf(w, "header key %q, value %q\n", k, v)
+				http.Error(w, "Could not find a valid token.", http.StatusUnauthorized)
+				return
 			}
 			//Retrieving and verifying the token:
-			// clientId := r.Header.Get("Userid")
-			if len(tokenId) == 0 {
+			if len(clientToken) == 0 {
 				http.Error(w, "Could not find Userid", http.StatusUnauthorized)
 				return
 			}
-			authenticated, err := verifyToken(tokenId, r)
+			authenticated, err := verifyToken(clientToken, r.Context())
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				http.Error(w, "Unexpected error while authenticating the request", http.StatusInternalServerError)
 				return
 			}
 			if !authenticated {
 				http.Error(w, "Invalid token", http.StatusForbidden)
 				return
 			}
-			fmt.Fprintf(w, "Authentication successful!")
+			klog.V(5).Info("User authentication successful!")
+
+			next.ServeHTTP(w, r)
 
 		})
+
 	}
 }
 
-func verifyToken(clientId string, r *http.Request) (bool, error) {
-	ctx := context.Context(r.Context())
+func verifyToken(clientId string, ctx context.Context) (bool, error) {
 	tr := authv1.TokenReview{
 		Spec: authv1.TokenReviewSpec{
 			Token: clientId,
@@ -86,16 +79,17 @@ func verifyToken(clientId string, r *http.Request) (bool, error) {
 	}
 	result, err := kClientset.AuthenticationV1().TokenReviews().Create(ctx, &tr, metav1.CreateOptions{})
 	if err != nil {
+		klog.Warning("Error authenticating the user token.", err.Error())
 		return false, err
 	}
-
-	log.Printf("%v\n", prettyPrint(result.Status))
+	klog.V(9).Infof("%v\n", prettyPrint(result.Status))
 	if result.Status.Authenticated {
 		return true, nil
 	}
 	return false, nil
 }
 
+// https://stackoverflow.com/a/51270134
 func prettyPrint(i interface{}) string {
 	s, _ := json.MarshalIndent(i, "", "\t")
 	return string(s)

@@ -2,13 +2,10 @@ package main
 
 import (
 	"flag"
-	"log"
-	"net/http"
 
 	// "net/http"
 	"os"
 
-	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/go-chi/chi"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/database"
@@ -35,7 +32,7 @@ func main() {
 		klog.Fatal(configError)
 	}
 
-	//Check and verify token:
+	//Call kubeclient for authentication
 	rbac.KubeClient()
 
 	database.GetConnection()
@@ -45,12 +42,12 @@ func main() {
 
 	if len(os.Args) > 1 && os.Args[1] == "playground" {
 
-		router.Handle("/", playground.Handler("searchapi/graphql", "/playground"))
-		log.Fatal(http.ListenAndServe("localhost:4010", router))
+		// router.Handle("/", playground.Handler("searchapi/graphql", "/playground"))
+		// log.Fatal(http.ListenAndServe("localhost:4010", router))
 
-		server.StartAndListen(true)
+		server.StartAndListen(true, router)
 	}
 
-	server.StartAndListen(false)
+	server.StartAndListen(false, router)
 
 }
