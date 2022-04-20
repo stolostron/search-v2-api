@@ -27,15 +27,9 @@ func (r *queryResolver) Search(ctx context.Context, input []*model.SearchInput) 
 	return resolver.Search(ctx, input)
 }
 
-func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) {
-	klog.Infoln("Received Messages query")
-
-	messages := make([]*model.Message, 0)
-	kind := "Informational"
-	desc := "Trial search-v2-api"
-	message1 := model.Message{ID: "1", Kind: &kind, Description: &desc}
-	messages = append(messages, &message1)
-	return messages, nil
+func (r *queryResolver) SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error) {
+	klog.Infof("Received SearchComplete query with input property **%s** and limit %d", property, limit)
+	return resolver.SearchComplete(ctx, property, query, limit)
 }
 
 func (r *queryResolver) SearchSchema(ctx context.Context) (map[string]interface{}, error) {
@@ -57,9 +51,15 @@ func (r *queryResolver) SavedSearches(ctx context.Context) ([]*model.UserSearch,
 	return savedSrches, nil
 }
 
-func (r *queryResolver) SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error) {
-	klog.Infof("Received SearchComplete query with input property **%s** and limit %d", property, limit)
-	return resolver.SearchComplete(ctx, property, query, limit)
+func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) {
+	klog.Infoln("Received Messages query")
+
+	messages := make([]*model.Message, 0)
+	kind := "Informational"
+	desc := "Trial search-v2-api"
+	message1 := model.Message{ID: "1", Kind: &kind, Description: &desc}
+	messages = append(messages, &message1)
+	return messages, nil
 }
 
 // Mutation returns generated.MutationResolver implementation.

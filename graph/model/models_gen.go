@@ -3,26 +3,54 @@
 package model
 
 type Message struct {
-	ID          string  `json:"id"`
+	// Unique message identifier. This can be used by clients to process the message independently of localization or gramatical changes.
+	ID string `json:"id"`
+	// Describes the type of message.
+	//
+	// Expected values are: information, warning, error.
 	Kind        *string `json:"kind"`
 	Description *string `json:"description"`
 }
 
+// Defined a key/value to filter results.
+// When multiple values are provided for a property, it's interpreted as an OR operation.
 type SearchFilter struct {
-	Property string    `json:"property"`
-	Values   []*string `json:"values"`
+	// Defines the property or key.
+	Property string `json:"property"`
+	// Defines the values for a property. Multiple values are interpreted as an OR operation.
+	Values []*string `json:"values"`
 }
 
+// Describes the input options to the search query.
 type SearchInput struct {
-	Keywords     []*string       `json:"keywords"`
-	Filters      []*SearchFilter `json:"filters"`
-	Limit        *int            `json:"limit"`
-	RelatedKinds []*string       `json:"relatedKinds"`
+	// List of strings to match resources.
+	// Will match any text field that contains any of the keywords.
+	// When multiple keywords are provided, it is interpreted as an [???] operation.
+	// Matches are case insensitive.
+	Keywords []*string `json:"keywords"`
+	// List of filters key/values.
+	// When multiple filters are provided, results will match all fiters (AND operation).
+	Filters []*SearchFilter `json:"filters"`
+	// Max number of results.
+	// **Default:** 10,000
+	// For unlimited results use -1.
+	Limit *int `json:"limit"`
+	// Filter relationships to the specified kinds.
+	// If empty, all relationships will be included.
+	// This filter is used with the 'related' field on SearchResult.
+	RelatedKinds []*string `json:"relatedKinds"`
 }
 
+// Defines the data required to save a user search.
 type UserSearch struct {
-	ID          *string `json:"id"`
-	Name        *string `json:"name"`
+	// Unique identifier of the user/saved search object.
+	ID *string `json:"id"`
+	// Name of the user/saved search.
+	Name *string `json:"name"`
+	// Description of the user/saved search.
 	Description *string `json:"description"`
-	SearchText  *string `json:"searchText"`
+	// The search query in text format.
+	// Example:
+	// - `kind:pod,deployment namespace:default bar foo`
+	SearchText *string `json:"searchText"`
 }
