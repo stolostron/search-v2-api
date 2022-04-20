@@ -9,16 +9,21 @@ import (
 
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
-	"github.com/go-chi/chi"
+	"github.com/gorilla/mux"
 	"github.com/stolostron/search-v2-api/graph"
 	"github.com/stolostron/search-v2-api/graph/generated"
 	"github.com/stolostron/search-v2-api/pkg/config"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 )
 
 // const defaultPort = "8080"
 
-func StartAndListen(playmode bool, router *chi.Mux) {
+func StartAndListen(playmode bool) {
 	port := config.Cfg.HttpPort
+
+	//initiating router for middleware that authenticates user:
+	router := mux.NewRouter()
+	router.Use(rbac.Middleware())
 
 	// Configure TLS
 	cfg := &tls.Config{
@@ -36,9 +41,7 @@ func StartAndListen(playmode bool, router *chi.Mux) {
 		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 	}
 
-	// router.Handle("/", playground.Handler("searchapi/graphql", "/playground"))
-
-	router.Handle("/", playground.Handler("searchapi/graphql", "/playground"))
+	router.Handle("/", playground.Handler("GraphQL playground", "/query"))
 	router.Handle("/query", srv.Handler)
 	if playmode {
 		klog.Infof("connect to https://localhost:%d%s/graphql for GraphQL playground", port, config.Cfg.ContextPath)
@@ -47,8 +50,5 @@ func StartAndListen(playmode bool, router *chi.Mux) {
 	}
 	klog.Infof(`Search API is now running on https://localhost:%d%s/graphql`, port, config.Cfg.ContextPath)
 	klog.Fatal(http.ListenAndServeTLS(":"+fmt.Sprint(port), "./sslcert/tls.crt", "./sslcert/tls.key",
-		srv.Handler))
+		router)) //router here too??
 }
-
-// router.Handle("/", playground.Handler("searchapi/graphql", "/playground"))
-// log.Fatal(http.ListenAndServe("localhost:4010", router))

@@ -6,7 +6,7 @@ import (
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 func getKubeConfigPath() string {
@@ -36,9 +36,6 @@ func GetClientConfig() (*rest.Config, error) {
 	if clientConfigError != nil {
 		klog.Fatal("Error getting Kube Config: ", clientConfigError)
 	}
-
-	// token := clientConfig.BearerToken
-	// fmt.Printf("The bearer token is: %s\n", token)
 
 	return clientConfig, clientConfigError
 }

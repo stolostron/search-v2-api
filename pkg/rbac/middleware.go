@@ -9,7 +9,7 @@ import (
 	authv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 var kClientset *kubernetes.Clientset
@@ -31,17 +31,17 @@ func KubeClient() {
 func Middleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 			//if there is cookie available use that else use the authorization header:
 			var clientToken string
-			if len(r.Cookies()) != 0 {
+			if len(r.Cookies()) > 0 {
 				for _, cookie := range r.Cookies() {
 					if cookie.Name == "acm-access-token-cookie" {
 						klog.V(5).Info("Got user token from Cookie")
 						clientToken = cookie.Value
+						break
 					}
 				}
-			} else if len(r.Header.Get("Authorization")) != 0 {
+			} else if r.Header.Get("Authorization") != "" {
 				klog.V(5).Info("Got user token from Authorization header.")
 				clientToken = r.Header.Get("Authorization")
 			} else {
@@ -49,8 +49,8 @@ func Middleware() func(http.Handler) http.Handler {
 				return
 			}
 			//Retrieving and verifying the token:
-			if len(clientToken) == 0 {
-				http.Error(w, "Could not find Userid", http.StatusUnauthorized)
+			if clientToken == "" {
+				http.Error(w, "Could not find client token", http.StatusUnauthorized)
 				return
 			}
 			authenticated, err := verifyToken(clientToken, r.Context())
@@ -79,13 +79,14 @@ func verifyToken(clientId string, ctx context.Context) (bool, error) {
 	}
 	result, err := kClientset.AuthenticationV1().TokenReviews().Create(ctx, &tr, metav1.CreateOptions{})
 	if err != nil {
-		klog.Warning("Error authenticating the user token.", err.Error())
+		klog.Warning("Error creating the token review.", err.Error())
 		return false, err
 	}
 	klog.V(9).Infof("%v\n", prettyPrint(result.Status))
 	if result.Status.Authenticated {
 		return true, nil
 	}
+	klog.V(5).Info("User is not authenticated.") //should this be warning or info?
 	return false, nil
 }
 
