@@ -33,7 +33,7 @@ func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) 
 
 func (r *queryResolver) SearchSchema(ctx context.Context) (map[string]interface{}, error) {
 	klog.V(3).Infoln("Received SearchSchema query")
-	return resolver.SearchSchema(ctx)
+	return resolver.SearchSchemaResolver(ctx)
 }
 
 func (r *queryResolver) SavedSearches(ctx context.Context) ([]*model.UserSearch, error) {

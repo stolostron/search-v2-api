@@ -12,11 +12,11 @@ import (
 
 func Test_Messages_Query(t *testing.T) {
 	// Create a SearchSchemaResolver instance with a mock connection pool.
-	resolver, _ := newMockSearchSchema(t)
+	resolver, _ := newMockMessage(t)
 
 	sql := `SELECT COUNT(DISTINCT("mcInfo".data->>'name')) FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`
 	// Execute function
-	resolver.messageQuery(context.TODO())
+	resolver.buildSearchAddonDisabledQuery(context.TODO())
 
 	// Verify response
 	if resolver.query != sql {
@@ -26,7 +26,7 @@ func Test_Messages_Query(t *testing.T) {
 
 func Test_Message_Results(t *testing.T) {
 	// Create a SearchSchemaResolver instance with a mock connection pool.
-	resolver, mockPool := newMockSearchSchema(t)
+	resolver, mockPool := newMockMessage(t)
 
 	// Mock the database queries.
 	mockRow := &Row{MockValue: 1}
@@ -35,7 +35,7 @@ func Test_Message_Results(t *testing.T) {
 	mockPool.EXPECT().QueryRow(gomock.Any(),
 		gomock.Eq(`SELECT COUNT(DISTINCT("mcInfo".data->>'name')) FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`),
 	).Return(mockRow)
-	resolver.messageQuery(context.TODO())
+	resolver.buildSearchAddonDisabledQuery(context.TODO())
 	//Execute the function
 	res, err := resolver.messageResults(context.TODO())
 

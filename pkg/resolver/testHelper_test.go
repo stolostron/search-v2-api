@@ -43,12 +43,23 @@ func newMockSearchComplete(t *testing.T, input *model.SearchInput, property stri
 	}
 	return mockResolver, mockPool
 }
-func newMockSearchSchema(t *testing.T) (*SearchSchemaMessage, *pgxpoolmock.MockPgxPool) {
+func newMockSearchSchema(t *testing.T) (*SearchSchema, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 
-	mockResolver := &SearchSchemaMessage{
+	mockResolver := &SearchSchema{
+		pool: mockPool,
+	}
+	return mockResolver, mockPool
+}
+
+func newMockMessage(t *testing.T) (*Message, *pgxpoolmock.MockPgxPool) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
+
+	mockResolver := &Message{
 		pool: mockPool,
 	}
 	return mockResolver, mockPool

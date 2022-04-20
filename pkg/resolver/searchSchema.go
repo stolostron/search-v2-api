@@ -9,21 +9,23 @@ import (
 	klog "k8s.io/klog/v2"
 )
 
-type SearchSchemaMessage struct {
+type SearchSchema struct {
 	pool   pgxpoolmock.PgxPool
 	query  string
 	params []interface{}
 }
 
-func SearchSchema(ctx context.Context) (map[string]interface{}, error) {
-	searchSchemaResult := &SearchSchemaMessage{
+func SearchSchemaResolver(ctx context.Context) (map[string]interface{}, error) {
+	searchSchemaResult := &SearchSchema{
 		pool: db.GetConnection(),
 	}
-	searchSchemaResult.searchSchemaQuery(ctx)
+	searchSchemaResult.buildSearchSchemaQuery(ctx)
 	return searchSchemaResult.searchSchemaResults(ctx)
 }
 
-func (s *SearchSchemaMessage) searchSchemaQuery(ctx context.Context) {
+// Build the query to get all the properties (or keys) from the resources in the database.
+// These are used to build the search schema.
+func (s *SearchSchema) buildSearchSchemaQuery(ctx context.Context) {
 	var selectDs *goqu.SelectDataset
 
 	// schema query sample: "SELECT distinct jsonb_object_keys(jsonb_strip_nulls(data)) FROM search.resources"
@@ -53,7 +55,7 @@ func (s *SearchSchemaMessage) searchSchemaQuery(ctx context.Context) {
 	klog.V(3).Info("SearchSchema Query: ", sql)
 }
 
-func (s *SearchSchemaMessage) searchSchemaResults(ctx context.Context) (map[string]interface{}, error) {
+func (s *SearchSchema) searchSchemaResults(ctx context.Context) (map[string]interface{}, error) {
 	klog.V(2).Info("Resolving searchSchemaResults()")
 	srchSchema := map[string]interface{}{}
 	schemaTop := []string{"cluster", "kind", "label", "name", "namespace", "status"}

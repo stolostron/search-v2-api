@@ -16,7 +16,7 @@ func Test_SearchSchema_Query(t *testing.T) {
 
 	sql := `SELECT DISTINCT jsonb_object_keys(jsonb_strip_nulls("data")) FROM "search"."resources"`
 	// Execute function
-	resolver.searchSchemaQuery(context.TODO())
+	resolver.buildSearchSchemaQuery(context.TODO())
 
 	// Verify response
 	if resolver.query != sql {
@@ -41,7 +41,7 @@ func Test_SearchSchema_Results(t *testing.T) {
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT jsonb_object_keys(jsonb_strip_nulls("data")) FROM "search"."resources"`),
 	).Return(mockRows, nil)
-	resolver.searchSchemaQuery(context.TODO())
+	resolver.buildSearchSchemaQuery(context.TODO())
 	res, _ := resolver.searchSchemaResults(context.TODO())
 
 	// AssertStringArrayEqual(t, res["allProperties"].([]*string), expectedRes["allProperties"].([]string), "Search schema results doesn't match.")
