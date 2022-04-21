@@ -4,10 +4,28 @@ import (
 	"os"
 	"path/filepath"
 
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 )
+
+var kClientset *kubernetes.Clientset
+
+func KubeClient() *kubernetes.Clientset {
+	config, err := GetClientConfig()
+	if err != nil {
+		klog.Fatal(err.Error())
+	}
+
+	kClientset, err = kubernetes.NewForConfig(config)
+
+	if err != nil {
+		klog.Fatal(err.Error())
+	}
+	return kClientset
+
+}
 
 func getKubeConfigPath() string {
 	defaultKubePath := filepath.Join(os.Getenv("HOME"), ".kube", "config")

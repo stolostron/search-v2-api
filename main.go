@@ -6,7 +6,6 @@ import (
 
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/database"
-	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"github.com/stolostron/search-v2-api/pkg/server"
 	klog "k8s.io/klog/v2"
 )
@@ -26,9 +25,6 @@ func main() {
 	if configError != nil {
 		klog.Fatal(configError)
 	}
-
-	//Call kubeclient for authentication
-	rbac.KubeClient()
 
 	//Get database connection
 	database.GetConnection()

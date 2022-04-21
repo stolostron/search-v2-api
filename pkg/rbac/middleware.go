@@ -8,24 +8,8 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/config"
 	authv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 )
-
-var kClientset *kubernetes.Clientset
-
-func KubeClient() {
-	config, err := config.GetClientConfig()
-	if err != nil {
-		klog.Fatal(err.Error())
-	}
-	kClientset, err = kubernetes.NewForConfig(config)
-
-	if err != nil {
-		klog.Fatal(err.Error())
-	}
-
-}
 
 //verifies token (userid) with the TokenReview:
 func Middleware() func(http.Handler) http.Handler {
@@ -33,14 +17,9 @@ func Middleware() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			//if there is cookie available use that else use the authorization header:
 			var clientToken string
-			if len(r.Cookies()) > 0 {
-				for _, cookie := range r.Cookies() {
-					if cookie.Name == "acm-access-token-cookie" {
-						klog.V(5).Info("Got user token from Cookie")
-						clientToken = cookie.Value
-						break
-					}
-				}
+			cookie, err := r.Cookie("acm-access-token-cookie")
+			if err == nil {
+				clientToken = cookie.Value
 			} else if r.Header.Get("Authorization") != "" {
 				klog.V(5).Info("Got user token from Authorization header.")
 				clientToken = r.Header.Get("Authorization")
@@ -77,7 +56,7 @@ func verifyToken(clientId string, ctx context.Context) (bool, error) {
 			Token: clientId,
 		},
 	}
-	result, err := kClientset.AuthenticationV1().TokenReviews().Create(ctx, &tr, metav1.CreateOptions{})
+	result, err := config.KubeClient().AuthenticationV1().TokenReviews().Create(ctx, &tr, metav1.CreateOptions{})
 	if err != nil {
 		klog.Warning("Error creating the token review.", err.Error())
 		return false, err
