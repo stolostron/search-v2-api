@@ -41,7 +41,7 @@ func StartAndListen(playmode bool) {
 		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 	}
 
-	router.Handle("/", playground.Handler("GraphQL playground", "/query"))
+	router.Handle("/searchapi/graphql", playground.Handler("GraphQL playground", "/query"))
 	router.Handle("/query", srv.Handler)
 	if playmode {
 		klog.Infof("connect to https://localhost:%d%s/graphql for GraphQL playground", port, config.Cfg.ContextPath)

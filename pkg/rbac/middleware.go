@@ -20,8 +20,9 @@ func Middleware() func(http.Handler) http.Handler {
 			cookie, err := r.Cookie("acm-access-token-cookie")
 			if err == nil {
 				clientToken = cookie.Value
+				klog.Info("Got user token from Cookie.")
 			} else if r.Header.Get("Authorization") != "" {
-				klog.V(5).Info("Got user token from Authorization header.")
+				klog.Info("Got user token from Authorization header.")
 				clientToken = r.Header.Get("Authorization")
 			} else {
 				http.Error(w, "Could not find a valid token.", http.StatusUnauthorized)
