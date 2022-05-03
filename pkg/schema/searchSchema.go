@@ -10,7 +10,7 @@ import (
 
 func SearchSchema(ctx context.Context) (map[string]interface{}, error) {
 	query := searchSchemaQuery(ctx)
-	klog.Info("SearchSchema Query: ", query)
+	klog.Infof("SearchSchema Query: ", query)
 	return searchSchemaResults(query)
 }
 
