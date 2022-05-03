@@ -28,7 +28,7 @@ func main() {
 	}
 
 	database.GetConnection()
-	if len(os.Args) > 1 && os.Args[1] == "playground" {
+	if len(os.Args) > 1 && os.Args[len(os.Args)-1] == "playground" {
 		server.StartAndListen(true)
 	}
 	server.StartAndListen(false)

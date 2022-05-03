@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
@@ -18,6 +19,8 @@ import (
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"k8s.io/klog/v2"
 )
+
+var mux sync.RWMutex // Mutex to lock map during read/write
 
 type SearchResult struct {
 	input  *model.SearchInput
@@ -73,7 +76,9 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 	var r []SearchRelatedResult
 
 	if len(s.uids) > 0 {
+		startTime := time.Now()
 		r = s.getRelations()
+		klog.Info("Time taken to resolve relationships: ", time.Since(startTime))
 	} else {
 		klog.Warning("No uids selected for query:Related()")
 	}
@@ -196,119 +201,158 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	return items, nil
 }
 
-func (s *SearchResult) getRelations() []SearchRelatedResult {
-	klog.V(3).Infof("Resolving relationships for [%d] uids.\n", len(s.uids))
+func (s *SearchResult) buildRelationsQuery() {
 	var whereDs []exp.Expression
 
-	if len(s.input.RelatedKinds) > 0 {
-		relatedKinds := pointerToStringArray(s.input.RelatedKinds)
-		whereDs = append(whereDs, goqu.C("destkind").In(relatedKinds).Expression())
-		klog.Warning("TODO: The relationships query must use the provided kind filters effectively.")
-	}
-	//The level can be parameterized later, if needed, for applications
-	whereDs = append(whereDs, goqu.C("level").Eq(1)) // Add filter to select only level 1 relationships
+	//The level can be parameterized later, if needed
+	whereDs = append(whereDs, goqu.C("level").Lt(4))       // Add filter to select only upto level 4 relationships
+	whereDs = append(whereDs, goqu.C("iid").NotIn(s.uids)) // Add filter to avoid selecting the search object itself
 
-	//defining variables
-	items := []map[string]interface{}{}
-	var kindSlice []string
-	var kindList []string
-	var countList []int
-
+	//Non-recursive CTE SELECT CLAUSE
 	schema := goqu.S("search")
 	selectBase := make([]interface{}, 0)
-	selectBase = append(selectBase, "r.uid", "r.data", "e.destkind", "e.sourceid", "e.destid",
-		goqu.L("ARRAY[r.uid]").As("path"), goqu.L("1").As("level"))
+	selectBase = append(selectBase, goqu.L("1").As("level"), "sourceid", "destid", "sourcekind", "destkind", "cluster")
 
+	//Recursive CTE SELECT CLAUSE
 	selectNext := make([]interface{}, 0)
-	selectNext = append(selectNext, "r.uid", "r.data", "e.destkind", "e.sourceid", "e.destid",
-		goqu.L("sg.path||r.uid").As("path"), goqu.L("level+1").As("level"))
+	selectNext = append(selectNext, goqu.L("level+1").As("level"), "e.sourceid", "e.destid", "e.sourcekind",
+		"e.destkind", "e.cluster")
+
+	//Combine both source and dest ids and source and dest kinds into one column using UNNEST function
+	selectCombineIds := make([]interface{}, 0)
+	selectCombineIds = append(selectCombineIds, goqu.C("level"),
+		goqu.L("unnest(array[sourceid, destid, concat('cluster__',cluster)])").As("iid"),
+		goqu.L("unnest(array[sourcekind, destkind, 'Cluster'])").As("kind"))
+
+	//Final select statement
+	selectFinal := make([]interface{}, 0)
+	selectFinal = append(selectFinal, goqu.C("iid"), goqu.C("kind"), goqu.MIN("level").As("level"))
+
+	//GROUPBY CLAUSE
+	groupBy := make([]interface{}, 0)
+	groupBy = append(groupBy, goqu.C("iid"), goqu.C("kind"))
+
 	// Original query to find relations between resources - accepts an array of uids
 	// =============================================================================
-	// relQuery := strings.TrimSpace(`WITH RECURSIVE
-	// 	search_graph(uid, data, destkind, sourceid, destid, path, level)
-	// 	AS (
-	// 	SELECT r.uid, r.data, e.destkind, e.sourceid, e.destid, ARRAY[r.uid] AS path, 1 AS level
-	// 		FROM search.resources r
-	// 		INNER JOIN
-	// 			search.edges e ON (r.uid = e.sourceid) OR (r.uid = e.destid)
-	// 		 WHERE r.uid = ANY($1)
-	// 	UNION
-	// 	SELECT r.uid, r.data, e.destkind, e.sourceid, e.destid, path||r.uid, level+1 AS level
-	// 		FROM search.resources r
-	// 		INNER JOIN
-	// 			search.edges e ON (r.uid = e.sourceid)
-	// 		, search_graph sg
-	// 		WHERE (e.sourceid = sg.destid OR e.destid = sg.sourceid)
-	// 		AND r.uid <> all(sg.path)
-	// 		AND level = 1
-	// 		)
-	// 	SELECT distinct ON (destid) data, destid, destkind FROM search_graph WHERE level=1 OR destid = ANY($1)`)
-	sql, params, err := goqu.From("search_graph").
-		WithRecursive("search_graph(uid, data, destkind, sourceid, destid, path, level)",
-			goqu.From(schema.Table("resources").As("r")).InnerJoin(schema.Table("edges").As("e"),
-				goqu.On(goqu.ExOr{"r.uid": []exp.IdentifierExpression{goqu.I("e.sourceid"), goqu.I("e.destid")}})).
-				Select(selectBase...).
-				Where(goqu.I("r.uid").In(s.uids)).
-				Union(goqu.From(schema.Table("resources").As("r")).InnerJoin(schema.Table("edges").As("e"),
-					goqu.On(goqu.Ex{"r.uid": goqu.I("e.sourceid")})).
-					InnerJoin(goqu.T("search_graph").As("sg"),
-						goqu.On(goqu.ExOr{"sg.destid": goqu.I("e.sourceid"), "sg.sourceid": goqu.I("e.destid")})).
-					Select(selectNext...).
-					Where(goqu.Ex{"sg.level": goqu.L("1"),
-						"r.uid": goqu.Op{"neq": goqu.All("{sg.path}")}}))).
-		Select("data", "destid", "destkind").Distinct("destid").
-		Where(whereDs...).ToSQL()
+	srcDestIds := make([]interface{}, 0)
+	srcDestIds = append(srcDestIds, goqu.I("e.sourceid"), goqu.I("e.destid"))
+
+	// Non-recursive CTE
+	baseTerm := goqu.From(schema.Table("all_edges").As("e")).
+		Select(selectBase...).
+		Where(goqu.ExOr{"sourceid": (s.uids), "destid": (s.uids)})
+
+	// Recursive CTE
+	recursiveTerm := goqu.From(schema.Table("all_edges").As("e")).
+		InnerJoin(goqu.T("search_graph").As("sg"),
+			goqu.On(goqu.ExOr{"sg.destid": srcDestIds, "sg.sourceid": srcDestIds})).
+		Select(selectNext...).
+		Where(goqu.Ex{"sg.level": goqu.Op{"Lt": goqu.L("4")},
+			"e.destkind": goqu.Op{"neq": "Node"}})
+
+	// Recursive query
+	search_graphQ := goqu.From("search_graph").
+		WithRecursive("search_graph(level, sourceid, destid,  sourcekind, destkind, cluster)",
+			baseTerm.
+				Union(recursiveTerm)).
+		SelectDistinct("level", "sourceid", "destid", "sourcekind", "destkind", "cluster")
+
+	combineIds := goqu.From(search_graphQ.As("search_graph")).Select(selectCombineIds...)
+
+	sql, params, err := goqu.From(combineIds.As("combineIds")).
+		Select(selectFinal...).
+		Where(whereDs...).
+		GroupBy(groupBy...).
+		ToSQL()
 
 	if err != nil {
 		klog.Error("Error creating relation query", err)
-		return nil
+	} else {
+		klog.V(3).Info("Relations query: ", s.query)
+		s.query = sql
+		s.params = params
 	}
-	klog.V(3).Info("Relations query: ", sql)
-	relations, relQueryError := s.pool.Query(context.TODO(), sql, params...) // how to deal with defaults.
+}
+func (s *SearchResult) getRelations() []SearchRelatedResult {
+	klog.V(3).Infof("Resolving relationships for [%d] uids.\n", len(s.uids))
+	if len(s.input.RelatedKinds) > 0 {
+		// relatedKinds := pointerToStringArray(s.input.RelatedKinds)
+		// whereDs = append(whereDs, goqu.C("destkind").In(relatedKinds).Expression())
+		klog.Warning("TODO: The relationships query must use the provided kind filters effectively.")
+	}
+
+	//defining variables
+	level1Map := map[string][]string{}    // Map to store level 1 relations
+	allLevelsMap := map[string][]string{} // Map to store all relations
+	var keepAllLevels bool
+
+	// Build the relations query
+	s.buildRelationsQuery()
+
+	relations, relQueryError := s.pool.Query(context.TODO(), s.query, s.params...) // how to deal with defaults.
 	if relQueryError != nil {
 		klog.Errorf("Error while executing getRelations query. Error :%s", relQueryError.Error())
+		return nil
 	}
 
 	defer relations.Close()
 
 	// iterating through resulting rows and scaning data, destid  and destkind
 	for relations.Next() {
-		var destkind, destid string
-		var data map[string]interface{}
-		relatedResultError := relations.Scan(&data, &destid, &destkind)
+		var kind, iid string
+		var level int
+		relatedResultError := relations.Scan(&iid, &kind, &level)
+
 		if relatedResultError != nil {
 			klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
+			return nil
 		}
+		if level == 1 { // update map if level is 1
+			updateKindMap(iid, kind, level1Map)
+		}
+		updateKindMap(iid, kind, allLevelsMap)
 
-		// creating currItem variable to keep data and converting strings in data to lowercase
-		currItem := formatDataMap(data)
-
-		// currItem["Kind"] = destkind
-		kindSlice = append(kindSlice, destkind)
-		items = append(items, currItem)
+		// Turn on keepAllLevels if the kind is Application or Subscription
+		if kind == "Application" || kind == "Subscription" {
+			keepAllLevels = true
+		}
 	}
+	klog.V(5).Info("keepAllLevels? ", keepAllLevels)
+	var relatedSearch []SearchRelatedResult
 
-	// calling function to get map which contains unique values from kindSlice
-	// and counts the number occurances ex: map[key:Pod, value:2] if pod occurs 2x in kindSlice
-	count := printUniqueValue(kindSlice)
-
-	//iterating over count and appending to new lists (kindList and countList)
-	for k, v := range count {
-		kindList = append(kindList, k)
-		countList = append(countList, v)
+	if keepAllLevels {
+		relatedSearch = searchRelatedResultKindCount(allLevelsMap)
+	} else {
+		relatedSearch = searchRelatedResultKindCount(level1Map)
 	}
-
-	//instantiating composite literal
-	relatedSearch := make([]SearchRelatedResult, len(count))
-
-	//iterating and sending values to relatedSearch
-	for i := range kindList {
-		kind := kindList[i]
-		count := countList[i]
-		relatedSearch[i] = SearchRelatedResult{kind, &count, items}
-	}
-
+	klog.V(5).Info("relatedSearch: ", relatedSearch)
 	return relatedSearch
+}
+
+func searchRelatedResultKindCount(levelMap map[string][]string) []SearchRelatedResult {
+
+	relatedSearch := make([]SearchRelatedResult, len(levelMap))
+
+	i := 0
+	//iterating and sending values to relatedSearch
+	for kind, iidArray := range levelMap {
+		count := len(iidArray)
+		relatedSearch[i] = SearchRelatedResult{Kind: kind, Count: &count}
+		i++
+	}
+	return relatedSearch
+}
+
+func updateKindMap(iid string, kind string, levelMap map[string][]string) {
+	mux.RLock() // Lock map to read
+	iids := levelMap[kind]
+	mux.RUnlock()
+
+	iids = append(iids, kind)
+
+	mux.Lock() // Lock map to write
+	levelMap[kind] = iids
+	mux.Unlock()
 }
 
 // helper function TODO: make helper.go module to store these if needed.
