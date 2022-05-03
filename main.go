@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"os"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/database"
@@ -29,8 +28,5 @@ func main() {
 	//Get database connection
 	database.GetConnection()
 
-	if len(os.Args) > 1 && os.Args[1] == "playground" {
-		server.StartAndListen(true)
-	}
-	server.StartAndListen(false)
+	server.StartAndListen()
 }

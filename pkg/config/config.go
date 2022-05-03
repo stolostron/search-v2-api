@@ -46,6 +46,7 @@ type Config struct {
 	DB_NAME                 string
 	DB_PASS                 string
 	DB_PORT                 int
+	PlaygroundMode          bool
 }
 
 func new() *Config {
@@ -65,6 +66,7 @@ func new() *Config {
 		DB_NAME:                 getEnv("DB_NAME", DEFAULT_DB_NAME),
 		DB_USER:                 getEnv("DB_USER", DEFAULT_DB_USER),
 		DB_PORT:                 getEnvAsInt("DB_PORT", DEFAULT_DB_PORT),
+		PlaygroundMode:          getEnvAsBool("PLAYGROUND_MODE", false),
 	}
 	conf.DB_PASS = url.QueryEscape(conf.DB_PASS)
 	return conf
@@ -113,5 +115,15 @@ func getEnvAsInt(name string, defaultVal int) int {
 	if value, err := strconv.Atoi(valueStr); err == nil {
 		return value
 	}
+	return defaultVal
+}
+
+// Helper to read an environment variable into a bool or return default value
+func getEnvAsBool(name string, defaultVal bool) bool {
+	valStr := getEnv(name, "")
+	if val, err := strconv.ParseBool(valStr); err == nil {
+		return val
+	}
+
 	return defaultVal
 }

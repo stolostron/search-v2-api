@@ -16,14 +16,8 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 )
 
-// const defaultPort = "8080"
-
-func StartAndListen(playmode bool) {
+func StartAndListen() {
 	port := config.Cfg.HttpPort
-
-	//initiating router for middleware that authenticates user:
-	router := mux.NewRouter()
-	router.Use(rbac.Middleware())
 
 	// Configure TLS
 	cfg := &tls.Config{
@@ -41,14 +35,20 @@ func StartAndListen(playmode bool) {
 		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 	}
 
-	router.Handle("/searchapi/graphql", playground.Handler("GraphQL playground", "/query"))
-	router.Handle("/query", srv.Handler)
-	if playmode {
-		klog.Infof("connect to https://localhost:%d%s/graphql for GraphQL playground", port, config.Cfg.ContextPath)
-		klog.Fatal(http.ListenAndServeTLS(":"+fmt.Sprint(port), "./sslcert/tls.crt", "./sslcert/tls.key",
-			router))
+	// Initiating router
+	router := mux.NewRouter()
+
+	if config.Cfg.PlaygroundMode {
+		router.Handle("/playground", playground.Handler("GraphQL playground", "/searchapi/graphql"))
+		klog.Infof("GraphQL playground is now running on https://localhost:%d/playground", port)
 	}
+
+	// Add authentication middleware to the /searchapi subroute.
+	apiSubrouter := router.PathPrefix("/searchapi").Subrouter()
+	apiSubrouter.Use(rbac.Middleware())
+	apiSubrouter.Handle("/graphql", srv.Handler)
+
 	klog.Infof(`Search API is now running on https://localhost:%d%s/graphql`, port, config.Cfg.ContextPath)
 	klog.Fatal(http.ListenAndServeTLS(":"+fmt.Sprint(port), "./sslcert/tls.crt", "./sslcert/tls.key",
-		router)) //router here too??
+		router))
 }

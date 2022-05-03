@@ -20,34 +20,33 @@ func Middleware() func(http.Handler) http.Handler {
 			cookie, err := r.Cookie("acm-access-token-cookie")
 			if err == nil {
 				clientToken = cookie.Value
-				klog.Info("Got user token from Cookie.")
+				klog.V(5).Info("Got user token from Cookie.")
 			} else if r.Header.Get("Authorization") != "" {
-				klog.Info("Got user token from Authorization header.")
+				klog.V(5).Info("Got user token from Authorization header.")
 				clientToken = r.Header.Get("Authorization")
-			} else {
-				http.Error(w, "Could not find a valid token.", http.StatusUnauthorized)
-				return
 			}
-			//Retrieving and verifying the token:
+			// Retrieving and verifying the token
 			if clientToken == "" {
-				http.Error(w, "Could not find client token", http.StatusUnauthorized)
+				klog.V(4).Info("Request didn't have a valid authentication token.")
+				http.Error(w, "{\"message\":\"Request didn't have a valid authentication token.\"}", http.StatusUnauthorized)
 				return
 			}
 			authenticated, err := verifyToken(clientToken, r.Context())
 			if err != nil {
-				http.Error(w, "Unexpected error while authenticating the request", http.StatusInternalServerError)
+				klog.Warning("Unexpected error while authenticating the request token.", err)
+				http.Error(w, "{\"message\":\"Unexpected error while authenticating the request token.\"}", http.StatusInternalServerError)
 				return
 			}
 			if !authenticated {
-				http.Error(w, "Invalid token", http.StatusForbidden)
+				klog.V(4).Info("Rejecting request: Invalid token.")
+				http.Error(w, "{\"message\":\"Invalid token\"}", http.StatusForbidden)
 				return
 			}
-			klog.V(5).Info("User authentication successful!")
 
+			klog.V(5).Info("User authentication successful!")
 			next.ServeHTTP(w, r)
 
 		})
-
 	}
 }
 
@@ -66,7 +65,7 @@ func verifyToken(clientId string, ctx context.Context) (bool, error) {
 	if result.Status.Authenticated {
 		return true, nil
 	}
-	klog.V(5).Info("User is not authenticated.") //should this be warning or info?
+	klog.V(4).Info("User is not authenticated.") //should this be warning or info?
 	return false, nil
 }
 
