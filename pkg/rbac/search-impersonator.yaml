@@ -5,6 +5,6 @@ metadata:
   name: search-impersonator
 rules:
 - apiGroups: [""]
-  resources: ["users", "serviceaccounts", "groups"] 
+  resources: ["*"] 
   verbs: ["impersonate"]
 
