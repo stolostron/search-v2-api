@@ -208,12 +208,12 @@ func (s *SearchResult) buildRelationsQuery() {
 	whereDs = append(whereDs, goqu.C("level").Lt(4))       // Add filter to select only upto level 4 relationships
 	whereDs = append(whereDs, goqu.C("iid").NotIn(s.uids)) // Add filter to avoid selecting the search object itself
 
-	//Non-recursive CTE SELECT CLAUSE
+	//Non-recursive term SELECT CLAUSE
 	schema := goqu.S("search")
 	selectBase := make([]interface{}, 0)
 	selectBase = append(selectBase, goqu.L("1").As("level"), "sourceid", "destid", "sourcekind", "destkind", "cluster")
 
-	//Recursive CTE SELECT CLAUSE
+	//Recursive term SELECT CLAUSE
 	selectNext := make([]interface{}, 0)
 	selectNext = append(selectNext, goqu.L("level+1").As("level"), "e.sourceid", "e.destid", "e.sourcekind",
 		"e.destkind", "e.cluster")
@@ -237,20 +237,22 @@ func (s *SearchResult) buildRelationsQuery() {
 	srcDestIds := make([]interface{}, 0)
 	srcDestIds = append(srcDestIds, goqu.I("e.sourceid"), goqu.I("e.destid"))
 
-	// Non-recursive CTE
+	// Non-recursive term
 	baseTerm := goqu.From(schema.Table("all_edges").As("e")).
 		Select(selectBase...).
 		Where(goqu.ExOr{"sourceid": (s.uids), "destid": (s.uids)})
 
-	// Recursive CTE
+	// Recursive term
 	recursiveTerm := goqu.From(schema.Table("all_edges").As("e")).
 		InnerJoin(goqu.T("search_graph").As("sg"),
 			goqu.On(goqu.ExOr{"sg.destid": srcDestIds, "sg.sourceid": srcDestIds})).
 		Select(selectNext...).
+		// Limiting upto level 4 as it should suffice for application relations
 		Where(goqu.Ex{"sg.level": goqu.Op{"Lt": goqu.L("4")},
+			// Avoid getting nodes in recursion to prevent pulling all relations for node
 			"e.destkind": goqu.Op{"neq": "Node"}})
 
-	// Recursive query
+	// Recursive query. Refer: https://www.postgresqltutorial.com/postgresql-tutorial/postgresql-recursive-query/
 	search_graphQ := goqu.From("search_graph").
 		WithRecursive("search_graph(level, sourceid, destid,  sourcekind, destkind, cluster)",
 			baseTerm.
@@ -275,11 +277,6 @@ func (s *SearchResult) buildRelationsQuery() {
 }
 func (s *SearchResult) getRelations() []SearchRelatedResult {
 	klog.V(3).Infof("Resolving relationships for [%d] uids.\n", len(s.uids))
-	if len(s.input.RelatedKinds) > 0 {
-		// relatedKinds := pointerToStringArray(s.input.RelatedKinds)
-		// whereDs = append(whereDs, goqu.C("destkind").In(relatedKinds).Expression())
-		klog.Warning("TODO: The relationships query must use the provided kind filters effectively.")
-	}
 
 	//defining variables
 	level1Map := map[string][]string{}    // Map to store level 1 relations
@@ -324,6 +321,11 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		relatedSearch = searchRelatedResultKindCount(allLevelsMap)
 	} else {
 		relatedSearch = searchRelatedResultKindCount(level1Map)
+	}
+	if len(s.input.RelatedKinds) > 0 {
+		// relatedKinds := pointerToStringArray(s.input.RelatedKinds)
+		// whereDs = append(whereDs, goqu.C("destkind").In(relatedKinds).Expression())
+		klog.Warning("TODO: The relationships query must use the provided kind filters effectively.")
 	}
 	klog.V(5).Info("relatedSearch: ", relatedSearch)
 	return relatedSearch
