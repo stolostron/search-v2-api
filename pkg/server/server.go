@@ -35,15 +35,17 @@ func StartAndListen() {
 		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 	}
 
-	// Initiating router
+	// Initiate router
 	router := mux.NewRouter()
+	router.HandleFunc("/liveness", livenessProbe).Methods("GET")
+	router.HandleFunc("/readiness", readinessProbe).Methods("GET")
 
 	if config.Cfg.PlaygroundMode {
 		router.Handle("/playground", playground.Handler("GraphQL playground", fmt.Sprintf("%s/graphql", config.Cfg.ContextPath)))
 		klog.Infof("GraphQL playground is now running on https://localhost:%d/playground", port)
 	}
 
-	// Add authentication middleware to the ContextPath [/searchapi] subroute.
+	// Add authentication middleware to the /searchapi (ContextPath) subroute.
 	apiSubrouter := router.PathPrefix(config.Cfg.ContextPath).Subrouter()
 	apiSubrouter.Use(rbac.Middleware())
 	apiSubrouter.Handle("/graphql", srv.Handler)
