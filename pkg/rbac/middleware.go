@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
 	authv1 "k8s.io/api/authentication/v1"
@@ -24,6 +25,8 @@ func Middleware() func(http.Handler) http.Handler {
 			} else if r.Header.Get("Authorization") != "" {
 				klog.V(5).Info("Got user token from Authorization header.")
 				clientToken = r.Header.Get("Authorization")
+				// Remove the keyword "Bearer " if it exists in the header.
+				clientToken = strings.Replace(clientToken, "Bearer ", "", 1)
 			}
 			// Retrieving and verifying the token
 			if clientToken == "" {

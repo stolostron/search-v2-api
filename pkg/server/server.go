@@ -39,16 +39,15 @@ func StartAndListen() {
 	router := mux.NewRouter()
 
 	if config.Cfg.PlaygroundMode {
-		router.Handle("/playground", playground.Handler("GraphQL playground", "/searchapi/graphql"))
+		router.Handle("/playground", playground.Handler("GraphQL playground", fmt.Sprintf("%s/graphql", config.Cfg.ContextPath)))
 		klog.Infof("GraphQL playground is now running on https://localhost:%d/playground", port)
 	}
 
-	// Add authentication middleware to the /searchapi subroute.
-	apiSubrouter := router.PathPrefix("/searchapi").Subrouter()
+	// Add authentication middleware to the ContextPath [/searchapi] subroute.
+	apiSubrouter := router.PathPrefix(config.Cfg.ContextPath).Subrouter()
 	apiSubrouter.Use(rbac.Middleware())
 	apiSubrouter.Handle("/graphql", srv.Handler)
 
 	klog.Infof(`Search API is now running on https://localhost:%d%s/graphql`, port, config.Cfg.ContextPath)
-	klog.Fatal(http.ListenAndServeTLS(":"+fmt.Sprint(port), "./sslcert/tls.crt", "./sslcert/tls.key",
-		router))
+	klog.Fatal(http.ListenAndServeTLS(":"+fmt.Sprint(port), "./sslcert/tls.crt", "./sslcert/tls.key", router))
 }
