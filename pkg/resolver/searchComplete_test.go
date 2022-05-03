@@ -16,7 +16,8 @@ func Test_SearchComplete_Query(t *testing.T) {
 	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1)
 	val1 := "Template"
 	val2 := "ReplicaSet"
-	expectedProps := []*string{&val1, &val2}
+	val3 := "ConfigMap"
+	expectedProps := []*string{&val1, &val2, &val3}
 
 	// Mock the database queries.
 	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput)
@@ -42,7 +43,8 @@ func Test_SearchCompleteNoProp_Query(t *testing.T) {
 	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1)
 	val1 := "Template"
 	val2 := "ReplicaSet"
-	expectedProps := []*string{&val1, &val2}
+	val3 := "ConfigMap"
+	expectedProps := []*string{&val1, &val2, &val3}
 
 	// Mock the database queries.
 	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput)
@@ -69,7 +71,8 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1)
 	val1 := "Template"
 	val2 := "ReplicaSet"
-	expectedProps := []*string{&val1, &val2}
+	val3 := "ConfigMap"
+	expectedProps := []*string{&val1, &val2, &val3}
 
 	// Mock the database queries.
 	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput)

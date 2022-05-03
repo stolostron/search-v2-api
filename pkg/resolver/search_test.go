@@ -170,7 +170,7 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "uid", Values: resultList}}}
 	resolver, mockPool2 := newMockSearchResolver(t, searchInput, resultList)
 
-	relQuery := strings.TrimSpace(`WITH RECURSIVE search_graph(uid, data, destkind, sourceid, destid, path, level) AS (SELECT "r"."uid", "r"."data", "e"."destkind", "e"."sourceid", "e"."destid", ARRAY[r.uid] AS "path", 1 AS "level" FROM "search"."resources" AS "r" INNER JOIN "search"."edges" AS "e" ON ("r"."uid" IN ("e"."sourceid", "e"."destid")) WHERE ("r"."uid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b')) UNION (SELECT "r"."uid", "r"."data", "e"."destkind", "e"."sourceid", "e"."destid", sg.path||r.uid AS "path", level+1 AS "level" FROM "search"."resources" AS "r" INNER JOIN "search"."edges" AS "e" ON ("r"."uid" = "e"."sourceid") INNER JOIN "search_graph" AS "sg" ON (("sg"."destid" = "e"."sourceid") OR ("sg"."sourceid" = "e"."destid")) WHERE (("r"."uid" != ALL ('{sg.path}')) AND ("sg"."level" = 1)))) SELECT DISTINCT ON ("destid") "data", "destid", "destkind" FROM "search_graph" WHERE ("level" = 1)`)
+	relQuery := strings.TrimSpace(`SELECT "iid", "kind", MIN("level") AS "level" FROM (SELECT "level", unnest(array[sourceid, destid, concat('cluster__',cluster)]) AS "iid", unnest(array[sourcekind, destkind, 'Cluster']) AS "kind" FROM (WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster) AS (SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search"."all_edges" AS "e" WHERE (("destid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b')) OR ("sourceid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b'))) UNION (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster" FROM "search"."all_edges" AS "e" INNER JOIN "search_graph" AS "sg" ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))) WHERE (("e"."destkind" != 'Node') AND ("sg"."level" < 4)))) SELECT DISTINCT "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search_graph") AS "search_graph") AS "combineIds" WHERE (("level" < 4) AND ("iid" NOT IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b'))) GROUP BY "iid", "kind"`)
 
 	mockRows := newMockRows("./mocks/mock-rel-1.json", searchInput)
 	mockPool2.EXPECT().Query(gomock.Any(),
@@ -188,7 +188,7 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 
 	expectedKinds := make([]*string, len(mockRows.mockData))
 	for i, data := range mockRows.mockData {
-		destKind, _ := data["destkind"].(string)
+		destKind, _ := data["kind"].(string)
 		expectedKinds[i] = &destKind
 	}
 	// Verify expected and result kinds
@@ -214,22 +214,30 @@ func Test_SearchResolver_RelatedKindsRelationships(t *testing.T) {
 	searchInput2 := &model.SearchInput{RelatedKinds: []*string{&relatedKind1}, Filters: []*model.SearchFilter{{Property: "uid", Values: resultList}}}
 	resolver, mockPool2 := newMockSearchResolver(t, searchInput2, resultList)
 
-	relQuery := strings.TrimSpace(`WITH RECURSIVE search_graph(uid, data, destkind, sourceid, destid, path, level) AS (SELECT "r"."uid", "r"."data", "e"."destkind", "e"."sourceid", "e"."destid", ARRAY[r.uid] AS "path", 1 AS "level" FROM "search"."resources" AS "r" INNER JOIN "search"."edges" AS "e" ON ("r"."uid" IN ("e"."sourceid", "e"."destid")) WHERE ("r"."uid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b')) UNION (SELECT "r"."uid", "r"."data", "e"."destkind", "e"."sourceid", "e"."destid", sg.path||r.uid AS "path", level+1 AS "level" FROM "search"."resources" AS "r" INNER JOIN "search"."edges" AS "e" ON ("r"."uid" = "e"."sourceid") INNER JOIN "search_graph" AS "sg" ON (("sg"."destid" = "e"."sourceid") OR ("sg"."sourceid" = "e"."destid")) WHERE (("r"."uid" != ALL ('{sg.path}')) AND ("sg"."level" = 1)))) SELECT DISTINCT ON ("destid") "data", "destid", "destkind" FROM "search_graph" WHERE (("destkind" IN ('ConfigMap')) AND ("level" = 1))`)
+	relQuery := strings.TrimSpace(`SELECT "iid", "kind", MIN("level") AS "level" FROM (SELECT "level", unnest(array[sourceid, destid, concat('cluster__',cluster)]) AS "iid", unnest(array[sourcekind, destkind, 'Cluster']) AS "kind" FROM (WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster) AS (SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search"."all_edges" AS "e" WHERE (("destid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b')) OR ("sourceid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b'))) UNION (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster" FROM "search"."all_edges" AS "e" INNER JOIN "search_graph" AS "sg" ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))) WHERE (("e"."destkind" != 'Node') AND ("sg"."level" < 4)))) SELECT DISTINCT "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search_graph") AS "search_graph") AS "combineIds" WHERE (("level" < 4) AND ("iid" NOT IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b'))) GROUP BY "iid", "kind"`)
 
 	mockRows := newMockRows("./mocks/mock-rel-1.json", searchInput2)
 	mockPool2.EXPECT().Query(gomock.Any(),
 		gomock.Eq(relQuery),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
+	mockRows2 := newMockRows("./mocks/mock.json", searchInput2)
+
+	relatedQuery := `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("uid" IN ('local-cluster/30c35f12-320a-417f-98d1-fbee28a4b2a6')) LIMIT 10000`
+	// Mock the database query
+	mockPool2.EXPECT().Query(gomock.Any(),
+		gomock.Eq(relatedQuery),
+		gomock.Eq([]interface{}{}),
+	).Return(mockRows2, nil)
 
 	result := resolver.Related() // this should return a relatedResults object
 
-	if result[0].Kind != mockRows.mockData[0]["destkind"] {
+	if !strings.EqualFold(result[0].Kind, strings.ToLower(mockRows2.mockData[0]["destkind"].(string))) {
 		t.Errorf("Kind value in mockdata does not match kind value of result")
 	}
 
 	// Verify returned items.
-	if len(result) != len(mockRows.mockData) {
+	if len(result) != len(mockRows2.mockData) {
 		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result))
 	}
 }

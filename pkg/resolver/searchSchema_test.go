@@ -29,7 +29,7 @@ func Test_SearchSchema_Results(t *testing.T) {
 	searchInput := &model.SearchInput{}
 	resolver, mockPool := newMockSearchSchema(t)
 
-	expectedList := []string{"cluster", "kind", "label", "name", "namespace", "status", "Template", "ReplicaSet"}
+	expectedList := []string{"cluster", "kind", "label", "name", "namespace", "status", "Template", "ReplicaSet", "ConfigMap"}
 
 	expectedRes := map[string]interface{}{
 		"allProperties": expectedList,
