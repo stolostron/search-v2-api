@@ -20,8 +20,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-var mux sync.RWMutex // Mutex to lock map during read/write
-
 type SearchResult struct {
 	input  *model.SearchInput
 	pool   pgxpoolmock.PgxPool
@@ -29,6 +27,7 @@ type SearchResult struct {
 	wg     sync.WaitGroup // WORKAROUND: Used to serialize search query and relatioinships query.
 	query  string
 	params []interface{}
+	mux    sync.RWMutex // Mutex to lock map during read/write
 	//  Related []SearchRelatedResult
 }
 
@@ -300,7 +299,8 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 	var whereDs []exp.Expression
 
 	if input.Keywords != nil && len(input.Keywords) > 0 {
-		//query example: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data") WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' IN ('Pod')))
+		// Sample query: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data")
+		// WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' IN ('Pod')))
 		keywords := pointerToStringArray(input.Keywords)
 		for _, key := range keywords {
 			key = "%" + key + "%"

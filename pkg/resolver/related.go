@@ -124,7 +124,8 @@ func (s *SearchResult) selectIfClusterUIDPresent() *goqu.SelectDataset {
 		}
 	}
 	if len(clusterNames) > 0 {
-		// select uid as iid, data->>'kind' as kind, 1 AS "level" FROM search.resources where cluster IN ('local-cluster', 'sv-remote-1')
+		// Sample query: select uid as iid, data->>'kind' as kind, 1 AS "level" FROM search.resources
+		// where cluster IN ('local-cluster', 'sv-remote-1')
 		//define schema table:
 		schemaTable := goqu.S("search").Table("resources")
 		ds := goqu.From(schemaTable)
@@ -207,9 +208,9 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 			return nil
 		}
 		if level == 1 { // update map if level is 1
-			updateKindMap(iid, kind, level1Map)
+			s.updateKindMap(iid, kind, level1Map)
 		}
-		updateKindMap(iid, kind, allLevelsMap)
+		s.updateKindMap(iid, kind, allLevelsMap)
 
 		// Turn on keepAllLevels if the kind is Application or Subscription
 		if kind == "Application" || kind == "Subscription" {
@@ -290,14 +291,14 @@ func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface
 	return relatedSearch
 }
 
-func updateKindMap(iid string, kind string, levelMap map[string][]string) {
-	mux.RLock() // Lock map to read
+func (s *SearchResult) updateKindMap(iid string, kind string, levelMap map[string][]string) {
+	s.mux.RLock() // Lock map to read
 	iids := levelMap[kind]
-	mux.RUnlock()
+	s.mux.RUnlock()
 
 	iids = append(iids, iid)
 
-	mux.Lock() // Lock map to write
+	s.mux.Lock() // Lock map to write
 	levelMap[kind] = iids
-	mux.Unlock()
+	s.mux.Unlock()
 }
