@@ -271,7 +271,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 
 	defer relations.Close()
 
-	// iterating through resulting rows and scaning data, destid  and destkind
+	// iterating through resulting rows and scaning data, destid and destkind
 	for relations.Next() {
 		var destkind, destid string
 		var data map[string]interface{}
@@ -323,7 +323,7 @@ func printUniqueValue(arr []string) map[string]int {
 
 // Labels are sorted alphabetically to ensure consistency, then encoded in a
 // string with the following format.
-// key1:value1,key2:value2,...
+// key1:value1; key2:value2; ...
 func formatLabels(labels map[string]interface{}) string {
 	keys := make([]string, 0)
 	labelStrings := make([]string, 0)
@@ -334,18 +334,18 @@ func formatLabels(labels map[string]interface{}) string {
 	for _, k := range keys {
 		labelStrings = append(labelStrings, fmt.Sprintf("%s:%s", k, labels[k]))
 	}
-	return strings.Join(labelStrings, ",")
+	return strings.Join(labelStrings, "; ")
 }
 
 // Encode array into a single string with the format.
-//  value1,value2,...
+//  value1; value2; ...
 func formatArray(itemlist []interface{}) string {
 	keys := make([]string, len(itemlist))
 	for i, k := range itemlist {
 		keys[i] = convertToString(k)
 	}
 	sort.Strings(keys)
-	return strings.Join(keys, ",")
+	return strings.Join(keys, "; ")
 }
 
 // Convert interface to string format
