@@ -82,13 +82,13 @@ func (s *SearchResult) buildRelationsQuery() {
 			"e.destkind": goqu.Op{"neq": "Node"}})
 
 	// Recursive query. Refer: https://www.postgresqltutorial.com/postgresql-tutorial/postgresql-recursive-query/
-	search_graphQ := goqu.From("search_graph").
+	searchGraphQ := goqu.From("search_graph").
 		WithRecursive("search_graph(level, sourceid, destid,  sourcekind, destkind, cluster)",
 			baseTerm.
 				Union(recursiveTerm)).
 		SelectDistinct("level", "sourceid", "destid", "sourcekind", "destkind", "cluster")
 
-	combineIds := goqu.From(search_graphQ.As("search_graph")).Select(selectCombineIds...)
+	combineIds := goqu.From(searchGraphQ.As("search_graph")).Select(selectCombineIds...)
 
 	sql, params, err := goqu.From(combineIds.As("combineIds")).
 		Select(selectFinal...).
