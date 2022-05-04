@@ -35,7 +35,7 @@ func Test_getEnvAsInt_default(t *testing.T) {
 	res := getEnvAsInt("ENV_VARIABLE_NOT_DEFINED", 99)
 
 	if res != 99 {
-		t.Errorf("Failed testing getEnvAsIInt() Expected: %d  Got: %d", 99, res)
+		t.Errorf("Failed testing getEnvAsInt() Expected: %d  Got: %d", 99, res)
 	}
 }
 
@@ -45,7 +45,26 @@ func Test_getEnvAsInt(t *testing.T) {
 	res := getEnvAsInt("TEST_VARIABLE", 0)
 
 	if res != 99 {
-		t.Errorf("Failed testing getEnv()  Expected: %d  Got: %d", 99, res)
+		t.Errorf("Failed testing getEnvAsInt() Expected: %d  Got: %d", 99, res)
+	}
+}
+
+// Should use default boolean value when environment variable does not exist.
+func Test_getEnvAsBool_default(t *testing.T) {
+	res := getEnvAsBool("ENV_VARIABLE_NOT_DEFINED", false)
+
+	if res {
+		t.Errorf("Failed testing getEnvAsBool() Expected: %+v  Got: %+v ", false, res)
+	}
+}
+
+// Should load bool value from environment.
+func Test_getEnvAsBool(t *testing.T) {
+	os.Setenv("TEST_VARIABLE", "true")
+	res := getEnvAsBool("TEST_VARIABLE", false)
+
+	if !res {
+		t.Errorf("Failed testing getEnvAsBool() Expected: %+v  Got: %+v", true, res)
 	}
 }
 
