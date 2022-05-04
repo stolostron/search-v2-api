@@ -261,7 +261,7 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 	for key, value := range data {
 		switch v := value.(type) {
 		case string:
-			item[key] = strings.ToLower(v)
+			item[key] = v //strings.ToLower(v)
 		case bool:
 			item[key] = strconv.FormatBool(v)
 		case float64:
