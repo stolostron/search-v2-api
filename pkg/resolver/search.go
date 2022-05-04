@@ -144,7 +144,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 }
 
 func (s *SearchResult) resolveCount() int {
-	rows := s.pool.QueryRow(context.Background(), s.query, s.params...)
+	rows := s.pool.QueryRow(context.TODO(), s.query, s.params...)
 
 	var count int
 	err := rows.Scan(&count)
