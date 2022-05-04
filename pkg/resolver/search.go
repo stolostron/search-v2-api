@@ -126,7 +126,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		} else if s.input != nil && s.input.Limit != nil && *s.input.Limit == -1 {
 			klog.Warning("No limit set. Fetching all results.")
 		} else {
-			limit = config.DEFAULT_QUERY_LIMIT
+			limit = config.Cfg.QueryLimit
 		}
 	}
 	//Get the query
@@ -140,7 +140,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 }
 
 func (s *SearchResult) resolveCount() int {
-	rows := s.pool.QueryRow(context.Background(), s.query, s.params...)
+	rows := s.pool.QueryRow(context.TODO(), s.query, s.params...)
 
 	var count int
 	err := rows.Scan(&count)
