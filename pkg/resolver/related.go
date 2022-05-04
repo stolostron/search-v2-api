@@ -99,9 +99,9 @@ func (s *SearchResult) buildRelationsQuery() {
 	if err != nil {
 		klog.Error("Error creating relation query", err)
 	} else {
-		klog.V(3).Info("Relations query: ", s.query)
 		s.query = sql
 		s.params = params
+		klog.V(3).Info("Relations query: ", s.query)
 	}
 }
 
