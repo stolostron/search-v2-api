@@ -58,13 +58,13 @@ func (s *SearchSchema) buildSearchSchemaQuery(ctx context.Context) {
 func (s *SearchSchema) searchSchemaResults(ctx context.Context) (map[string]interface{}, error) {
 	klog.V(2).Info("Resolving searchSchemaResults()")
 	srchSchema := map[string]interface{}{}
-	schemaTop := []string{"cluster", "kind", "label", "name", "namespace", "status"}
-	schemaTopMap := map[string]struct{}{}
-	for _, key := range schemaTop {
-		schemaTopMap[key] = struct{}{}
+	// These default properties are always present and we want them at the top.
+	schema := []string{"cluster", "kind", "label", "name", "namespace", "status"}
+	// Use a map to remove duplicates efficiently.
+	schemaMap := map[string]struct{}{}
+	for _, key := range schema {
+		schemaMap[key] = struct{}{}
 	}
-	schema := []string{}
-	schema = append(schema, schemaTop...)
 
 	rows, err := s.pool.Query(ctx, s.query)
 	if err != nil {
@@ -75,7 +75,11 @@ func (s *SearchSchema) searchSchemaResults(ctx context.Context) (map[string]inte
 		for rows.Next() {
 			prop := ""
 			_ = rows.Scan(&prop)
-			if _, present := schemaTopMap[prop]; !present {
+			// Skip properties that start with _ because those are used internally and aren't intended to be exposed.
+			if prop[0:1] == "_" {
+				continue
+			}
+			if _, present := schemaMap[prop]; !present {
 				schema = append(schema, prop)
 			}
 		}
