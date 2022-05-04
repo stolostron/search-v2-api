@@ -9,17 +9,15 @@ import (
 
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
+	"github.com/gorilla/mux"
 	"github.com/stolostron/search-v2-api/graph"
 	"github.com/stolostron/search-v2-api/graph/generated"
 	"github.com/stolostron/search-v2-api/pkg/config"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 )
 
-// const defaultPort = "8080"
-
-func StartAndListen(playmode bool) {
+func StartAndListen() {
 	port := config.Cfg.HttpPort
-
-	// router := mux.NewRouter()ß
 
 	// Configure TLS
 	cfg := &tls.Config{
@@ -37,14 +35,21 @@ func StartAndListen(playmode bool) {
 		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 	}
 
-	http.Handle("/", playground.Handler("GraphQL playground", "/query"))
-	http.Handle("/query", srv.Handler)
-	if playmode {
-		klog.Infof("connect to https://localhost:%d%s/graphql for GraphQL playground", port, config.Cfg.ContextPath)
-		klog.Fatal(http.ListenAndServeTLS(":"+fmt.Sprint(port), "./sslcert/tls.crt", "./sslcert/tls.key",
-			nil))
+	// Initiate router
+	router := mux.NewRouter()
+	router.HandleFunc("/liveness", livenessProbe).Methods("GET")
+	router.HandleFunc("/readiness", readinessProbe).Methods("GET")
+
+	if config.Cfg.PlaygroundMode {
+		router.Handle("/playground", playground.Handler("GraphQL playground", fmt.Sprintf("%s/graphql", config.Cfg.ContextPath)))
+		klog.Infof("GraphQL playground is now running on https://localhost:%d/playground", port)
 	}
+
+	// Add authentication middleware to the /searchapi (ContextPath) subroute.
+	apiSubrouter := router.PathPrefix(config.Cfg.ContextPath).Subrouter()
+	apiSubrouter.Use(rbac.Middleware())
+	apiSubrouter.Handle("/graphql", srv.Handler)
+
 	klog.Infof(`Search API is now running on https://localhost:%d%s/graphql`, port, config.Cfg.ContextPath)
-	klog.Fatal(http.ListenAndServeTLS(":"+fmt.Sprint(port), "./sslcert/tls.crt", "./sslcert/tls.key",
-		srv.Handler))
+	klog.Fatal(http.ListenAndServeTLS(":"+fmt.Sprint(port), "./sslcert/tls.crt", "./sslcert/tls.key", router))
 }
