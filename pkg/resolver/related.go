@@ -3,6 +3,7 @@ package resolver
 
 import (
 	"context"
+	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
@@ -90,11 +91,19 @@ func (s *SearchResult) buildRelationsQuery() {
 
 	combineIds := goqu.From(searchGraphQ.As("search_graph")).Select(selectCombineIds...)
 
-	sql, params, err := goqu.From(combineIds.As("combineIds")).
+	relQuery := goqu.From(combineIds.As("combineIds")).
 		Select(selectFinal...).
 		Where(whereDs...).
-		GroupBy(groupBy...).
-		ToSQL()
+		GroupBy(groupBy...)
+
+	// Check if the uids include cluster uids. This will be true if search term includes `kind: Cluster`
+	// Since there are no direct edges between cluster node and other nodes,
+	// add a union to the relation query to get all resources in the clusters
+	clusterSelectTerm := s.selectIfClusterUIDPresent()
+	if clusterSelectTerm != nil {
+		relQuery = relQuery.Union(clusterSelectTerm)
+	}
+	sql, params, err := relQuery.ToSQL()
 
 	if err != nil {
 		klog.Error("Error creating relation query", err)
@@ -102,6 +111,35 @@ func (s *SearchResult) buildRelationsQuery() {
 		s.query = sql
 		s.params = params
 		klog.V(3).Info("Relations query: ", s.query)
+	}
+}
+
+// Check if clusters are part of the search input `kind: Cluster`
+func (s *SearchResult) selectIfClusterUIDPresent() *goqu.SelectDataset {
+	var clusterNames []string
+	for _, uid := range s.uids { // check if cluster uid is in s.uids
+		if strings.HasPrefix(*uid, "cluster__") {
+			clusterName := strings.TrimPrefix(*uid, "cluster__") // get the cluster name
+			clusterNames = append(clusterNames, clusterName)
+		}
+	}
+	if len(clusterNames) > 0 {
+		// select uid as iid, data->>'kind' as kind, 1 AS "level" FROM search.resources where cluster IN ('local-cluster', 'sv-remote-1')
+		//define schema table:
+		schemaTable := goqu.S("search").Table("resources")
+		ds := goqu.From(schemaTable)
+
+		//SELECT CLAUSE
+		selectDs := ds.Select(goqu.C("uid").As("iid"), goqu.L("data->>'kind'").As("kind"), goqu.L("1").As("level"))
+
+		//WHERE CLAUSE
+
+		//LIMIT CLAUSE - Do we need limit here?
+		// limit := config.Cfg.QueryLimit
+
+		return selectDs.Where(goqu.C("cluster").In(clusterNames))
+	} else {
+		return nil
 	}
 }
 
