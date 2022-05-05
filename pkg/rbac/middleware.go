@@ -10,8 +10,11 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/config"
 	authv1 "k8s.io/api/authentication/v1"
 	authov1 "k8s.io/api/authorization/v1"
+
+	// machineryV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -88,24 +91,28 @@ func verifyToken(clientId string, ctx context.Context) (bool, types.UID, error) 
 func authorize(uid types.UID, ctx context.Context) bool { //we want to return the SelfSubjectAccessReviewSpec{}
 
 	//create impersonation config that will impersonates user based on UID (from tokereview):
-	config, _ := config.GetClientConfig()
-	config.Impersonate = rest.ImpersonationConfig{
+	imConfig := config.GetClientConfig()
+	imConfig.Impersonate = rest.ImpersonationConfig{
 		UID: string(uid),
 	}
 	//create a new clientset for the impersonation
-	clientset, err := kubernetes.NewForConfig(config)
+	clientset, err := kubernetes.NewForConfig(imConfig)
 	if err != nil {
 		klog.Warning("Error with creating a new clientset with impersonation config.", err.Error())
 	}
 
+	//first we need to get all resource types from cluster we can do this with a
+	resources, _ := listResources(clientset.DiscoveryClient)
+
+	fmt.Println(resources)
+
 	// SelfSubjectAccessReview checks whether or not the current user can perform an action.
-	// Not filling in a spec.namespace means "in all namespaces". Self is a special case,
-	// because users should always be able to check whether they can perform an action
 	checkSelf := authov1.SelfSubjectAccessReview{
 		Spec: authov1.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authov1.ResourceAttributes{
+				// Version:  "rbac.authorization.k8s.io/v1",
 				Verb:     "list",
-				Resource: "pods",
+				Resource: "*",
 			},
 		},
 	}
@@ -114,10 +121,10 @@ func authorize(uid types.UID, ctx context.Context) bool { //we want to return th
 		SelfSubjectAccessReviews().
 		Create(ctx, &checkSelf, metav1.CreateOptions{})
 
-	fmt.Println(result)
+	// fmt.Println("impersonated access review", result)
 
 	if err != nil {
-		klog.Warning("Error creating the access review", err.Error())
+		klog.Warning("Error creating the impersonated access review", err.Error())
 	}
 
 	//Status is filled in by the server and indicates whether the request is allowed or not
@@ -134,4 +141,39 @@ func authorize(uid types.UID, ctx context.Context) bool { //we want to return th
 func prettyPrint(i interface{}) string {
 	s, _ := json.MarshalIndent(i, "", "\t")
 	return string(s)
+}
+
+func listResources(discoveryClient *discovery.DiscoveryClient) ([]*metav1.APIResourceList, error) {
+	// Get kubernetes client for discovering resource types.
+	supportedResources := []*metav1.APIResourceList{}
+	apiResources, err := discoveryClient.ServerPreferredResources()
+	if err != nil && apiResources == nil { // only return if the list is empty
+		return nil, err
+	} else if err != nil {
+		klog.Warning("ServerPreferredResources could not list all available resources: ", err)
+	}
+
+	for _, apiList := range apiResources {
+
+		list := metav1.APIResourceList{}
+		list.GroupVersion = apiList.GroupVersion
+		listResources := []metav1.APIResource{}
+
+		for _, apiResource := range apiList.APIResources {
+
+			for _, verb := range apiResource.Verbs {
+				if verb == "list" {
+					listResources = append(listResources, apiResource)
+				}
+			}
+		}
+
+		list.APIResources = listResources
+		supportedResources = append(supportedResources, &list)
+
+		supportedResources = append(supportedResources, apiResources...)
+	}
+
+	return supportedResources, err
+
 }
