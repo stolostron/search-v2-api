@@ -79,6 +79,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		}
 		s.query = sql
 		s.params = params
+		klog.V(3).Info("SearchComplete Query: ", s.query)
 	} else {
 		s.query = ""
 		s.params = nil
