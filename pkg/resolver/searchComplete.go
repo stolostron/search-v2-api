@@ -59,6 +59,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			selectDs = ds.SelectDistinct(s.property).Order(goqu.C(s.property).Asc())
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
 			whereDs = append(whereDs, goqu.C(s.property).IsNotNull())
+			whereDs = append(whereDs, goqu.C(s.property).Neq(""))
 		} else {
 			selectDs = ds.SelectDistinct(goqu.L(`"data"->>?`, s.property)).Order(goqu.L(`"data"->>?`, s.property).Asc())
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
