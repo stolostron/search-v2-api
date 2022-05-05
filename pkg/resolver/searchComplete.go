@@ -93,7 +93,7 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 		klog.Error("Error fetching search complete results from db ", err)
 	}
 	defer rows.Close()
-	var srchCompleteOut []*string
+	srchCompleteOut := make([]*string, 0)
 	if rows != nil {
 		for rows.Next() {
 			prop := ""
