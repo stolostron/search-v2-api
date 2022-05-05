@@ -25,7 +25,7 @@ func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, err
 	s.searchCompleteQuery(ctx)
 	res, autoCompleteErr := s.searchCompleteResults(ctx)
 	if autoCompleteErr != nil {
-		klog.Error("Error resolving properties in autoComplete", autoCompleteErr)
+		klog.Error("Error resolving properties in autoComplete. ", autoCompleteErr)
 	}
 	return res, autoCompleteErr
 }
@@ -91,11 +91,13 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*string, error) {
 	klog.V(2).Info("Resolving searchCompleteResults()")
 	rows, err := s.pool.Query(ctx, s.query, s.params...)
+	srchCompleteOut := make([]*string, 0)
+
 	if err != nil {
 		klog.Error("Error fetching search complete results from db ", err)
+		return srchCompleteOut, err
 	}
 	defer rows.Close()
-	srchCompleteOut := make([]*string, 0)
 	if rows != nil {
 		for rows.Next() {
 			prop := ""

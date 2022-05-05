@@ -157,6 +157,7 @@ func (s *SearchResult) resolveUids() {
 	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
+		return
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -174,6 +175,7 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
+		return items, err
 	}
 	defer rows.Close()
 

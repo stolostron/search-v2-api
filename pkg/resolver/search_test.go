@@ -35,7 +35,7 @@ func Test_SearchResolver_Items(t *testing.T) {
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 	// Mock the database queries.
-	mockRows := newMockRows("./mocks/mock.json", searchInput)
+	mockRows := newMockRows("./mocks/mock.json", searchInput, "")
 
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'kind' IN ('template')) LIMIT 10000`),
@@ -79,7 +79,7 @@ func Test_SearchResolver_Items_Multiple_Filter(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 
 	// Mock the database queries.
-	mockRows := newMockRows("./mocks/mock.json", searchInput)
+	mockRows := newMockRows("./mocks/mock.json", searchInput, "")
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster'))) LIMIT 10`),
 		// gomock.Eq("SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'namespace')=any($1) AND cluster=$2 LIMIT 10"),
@@ -123,7 +123,7 @@ func Test_SearchWithMultipleClusterFilter_NegativeLimit_Query(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput)
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, "")
 
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
@@ -165,7 +165,7 @@ func Test_SearchResolver_Keywords(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 
 	// Mock the database queries.
-	mockRows := newMockRows("./mocks/mock.json", searchInput)
+	mockRows := newMockRows("./mocks/mock.json", searchInput, "")
 
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT "uid", "cluster", "data" FROM "search"."resources", jsonb_each_text("data") WHERE ("value" LIKE '%Template%') LIMIT 10`),

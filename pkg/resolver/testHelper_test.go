@@ -83,7 +83,7 @@ func (r *Row) Scan(dest ...interface{}) error {
 // https://github.com/jackc/pgx/blob/master/rows.go#L24
 // ====================================================
 
-func newMockRows(mockDataFile string, input *model.SearchInput) *MockRows {
+func newMockRows(mockDataFile string, input *model.SearchInput, prop string) *MockRows {
 	// Read json file and build mock data
 	bytes, _ := ioutil.ReadFile(mockDataFile)
 	var data map[string]interface{}
@@ -101,29 +101,56 @@ func newMockRows(mockDataFile string, input *model.SearchInput) *MockRows {
 
 	mockData := make([]map[string]interface{}, 0)
 
-	for _, item := range items {
-		if !strings.Contains(mockDataFile, "rel") { // load resources file
+	switch prop {
+	case "":
 
-			if useInputFilterToLoadData(mockDataFile, input, item) {
-				uid := item.(map[string]interface{})["uid"]
+		for _, item := range items {
+			if !strings.Contains(mockDataFile, "rel") { // load resources file
 
-				mockDatum := map[string]interface{}{
-					"uid":      uid,
-					"cluster":  strings.Split(uid.(string), "/")[0],
-					"data":     item.(map[string]interface{})["properties"],
-					"destid":   item.(map[string]interface{})["DestUID"],
-					"destkind": item.(map[string]interface{})["DestKind"],
+				if useInputFilterToLoadData(mockDataFile, input, item) {
+					uid := item.(map[string]interface{})["uid"]
+
+					mockDatum := map[string]interface{}{
+						"uid":      uid,
+						"cluster":  strings.Split(uid.(string), "/")[0],
+						"data":     item.(map[string]interface{})["properties"],
+						"destid":   item.(map[string]interface{})["DestUID"],
+						"destkind": item.(map[string]interface{})["DestKind"],
+					}
+
+					mockData = append(mockData, mockDatum)
 				}
 
+			} else { // load relations file
+				mockDatum := map[string]interface{}{
+					"level": item.(map[string]interface{})["Level"],
+					"iid":   item.(map[string]interface{})["DestUID"],
+					"kind":  item.(map[string]interface{})["DestKind"],
+				}
 				mockData = append(mockData, mockDatum)
 			}
-		} else { // load relations file
+		}
+	default: // For searchschema and searchComplete
+		// For searchComplete
+		props := map[string]string{}
+		for _, item := range items {
+			uid := item.(map[string]interface{})["uid"]
+			cluster := strings.Split(uid.(string), "/")[0]
+			data := item.(map[string]interface{})["properties"].(map[string]interface{})
+
+			if prop == "cluster" {
+				props[cluster] = ""
+			} else {
+				props[data[prop].(string)] = ""
+			}
+		}
+
+		for key := range props {
 			mockDatum := map[string]interface{}{
-				"level": item.(map[string]interface{})["Level"],
-				"iid":   item.(map[string]interface{})["DestUID"],
-				"kind":  item.(map[string]interface{})["DestKind"],
+				"prop": key,
 			}
 			mockData = append(mockData, mockDatum)
+
 		}
 	}
 
@@ -173,7 +200,7 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 			case *map[string]interface{}:
 				*dest[i].(*map[string]interface{}) = r.mockData[r.index-1][r.columnHeaders[i]].(map[string]interface{})
 			case *interface{}:
-				*dest[i].(*interface{}) = r.mockData[r.index-1][r.columnHeaders[i]].(interface{})
+				dest[i] = r.mockData[r.index-1][r.columnHeaders[i]]
 			case nil:
 				klog.Info("error type %T", v)
 			default:
@@ -183,8 +210,7 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 
 		}
 	} else if len(dest) == 1 { // For searchComplete function
-		dataMap := r.mockData[r.index-1]["data"].(map[string]interface{})
-		*dest[0].(*string) = dataMap["kind"].(string)
+		*dest[0].(*string) = r.mockData[r.index-1]["prop"].(string)
 	}
 	return nil
 }

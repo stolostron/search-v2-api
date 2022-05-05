@@ -69,6 +69,7 @@ func (s *SearchSchema) searchSchemaResults(ctx context.Context) (map[string]inte
 	rows, err := s.pool.Query(ctx, s.query)
 	if err != nil {
 		klog.Error("Error fetching search schema results from db ", err)
+		return srchSchema, err
 	}
 	defer rows.Close()
 	if rows != nil {
