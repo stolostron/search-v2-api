@@ -100,7 +100,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 
-	if s.input.Keywords != nil {
+	if s.input.Keywords != nil && len(s.input.Keywords) > 0 {
 		jsb := goqu.L("jsonb_each_text(?)", goqu.C("data"))
 		ds = goqu.From(schemaTable, jsb)
 	}
@@ -115,11 +115,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	}
 
 	//WHERE CLAUSE
-	if s.input != nil && len(s.input.Filters) > 0 {
-		whereDs = WhereClauseFilter(s.input)
-	}
-
-	if s.input != nil && s.input.Keywords != nil && len(s.input.Keywords) > 0 {
+	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 		whereDs = WhereClauseFilter(s.input)
 	}
 
@@ -130,7 +126,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		} else if s.input != nil && s.input.Limit != nil && *s.input.Limit == -1 {
 			klog.Warning("No limit set. Fetching all results.")
 		} else {
-			limit = config.DEFAULT_QUERY_LIMIT
+			limit = config.Cfg.QueryLimit
 		}
 	}
 	//Get the query
@@ -138,13 +134,13 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	if err != nil {
 		klog.Errorf("Error building SearchComplete query: %s", err.Error())
 	}
-	klog.Infof("query: %s\nargs: %s", sql, params)
+	klog.V(3).Infof("query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
 }
 
 func (s *SearchResult) resolveCount() int {
-	rows := s.pool.QueryRow(context.Background(), s.query, s.params...)
+	rows := s.pool.QueryRow(context.TODO(), s.query, s.params...)
 
 	var count int
 	err := rows.Scan(&count)
@@ -201,7 +197,7 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 }
 
 func (s *SearchResult) getRelations() []SearchRelatedResult {
-	klog.Infof("Resolving relationships for [%d] uids.\n", len(s.uids))
+	klog.V(3).Infof("Resolving relationships for [%d] uids.\n", len(s.uids))
 	var whereDs []exp.Expression
 
 	if len(s.input.RelatedKinds) > 0 {
@@ -275,7 +271,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 
 	defer relations.Close()
 
-	// iterating through resulting rows and scaning data, destid  and destkind
+	// iterating through resulting rows and scaning data, destid and destkind
 	for relations.Next() {
 		var destkind, destid string
 		var data map[string]interface{}
@@ -327,7 +323,7 @@ func printUniqueValue(arr []string) map[string]int {
 
 // Labels are sorted alphabetically to ensure consistency, then encoded in a
 // string with the following format.
-// key1:value1,key2:value2,...
+// key1:value1; key2:value2; ...
 func formatLabels(labels map[string]interface{}) string {
 	keys := make([]string, 0)
 	labelStrings := make([]string, 0)
@@ -338,18 +334,18 @@ func formatLabels(labels map[string]interface{}) string {
 	for _, k := range keys {
 		labelStrings = append(labelStrings, fmt.Sprintf("%s:%s", k, labels[k]))
 	}
-	return strings.Join(labelStrings, ",")
+	return strings.Join(labelStrings, "; ")
 }
 
 // Encode array into a single string with the format.
-//  value1,value2,...
+//  value1; value2; ...
 func formatArray(itemlist []interface{}) string {
 	keys := make([]string, len(itemlist))
 	for i, k := range itemlist {
 		keys[i] = convertToString(k)
 	}
 	sort.Strings(keys)
-	return strings.Join(keys, ",")
+	return strings.Join(keys, "; ")
 }
 
 // Convert interface to string format
@@ -402,16 +398,12 @@ func pointerToStringArray(pointerArray []*string) []string {
 func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 	var whereDs []exp.Expression
 
-	if input.Keywords != nil {
+	if input.Keywords != nil && len(input.Keywords) > 0 {
 		//query example: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data") WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' IN ('Pod')))
-		if len(input.Keywords) > 0 {
-			keywords := pointerToStringArray(input.Keywords)
-			for _, key := range keywords {
-				key = "%" + key + "%"
-				whereDs = append(whereDs, goqu.L(`"value"`).Like(key).Expression())
-			}
-		} else {
-			klog.Warningf("Ignoring keyword filter [%s] because it has no values", input.Keywords)
+		keywords := pointerToStringArray(input.Keywords)
+		for _, key := range keywords {
+			key = "%" + key + "%"
+			whereDs = append(whereDs, goqu.L(`"value"`).Like(key).Expression())
 		}
 	}
 	if input.Filters != nil {

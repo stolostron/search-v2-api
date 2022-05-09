@@ -2,12 +2,10 @@ package main
 
 import (
 	"flag"
-	"os"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/server"
-
 	klog "k8s.io/klog/v2"
 )
 
@@ -27,9 +25,8 @@ func main() {
 		klog.Fatal(configError)
 	}
 
+	//Get database connection
 	database.GetConnection()
-	if len(os.Args) > 1 && os.Args[1] == "playground" {
-		server.StartAndListen(true)
-	}
-	server.StartAndListen(false)
+
+	server.StartAndListen()
 }

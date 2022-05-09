@@ -1,6 +1,3 @@
-/*
-Copyright (c) 2021 Red Hat, Inc.
-*/
 // Copyright Contributors to the Open Cluster Management project
 
 package config
@@ -15,59 +12,46 @@ import (
 	klog "k8s.io/klog/v2"
 )
 
-const (
-	API_SERVER_URL           = "https://kubernetes.default.svc"
-	DEFAULT_CONTEXT_PATH     = "/searchapi"
-	DEFAULT_QUERY_LIMIT      = 10000
-	DEFAULT_QUERY_LOOP_LIMIT = 5000
-	HTTP_PORT                = 4010
-	RBAC_POLL_INTERVAL       = 60000  // 1 minute
-	RBAC_INACTIVITY_TIMEOUT  = 600000 // 10 minutes
-	SERVICEACCT_TOKEN        = ""
-	DEFAULT_DB_PASS          = ""
-	DEFAULT_DB_HOST          = "localhost"
-	DEFAULT_DB_USER          = ""
-	DEFAULT_DB_NAME          = ""
-	DEFAULT_DB_PORT          = int(5432)
-)
-
-// Define a config type to hold our config properties.
-
 var Cfg = new()
 
+// Define a Config type to hold our config properties.
 type Config struct {
-	API_SERVER_URL          string // address for API_SERVER
-	ContextPath             string
-	defaultQueryLimit       int // number of queries handled at a time
-	defaultQueryLoopLimit   int
-	HttpPort                int
-	RBAC_POLL_INTERVAL      int
-	RBAC_INACTIVITY_TIMEOUT int
-	SERVICEACCT_TOKEN       string
-	DB_HOST                 string
-	DB_USER                 string
-	DB_NAME                 string
-	DB_PASS                 string
-	DB_PORT                 int
+	API_SERVER_URL string // address for Kubernetes API Server
+	ContextPath    string
+	DB_HOST        string
+	DB_NAME        string
+	DB_PASS        string
+	DB_PORT        int
+	DB_USER        string
+	HttpPort       int
+	PlaygroundMode bool // Enable the GraphQL Playground client.
+	QueryLimit     int  // The default LIMIT to use on queries. Client can override.
+
+	// Placeholder for future use.
+	// QueryLoopLimit          int // number of queries handled at a time
+	// RBAC_INACTIVITY_TIMEOUT int
+	// RBAC_POLL_INTERVAL      int
 }
 
 func new() *Config {
-	// If environment variables are set, use those values constants
-	// Simply put, the order of preference is env -> default constants (from left to right)
+	// If environment variables are set, use default values
+	// Simply put, the order of preference is env -> default values (from left to right)
 	conf := &Config{
-		API_SERVER_URL:          getEnv("API_SERVER_URL", API_SERVER_URL),
-		ContextPath:             getEnv("CONTEXT_PATH", DEFAULT_CONTEXT_PATH),
-		defaultQueryLimit:       getEnvAsInt("QUERY_LIMIT", DEFAULT_QUERY_LIMIT),
-		defaultQueryLoopLimit:   getEnvAsInt("QUERY_LOOP_LIMIT", DEFAULT_QUERY_LOOP_LIMIT),
-		HttpPort:                getEnvAsInt("HTTP_PORT", HTTP_PORT),
-		RBAC_POLL_INTERVAL:      getEnvAsInt("RBAC_POLL_INTERVAL", RBAC_POLL_INTERVAL),
-		RBAC_INACTIVITY_TIMEOUT: getEnvAsInt("RBAC_INACTIVITY_TIMEOUT", RBAC_INACTIVITY_TIMEOUT),
-		SERVICEACCT_TOKEN:       getEnv("SERVICEACCT_TOKEN", SERVICEACCT_TOKEN),
-		DB_PASS:                 getEnv("DB_PASS", DEFAULT_DB_PASS),
-		DB_HOST:                 getEnv("DB_HOST", DEFAULT_DB_HOST),
-		DB_NAME:                 getEnv("DB_NAME", DEFAULT_DB_NAME),
-		DB_USER:                 getEnv("DB_USER", DEFAULT_DB_USER),
-		DB_PORT:                 getEnvAsInt("DB_PORT", DEFAULT_DB_PORT),
+		API_SERVER_URL: getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
+		ContextPath:    getEnv("CONTEXT_PATH", "/searchapi"),
+		DB_HOST:        getEnv("DB_HOST", "localhost"),
+		DB_NAME:        getEnv("DB_NAME", ""),
+		DB_PASS:        getEnv("DB_PASS", ""),
+		DB_PORT:        getEnvAsInt("DB_PORT", int(5432)),
+		DB_USER:        getEnv("DB_USER", ""),
+		HttpPort:       getEnvAsInt("HTTP_PORT", 4010),
+		PlaygroundMode: getEnvAsBool("PLAYGROUND_MODE", false),
+		QueryLimit:     getEnvAsInt("QUERY_LIMIT", 10000),
+
+		// Placeholder for future use.
+		// QueryLoopLimit:          getEnvAsInt("QUERY_LOOP_LIMIT", 5000),
+		// RBAC_INACTIVITY_TIMEOUT: getEnvAsInt("RBAC_INACTIVITY_TIMEOUT", 600000), // 10 minutes
+		// RBAC_POLL_INTERVAL:      getEnvAsInt("RBAC_POLL_INTERVAL", 60000),       // 1 minute
 	}
 	conf.DB_PASS = url.QueryEscape(conf.DB_PASS)
 	return conf
@@ -116,5 +100,15 @@ func getEnvAsInt(name string, defaultVal int) int {
 	if value, err := strconv.Atoi(valueStr); err == nil {
 		return value
 	}
+	return defaultVal
+}
+
+// Helper to read an environment variable into a bool or return default value
+func getEnvAsBool(name string, defaultVal bool) bool {
+	valStr := getEnv(name, "")
+	if val, err := strconv.ParseBool(valStr); err == nil {
+		return val
+	}
+
 	return defaultVal
 }

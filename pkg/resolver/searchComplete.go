@@ -23,7 +23,7 @@ type SearchCompleteResult struct {
 
 func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, error) {
 	s.searchCompleteQuery(ctx)
-	res, autoCompleteErr := s.searchCompleteResults()
+	res, autoCompleteErr := s.searchCompleteResults(ctx)
 	if autoCompleteErr != nil {
 		klog.Error("Error resolving properties in autoComplete", autoCompleteErr)
 	}
@@ -70,7 +70,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		} else if s.input != nil && s.input.Limit != nil && *s.input.Limit == -1 {
 			klog.Warning("No limit set. Fetching all results.")
 		} else {
-			limit = config.DEFAULT_QUERY_LIMIT
+			limit = config.Cfg.QueryLimit
 		}
 		//Get the query
 		sql, params, err := selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
@@ -86,21 +86,23 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 
 }
 
-func (s *SearchCompleteResult) searchCompleteResults() ([]*string, error) {
+func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*string, error) {
 	klog.V(2).Info("Resolving searchCompleteResults()")
-	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
+	rows, err := s.pool.Query(ctx, s.query, s.params...)
 	if err != nil {
-		klog.Error("Error fetching results from db ", err)
+		klog.Error("Error fetching search complete results from db ", err)
 	}
 	defer rows.Close()
-	var srchCompleteOut []*string
-	for rows.Next() {
-		prop := ""
-		scanErr := rows.Scan(&prop)
-		if scanErr != nil {
-			klog.Info("Error reading searchCompleteResults", scanErr)
+	srchCompleteOut := make([]*string, 0)
+	if rows != nil {
+		for rows.Next() {
+			prop := ""
+			scanErr := rows.Scan(&prop)
+			if scanErr != nil {
+				klog.Info("Error reading searchCompleteResults", scanErr)
+			}
+			srchCompleteOut = append(srchCompleteOut, &prop)
 		}
-		srchCompleteOut = append(srchCompleteOut, &prop)
 	}
 	return srchCompleteOut, nil
 }
