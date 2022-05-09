@@ -53,3 +53,8 @@ func GetConnection() *pgxpool.Pool {
 	}
 	return nil
 }
+
+func CheckConnection(*pgxpool.Pool) bool {
+	err := pool.Ping(context.Background())
+	return err == nil
+}

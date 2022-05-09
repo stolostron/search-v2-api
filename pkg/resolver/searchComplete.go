@@ -2,10 +2,13 @@ package resolver
 
 import (
 	"context"
+	"strconv"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
@@ -90,23 +93,64 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 
 func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*string, error) {
 	klog.V(2).Info("Resolving searchCompleteResults()")
-	rows, err := s.pool.Query(ctx, s.query, s.params...)
 	srchCompleteOut := make([]*string, 0)
+	connected := db.CheckConnection(s.pool.(*pgxpool.Pool))
+	klog.Infoln("***connected? ", connected)
+	if connected {
+		rows, err := s.pool.Query(ctx, s.query, s.params...)
 
-	if err != nil {
-		klog.Error("Error fetching search complete results from db ", err)
-		return srchCompleteOut, err
-	}
-	defer rows.Close()
-	if rows != nil {
-		for rows.Next() {
-			prop := ""
-			scanErr := rows.Scan(&prop)
-			if scanErr != nil {
-				klog.Info("Error reading searchCompleteResults", scanErr)
+		if err != nil {
+			klog.Error("Error fetching search complete results from db ", err)
+			return srchCompleteOut, err
+		}
+		defer rows.Close()
+		if rows != nil {
+			for rows.Next() {
+				prop := ""
+				scanErr := rows.Scan(&prop)
+				if scanErr != nil {
+					klog.Info("Error reading searchCompleteResults", scanErr)
+				}
+				srchCompleteOut = append(srchCompleteOut, &prop)
 			}
-			srchCompleteOut = append(srchCompleteOut, &prop)
+		}
+		isNumber := isNumber(srchCompleteOut)
+		if isNumber { //check if valid number
+			isNumber := "isNumber"
+			srchCompleteOutNum := []*string{&isNumber}
+			srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut...)
+		}
+		if !isNumber && isDate(srchCompleteOut) { //check if valid date
+			isDate := "isDate"
+			srchCompleteOutNum := []*string{&isDate}
+			srchCompleteOut = srchCompleteOutNum
+		}
+
+	}
+
+	return srchCompleteOut, nil
+}
+
+// check if a given string is of type date
+func isDate(vals []*string) bool {
+	for _, val := range vals {
+		// parse string date to golang time format: YYYY-MM-DDTHH:mm:ssZ i.e. "2022-01-01T17:17:09Z"
+		// const time.RFC3339 is YYYY-MM-DDTHH:mm:ssZ format ex:"2006-01-02T15:04:05Z07:00"
+
+		if _, err := time.Parse(time.RFC3339, *val); err != nil {
+			return false
 		}
 	}
-	return srchCompleteOut, nil
+	return true
+}
+
+// check if a given string is of type number (int)
+func isNumber(vals []*string) bool {
+
+	for _, val := range vals {
+		if _, err := strconv.Atoi(*val); err != nil {
+			return false
+		}
+	}
+	return true
 }
