@@ -70,6 +70,18 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 	if s.uids == nil {
 		s.Uids()
 	}
+	start := time.Now()
+	numUIDs := len(s.uids)
+
+	defer func() {
+		// Log a warning if finding relationships is too slow.
+		// Note the 500ms is just an initial guess, we should adjust based on normal execution time.
+		if time.Since(start) > 500*time.Millisecond {
+			klog.Warningf("Finding relationships for %d uids and %d level(s) took %s.", numUIDs, config.Cfg.RelationLevel, time.Since(start))
+			return
+		}
+		klog.V(4).Infof("Finding relationships for %d uids and %d level(s) took %s.", numUIDs, config.Cfg.RelationLevel, time.Since(start))
+	}()
 
 	s.wg.Wait()
 	var r []SearchRelatedResult

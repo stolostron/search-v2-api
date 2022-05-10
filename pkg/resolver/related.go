@@ -7,6 +7,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
+	"github.com/stolostron/search-v2-api/pkg/config"
 	klog "k8s.io/klog/v2"
 )
 
@@ -32,11 +33,46 @@ type SearchRelatedResult struct {
 // 	return nil
 // }
 func (s *SearchResult) buildRelationsQuery() {
-	var whereDs []exp.Expression
+	// Example query to find relations between resources - accepts an array of uids
+	// =============================================================================
+	// 	SELECT "uid", "kind", MIN("level") AS "level" FROM
+	// (
+	// 	SELECT "level", unnest(array[sourceid, destid, concat('cluster__',cluster)]) AS "uid",
+	// unnest(array[sourcekind, destkind, 'Cluster']) AS "kind"
+	// 	FROM (
+	// 		WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster) AS
+	// 		(SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster"
+	// 		 FROM "search"."all_edges" AS "e"
+	// 		 WHERE (("destid" IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc' )) OR
+	// 					("sourceid" IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc'))
+	// 			   )
+	// 				   UNION
+	// 		 (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster"
+	// 		  FROM "search"."all_edges" AS "e"
+	// 		  INNER JOIN "search_graph" AS "sg"
+	// 		  ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR
+	// 			  ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))
+	// 			 )
+	//  		  WHERE (("e"."destkind" != 'Node') AND
+	// 				 ("sg"."level" <=3)
+	//  				)
+	// 		 )
+	// 		) SELECT DISTINCT "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search_graph"
+	// 	) AS "search_graph"
+	// ) AS "combineIds"
+	// WHERE (("level" <=3)
+	// AND ("uid" NOT IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc')))
+	// GROUP BY "uid", "kind"
+	// -- union -- This is added if `kind:Cluster` is present in search term
+	// -- select uid as uid, data->>'kind' as kind, 1 AS "level" FROM search.resources where cluster IN ('local-cluster')
 
+	var whereDs []exp.Expression
+	// This level will come into effect only in case of Application/Subscription relations.
+	// For normal searches, we go only upto level 1. This can be changed later, if necessary.
+	level := config.Cfg.RelationLevel
 	//The level can be parameterized later, if needed
-	whereDs = append(whereDs, goqu.C("level").Lt(4))       // Add filter to select only upto level 4 relationships
-	whereDs = append(whereDs, goqu.C("iid").NotIn(s.uids)) // Add filter to avoid selecting the search object itself
+	whereDs = append(whereDs, goqu.C("level").Lte(level))  // Add filter to select upto level (default 3) relationships
+	whereDs = append(whereDs, goqu.C("uid").NotIn(s.uids)) // Add filter to avoid selecting the search object itself
 
 	//Non-recursive term SELECT CLAUSE
 	schema := goqu.S("search")
@@ -51,19 +87,17 @@ func (s *SearchResult) buildRelationsQuery() {
 	//Combine both source and dest ids and source and dest kinds into one column using UNNEST function
 	selectCombineIds := make([]interface{}, 0)
 	selectCombineIds = append(selectCombineIds, goqu.C("level"),
-		goqu.L("unnest(array[sourceid, destid, concat('cluster__',cluster)])").As("iid"),
+		goqu.L("unnest(array[sourceid, destid, concat('cluster__',cluster)])").As("uid"),
 		goqu.L("unnest(array[sourcekind, destkind, 'Cluster'])").As("kind"))
 
 	//Final select statement
 	selectFinal := make([]interface{}, 0)
-	selectFinal = append(selectFinal, goqu.C("iid"), goqu.C("kind"), goqu.MIN("level").As("level"))
+	selectFinal = append(selectFinal, goqu.C("uid"), goqu.C("kind"), goqu.MIN("level").As("level"))
 
 	//GROUPBY CLAUSE
 	groupBy := make([]interface{}, 0)
-	groupBy = append(groupBy, goqu.C("iid"), goqu.C("kind"))
+	groupBy = append(groupBy, goqu.C("uid"), goqu.C("kind"))
 
-	// Original query to find relations between resources - accepts an array of uids
-	// =============================================================================
 	srcDestIds := make([]interface{}, 0)
 	srcDestIds = append(srcDestIds, goqu.I("e.sourceid"), goqu.I("e.destid"))
 
@@ -77,8 +111,8 @@ func (s *SearchResult) buildRelationsQuery() {
 		InnerJoin(goqu.T("search_graph").As("sg"),
 			goqu.On(goqu.ExOr{"sg.destid": srcDestIds, "sg.sourceid": srcDestIds})).
 		Select(selectNext...).
-		// Limiting upto level 4 as it should suffice for application relations
-		Where(goqu.Ex{"sg.level": goqu.Op{"Lt": goqu.L("4")},
+		// Limiting upto default level 3 as it should suffice for application relations
+		Where(goqu.Ex{"sg.level": goqu.Op{"Lte": level},
 			// Avoid getting nodes in recursion to prevent pulling all relations for node
 			"e.destkind": goqu.Op{"neq": "Node"}})
 
@@ -124,16 +158,16 @@ func (s *SearchResult) selectIfClusterUIDPresent() *goqu.SelectDataset {
 		}
 	}
 	if len(clusterNames) > 0 {
-		// Sample query: select uid as iid, data->>'kind' as kind, 1 AS "level" FROM search.resources
+		// Sample query: select uid as uid, data->>'kind' as kind, 1 AS "level" FROM search.resources
 		// where cluster IN ('local-cluster', 'sv-remote-1')
 		//define schema table:
 		schemaTable := goqu.S("search").Table("resources")
 		ds := goqu.From(schemaTable)
 
 		//SELECT CLAUSE
-		selectDs := ds.Select(goqu.C("uid").As("iid"), goqu.L("data->>'kind'").As("kind"), goqu.L("1").As("level"))
+		selectDs := ds.Select(goqu.C("uid").As("uid"), goqu.L("data->>'kind'").As("kind"), goqu.L("1").As("level"))
 
-		//WHERE CLAUSE
+		//WHERE CLAUSE - Do we need to add clauses here?
 
 		//LIMIT CLAUSE - Do we need limit here?
 		// limit := config.Cfg.QueryLimit
@@ -199,18 +233,18 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 
 	// iterating through resulting rows and scaning data, destid  and destkind
 	for relations.Next() {
-		var kind, iid string
+		var kind, uid string
 		var level int
-		relatedResultError := relations.Scan(&iid, &kind, &level)
+		relatedResultError := relations.Scan(&uid, &kind, &level)
 
 		if relatedResultError != nil {
 			klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
 			return nil
 		}
 		if level == 1 { // update map if level is 1
-			s.updateKindMap(iid, kind, level1Map)
+			s.updateKindMap(uid, kind, level1Map)
 		}
-		s.updateKindMap(iid, kind, allLevelsMap)
+		s.updateKindMap(uid, kind, allLevelsMap)
 
 		// Turn on keepAllLevels if the kind is Application or Subscription
 		if kind == "Application" || kind == "Subscription" {
@@ -291,14 +325,14 @@ func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface
 	return relatedSearch
 }
 
-func (s *SearchResult) updateKindMap(iid string, kind string, levelMap map[string][]string) {
+func (s *SearchResult) updateKindMap(uid string, kind string, levelMap map[string][]string) {
 	s.mux.RLock() // Lock map to read
-	iids := levelMap[kind]
+	uids := levelMap[kind]
 	s.mux.RUnlock()
 
-	iids = append(iids, iid)
+	uids = append(uids, uid)
 
 	s.mux.Lock() // Lock map to write
-	levelMap[kind] = iids
+	levelMap[kind] = uids
 	s.mux.Unlock()
 }
