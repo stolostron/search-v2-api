@@ -124,7 +124,7 @@ func newMockRows(mockDataFile string, input *model.SearchInput, prop string) *Mo
 			} else { // load relations file
 				mockDatum := map[string]interface{}{
 					"level": item.(map[string]interface{})["Level"],
-					"iid":   item.(map[string]interface{})["DestUID"],
+					"uid":   item.(map[string]interface{})["DestUID"],
 					"kind":  item.(map[string]interface{})["DestKind"],
 				}
 				mockData = append(mockData, mockDatum)

@@ -1,5 +1,5 @@
 {
-    "columns": ["iid", "kind", "level"],
+    "columns": ["uid", "kind", "level"],
     "records":[
     {
         "DestUID": "local-cluster/411e30e4-f773-41a6-b745-24c93c173f45",

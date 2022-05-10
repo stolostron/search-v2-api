@@ -76,30 +76,24 @@ func (s *SearchResult) buildRelationsQuery() {
 
 	//Non-recursive term SELECT CLAUSE
 	schema := goqu.S("search")
-	selectBase := make([]interface{}, 0)
-	selectBase = append(selectBase, goqu.L("1").As("level"), "sourceid", "destid", "sourcekind", "destkind", "cluster")
+	selectBase := []interface{}{goqu.L("1").As("level"), "sourceid", "destid", "sourcekind", "destkind", "cluster"}
 
 	//Recursive term SELECT CLAUSE
-	selectNext := make([]interface{}, 0)
-	selectNext = append(selectNext, goqu.L("level+1").As("level"), "e.sourceid", "e.destid", "e.sourcekind",
-		"e.destkind", "e.cluster")
+	selectNext := []interface{}{goqu.L("level+1").As("level"), "e.sourceid", "e.destid", "e.sourcekind",
+		"e.destkind", "e.cluster"}
 
 	//Combine both source and dest ids and source and dest kinds into one column using UNNEST function
-	selectCombineIds := make([]interface{}, 0)
-	selectCombineIds = append(selectCombineIds, goqu.C("level"),
+	selectCombineIds := []interface{}{goqu.C("level"),
 		goqu.L("unnest(array[sourceid, destid, concat('cluster__',cluster)])").As("uid"),
-		goqu.L("unnest(array[sourcekind, destkind, 'Cluster'])").As("kind"))
+		goqu.L("unnest(array[sourcekind, destkind, 'Cluster'])").As("kind")}
 
 	//Final select statement
-	selectFinal := make([]interface{}, 0)
-	selectFinal = append(selectFinal, goqu.C("uid"), goqu.C("kind"), goqu.MIN("level").As("level"))
+	selectFinal := []interface{}{goqu.C("uid"), goqu.C("kind"), goqu.MIN("level").As("level")}
 
 	//GROUPBY CLAUSE
-	groupBy := make([]interface{}, 0)
-	groupBy = append(groupBy, goqu.C("uid"), goqu.C("kind"))
+	groupBy := []interface{}{goqu.C("uid"), goqu.C("kind")}
 
-	srcDestIds := make([]interface{}, 0)
-	srcDestIds = append(srcDestIds, goqu.I("e.sourceid"), goqu.I("e.destid"))
+	srcDestIds := []interface{}{goqu.I("e.sourceid"), goqu.I("e.destid")}
 
 	// Non-recursive term
 	baseTerm := goqu.From(schema.Table("all_edges").As("e")).
@@ -294,8 +288,8 @@ func (s *SearchResult) searchRelatedResultKindCount(levelMap map[string][]string
 
 	i := 0
 	//iterating and sending values to relatedSearch
-	for kind, iidArray := range levelMap {
-		count := len(iidArray)
+	for kind, uidArray := range levelMap {
+		count := len(uidArray)
 		relatedSearch[i] = SearchRelatedResult{Kind: kind, Count: &count}
 		i++
 	}
