@@ -14,11 +14,28 @@ import (
 	// machineryV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 )
+
+//https://github.com/stolostron/search-v2-api/commit/70a43d92cd8a3de0a8a958aff09d238f12433a48
+//here we store the authorization rules:
+type UserRbac struct {
+	// Identify the user
+	id    string //get after authenticating user
+	token string //the token get from user request do we need?
+	// Cache Authorization Rules
+	namespaces []string
+	// clusterResourceRules    []rule
+	namespacedResourceRules map[string]rule
+}
+
+type rule struct {
+	// Action is always List.
+	apigroup string
+	kind     string
+}
 
 //verifies token (userid) with the TokenReview:
 func Middleware() func(http.Handler) http.Handler {
@@ -59,10 +76,19 @@ func Middleware() func(http.Handler) http.Handler {
 			klog.V(5).Info("User authentication successful!")
 
 			// //2.check that authenticated users impersonation privilages (authorize):
-			if authorize(uid, r.Context()) {
-				klog.V(5).Info("Authorized")
+			ssar, err := authorize(clientToken, uid, r.Context())
+
+			if err != nil {
+				klog.Warning("Unexpected error while authorizaing the user actions.", err)
+				http.Error(w, "{\"message\":\"Unexpected error while authorizing user actions.\"}",
+					http.StatusInternalServerError)
+				return
+			} else {
+				klog.V(5).Info("User authorization successful!")
+				klog.V(5).Info("Impersonation for %s successful!", ssar.UID)
 			}
 
+			// we want to store the ssar
 			next.ServeHTTP(w, r)
 
 		})
@@ -88,7 +114,8 @@ func verifyToken(clientId string, ctx context.Context) (bool, types.UID, error) 
 	return false, "", nil
 }
 
-func authorize(uid types.UID, ctx context.Context) bool { //we want to return the SelfSubjectAccessReviewSpec{}
+//authorize function will return the SelfSubjectAccessReviewSpec{}
+func authorize(token string, uid types.UID, ctx context.Context) (*authov1.SelfSubjectAccessReview, error) {
 
 	//create impersonation config that will impersonates user based on UID (from tokereview):
 	imConfig := config.GetClientConfig()
@@ -101,40 +128,52 @@ func authorize(uid types.UID, ctx context.Context) bool { //we want to return th
 		klog.Warning("Error with creating a new clientset with impersonation config.", err.Error())
 	}
 
-	//first we need to get all resource types from cluster we can do this with a
-	resources, _ := listResources(clientset.DiscoveryClient)
-
-	fmt.Println(resources)
-
-	// SelfSubjectAccessReview checks whether or not the current user can perform an action.
-	checkSelf := authov1.SelfSubjectAccessReview{
-		Spec: authov1.SelfSubjectAccessReviewSpec{
-			ResourceAttributes: &authov1.ResourceAttributes{
-				// Version:  "rbac.authorization.k8s.io/v1",
-				Verb:     "list",
-				Resource: "*",
-			},
-		},
-	}
-
-	result, err := clientset.AuthorizationV1().
-		SelfSubjectAccessReviews().
-		Create(ctx, &checkSelf, metav1.CreateOptions{})
-
-	// fmt.Println("impersonated access review", result)
-
+	//first we need to get all resource (will need to store this in User struct)
+	namespaceResources, _, err := listResources()
 	if err != nil {
-		klog.Warning("Error creating the impersonated access review", err.Error())
+		klog.Warning("Error getting.", err.Error())
 	}
 
-	//Status is filled in by the server and indicates whether the request is allowed or not
-	if !result.Status.Allowed {
-		klog.V(5).Info("Impersonation denied")
-		return false
-	} else {
-		klog.V(5).Info("Impersonation allowed")
-		return true
+	for _, resources := range namespaceResources {
+		// SelfSubjectAccessReview checks whether or not the current user can perform an action.
+		checkSelf := authov1.SelfSubjectAccessReview{
+			Spec: authov1.SelfSubjectAccessReviewSpec{
+				ResourceAttributes: &authov1.ResourceAttributes{
+					// Version:  "rbac.authorization.k8s.io/v1",
+					Verb:     "list",
+					Resource: resources.Name,
+				},
+			},
+		}
+
+		// we check to see if our impersonation config can impersonate the attributes of user:
+		result, err := clientset.AuthorizationV1().
+			SelfSubjectAccessReviews().
+			Create(ctx, &checkSelf, metav1.CreateOptions{})
+
+		if err != nil {
+			klog.Warning("Error creating the impersonated access review", err.Error())
+		}
+
+		//Status is filled in by the server and indicates whether the request is allowed or not
+		if !result.Status.Allowed {
+			klog.V(5).Info("Impersonation denied")
+
+		} else {
+			klog.V(5).Info("Impersonation allowed")
+			data := UserRbac{
+				id:         string(uid),
+				token:      token,
+				namespaces: nil, //WIP
+				// Cache Authorization Rules
+				namespacedResourceRules: nil, //WIP
+			}
+			fmt.Println(data)
+			return result, err
+		}
+
 	}
+	return nil, err
 }
 
 // https://stackoverflow.com/a/51270134
@@ -143,37 +182,37 @@ func prettyPrint(i interface{}) string {
 	return string(s)
 }
 
-func listResources(discoveryClient *discovery.DiscoveryClient) ([]*metav1.APIResourceList, error) {
-	// Get kubernetes client for discovering resource types.
-	supportedResources := []*metav1.APIResourceList{}
-	apiResources, err := discoveryClient.ServerPreferredResources()
+// list all the resources on cluster
+// TODO: will change to querying the database to get resources instead of callin all apis in next iteration)
+func listResources() ([]metav1.APIResource, []metav1.APIResource, error) {
+	// allresources := []*metav1.APIGroupList{}
+	supportedNamepacedResources := []metav1.APIResource{}
+	supportedClusterScopedResources := []metav1.APIResource{}
+
+	// get all resources (namespcaed + cluster scopd) on cluster using kubeclient created for user:
+	apiResources, err := config.KubeClient().ServerPreferredResources()
+
 	if err != nil && apiResources == nil { // only return if the list is empty
-		return nil, err
+		return nil, nil, err
 	} else if err != nil {
 		klog.Warning("ServerPreferredResources could not list all available resources: ", err)
 	}
-
 	for _, apiList := range apiResources {
 
-		list := metav1.APIResourceList{}
-		list.GroupVersion = apiList.GroupVersion
-		listResources := []metav1.APIResource{}
-
 		for _, apiResource := range apiList.APIResources {
-
 			for _, verb := range apiResource.Verbs {
 				if verb == "list" {
-					listResources = append(listResources, apiResource)
+
+					//get all resources that have list verb:
+					if apiResource.Namespaced {
+						supportedNamepacedResources = append(supportedNamepacedResources, apiResource)
+					} else {
+						supportedClusterScopedResources = append(supportedClusterScopedResources, apiResource)
+					}
 				}
 			}
 		}
-
-		list.APIResources = listResources
-		supportedResources = append(supportedResources, &list)
-
-		supportedResources = append(supportedResources, apiResources...)
 	}
-
-	return supportedResources, err
+	return supportedNamepacedResources, supportedClusterScopedResources, err
 
 }
