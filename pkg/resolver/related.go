@@ -66,13 +66,15 @@ func (s *SearchResult) buildRelationsQuery() {
 	// -- union -- This is added if `kind:Cluster` is present in search term
 	// -- select uid as uid, data->>'kind' as kind, 1 AS "level" FROM search.resources where cluster IN ('local-cluster')
 
-	var whereDs []exp.Expression
 	// This level will come into effect only in case of Application/Subscription relations.
 	// For normal searches, we go only upto level 1. This can be changed later, if necessary.
 	level := config.Cfg.RelationLevel
 	//The level can be parameterized later, if needed
-	whereDs = append(whereDs, goqu.C("level").Lte(level))  // Add filter to select upto level (default 3) relationships
-	whereDs = append(whereDs, goqu.C("uid").NotIn(s.uids)) // Add filter to avoid selecting the search object itself
+	// whereDs = append(whereDs, goqu.C("level").Lte(level))  // Add filter to select upto level (default 3) relationships
+	// whereDs = append(whereDs, goqu.C("uid").NotIn(s.uids)) // Add filter to avoid selecting the search object itself
+	whereDs := []exp.Expression{
+		goqu.C("level").Lte(level),  // Add filter to select up to level (default 3) relationships
+		goqu.C("uid").NotIn(s.uids)} // Add filter to avoid selecting the search object itself
 
 	//Non-recursive term SELECT CLAUSE
 	schema := goqu.S("search")
@@ -185,8 +187,7 @@ func (s *SearchResult) buildRelatedKindsQuery() {
 	selectDs := ds.Select("uid", "cluster", "data")
 
 	//WHERE CLAUSE
-	var whereDs []exp.Expression
-	whereDs = append(whereDs, goqu.C("uid").In(s.uids)) // Add filter to avoid selecting the search object itself
+	whereDs := []exp.Expression{goqu.C("uid").In(s.uids)} // Add filter to avoid selecting the search object itself
 
 	//LIMIT CLAUSE
 	limit := s.setLimit()
