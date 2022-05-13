@@ -236,6 +236,9 @@ func getWhereClauseExpression(prop, operator string, values []string) exp.Expres
 	case "=":
 		return goqu.L(`"data"->>?`, prop).In(values).Expression()
 	default:
+		if prop == "cluster" {
+			return goqu.C(prop).In(values).Expression()
+		}
 		return goqu.L(`"data"->>?`, prop).In(values).Expression()
 	}
 
@@ -502,15 +505,11 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
 
-				if filter.Property == "cluster" {
-					whereDs = append(whereDs, goqu.C(filter.Property).In(values).Expression())
-				} else {
-					operator, values := getOperator(values) // Check if value is a number and get the operator
-					if operator == "" {                     //If not a number (no operator), check if values are dates
-						operator, values = getDateFilter(values) // Check if value is a date and get the date value
-					}
-					whereDs = append(whereDs, getWhereClauseExpression(filter.Property, operator, values))
+				operator, values := getOperator(values) // Check if value is a number and get the operator
+				if operator == "" {                     //If not a number (no operator), check if values are dates
+					operator, values = getDateFilter(values) // Check if value is a date and get the date value
 				}
+				whereDs = append(whereDs, getWhereClauseExpression(filter.Property, operator, values))
 			} else {
 				klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
 			}
