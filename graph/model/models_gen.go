@@ -6,8 +6,7 @@ type Message struct {
 	// Unique message identifier. This can be used by clients to process the message independently of localization or gramatical changes.
 	ID string `json:"id"`
 	// Describes the type of message.
-	//
-	// Expected values are: information, warning, error.
+	// **Values:** information, warning, error.
 	Kind        *string `json:"kind"`
 	Description *string `json:"description"`
 }
@@ -25,7 +24,7 @@ type SearchFilter struct {
 type SearchInput struct {
 	// List of strings to match resources.
 	// Will match any text field that contains any of the keywords.
-	// When multiple keywords are provided, it is interpreted as an [???] operation.
+	// When multiple keywords are provided, it is interpreted as an **???** operation.
 	// Matches are case insensitive.
 	Keywords []*string `json:"keywords"`
 	// List of filters key/values.
@@ -41,13 +40,13 @@ type SearchInput struct {
 	RelatedKinds []*string `json:"relatedKinds"`
 }
 
-// Defines the data required to save a user search.
+// Data required to save a search query.
 type UserSearch struct {
-	// Unique identifier of the user/saved search object.
+	// Unique identifier of the user/saved search query.
 	ID *string `json:"id"`
-	// Name of the user/saved search.
+	// Name of the saved search query.
 	Name *string `json:"name"`
-	// Description of the user/saved search.
+	// Description of the saved search query.
 	Description *string `json:"description"`
 	// The search query in text format.
 	// Example:

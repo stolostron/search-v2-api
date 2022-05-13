@@ -1,5 +1,5 @@
 """
-Search API schema.
+Search Query API schema.
 """
 schema { 
   query: Query
@@ -12,33 +12,34 @@ Supported queries.
 type Query {
   """
   ### Search for resources from managed clusters.
-  
-  [PLACEHOLDER] Results only include resources for which the authenticated user has list permission. [/PLACEHOLDER]
-  
-  For more information [see the feature documentation]() 
+  > *PLACEHOLDER: Results only include resources for which the authenticated user has list permission.*
+
+  For more information see the feature spec.
   """
   search(input: [SearchInput]): [SearchResult]
   
   """
-  Returns all values for the given property.
-  If a query is passed, the results are filtered to only those matching the query.
-  For example, if the property is `name` and the query is `namespace:foo`, this returns the names of all objects in namespace foo.
+  Returns all values for the given property.  
+  If a query is included, the results are filtered to only resources matching the query.  
+  For example, if the property is `name` and the query is `namespace:foo`, the result is the names of all objects in the namespace foo.
   
-  Default **limit** is 1,000 ???.
+  Default limit is 10,000.
   """
   searchComplete(property: String!, query: SearchInput, limit: Int): [String]
 
   """
-  Returns all properties for resources currently indexed.
+  Returns all properties from resources currently indexed.
   """
   searchSchema: Map
 
-  "Get saved search queries for the authenticated user."
+  """
+  Saved search queries for the authenticated user.
+  """
   savedSearches: [userSearch]
 
   """
-  Returns additional information about the service status or conditions found while processing the query.
-  This is similar to the errors query, but without implying that there was a problem.
+  Additional information about the service status or conditions found while processing the query.  
+  This is similar to the errors query, but without implying that there was a problem processing the query.
   """
   messages: [Message]
 }
@@ -55,7 +56,7 @@ type Mutation {
 
 
 """
-Defined a key/value to filter results.
+Defined a key/value to filter results.  
 When multiple values are provided for a property, it's interpreted as an OR operation.
 """
 input SearchFilter {
@@ -71,29 +72,29 @@ Describes the input options to the search query.
 """
 input SearchInput {
     """
-    List of strings to match resources.
-    Will match any text field that contains any of the keywords.
-    When multiple keywords are provided, it is interpreted as an [???] operation.
+    List of strings to match resources.  
+    Will match any text field that contains any of the keywords.  
+    When multiple keywords are provided, it is interpreted as an **???** operation.  
     Matches are case insensitive.
     """
     keywords: [String]
     
     """
-    List of filters key/values.
+    List of filters key/values.  
     When multiple filters are provided, results will match all fiters (AND operation).
     """
     filters: [SearchFilter]
     
     """
-    Max number of results.
-    **Default:** 10,000
+    Max number of results.  
+    **Default:** 10,000  
     For unlimited results use -1.
     """
     limit: Int
 
     """
-    Filter relationships to the specified kinds.
-    If empty, all relationships will be included.
+    Filter relationships to the specified kinds.  
+    If empty, all relationships will be included.  
     This filter is used with the 'related' field on SearchResult.
     """
     relatedKinds: [String]
@@ -104,16 +105,17 @@ Data returned by the search query.
 """
 type SearchResult {
     """
-    Total number of resources.
+    Total number of resources matching the query.  
     **NOTE:** Should not use in combination with items. If items is requested, the count is simply the size of items.
     """
     count: Int
     """
-    Resources matched by the query.
+    Resources matching the search query.
     """
     items: [Map]
     """
-    Resources related to the query results (items).
+    Resources related to the query results (items).  
+    For example, if searching for deployments, this will return the related pod resources.
     """
     related: [SearchRelatedResult]
   }
@@ -121,7 +123,7 @@ type SearchResult {
 type SearchRelatedResult {
     kind: String!
     """
-    Total number of resources.
+    Total number of related resources.  
     **NOTE:** Should not use in combination with items. If items is requested, the count is simply the size of items.
     """
     count: Int
@@ -132,24 +134,24 @@ type SearchRelatedResult {
   }
 
 """
-Defines the data required to save a user search.
+Data required to save a search query.
 """
 type userSearch {
   """
-  Unique identifier of the user/saved search object.
+  Unique identifier of the user/saved search query.
   """
   id: String
 
   """
-  Name of the user/saved search.
+  Name of the saved search query.
   """
   name: String
   """
-  Description of the user/saved search.
+  Description of the saved search query.
   """
   description: String
   """
-  The search query in text format.
+  The search query in text format.  
   Example:
   - `kind:pod,deployment namespace:default bar foo`
   """
@@ -157,12 +159,13 @@ type userSearch {
 }
 
 type Message {
-    "Unique message identifier. This can be used by clients to process the message independently of localization or gramatical changes."
+    """
+    Unique message identifier. This can be used by clients to process the message independently of localization or gramatical changes.
+    """
     id: String!
     """
-    Describes the type of message.
-    
-    Expected values are: information, warning, error.
+    Describes the type of message.  
+    **Values:** information, warning, error.
     """
     kind: String
     # Message text.
