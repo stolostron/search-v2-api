@@ -26,8 +26,8 @@
             "apigroup":"apps",
             "apiversion":"v1",
             "created":"2021-07-14T10:15:20Z",
-            "current":2,
-            "desired":2
+            "current":3,
+            "desired":3
             ,"kind":"ReplicaSet",
             "label":{
                 "app.kubernetes.io/component":"controller",

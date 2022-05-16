@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/golang/mock/gomock"
 	"github.com/stolostron/search-v2-api/graph/model"
 )
@@ -95,15 +96,20 @@ type TestOperatorItem struct {
 }
 
 func Test_SearchResolver_ItemsWithOperator(t *testing.T) {
+
+	//define schema table:
+	schemaTable := goqu.S("search").Table("resources")
+	ds := goqu.From(schemaTable)
+
 	val1 := ">1"
 	testOperatorGreater := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val1}}}},
 		mockQuery:   `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'current' > ('1')) LIMIT 10000`,
 	}
-	val2 := "<3"
+	val2 := "<4"
 	testOperatorLesser := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val2}}}},
-		mockQuery:   `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'current' < ('3')) LIMIT 10000`,
+		mockQuery:   `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'current' < ('4')) LIMIT 10000`,
 	}
 	val3 := ">=1"
 	testOperatorGreaterorEqual := TestOperatorItem{
@@ -116,16 +122,16 @@ func Test_SearchResolver_ItemsWithOperator(t *testing.T) {
 		mockQuery:   `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'current' <= ('3')) LIMIT 10000`,
 	}
 
-	val5 := "!3"
+	val5 := "!4"
 	testOperatorNot := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val5}}}},
-		mockQuery:   `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'current' NOT IN ('3')) LIMIT 10000`,
+		mockQuery:   `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'current' NOT IN ('4')) LIMIT 10000`,
 	}
 
-	val6 := "!=3"
+	val6 := "!=4"
 	testOperatorNotEqual := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val6}}}},
-		mockQuery:   `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'current' NOT IN ('3')) LIMIT 10000`,
+		mockQuery:   `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'current' NOT IN ('4')) LIMIT 10000`,
 	}
 
 	val7 := "=3"
@@ -134,8 +140,56 @@ func Test_SearchResolver_ItemsWithOperator(t *testing.T) {
 		mockQuery:   `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'current' IN ('3')) LIMIT 10000`,
 	}
 
-	testOperators := []TestOperatorItem{testOperatorGreater, testOperatorLesser, testOperatorGreaterorEqual,
-		testOperatorLesserorEqual, testOperatorNot, testOperatorNotEqual, testOperatorEqual}
+	val8 := "year"
+	_, newVal8 := getDateFilter([]string{val8})
+	mockQueryYear, _, _ := ds.Select("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, "created").Gt(goqu.L("?", newVal8))).Limit(10000).ToSQL()
+
+	testOperatorYear := TestOperatorItem{
+		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "created", Values: []*string{&val8}}}},
+		mockQuery:   mockQueryYear, // `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'created' > ('2021-05-16T13:11:12Z')) LIMIT 10000`,
+	}
+
+	val9 := "hour"
+	_, newVal9 := getDateFilter([]string{val9})
+	mockQueryHour, _, _ := ds.Select("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, "created").Gt(goqu.L("?", newVal9))).Limit(10000).ToSQL()
+
+	testOperatorHour := TestOperatorItem{
+		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "created", Values: []*string{&val9}}}},
+		mockQuery:   mockQueryHour, // `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'created' > ('2021-05-16T13:11:12Z')) LIMIT 10000`,
+	}
+
+	val10 := "day"
+	_, newVal10 := getDateFilter([]string{val10})
+	mockQueryDay, _, _ := ds.Select("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, "created").Gt(goqu.L("?", newVal10))).Limit(10000).ToSQL()
+
+	testOperatorDay := TestOperatorItem{
+		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "created", Values: []*string{&val10}}}},
+		mockQuery:   mockQueryDay, // `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'created' > ('2021-05-16T13:11:12Z')) LIMIT 10000`,
+	}
+
+	val11 := "week"
+	_, newVal11 := getDateFilter([]string{val11})
+	mockQueryWeek, _, _ := ds.Select("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, "created").Gt(goqu.L("?", newVal11))).Limit(10000).ToSQL()
+
+	testOperatorWeek := TestOperatorItem{
+		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "created", Values: []*string{&val11}}}},
+		mockQuery:   mockQueryWeek, // `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'created' > ('2021-05-16T13:11:12Z')) LIMIT 10000`,
+	}
+
+	val12 := "month"
+	_, newVal12 := getDateFilter([]string{val12})
+	mockQueryMonth, _, _ := ds.Select("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, "created").Gt(goqu.L("?", newVal12))).Limit(10000).ToSQL()
+
+	testOperatorMonth := TestOperatorItem{
+		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "created", Values: []*string{&val12}}}},
+		mockQuery:   mockQueryMonth, // `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'created' > ('2021-05-16T13:11:12Z')) LIMIT 10000`,
+	}
+
+	testOperators := []TestOperatorItem{
+		testOperatorGreater, testOperatorLesser, testOperatorGreaterorEqual,
+		testOperatorLesserorEqual, testOperatorNot, testOperatorNotEqual, testOperatorEqual,
+		testOperatorYear, testOperatorHour, testOperatorDay, testOperatorWeek, testOperatorMonth,
+	}
 
 	for _, currTest := range testOperators {
 		// Create a SearchResolver instance with a mock connection pool.

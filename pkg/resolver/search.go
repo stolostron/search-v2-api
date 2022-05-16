@@ -253,23 +253,23 @@ func getDateFilter(values []string) (string, []string) {
 	for i, val := range values {
 		switch val {
 		case "hour":
-			then := now.Add(time.Duration(-1) * time.Hour).String()
+			then := now.Add(time.Duration(-1) * time.Hour).Format("2006-01-02T15:04:05Z")
 			newValues[i] = then
 
 		case "day":
-			then := now.AddDate(0, 0, -1).String()
+			then := now.AddDate(0, 0, -1).Format("2006-01-02T15:04:05Z")
 			newValues[i] = then
 
 		case "week":
-			then := now.AddDate(0, 0, -7).String()
+			then := now.AddDate(0, 0, -7).Format("2006-01-02T15:04:05Z")
 			newValues[i] = then
 
 		case "month":
-			then := now.AddDate(0, -1, 0).String()
+			then := now.AddDate(0, -1, 0).Format("2006-01-02T15:04:05Z")
 			newValues[i] = then
 
 		case "year":
-			then := now.AddDate(-1, 0, 0).String()
+			then := now.AddDate(-1, 0, 0).Format("2006-01-02T15:04:05Z")
 			newValues[i] = then
 
 		default:
