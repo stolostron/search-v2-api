@@ -19,8 +19,8 @@ type SearchFilter struct {
 	// Name of the property (key).
 	Property string `json:"property"`
 	// Values for the property. Multiple values per property are interpreted as an OR operation.
-	// Optionally one of these operands `=,!,!=,>,>=,<,<=` can be included at the begining of the value.
-	// By default the equality operand is used.
+	// Optionally one of these operations `=,!,!=,>,>=,<,<=` can be included at the begining of the value.
+	// By default the equality operation is used.
 	Values []*string `json:"values"`
 }
 
@@ -36,6 +36,7 @@ type SearchInput struct {
 	Filters []*SearchFilter `json:"filters"`
 	// Max number of results returned by the query.
 	// **Default is** 10,000
+	// A value of -1 will remove the limit. Use carefully because it may impact the service.
 	Limit *int `json:"limit"`
 	// Filter relationships to the specified kinds.
 	// If empty, all relationships will be included.

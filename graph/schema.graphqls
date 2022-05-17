@@ -22,10 +22,11 @@ type Query {
   
   """
   Query all values for the given property.  
-  If a query is included, the results are filtered to only resources matching the query.  
-  For example, if the property is `name` and the query is `namespace:foo`, the result is the names of all objects in the namespace foo.
+  Optionally, a query can be included to filter the results.  
+  For example, if we want to get the names of all resources in the namespace foo, we can pass a query with the filter `{property: namespace, values:['foo']}`
   
-  Default limit is 10,000.
+  **Default limit is** 10,000  
+  A value of -1 will remove the limit. Use carefully because it may impact the service.
   """
   searchComplete(property: String!, query: SearchInput, limit: Int): [String]
 
@@ -75,8 +76,8 @@ input SearchFilter {
     property: String!
     """
     Values for the property. Multiple values per property are interpreted as an OR operation.
-    Optionally one of these operands `=,!,!=,>,>=,<,<=` can be included at the begining of the value.
-    By default the equality operand is used.
+    Optionally one of these operations `=,!,!=,>,>=,<,<=` can be included at the begining of the value.
+    By default the equality operation is used.
     """
     values: [String]!
   }
@@ -103,6 +104,7 @@ input SearchInput {
     """
     Max number of results returned by the query.  
     **Default is** 10,000  
+    A value of -1 will remove the limit. Use carefully because it may impact the service.
     """
     limit: Int
 
