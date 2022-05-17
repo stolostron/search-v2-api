@@ -6,7 +6,7 @@ package model
 type Message struct {
 	// Unique identifier to be used by clients to process the message independently of locale or gramatical changes.
 	ID string `json:"id"`
-	// Message type (information, warning, error).
+	// Message type.
 	// **Values:** information, warning, error.
 	Kind *string `json:"kind"`
 	// Message text.
@@ -14,22 +14,22 @@ type Message struct {
 }
 
 // Defines a key/value to filter results.
-// When multiple values are provided for a property, it's interpreted as an OR operation.
+// When multiple values are provided for a property, it is interpreted as an OR operation.
 type SearchFilter struct {
-	// Defines the property or key.
+	// Name of the property (or key).
 	Property string `json:"property"`
-	// Defines the values for a property. Multiple values are interpreted as an OR operation.
+	// Values for the property. Multiple values per property are interpreted as an OR operation.
 	Values []*string `json:"values"`
 }
 
 // Input options to the search query.
 type SearchInput struct {
 	// List of strings to match resources.
-	// Will match resources containiny any of the keywords in any text field.
+	// Will match resources containing any of the keywords in any text field.
 	// When multiple keywords are provided, it is interpreted as an AND operation.
 	// Matches are case insensitive.
 	Keywords []*string `json:"keywords"`
-	// List of SearchFilter, which is a key(properrty) and values.
+	// List of SearchFilter, which is a key(property) and values.
 	// When multiple filters are provided, results will match all fiters (AND operation).
 	Filters []*SearchFilter `json:"filters"`
 	// Max number of results returned by the query.

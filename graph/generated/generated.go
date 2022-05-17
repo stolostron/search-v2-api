@@ -392,15 +392,15 @@ type Mutation {
 
 """
 Defines a key/value to filter results.  
-When multiple values are provided for a property, it's interpreted as an OR operation.
+When multiple values are provided for a property, it is interpreted as an OR operation.
 """
 input SearchFilter {
     """
-    Defines the property or key.
+    Name of the property (or key).
     """
     property: String!
     """
-    Defines the values for a property. Multiple values are interpreted as an OR operation.
+    Values for the property. Multiple values per property are interpreted as an OR operation.
     """
     values: [String]!
   }
@@ -412,14 +412,14 @@ Input options to the search query.
 input SearchInput {
     """
     List of strings to match resources.  
-    Will match resources containiny any of the keywords in any text field.  
+    Will match resources containing any of the keywords in any text field.  
     When multiple keywords are provided, it is interpreted as an AND operation.  
     Matches are case insensitive.
     """
     keywords: [String]
 
     """
-    List of SearchFilter, which is a key(properrty) and values.  
+    List of SearchFilter, which is a key(property) and values.  
     When multiple filters are provided, results will match all fiters (AND operation).
     """
     filters: [SearchFilter]
@@ -507,7 +507,7 @@ type Message {
     """
     id: String!
     """
-    Message type (information, warning, error). 
+    Message type. 
     **Values:** information, warning, error.
     """
     kind: String
