@@ -16,9 +16,11 @@ type Message struct {
 // Defines a key/value to filter results.
 // When multiple values are provided for a property, it is interpreted as an OR operation.
 type SearchFilter struct {
-	// Name of the property (or key).
+	// Name of the property (key).
 	Property string `json:"property"`
 	// Values for the property. Multiple values per property are interpreted as an OR operation.
+	// By default the operation is equality, but you could include these operands in the first
+	// character of the value [!,!=,>,>=,<,<=].
 	Values []*string `json:"values"`
 }
 

@@ -334,6 +334,8 @@ func (ec *executionContext) introspectType(name string) (*introspection.Type, er
 
 var sources = []*ast.Source{
 	{Name: "graph/schema.graphqls", Input: `"""
+Copyright Contributors to the Open Cluster Management project.
+
 Search Query API.
 """
 schema { 
@@ -369,6 +371,7 @@ type Query {
 
   """
   Saved search queries for the authenticated user.
+  **[PLACEHOLDER] This query is not yet implemented in V2.**
   """
   savedSearches: [userSearch]
 
@@ -383,9 +386,15 @@ type Query {
 Supported mutations
 """
 type Mutation {
-    "Delete search query for the authenticated user."
+    """
+    Delete search query for the authenticated user.
+    **[PLACEHOLDER] This query is not yet implemented in V2.**
+    """
     deleteSearch(resource: String): String
-    "Save a search query for the authenticated user."
+    """
+    Save a search query for the authenticated user.
+    **[PLACEHOLDER] This query is not yet implemented in V2.**
+    """
     saveSearch(resource: String): String
 }
 
@@ -396,11 +405,13 @@ When multiple values are provided for a property, it is interpreted as an OR ope
 """
 input SearchFilter {
     """
-    Name of the property (or key).
+    Name of the property (key).
     """
     property: String!
     """
     Values for the property. Multiple values per property are interpreted as an OR operation.
+    By default the operation is equality, but you could include these operands in the first
+    character of the value [!,!=,>,>=,<,<=].
     """
     values: [String]!
   }
