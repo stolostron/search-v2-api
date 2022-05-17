@@ -1,3 +1,4 @@
+// Copyright Contributors to the Open Cluster Management projects
 package rbac
 
 import "time"
@@ -10,10 +11,8 @@ func (tr *UserTokenReviews) GetTimebyToken(token string) (interface{}, bool) {
 
 	}
 	value, exists := tr.data[token]
-	if !exists {
-		return value, false
-	}
-	return value, true
+
+	return value, exists
 
 }
 
@@ -52,8 +51,8 @@ func (tr *UserTokenReviews) SetTokenTime(token string, timeCreated time.Time) {
 
 	}
 	tr.data[token] = timeCreated
-	var mins time.Duration
-	tr.expiresAt = tr.data[token].Add(mins)
+	// var mins time.Duration
+	// tr.expiresAt = tr.data[token].Add(mins)
 }
 
 func (tr *UserTokenReviews) SetExpTime(token string, timeCreated time.Time) {
@@ -63,7 +62,7 @@ func (tr *UserTokenReviews) SetExpTime(token string, timeCreated time.Time) {
 
 	}
 
-	tr.expiresAt = timeCreated.Add(time.Minute * 1) //a minute from creation token
+	tr.expiresAt = timeCreated.Add(time.Minute * 1) //a minute from token creation
 }
 
 // to set the token and uid
@@ -86,6 +85,7 @@ func New() *UserTokenReviews {
 	return utk
 }
 
+//this we will use if the token is old
 func (tr *UserTokenReviews) Remove(token string) {
 	if THREADING {
 		tr.lock.Lock()

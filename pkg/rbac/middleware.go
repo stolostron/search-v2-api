@@ -49,9 +49,10 @@ func Middleware(utr *UserTokenReviews) func(http.Handler) http.Handler {
 					http.StatusUnauthorized)
 				return
 			}
-			//check if token review already exists and if token has expired
+			//check if token review already exists or if token has expired
 			var duration_Minute time.Duration = 1 * time.Minute
-			if !utr.DoesTokenExist(clientToken) || utr.data[clientToken].Sub(utr.expiresAt) < duration_Minute { //if difference between creation and expiration is more than a minute
+
+			if !utr.DoesTokenExist(clientToken) || utr.data[clientToken].Sub(utr.expiresAt) > duration_Minute { //if difference between creation and expiration is more than a minute
 
 				authenticated, uid, tokenTime, err := verifyToken(clientToken, r.Context())
 				if err != nil {
@@ -83,6 +84,7 @@ func Middleware(utr *UserTokenReviews) func(http.Handler) http.Handler {
 
 			//next we want to authorize
 			klog.V(4).Info("token cached")
+			klog.V(4).Info(utr)
 
 			// we want to store the ssar
 			next.ServeHTTP(w, r)

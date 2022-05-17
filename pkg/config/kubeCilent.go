@@ -11,13 +11,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
-var kClientset *kubernetes.Clientset
-
 func KubeClient() *kubernetes.Clientset {
 	config := GetClientConfig()
-	// if err != nil {
-	// 	klog.Fatal(err.Error())
-	// }
 
 	kClientset, err := kubernetes.NewForConfig(config)
 
