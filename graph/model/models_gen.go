@@ -2,11 +2,11 @@
 
 package model
 
-// Message describes conditions detected while executing a query on the server.
+// A message is used to communicate conditions detected while executing a query on the server.
 type Message struct {
-	// Unique message identifier. This can be used by clients to process the message independently of localization or gramatical changes.
+	// Unique identifier. This can be used by clients to process the message independently of localization or gramatical changes.
 	ID string `json:"id"`
-	// Type of message.
+	// Message type (information, warning, error).
 	// **Values:** information, warning, error.
 	Kind *string `json:"kind"`
 	// Message text.
@@ -25,14 +25,14 @@ type SearchFilter struct {
 // Input options to the search query.
 type SearchInput struct {
 	// List of strings to match resources.
-	// Will match any text field that contains any of the keywords.
-	// When multiple keywords are provided, it is interpreted as an **???** operation.
+	// Will match resources containiny any of the keywords in any text field.
+	// When multiple keywords are provided, it is interpreted as an AND operation.
 	// Matches are case insensitive.
 	Keywords []*string `json:"keywords"`
-	// List of filters key/values.
+	// List of SearchFilter, which is a key(properrty) and values.
 	// When multiple filters are provided, results will match all fiters (AND operation).
 	Filters []*SearchFilter `json:"filters"`
-	// Max number of results.
+	// Max number of results returned by the query.
 	// **Default is** 10,000
 	Limit *int `json:"limit"`
 	// Filter relationships to the specified kinds.
@@ -41,9 +41,9 @@ type SearchInput struct {
 	RelatedKinds []*string `json:"relatedKinds"`
 }
 
-// Data required to save a search query.
+// Data required to save a user search query.
 type UserSearch struct {
-	// Unique identifier of the user/saved search query.
+	// Unique identifier of the saved search query.
 	ID *string `json:"id"`
 	// Name of the saved search query.
 	Name *string `json:"name"`

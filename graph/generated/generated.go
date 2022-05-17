@@ -346,7 +346,7 @@ Queries supported by the Search Query API.
 """
 type Query {
   """
-  Search for resources in the index.  
+  Search for resources index from the managed clusters.  
   *[PLACEHOLDER] Results only include kubernetes resources for which the authenticated user has list permission.*
 
   For more information see the feature spec.
@@ -412,20 +412,20 @@ Input options to the search query.
 input SearchInput {
     """
     List of strings to match resources.  
-    Will match any text field that contains any of the keywords.  
-    When multiple keywords are provided, it is interpreted as an **???** operation.  
+    Will match resources containiny any of the keywords in any text field.  
+    When multiple keywords are provided, it is interpreted as an AND operation.  
     Matches are case insensitive.
     """
     keywords: [String]
-    
+
     """
-    List of filters key/values.  
+    List of SearchFilter, which is a key(properrty) and values.  
     When multiple filters are provided, results will match all fiters (AND operation).
     """
     filters: [SearchFilter]
     
     """
-    Max number of results.  
+    Max number of results returned by the query.  
     **Default is** 10,000  
     """
     limit: Int
@@ -444,7 +444,7 @@ Data returned by the search query.
 type SearchResult {
     """
     Total number of resources matching the query.  
-    **NOTE:** Should not use in combination with items. If items is requested, the count is simply the size of items.
+    **NOTE:** Should not use count in combination with items. If items is requested, the count is simply the size of items.
     """
     count: Int
     """
@@ -459,13 +459,13 @@ type SearchResult {
   }
 
 """
-Resources related to the results of the search query.
+Resources related to the items resolved from the search query.
 """
 type SearchRelatedResult {
     kind: String!
     """
     Total number of related resources.  
-    **NOTE:** Should not use in combination with items. If items is requested, the count is simply the size of items.
+    **NOTE:** Should not use count in combination with items. If items is requested, the count is simply the size of items.
     """
     count: Int
     """
@@ -475,14 +475,13 @@ type SearchRelatedResult {
   }
 
 """
-Data required to save a search query.
+Data required to save a user search query.
 """
 type userSearch {
   """
-  Unique identifier of the user/saved search query.
+  Unique identifier of the saved search query.
   """
   id: String
-
   """
   Name of the saved search query.
   """
@@ -500,15 +499,15 @@ type userSearch {
 }
 
 """
-Message describes conditions detected while executing a query on the server.
+A message is used to communicate conditions detected while executing a query on the server.
 """
 type Message {
     """
-    Unique message identifier. This can be used by clients to process the message independently of localization or gramatical changes.
+    Unique identifier. This can be used by clients to process the message independently of localization or gramatical changes.
     """
     id: String!
     """
-    Type of message.  
+    Message type (information, warning, error). 
     **Values:** information, warning, error.
     """
     kind: String
@@ -519,7 +518,7 @@ type Message {
 }
 
 """
-Map of strings. Holds data for a result item.
+Map of strings. Used to hold data for a result item.
 """
 scalar Map`, BuiltIn: false},
 }
