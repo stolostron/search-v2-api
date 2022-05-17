@@ -334,7 +334,7 @@ func (ec *executionContext) introspectType(name string) (*introspection.Type, er
 
 var sources = []*ast.Source{
 	{Name: "graph/schema.graphqls", Input: `"""
-Search Query API schema.
+Search Query API.
 """
 schema { 
   query: Query
@@ -342,18 +342,19 @@ schema {
 }
 
 """
-Supported queries.
+Queries supported by the Search Query API.
 """
 type Query {
   """
-  ### Search for resources from managed clusters.
-  > *PLACEHOLDER: Results only include resources for which the authenticated user has list permission.*  
+  Search for resources in the index.  
+  *[PLACEHOLDER] Results only include kubernetes resources for which the authenticated user has list permission.*
+
   For more information see the feature spec.
   """
   search(input: [SearchInput]): [SearchResult]
   
   """
-  Returns all values for the given property.  
+  Query all values for the given property.  
   If a query is included, the results are filtered to only resources matching the query.  
   For example, if the property is ` + "`" + `name` + "`" + ` and the query is ` + "`" + `namespace:foo` + "`" + `, the result is the names of all objects in the namespace foo.
   
@@ -390,19 +391,23 @@ type Mutation {
 
 
 """
-Defined a key/value to filter results.  
+Defines a key/value to filter results.  
 When multiple values are provided for a property, it's interpreted as an OR operation.
 """
 input SearchFilter {
-    "Defines the property or key."
+    """
+    Defines the property or key.
+    """
     property: String!
-    "Defines the values for a property. Multiple values are interpreted as an OR operation."
+    """
+    Defines the values for a property. Multiple values are interpreted as an OR operation.
+    """
     values: [String]!
   }
 
 
 """
-Describes the input options to the search query.
+Input options to the search query.
 """
 input SearchInput {
     """
@@ -421,8 +426,7 @@ input SearchInput {
     
     """
     Max number of results.  
-    **Default:** 10,000  
-    For unlimited results use -1.
+    **Default is** 10,000  
     """
     limit: Int
 
@@ -454,6 +458,9 @@ type SearchResult {
     related: [SearchRelatedResult]
   }
 
+"""
+Resources related to the results of the search query.
+"""
 type SearchRelatedResult {
     kind: String!
     """
@@ -492,20 +499,28 @@ type userSearch {
   searchText: String
 }
 
+"""
+Message describes conditions detected while executing a query on the server.
+"""
 type Message {
     """
     Unique message identifier. This can be used by clients to process the message independently of localization or gramatical changes.
     """
     id: String!
     """
-    Describes the type of message.  
+    Type of message.  
     **Values:** information, warning, error.
     """
     kind: String
-    # Message text.
+    """
+    Message text.
+    """
     description: String
 }
 
+"""
+Map of strings. Holds data for a result item.
+"""
 scalar Map`, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)

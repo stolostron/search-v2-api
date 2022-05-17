@@ -2,16 +2,18 @@
 
 package model
 
+// Message describes conditions detected while executing a query on the server.
 type Message struct {
 	// Unique message identifier. This can be used by clients to process the message independently of localization or gramatical changes.
 	ID string `json:"id"`
-	// Describes the type of message.
+	// Type of message.
 	// **Values:** information, warning, error.
-	Kind        *string `json:"kind"`
+	Kind *string `json:"kind"`
+	// Message text.
 	Description *string `json:"description"`
 }
 
-// Defined a key/value to filter results.
+// Defines a key/value to filter results.
 // When multiple values are provided for a property, it's interpreted as an OR operation.
 type SearchFilter struct {
 	// Defines the property or key.
@@ -20,7 +22,7 @@ type SearchFilter struct {
 	Values []*string `json:"values"`
 }
 
-// Describes the input options to the search query.
+// Input options to the search query.
 type SearchInput struct {
 	// List of strings to match resources.
 	// Will match any text field that contains any of the keywords.
@@ -31,8 +33,7 @@ type SearchInput struct {
 	// When multiple filters are provided, results will match all fiters (AND operation).
 	Filters []*SearchFilter `json:"filters"`
 	// Max number of results.
-	// **Default:** 10,000
-	// For unlimited results use -1.
+	// **Default is** 10,000
 	Limit *int `json:"limit"`
 	// Filter relationships to the specified kinds.
 	// If empty, all relationships will be included.
