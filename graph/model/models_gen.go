@@ -4,7 +4,7 @@ package model
 
 // A message is used to communicate conditions detected while executing a query on the server.
 type Message struct {
-	// Unique identifier. This can be used by clients to process the message independently of localization or gramatical changes.
+	// Unique identifier to be used by clients to process the message independently of locale or gramatical changes.
 	ID string `json:"id"`
 	// Message type (information, warning, error).
 	// **Values:** information, warning, error.

@@ -346,7 +346,7 @@ Queries supported by the Search Query API.
 """
 type Query {
   """
-  Search for resources index from the managed clusters.  
+  Search for resources and their relationships. 
   *[PLACEHOLDER] Results only include kubernetes resources for which the authenticated user has list permission.*
 
   For more information see the feature spec.
@@ -363,7 +363,7 @@ type Query {
   searchComplete(property: String!, query: SearchInput, limit: Int): [String]
 
   """
-  Returns all properties from resources currently indexed.
+  Returns all properties from resources currently in the index.
   """
   searchSchema: Map
 
@@ -503,7 +503,7 @@ A message is used to communicate conditions detected while executing a query on 
 """
 type Message {
     """
-    Unique identifier. This can be used by clients to process the message independently of localization or gramatical changes.
+    Unique identifier to be used by clients to process the message independently of locale or gramatical changes.
     """
     id: String!
     """
