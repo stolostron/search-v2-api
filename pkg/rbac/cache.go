@@ -4,7 +4,7 @@ import "time"
 
 //to get the token and uid
 func (tr *UserTokenReviews) GetTimebyToken(token string) (interface{}, bool) {
-	if Threading {
+	if THREADING {
 		tr.lock.RLock()
 		defer tr.lock.RUnlock()
 
@@ -18,7 +18,7 @@ func (tr *UserTokenReviews) GetTimebyToken(token string) (interface{}, bool) {
 }
 
 func (tr *UserTokenReviews) DoesTokenExist(token string) bool {
-	if Threading {
+	if THREADING {
 		tr.lock.RLock()
 		defer tr.lock.RUnlock()
 
@@ -31,7 +31,7 @@ func (tr *UserTokenReviews) DoesTokenExist(token string) bool {
 
 //to get the token and uid
 func (tr *UserTokenReviews) GetTimebyUid(uid string) map[string]time.Time {
-	if Threading {
+	if THREADING {
 		tr.lock.RLock()
 		defer tr.lock.RUnlock()
 
@@ -46,7 +46,7 @@ func (tr *UserTokenReviews) GetTimebyUid(uid string) map[string]time.Time {
 
 // to set the token and uid
 func (tr *UserTokenReviews) SetTokenTime(token string, timeCreated time.Time) {
-	if Threading {
+	if THREADING {
 		tr.lock.Lock()
 		defer tr.lock.Unlock()
 
@@ -57,7 +57,7 @@ func (tr *UserTokenReviews) SetTokenTime(token string, timeCreated time.Time) {
 }
 
 func (tr *UserTokenReviews) SetExpTime(token string, timeCreated time.Time) {
-	if Threading {
+	if THREADING {
 		tr.lock.Lock()
 		defer tr.lock.Unlock()
 
@@ -68,7 +68,7 @@ func (tr *UserTokenReviews) SetExpTime(token string, timeCreated time.Time) {
 
 // to set the token and uid
 func (tr *UserTokenReviews) SetUid(uid string) {
-	if Threading {
+	if THREADING {
 		tr.lock.Lock()
 		defer tr.lock.Unlock()
 	}
@@ -87,7 +87,7 @@ func New() *UserTokenReviews {
 }
 
 func (tr *UserTokenReviews) Remove(token string) {
-	if Threading {
+	if THREADING {
 		tr.lock.Lock()
 		defer tr.lock.Unlock()
 	}
