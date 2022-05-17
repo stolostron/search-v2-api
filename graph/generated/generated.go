@@ -410,8 +410,8 @@ input SearchFilter {
     property: String!
     """
     Values for the property. Multiple values per property are interpreted as an OR operation.
-    By default the operation is equality, but you could include these operands in the first
-    character of the value [!,!=,>,>=,<,<=].
+    Optionally one of these operands [=,!,!=,>,>=,<,<=] can be included at the begining of the value.
+    By default the equality operand is used.
     """
     values: [String]!
   }

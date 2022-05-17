@@ -19,8 +19,8 @@ type SearchFilter struct {
 	// Name of the property (key).
 	Property string `json:"property"`
 	// Values for the property. Multiple values per property are interpreted as an OR operation.
-	// By default the operation is equality, but you could include these operands in the first
-	// character of the value [!,!=,>,>=,<,<=].
+	// Optionally one of these operands [=,!,!=,>,>=,<,<=] can be included at the begining of the value.
+	// By default the equality operand is used.
 	Values []*string `json:"values"`
 }
 
