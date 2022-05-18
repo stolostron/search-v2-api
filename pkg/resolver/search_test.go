@@ -138,7 +138,7 @@ func Test_SearchResolver_ItemsWithNumOperator(t *testing.T) {
 
 	testOperatorMultiple := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val1, &val2}}}},
-		mockQuery:   `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'current' < '4') AND ("data"->>'current' > '1')) LIMIT 10000`,
+		mockQuery:   `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'current' < '4') OR ("data"->>'current' > '1')) LIMIT 10000`,
 	}
 
 	testOperators := []TestOperatorItem{
@@ -200,8 +200,8 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	opValMap = getOperatorAndNumDateFilter([]string{val8, val9})
-	mockQueryMultiple, _, _ := ds.Select("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, "created").Gt(opValMap[">"][0]),
-		goqu.L(`"data"->>?`, "created").Gt(opValMap[">"][1])).Limit(10000).ToSQL()
+	mockQueryMultiple, _, _ := ds.Select("uid", "cluster", "data").Where(goqu.Or(goqu.L(`"data"->>?`, "created").Gt(opValMap[">"][0]),
+		goqu.L(`"data"->>?`, "created").Gt(opValMap[">"][1]))).Limit(10000).ToSQL()
 
 	testoperatorMultiple := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "created", Values: []*string{&val8, &val9}}}},

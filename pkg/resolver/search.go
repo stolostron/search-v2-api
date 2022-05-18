@@ -229,24 +229,23 @@ func getOperator(values []string) map[string][]string {
 
 func getWhereClauseExpression(prop, operator string, values []string) []exp.Expression {
 	exps := []exp.Expression{}
-
 	switch operator {
 	case "<=":
 		for _, val := range values {
-			exps = append(exps, goqu.L(`"data"->>?`, prop).Lte(val).Expression())
+			exps = append(exps, goqu.L(`"data"->>?`, prop).Lte(val))
 		}
 	case ">=":
 		for _, val := range values {
-			exps = append(exps, goqu.L(`"data"->>?`, prop).Gte(val).Expression())
+			exps = append(exps, goqu.L(`"data"->>?`, prop).Gte(val))
 		}
 	case "!=":
-		exps = append(exps, goqu.L(`"data"->>?`, prop).Neq(values).Expression())
+		exps = append(exps, goqu.L(`"data"->>?`, prop).Neq(values))
 
 	case "!":
-		exps = append(exps, goqu.L(`"data"->>?`, prop).NotIn(values).Expression())
+		exps = append(exps, goqu.L(`"data"->>?`, prop).NotIn(values))
 	case "<":
 		for _, val := range values {
-			exps = append(exps, goqu.L(`"data"->>?`, prop).Lt(val).Expression())
+			exps = append(exps, goqu.L(`"data"->>?`, prop).Lt(val))
 		}
 	case ">":
 		for _, val := range values {
@@ -254,12 +253,12 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 		}
 	case "=":
 
-		exps = append(exps, goqu.L(`"data"->>?`, prop).In(values).Expression())
+		exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
 	default:
 		if prop == "cluster" {
-			exps = append(exps, goqu.C(prop).In(values).Expression())
+			exps = append(exps, goqu.C(prop).In(values))
 		} else {
-			exps = append(exps, goqu.L(`"data"->>?`, prop).In(values).Expression())
+			exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
 		}
 	}
 	return exps
@@ -529,8 +528,8 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 		for _, filter := range input.Filters {
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
-
-				opDateValueMap := getOperatorAndNumDateFilter(values) // Check if value is a number or date and get the date value
+				// Check if value is a number or date and get the cleaned up value
+				opDateValueMap := getOperatorAndNumDateFilter(values)
 
 				//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
 				keys := make([]string, 0, len(opDateValueMap))
@@ -538,10 +537,13 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 					keys = append(keys, k)
 				}
 				sort.Strings(keys)
-
+				var operatorWhereDs []exp.Expression //store all the clauses for this filter together
 				for _, operator := range keys {
-					whereDs = append(whereDs, getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator])...)
+					operatorWhereDs = append(operatorWhereDs,
+						getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator])...)
 				}
+				whereDs = append(whereDs, goqu.Or(operatorWhereDs...)) //Join all the clauses with OR
+
 			} else {
 				klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
 			}
