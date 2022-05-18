@@ -135,10 +135,17 @@ func newMockRows(mockDataFile string, input *model.SearchInput, prop string) *Mo
 			if prop == "cluster" {
 				props[cluster] = ""
 			} else {
-				props[data[prop].(string)] = ""
+				if _, ok := data[prop]; ok {
+					switch v := data[prop].(type) {
+
+					case float64:
+						props[strconv.Itoa(int(v))] = ""
+					default:
+						props[v.(string)] = ""
+					}
+				}
 			}
 		}
-
 		for key := range props {
 			mockDatum := map[string]interface{}{
 				"prop": key,
@@ -183,10 +190,14 @@ func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, ite
 	for _, filter := range input.Filters {
 		if len(filter.Values) > 0 {
 			values := pointerToStringArray(filter.Values) //get the filter values
-			op, values := getOperator(values)             //get the operator if filter property åis a number
-			if op == "" {
-				_, values = getDateFilter(values) // get the filter values if property is a date
+
+			opValueMap := getOperatorAndNumDateFilter(values) // get the filter values if property is a number or date
+			var op string
+			for key, val := range opValueMap {
+				op = key
+				values = val
 			}
+
 			uid := item.(map[string]interface{})["uid"]
 
 			if filter.Property == "cluster" {
@@ -204,52 +215,31 @@ func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, ite
 				var err error
 				if op != "" {
 					filterValue, err = strconv.Atoi(values[0]) // if the property is a number, get the first value
-					if err != nil {
+					// It will be a date property if there is error in conversion and operator is ">"
+					if err != nil && op != ">" {
 						fmt.Println("Error converting value to int", err)
 					}
 				}
 
 				switch op {
 				case "<":
-					if int(data[filter.Property].(float64)) < filterValue {
-						return true
-					}
-					return false
+					return int(data[filter.Property].(float64)) < filterValue
+
 				case ">":
-					if int(data[filter.Property].(float64)) > filterValue {
-						return true
-					}
-					return false
+					_, ok := data[filter.Property].(float64)
+					return ok && int(data[filter.Property].(float64)) > filterValue
+
 				case ">=":
-					if int(data[filter.Property].(float64)) >= filterValue {
-						return true
-					}
-					return false
+					return int(data[filter.Property].(float64)) >= filterValue
 				case "<=":
-					if int(data[filter.Property].(float64)) >= filterValue {
-						return true
-					}
-					return false
-				case "!=":
-					if int(data[filter.Property].(float64)) != filterValue {
-						return true
-					}
-					return false
-				case "!":
-					if int(data[filter.Property].(float64)) != filterValue {
-						return true
-					}
-					return false
+					return int(data[filter.Property].(float64)) <= filterValue
+				case "!", "!=":
+					return int(data[filter.Property].(float64)) != filterValue
 				case "=":
-					if int(data[filter.Property].(float64)) != filterValue {
-						return true
-					}
-					return false
+					return int(data[filter.Property].(float64)) == filterValue
 				default:
-					if !stringInSlice(data[filter.Property].(string), values) { //|| !stringInSlice(destkind, relatedValues) {
-						return false // If the filter value is not in resource, do not load it
-					}
-					return true
+					// If the filter value is not in resource, do not load it
+					return stringInSlice(data[filter.Property].(string), values)
 				}
 			}
 		}

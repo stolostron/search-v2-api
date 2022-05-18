@@ -199,7 +199,7 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 }
 
 // Remove operator (<=, >=, !=, !, <, >, =) if any from values
-func getOperator(values []string) (string, []string) {
+func getOperator(values []string) map[string][]string {
 	// Get the operator (/^<=|^>=|^!=|^!|^<|^>|^=/)
 	var operator string
 	// Replace any of these symbols with ""
@@ -210,74 +210,108 @@ func getOperator(values []string) (string, []string) {
 		"<", "",
 		">", "",
 		"=", "")
-	newValues := make([]string, len(values)) // To store cleaned up values (without operator)
-	for i, value := range values {
+	operatorValue := map[string][]string{}
+
+	for _, value := range values {
 		operatorRemovedValue := replacer.Replace(value)
-		newValues[i] = operatorRemovedValue
 		operator = strings.Replace(value, operatorRemovedValue, "", 1) // find operator
+		if vals, ok := operatorValue[operator]; !ok {
+			if operator != "" { // Add to map only if operator is present
+				operatorValue[operator] = []string{operatorRemovedValue} // Add an entry to map with key as operator
+			}
+		} else {
+			vals = append(vals, operatorRemovedValue)
+			operatorValue[operator] = vals
+		}
 	}
-	return operator, newValues
+	return operatorValue
 }
 
-func getWhereClauseExpression(prop, operator string, values []string) exp.Expression {
+func getWhereClauseExpression(prop, operator string, values []string) []exp.Expression {
+	exps := []exp.Expression{}
+
 	switch operator {
 	case "<=":
-		return goqu.L(`"data"->>?`, prop).Lte(values).Expression()
+		for _, val := range values {
+			exps = append(exps, goqu.L(`"data"->>?`, prop).Lte(val).Expression())
+		}
 	case ">=":
-		return goqu.L(`"data"->>?`, prop).Gte(values).Expression()
+		for _, val := range values {
+			exps = append(exps, goqu.L(`"data"->>?`, prop).Gte(val).Expression())
+		}
 	case "!=":
-		return goqu.L(`"data"->>?`, prop).Neq(values).Expression()
+		exps = append(exps, goqu.L(`"data"->>?`, prop).Neq(values).Expression())
+
 	case "!":
-		return goqu.L(`"data"->>?`, prop).NotIn(values).Expression()
+		exps = append(exps, goqu.L(`"data"->>?`, prop).NotIn(values).Expression())
 	case "<":
-		return goqu.L(`"data"->>?`, prop).Lt(values).Expression()
+		for _, val := range values {
+			exps = append(exps, goqu.L(`"data"->>?`, prop).Lt(val).Expression())
+		}
 	case ">":
-		return goqu.L(`"data"->>?`, prop).Gt(values).Expression()
+		for _, val := range values {
+			exps = append(exps, goqu.L(`"data"->>?`, prop).Gt(val))
+		}
 	case "=":
-		return goqu.L(`"data"->>?`, prop).In(values).Expression()
+
+		exps = append(exps, goqu.L(`"data"->>?`, prop).In(values).Expression())
 	default:
 		if prop == "cluster" {
-			return goqu.C(prop).In(values).Expression()
+			exps = append(exps, goqu.C(prop).In(values).Expression())
+		} else {
+			exps = append(exps, goqu.L(`"data"->>?`, prop).In(values).Expression())
 		}
-		return goqu.L(`"data"->>?`, prop).In(values).Expression()
 	}
+	return exps
 
 }
 
-func getDateFilter(values []string) (string, []string) {
-	// Expected values: {"hour", "day", "week", "month", "year"}
-	newValues := make([]string, len(values))
+// Check if value is a number or date and get the operator
+// Returns a map that stores operator and values
+func getOperatorAndNumDateFilter(values []string) map[string][]string {
 
-	now := time.Now()
-	operator := ">"
-	for i, val := range values {
-		switch val {
-		case "hour":
-			then := now.Add(time.Duration(-1) * time.Hour).Format("2006-01-02T15:04:05Z")
-			newValues[i] = then
-
-		case "day":
-			then := now.AddDate(0, 0, -1).Format("2006-01-02T15:04:05Z")
-			newValues[i] = then
-
-		case "week":
-			then := now.AddDate(0, 0, -7).Format("2006-01-02T15:04:05Z")
-			newValues[i] = then
-
-		case "month":
-			then := now.AddDate(0, -1, 0).Format("2006-01-02T15:04:05Z")
-			newValues[i] = then
-
-		case "year":
-			then := now.AddDate(-1, 0, 0).Format("2006-01-02T15:04:05Z")
-			newValues[i] = then
-
-		default:
-			operator = ""
-			newValues[i] = val
+	opValueMap := getOperator(values) //If values are numbers
+	// Store the operator and value in a map - this is to handle multiple values
+	updateOpValueMap := func(operator string, operatorValueMap map[string][]string, operatorRemovedValue string) {
+		if vals, ok := operatorValueMap[operator]; !ok {
+			operatorValueMap[operator] = []string{operatorRemovedValue}
+		} else {
+			vals = append(vals, operatorRemovedValue)
+			operatorValueMap[operator] = vals
 		}
 	}
-	return operator, newValues
+	if len(opValueMap) < 1 { //If not a number (no operator), check if values are dates
+		// Expected values: {"hour", "day", "week", "month", "year"}
+		operator := ">" // For dates, always check for values '>'
+		now := time.Now()
+		for _, val := range values {
+			var then string
+			format := "2006-01-02T15:04:05Z"
+			switch val {
+			case "hour":
+				then = now.Add(time.Duration(-1) * time.Hour).Format(format)
+
+			case "day":
+				then = now.AddDate(0, 0, -1).Format(format)
+
+			case "week":
+				then = now.AddDate(0, 0, -7).Format(format)
+
+			case "month":
+				then = now.AddDate(0, -1, 0).Format(format)
+
+			case "year":
+				then = now.AddDate(-1, 0, 0).Format(format)
+
+			default:
+				operator = ""
+				then = val
+			}
+			// Add the value and operator to map
+			updateOpValueMap(operator, opValueMap, then)
+		}
+	}
+	return opValueMap
 }
 
 func (s *SearchResult) getRelations() []SearchRelatedResult {
@@ -479,15 +513,6 @@ func pointerToStringArray(pointerArray []*string) []string {
 	return values
 }
 
-func stringArrayToPointer(stringArray []string) []*string {
-
-	values := make([]*string, len(stringArray))
-	for i, val := range stringArray {
-		tmpVal := val
-		values[i] = &tmpVal
-	}
-	return values
-}
 func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 	var whereDs []exp.Expression
 
@@ -505,11 +530,18 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
 
-				operator, values := getOperator(values) // Check if value is a number and get the operator
-				if operator == "" {                     //If not a number (no operator), check if values are dates
-					operator, values = getDateFilter(values) // Check if value is a date and get the date value
+				opDateValueMap := getOperatorAndNumDateFilter(values) // Check if value is a number or date and get the date value
+
+				//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
+				keys := make([]string, 0, len(opDateValueMap))
+				for k := range opDateValueMap {
+					keys = append(keys, k)
 				}
-				whereDs = append(whereDs, getWhereClauseExpression(filter.Property, operator, values))
+				sort.Strings(keys)
+
+				for _, operator := range keys {
+					whereDs = append(whereDs, getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator])...)
+				}
 			} else {
 				klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
 			}

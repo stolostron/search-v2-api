@@ -110,3 +110,54 @@ func Test_SearchCompleteWithCluster(t *testing.T) {
 	// Verify response
 	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteWithFilter_Query")
 }
+
+func Test_SearchCompleteQuery_PropDate(t *testing.T) {
+	// Create a SearchCompleteResolver instance with a mock connection pool.
+	prop1 := "created"
+	searchInput := &model.SearchInput{}
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1)
+	val1 := "isDate"
+	expectedProps := []*string{&val1} //, &val2, &val3}
+
+	// Mock the database queries.
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1)
+	// Mock the database query
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT "data"->>'created' FROM "search"."resources" WHERE ("data"->>'created' IS NOT NULL) ORDER BY "data"->>'created' ASC LIMIT 10000`),
+		gomock.Eq([]interface{}{})).Return(mockRows, nil)
+
+	// Execute function
+	result, err := resolver.autoComplete(context.TODO())
+	if err != nil {
+		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
+
+	}
+	// Verify response
+	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteQuery_PropDate")
+}
+
+func Test_SearchCompleteQuery_PropNum(t *testing.T) {
+	// Create a SearchCompleteResolver instance with a mock connection pool.
+	prop1 := "current"
+	searchInput := &model.SearchInput{}
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1)
+	val1 := "isNumber"
+	val2 := "3"
+	expectedProps := []*string{&val1, &val2} //, &val3}
+
+	// Mock the database queries.
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1)
+	// Mock the database query
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT "data"->>'current' FROM "search"."resources" WHERE ("data"->>'current' IS NOT NULL) ORDER BY "data"->>'current' ASC LIMIT 10000`),
+		gomock.Eq([]interface{}{})).Return(mockRows, nil)
+
+	// Execute function
+	result, err := resolver.autoComplete(context.TODO())
+	if err != nil {
+		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
+
+	}
+	// Verify response
+	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteQuery_PropNum")
+}

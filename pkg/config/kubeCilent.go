@@ -44,7 +44,7 @@ func GetClientConfig() (*rest.Config, error) {
 	var clientConfigError error
 
 	if kubeConfigPath != "" {
-		klog.Infof("Creating k8s client using KubeConfig at: %s", kubeConfigPath)
+		klog.V(6).Infof("Creating k8s client using KubeConfig at: %s", kubeConfigPath)
 		clientConfig, clientConfigError = clientcmd.BuildConfigFromFlags("", kubeConfigPath)
 	} else {
 		klog.V(2).Info("Creating k8s client using InClusterClientConfig")
