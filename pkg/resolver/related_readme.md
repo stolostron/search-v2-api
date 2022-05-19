@@ -39,8 +39,8 @@ WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, clus
 ------------------------NON-RECURSIVE PART START------------------------
 		(SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" 
 		 FROM "search"."all_edges" AS "e" 
-		 WHERE (("destid" IN ('sv-remote-1/9f5721e3-9af1-449f-835d-c8165f15c195' )) OR 
-					("sourceid" IN ('sv-remote-1/9f5721e3-9af1-449f-835d-c8165f15c195')) --Input /Control condition for non-recursive part
+		 WHERE (("destid" IN (<UID(s)>)) OR 
+					("sourceid" IN (<UID(s)>)) --Input /Control condition for non-recursive part
 			   ) 
 ------------------------NON-RECURSIVE PART END------------------------
 				   UNION 
