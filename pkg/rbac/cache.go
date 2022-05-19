@@ -67,6 +67,15 @@ func (tr *UserRbac) SetTokenTime(token string, timeCreated time.Time) {
 	// tr.expiresAt = tr.ValidatedTokens[token].Add(mins)
 }
 
+func (tr *UserRbac) UpdateTokenTime(token string) {
+	tr.lock.Lock()
+	defer tr.lock.Unlock()
+
+	timeCreated := time.Now() //updating timestamp if token still valid
+
+	tr.ValidatedTokens[token] = timeCreated
+}
+
 func (tr *UserRbac) SetExpTime(token string, timeCreated time.Time) {
 
 	tr.lock.Lock()
