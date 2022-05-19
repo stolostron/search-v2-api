@@ -162,7 +162,7 @@ func newMockRows(mockDataFile string, input *model.SearchInput, prop string) *Mo
 }
 func stringInSlice(a string, list []string) bool {
 	for _, b := range list {
-		if b == a {
+		if strings.EqualFold(b, a) {
 			return true
 		}
 	}
@@ -209,8 +209,13 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 			}
 
 		}
-	} else if len(dest) == 1 { // For searchComplete function
-		*dest[0].(*string) = r.mockData[r.index-1]["prop"].(string)
+	} else if len(dest) == 1 { // For searchComplete function and resolveUIDs function
+		_, ok := r.mockData[r.index-1]["prop"] //Check if prop is present in mockdata
+		if ok {
+			*dest[0].(*string) = r.mockData[r.index-1]["prop"].(string)
+		} else { //used by resolveUIDs function
+			*dest[0].(*string) = r.mockData[r.index-1]["uid"].(string)
+		}
 	}
 	return nil
 }

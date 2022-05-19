@@ -66,12 +66,7 @@ func (s *SearchResult) buildRelationsQuery() {
 	// -- union -- This is added if `kind:Cluster` is present in search term
 	// -- select uid as uid, data->>'kind' as kind, 1 AS "level" FROM search.resources where cluster IN ('local-cluster')
 
-	// This level will come into effect only in case of Application/Subscription relations.
-	// For normal searches, we go only upto level 1. This can be changed later, if necessary.
-	level := config.Cfg.RelationLevel
-	//The level can be parameterized later, if needed
-	// whereDs = append(whereDs, goqu.C("level").Lte(level))  // Add filter to select upto level (default 3) relationships
-	// whereDs = append(whereDs, goqu.C("uid").NotIn(s.uids)) // Add filter to avoid selecting the search object itself
+	level := s.setDepth()
 	whereDs := []exp.Expression{
 		goqu.C("level").Lte(level),  // Add filter to select up to level (default 3) relationships
 		goqu.C("uid").NotIn(s.uids)} // Add filter to avoid selecting the search object itself
@@ -111,17 +106,23 @@ func (s *SearchResult) buildRelationsQuery() {
 		Where(goqu.Ex{"sg.level": goqu.Op{"Lte": level},
 			// Avoid getting nodes in recursion to prevent pulling all relations for node
 			"e.destkind": goqu.Op{"neq": "Node"}})
+	var searchGraphQ *goqu.SelectDataset
 
-	// Recursive query. Refer: https://www.postgresqltutorial.com/postgresql-tutorial/postgresql-recursive-query/
-	searchGraphQ := goqu.From("search_graph").
-		WithRecursive("search_graph(level, sourceid, destid,  sourcekind, destkind, cluster)",
-			baseTerm.
-				Union(recursiveTerm)).
-		SelectDistinct("level", "sourceid", "destid", "sourcekind", "destkind", "cluster")
-
+	if level > 1 {
+		klog.V(5).Infof("Search term includes applications. Level: %d", level)
+		// Recursive query. Refer: https://www.postgresqltutorial.com/postgresql-tutorial/postgresql-recursive-query/
+		searchGraphQ = goqu.From("search_graph").
+			WithRecursive("search_graph(level, sourceid, destid,  sourcekind, destkind, cluster)",
+				baseTerm.
+					Union(recursiveTerm)).
+			SelectDistinct("level", "sourceid", "destid", "sourcekind", "destkind", "cluster")
+	} else {
+		searchGraphQ = baseTerm // Query without recursion since it is only level 1
+	}
 	combineIds := goqu.From(searchGraphQ.As("search_graph")).Select(selectCombineIds...)
+	var relQuery *goqu.SelectDataset
 
-	relQuery := goqu.From(combineIds.As("combineIds")).
+	relQuery = goqu.From(combineIds.As("combineIds")).
 		Select(selectFinal...).
 		Where(whereDs...).
 		GroupBy(groupBy...)
@@ -211,9 +212,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	klog.V(3).Infof("Resolving relationships for [%d] uids.\n", len(s.uids))
 
 	//defining variables
-	level1Map := map[string][]string{}    // Map to store level 1 relations
-	allLevelsMap := map[string][]string{} // Map to store all relations
-	var keepAllLevels bool
+	relatedMap := map[string][]string{} // Map to store relations
 
 	// Build the relations query
 	s.buildRelationsQuery()
@@ -236,26 +235,14 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 			klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
 			return nil
 		}
-		if level == 1 { // update map if level is 1
-			s.updateKindMap(uid, kind, level1Map)
-		}
-		s.updateKindMap(uid, kind, allLevelsMap)
-
-		// Turn on keepAllLevels if the kind is Application or Subscription
-		if kind == "Application" || kind == "Subscription" {
-			keepAllLevels = true
-		}
+		s.updateKindMap(uid, kind, relatedMap) // Store result in a map
 	}
-	klog.V(5).Info("keepAllLevels? ", keepAllLevels)
+
 	var relatedSearch []SearchRelatedResult
 
 	// retrieve provided kind filters only
 	if len(s.input.RelatedKinds) > 0 {
-		if keepAllLevels {
-			s.relatedKindUIDs(allLevelsMap) // get uids for provided kinds
-		} else {
-			s.relatedKindUIDs(level1Map) // get uids for provided kinds
-		}
+		s.relatedKindUIDs(relatedMap) // get uids for provided kinds
 		// Build Related kinds query
 		s.buildRelatedKindsQuery()
 		items, err := s.resolveItems() // Fetch the related kind items
@@ -264,12 +251,8 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		} else { // Convert to (kind, items) format
 			relatedSearch = s.searchRelatedResultKindItems(items)
 		}
-	} else { // Retrieve all related resources
-		if keepAllLevels {
-			relatedSearch = s.searchRelatedResultKindCount(allLevelsMap)
-		} else {
-			relatedSearch = s.searchRelatedResultKindCount(level1Map)
-		}
+	} else { // Retrieve kind and count of related items
+		relatedSearch = s.searchRelatedResultKindCount(relatedMap)
 	}
 	klog.V(5).Info("relatedSearch: ", relatedSearch)
 	return relatedSearch
@@ -330,4 +313,37 @@ func (s *SearchResult) updateKindMap(uid string, kind string, levelMap map[strin
 	s.mux.Lock() // Lock map to write
 	levelMap[kind] = uids
 	s.mux.Unlock()
+}
+
+func (s *SearchResult) setDepth() int {
+	// This level will come into effect only in case of Application relations.
+	// For normal searches, we go only upto level 1. This can be changed later, if necessary.
+	level := config.Cfg.RelationLevel
+	//The level can be parameterized later, if needed
+
+	//Set level
+	if s.searchApplication() && level == 0 {
+		level = 3 // If search involves applications and level is not explicitly set by user, set to 3
+	} else if level == 0 {
+		level = 1 // If level is not explicitly set by user, set to 1
+	}
+	return level
+}
+
+// Check if the search input filters contain Application - either in kind field or relatedKinds
+func (s *SearchResult) searchApplication() bool {
+	srchString := "Application"
+	for _, filter := range s.input.Filters {
+		for _, val := range filter.Values {
+			if strings.EqualFold(*val, srchString) {
+				return true
+			}
+		}
+	}
+	for _, relKind := range s.input.RelatedKinds {
+		if strings.EqualFold(*relKind, srchString) {
+			return true
+		}
+	}
+	return false
 }
