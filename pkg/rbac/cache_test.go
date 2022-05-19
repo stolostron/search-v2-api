@@ -6,7 +6,7 @@ import (
 )
 
 func TestBasic(t *testing.T) {
-	utr := New()
+	utr := New("tes-uid")
 	time := time.Time(time.Now())
 	utr.SetTokenTime("sha256~thisisatesttoken", time)
 	tim, exists := utr.GetTimebyToken("sha256~thisisatesttoken")

@@ -14,10 +14,12 @@ import (
 	"k8s.io/klog/v2"
 )
 
-//SAVING THIS IN ONLY BRANCH ANX/AUTHENTICATE
+type RbacCache struct {
+	UserRbac []*UserRbac
+}
 
 //first we want to cache the authenticated tokenreview response:
-type UserTokenReviews struct {
+type UserRbac struct {
 	uid             string
 	ValidatedTokens map[string]time.Time //token:timestamp
 	UserInfo        interface{}          //response from token review
@@ -32,12 +34,11 @@ type UserTokenReviews struct {
 }
 
 //verifies token (userid) with the TokenReview:
-func Middleware(utr *UserTokenReviews) func(http.Handler) http.Handler {
+func Middleware(rc *RbacCache) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 			var clientToken string
-			tokenTime := make(map[string]time.Time)
 			var duration_Minute time.Duration = 1 * time.Minute
 
 			//if there is cookie available use that else use the authorization header:
@@ -58,10 +59,10 @@ func Middleware(utr *UserTokenReviews) func(http.Handler) http.Handler {
 					http.StatusUnauthorized)
 				return
 			}
-			//check if token review doesn't already exists or if token has expired
-			// (difference between the creation time and exp time is more than 1 min.)
-			if !utr.DoesTokenExist(clientToken) || utr.ValidatedTokens[clientToken].Sub(utr.expiresAt) > duration_Minute {
-				utr.Remove(clientToken)
+
+			//Check if the RbacCache is empty:
+			if len(rc.UserRbac) == 0 {
+
 				authenticated, result, err := verifyToken(clientToken, r.Context())
 				if err != nil {
 					klog.Warning("Unexpected error while authenticating the request token.", err)
@@ -77,32 +78,65 @@ func Middleware(utr *UserTokenReviews) func(http.Handler) http.Handler {
 
 				klog.V(5).Info("User authentication successful!")
 				t := time.Now()
-				tokenTime[clientToken] = t
-
-				//creating creates new cache object
-				utr := New()
-				utr.SetUid(result.Status.User.UID)
-				utr.SetUserInfo(result)
-				utr.SetTokenTime(clientToken, tokenTime[clientToken])
-				utr.SetExpTime(clientToken, tokenTime[clientToken])
-
-				klog.V(5).Infof("time difference", utr.ValidatedTokens[clientToken].Sub(utr.expiresAt))
-				klog.V(5).Info("Current utr data %s", utr)
+				rc.cacheData(result, t, clientToken)
 
 			} else {
-				klog.V(5).Info("User token has not expired and is already validated with token review: %s", utr.ValidatedTokens[clientToken])
-				klog.V(5).Info(utr.GetTimebyToken(utr.uid))
+				//RabacCache not empty check for users in RbacCache
+				for _, utr := range rc.UserRbac {
+					//check if token review doesn't already exists or if token has expired
+					// (difference between the creation time and exp time is more than 1 min.)
+					if !utr.DoesTokenExist(clientToken) || utr.ValidatedTokens[clientToken].Sub(utr.expiresAt) > duration_Minute {
+
+						klog.V(5).Info("User token has not expired and is already validated with token review: %s", utr.ValidatedTokens[clientToken])
+					} else {
+						utr.Remove(clientToken)
+
+					}
+				}
+
+				//next we want to authorize
+				klog.V(4).Info("token cached")
+
+				next.ServeHTTP(w, r)
 			}
-
-			//next we want to authorize
-			klog.V(4).Info("token cached")
-			klog.V(4).Info(utr)
-
-			// we want to store the ssar
-			next.ServeHTTP(w, r)
 
 		})
 	}
+}
+
+// turn this into function
+// func authenticate(r, w, clientToken) (bool, *authv1.TokenReview, time.Time) {
+
+// 	authenticated, result, err := verifyToken(clientToken, r.Context())
+// 	if err != nil {
+// 		klog.Warning("Unexpected error while authenticating the request token.", err)
+// 		http.Error(w, "{\"message\":\"Unexpected error while authenticating the request token.\"}",
+// 			http.StatusInternalServerError)
+// 		return
+// 	}
+// 	if !authenticated {
+// 		klog.V(4).Info("Rejecting request: Invalid token.")
+// 		http.Error(w, "{\"message\":\"Invalid token\"}", http.StatusForbidden)
+// 		return
+// 	}
+
+// 	klog.V(5).Info("User authentication successful!")
+// 	t := time.Now()
+
+// 	return authenticated, result, t
+
+// }
+
+func (rc *RbacCache) cacheData(result *authv1.TokenReview, t time.Time, clientToken string) {
+	tokenTime := make(map[string]time.Time)
+	tokenTime[clientToken] = t
+	utr := New(result.Status.User.UID)
+	utr.SetUserInfo(result)
+	utr.SetTokenTime(clientToken, tokenTime[clientToken])
+	utr.SetExpTime(clientToken, tokenTime[clientToken])
+
+	//appendng this user to the RbacCache:
+	rc.UserRbac = append(rc.UserRbac, utr)
 }
 
 func verifyToken(clientId string, ctx context.Context) (bool, *authv1.TokenReview, error) {
