@@ -347,3 +347,13 @@ func (s *SearchResult) searchApplication() bool {
 	}
 	return false
 }
+
+func stringArrayToPointer(stringArray []string) []*string {
+
+	values := make([]*string, len(stringArray))
+	for i, val := range stringArray {
+		tmpVal := val
+		values[i] = &tmpVal
+	}
+	return values
+}

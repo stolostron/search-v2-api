@@ -3,8 +3,10 @@ package resolver
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -83,6 +85,7 @@ func (r *Row) Scan(dest ...interface{}) error {
 // https://github.com/jackc/pgx/blob/master/rows.go#L24
 // ====================================================
 
+//Prop will be the property input for searchComplete
 func newMockRows(mockDataFile string, input *model.SearchInput, prop string) *MockRows {
 	// Read json file and build mock data
 	bytes, _ := ioutil.ReadFile(mockDataFile)
@@ -141,10 +144,17 @@ func newMockRows(mockDataFile string, input *model.SearchInput, prop string) *Mo
 			if prop == "cluster" {
 				props[cluster] = ""
 			} else {
-				props[data[prop].(string)] = ""
+				if _, ok := data[prop]; ok {
+					switch v := data[prop].(type) {
+
+					case float64:
+						props[strconv.Itoa(int(v))] = ""
+					default:
+						props[v.(string)] = ""
+					}
+				}
 			}
 		}
-
 		for key := range props {
 			mockDatum := map[string]interface{}{
 				"prop": key,
@@ -167,6 +177,82 @@ func stringInSlice(a string, list []string) bool {
 		}
 	}
 	return false
+}
+
+// Only load mock data items if the input filters conditions are satisfied
+func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, item interface{}) bool {
+	// var destkind string
+	var relatedValues []string
+
+	if len(input.RelatedKinds) > 0 {
+		relatedValues = pointerToStringArray(input.RelatedKinds)
+		data := item.(map[string]interface{})["properties"].(map[string]interface{})
+		destkind := data["kind"].(string)
+		if stringInSlice(destkind, relatedValues) {
+			return true // If the resource kind is not in RelatedKinds, do not load it
+		} else {
+			return false
+		}
+	}
+
+	for _, filter := range input.Filters {
+		if len(filter.Values) > 0 {
+			values := pointerToStringArray(filter.Values) //get the filter values
+
+			opValueMap := getOperatorAndNumDateFilter(values) // get the filter values if property is a number or date
+			var op string
+			for key, val := range opValueMap {
+				op = key
+				values = val
+			}
+
+			uid := item.(map[string]interface{})["uid"]
+
+			if filter.Property == "cluster" {
+				cluster := strings.Split(uid.(string), "/")[0]
+				if !stringInSlice(cluster, values) {
+					return false // If the filter value is not in resource, do not load it
+				}
+			} else {
+				data := item.(map[string]interface{})["properties"].(map[string]interface{})
+
+				if data[filter.Property] == nil { // if required property is not set, don't load the item
+					return false
+				}
+				var filterValue int
+				var err error
+				if op != "" {
+					filterValue, err = strconv.Atoi(values[0]) // if the property is a number, get the first value
+					// It will be a date property if there is error in conversion and operator is ">"
+					if err != nil && op != ">" {
+						fmt.Println("Error converting value to int", err)
+					}
+				}
+
+				switch op {
+				case "<":
+					return int(data[filter.Property].(float64)) < filterValue
+
+				case ">":
+					_, ok := data[filter.Property].(float64)
+					return ok && int(data[filter.Property].(float64)) > filterValue
+
+				case ">=":
+					return int(data[filter.Property].(float64)) >= filterValue
+				case "<=":
+					return int(data[filter.Property].(float64)) <= filterValue
+				case "!", "!=":
+					return int(data[filter.Property].(float64)) != filterValue
+				case "=":
+					return int(data[filter.Property].(float64)) == filterValue
+				default:
+					// If the filter value is not in resource, do not load it
+					return stringInSlice(data[filter.Property].(string), values)
+				}
+			}
+		}
+	}
+	return true
 }
 
 type MockRows struct {
@@ -236,45 +322,4 @@ func AssertStringArrayEqual(t *testing.T, result, expected []*string, message st
 			return
 		}
 	}
-}
-
-// Load mock data based on input filters
-func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, item interface{}) bool {
-	// if !strings.Contains(mockDataFile, "rel") { // To load resources file
-	var destkind string
-	var relatedValues []string
-
-	if len(input.RelatedKinds) > 0 {
-		relatedValues = pointerToStringArray(input.RelatedKinds)
-		data := item.(map[string]interface{})["properties"].(map[string]interface{})
-		destkind = data["kind"].(string)
-		if stringInSlice(destkind, relatedValues) {
-			return true // If the resource kind is not in RelatedKinds, do not load it
-		} else {
-			return false
-		}
-	}
-
-	for _, filter := range input.Filters {
-		if len(filter.Values) > 0 {
-			values := pointerToStringArray(filter.Values)
-			uid := item.(map[string]interface{})["uid"]
-
-			cluster := strings.Split(uid.(string), "/")[0]
-			if filter.Property == "cluster" {
-
-				if !stringInSlice(cluster, values) {
-					return false // If the filter value is not in resource, do not load it
-				}
-			} else {
-				data := item.(map[string]interface{})["properties"].(map[string]interface{})
-
-				if !stringInSlice(data[filter.Property].(string), values) { //|| !stringInSlice(destkind, relatedValues) {
-					return false // If the filter value is not in resource, do not load it
-				}
-			}
-		}
-	}
-
-	return true
 }

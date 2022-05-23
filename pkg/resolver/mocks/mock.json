@@ -26,8 +26,8 @@
             "apigroup":"apps",
             "apiversion":"v1",
             "created":"2021-07-14T10:15:20Z",
-            "current":0,
-            "desired":0
+            "current":3,
+            "desired":3
             ,"kind":"ReplicaSet",
             "label":{
                 "app.kubernetes.io/component":"controller",
@@ -59,9 +59,7 @@
             "apigroup":"apps",
             "apiversion":"v1",
             "created":"2021-07-14T10:15:20Z",
-            "current":0,
-            "desired":0
-            ,"kind":"ConfigMap",
+            "kind":"ConfigMap",
             "name":"configmap-5f5575c669",
             "namespace":"openshift-monitoring"
         },
