@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
@@ -86,8 +87,6 @@ func (s *SearchResult) Uids() {
 	s.resolveUids()
 }
 
-//=====================
-
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) {
 	var limit int
 	var selectDs *goqu.SelectDataset
@@ -121,20 +120,21 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 
 	//LIMIT CLAUSE
 	if !count {
-		if s.input != nil && s.input.Limit != nil && *s.input.Limit > 0 {
-			limit = *s.input.Limit
-		} else if s.input != nil && s.input.Limit != nil && *s.input.Limit == -1 {
-			klog.Warning("No limit set. Fetching all results.")
-		} else {
-			limit = config.Cfg.QueryLimit
-		}
+		limit = s.setLimit()
 	}
+	var params []interface{}
+	var sql string
+	var err error
 	//Get the query
-	sql, params, err := selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
-	if err != nil {
-		klog.Errorf("Error building SearchComplete query: %s", err.Error())
+	if limit != 0 {
+		sql, params, err = selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
+	} else {
+		sql, params, err = selectDs.Where(whereDs...).ToSQL()
 	}
-	klog.V(3).Infof("query: %s\nargs: %s", sql, params)
+	if err != nil {
+		klog.Errorf("Error building Search query: %s", err.Error())
+	}
+	klog.V(3).Infof("Search query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
 }
@@ -154,6 +154,7 @@ func (s *SearchResult) resolveUids() {
 	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
+		return
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -171,6 +172,7 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
+		return items, err
 	}
 	defer rows.Close()
 
@@ -194,6 +196,121 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	}
 
 	return items, nil
+}
+
+// Remove operator (<=, >=, !=, !, <, >, =) if any from values
+func getOperator(values []string) map[string][]string {
+	// Get the operator (/^<=|^>=|^!=|^!|^<|^>|^=/)
+	var operator string
+	// Replace any of these symbols with ""
+	replacer := strings.NewReplacer("<=", "",
+		">=", "",
+		"!=", "",
+		"!", "",
+		"<", "",
+		">", "",
+		"=", "")
+	operatorValue := map[string][]string{}
+
+	for _, value := range values {
+		operatorRemovedValue := replacer.Replace(value)
+		operator = strings.Replace(value, operatorRemovedValue, "", 1) // find operator
+		if vals, ok := operatorValue[operator]; !ok {
+			if operator != "" { // Add to map only if operator is present
+				operatorValue[operator] = []string{operatorRemovedValue} // Add an entry to map with key as operator
+			}
+		} else {
+			vals = append(vals, operatorRemovedValue)
+			operatorValue[operator] = vals
+		}
+	}
+	return operatorValue
+}
+
+func getWhereClauseExpression(prop, operator string, values []string) []exp.Expression {
+	exps := []exp.Expression{}
+	switch operator {
+	case "<=":
+		for _, val := range values {
+			exps = append(exps, goqu.L(`"data"->>?`, prop).Lte(val))
+		}
+	case ">=":
+		for _, val := range values {
+			exps = append(exps, goqu.L(`"data"->>?`, prop).Gte(val))
+		}
+	case "!=":
+		exps = append(exps, goqu.L(`"data"->>?`, prop).Neq(values))
+
+	case "!":
+		exps = append(exps, goqu.L(`"data"->>?`, prop).NotIn(values))
+	case "<":
+		for _, val := range values {
+			exps = append(exps, goqu.L(`"data"->>?`, prop).Lt(val))
+		}
+	case ">":
+		for _, val := range values {
+			exps = append(exps, goqu.L(`"data"->>?`, prop).Gt(val))
+		}
+	case "=":
+
+		exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
+	default:
+		if prop == "cluster" {
+			exps = append(exps, goqu.C(prop).In(values))
+		} else {
+			exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
+		}
+	}
+	return exps
+
+}
+
+// Check if value is a number or date and get the operator
+// Returns a map that stores operator and values
+func getOperatorAndNumDateFilter(values []string) map[string][]string {
+
+	opValueMap := getOperator(values) //If values are numbers
+	// Store the operator and value in a map - this is to handle multiple values
+	updateOpValueMap := func(operator string, operatorValueMap map[string][]string, operatorRemovedValue string) {
+		if vals, ok := operatorValueMap[operator]; !ok {
+			operatorValueMap[operator] = []string{operatorRemovedValue}
+		} else {
+			vals = append(vals, operatorRemovedValue)
+			operatorValueMap[operator] = vals
+		}
+	}
+	if len(opValueMap) < 1 { //If not a number (no operator), check if values are dates
+		// Expected values: {"hour", "day", "week", "month", "year"}
+		operator := ">" // For dates, always check for values '>'
+		now := time.Now()
+		for _, val := range values {
+			var then string
+			format := "2006-01-02T15:04:05Z"
+			switch val {
+			case "hour":
+				then = now.Add(time.Duration(-1) * time.Hour).Format(format)
+
+			case "day":
+				then = now.AddDate(0, 0, -1).Format(format)
+
+			case "week":
+				then = now.AddDate(0, 0, -7).Format(format)
+
+			case "month":
+				then = now.AddDate(0, -1, 0).Format(format)
+
+			case "year":
+				then = now.AddDate(-1, 0, 0).Format(format)
+
+			default:
+				operator = ""
+				then = val
+			}
+			// Add the value and operator to map
+			updateOpValueMap(operator, opValueMap, then)
+		}
+	}
+	return opValueMap
 }
 
 func (s *SearchResult) getRelations() []SearchRelatedResult {
@@ -369,7 +486,7 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 	for key, value := range data {
 		switch v := value.(type) {
 		case string:
-			item[key] = strings.ToLower(v)
+			item[key] = v //strings.ToLower(v)
 		case bool:
 			item[key] = strconv.FormatBool(v)
 		case float64:
@@ -399,7 +516,8 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 	var whereDs []exp.Expression
 
 	if input.Keywords != nil && len(input.Keywords) > 0 {
-		//query example: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data") WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' IN ('Pod')))
+		// Sample query: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data")
+		// WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' IN ('Pod')))
 		keywords := pointerToStringArray(input.Keywords)
 		for _, key := range keywords {
 			key = "%" + key + "%"
@@ -410,12 +528,22 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 		for _, filter := range input.Filters {
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
+				// Check if value is a number or date and get the cleaned up value
+				opDateValueMap := getOperatorAndNumDateFilter(values)
 
-				if filter.Property == "cluster" {
-					whereDs = append(whereDs, goqu.C(filter.Property).In(values).Expression())
-				} else {
-					whereDs = append(whereDs, goqu.L(`"data"->>?`, filter.Property).In(values).Expression())
+				//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
+				keys := make([]string, 0, len(opDateValueMap))
+				for k := range opDateValueMap {
+					keys = append(keys, k)
 				}
+				sort.Strings(keys)
+				var operatorWhereDs []exp.Expression //store all the clauses for this filter together
+				for _, operator := range keys {
+					operatorWhereDs = append(operatorWhereDs,
+						getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator])...)
+				}
+				whereDs = append(whereDs, goqu.Or(operatorWhereDs...)) //Join all the clauses with OR
+
 			} else {
 				klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
 			}
@@ -423,4 +551,17 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 	}
 
 	return whereDs
+}
+
+//Set limit for queries
+func (s *SearchResult) setLimit() int {
+	var limit int
+	if s.input != nil && s.input.Limit != nil && *s.input.Limit > 0 {
+		limit = *s.input.Limit
+	} else if s.input != nil && s.input.Limit != nil && *s.input.Limit == -1 {
+		klog.Warning("No limit set. Fetching all results.")
+	} else {
+		limit = config.Cfg.QueryLimit
+	}
+	return limit
 }
