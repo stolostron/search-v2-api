@@ -23,7 +23,7 @@ type UserRbac struct {
 	ValidatedTokens map[string]time.Time //token:timestamp
 	UserInfo        *authv1.TokenReview  //response from token review
 	expiresAt       time.Time
-	lock            sync.RWMutex // use this to avoid runtime error in Go fot simultaneously trying to read and write to a map
+	lock            sync.RWMutex
 
 	//future fields:
 	// In the future we'll add more data like
@@ -32,87 +32,87 @@ type UserRbac struct {
 	// managedClusters       []string // ManagedClusters visible to the user.
 }
 
-func (tr *UserRbac) DoesTokenExist(token string) bool {
+func (user *UserRbac) DoesTokenExist(token string) bool {
 
-	tr.lock.RLock()
-	defer tr.lock.RUnlock()
+	user.lock.RLock()
+	defer user.lock.RUnlock()
 
-	_, exists := tr.ValidatedTokens[token]
+	_, exists := user.ValidatedTokens[token]
 
 	return exists
 
 }
 
-func (tr *UserRbac) SetUserInfo(tokenReviewResponse *authv1.TokenReview) {
-	tr.lock.Lock()
-	defer tr.lock.Unlock()
+func (user *UserRbac) SetUserInfo(tokenReviewResponse *authv1.TokenReview) {
+	user.lock.Lock()
+	defer user.lock.Unlock()
 
-	tr.UserInfo = tokenReviewResponse
+	user.UserInfo = tokenReviewResponse
 }
 
-func (tr *UserRbac) GetIDFromTokenReview() string {
-	tr.lock.Lock()
-	defer tr.lock.Unlock()
+func (user *UserRbac) GetIDFromTokenReview() string {
+	user.lock.Lock()
+	defer user.lock.Unlock()
 
-	ID := tr.UserInfo.UID
+	ID := user.UserInfo.UID
 
 	return string(ID)
 }
 
-func (tr *UserRbac) SetTokenTime(token string, timeCreated time.Time) {
+func (user *UserRbac) SetTokenTime(token string, timeCreated time.Time) {
 
-	tr.lock.Lock()
-	defer tr.lock.Unlock()
+	user.lock.Lock()
+	defer user.lock.Unlock()
 
-	tr.ValidatedTokens[token] = timeCreated
+	user.ValidatedTokens[token] = timeCreated
 }
 
-func (tr *UserRbac) UpdateTokenTime(token string) {
-	tr.lock.Lock()
-	defer tr.lock.Unlock()
+func (user *UserRbac) UpdateAuthenTime(token string) {
+	user.lock.Lock()
+	defer user.lock.Unlock()
 
 	timeCreated := time.Now() //updating timestamp if token still valid
 
-	tr.ValidatedTokens[token] = timeCreated
+	user.ValidatedTokens[token] = timeCreated
 }
 
-func (tr *UserRbac) SetExpTime(token string, timeCreated time.Time) {
+func (user *UserRbac) SetExpTime(token string, timeCreated time.Time) {
 
-	tr.lock.Lock()
-	defer tr.lock.Unlock()
+	user.lock.Lock()
+	defer user.lock.Unlock()
 
-	tr.expiresAt = timeCreated.Add(time.Minute * 1) //a minute from token creation
+	user.expiresAt = timeCreated.Add(time.Minute * 1) //a minute from token creation
 }
 
 // New cache user object:
 func New(uid string) *UserRbac {
-	utk := &UserRbac{
+	user := &UserRbac{
 		uid:             uid,
 		ValidatedTokens: make(map[string]time.Time),
 		expiresAt:       time.Time{},
 	}
-	return utk
+	return user
 }
 
 // Removes token from user
-func (tr *UserRbac) removeToken(token string) {
+func (user *UserRbac) removeToken(token string) {
 
-	tr.lock.Lock()
-	defer tr.lock.Unlock()
+	user.lock.Lock()
+	defer user.lock.Unlock()
 
-	delete(tr.ValidatedTokens, token)
+	delete(user.ValidatedTokens, token)
 }
 
 func (cache *RbacCache) CacheData(result *authv1.TokenReview, t time.Time, clientToken string) {
 	tokenTime := make(map[string]time.Time)
 	tokenTime[clientToken] = t
-	utr := New(result.Status.User.UID)
-	utr.SetUserInfo(result)
-	utr.SetTokenTime(clientToken, tokenTime[clientToken])
-	utr.SetExpTime(clientToken, tokenTime[clientToken])
+	user := New(result.Status.User.UID)
+	user.SetUserInfo(result)
+	user.SetTokenTime(clientToken, tokenTime[clientToken])
+	user.SetExpTime(clientToken, tokenTime[clientToken])
 
 	//appendng this user to the RbacCache:
-	cache.Users = append(cache.Users, utr)
+	cache.Users = append(cache.Users, user)
 }
 
 func (cache *RbacCache) ValidateToken(clientId string, r *http.Request, ctx context.Context) (bool, error) {
@@ -147,7 +147,7 @@ func (cache *RbacCache) ValidateToken(clientId string, r *http.Request, ctx cont
 func (user *UserRbac) isValidToken(clientToken string, r *http.Request) (bool, error) {
 	// Check the cached timestamp
 	if !time.Now().After(user.expiresAt) {
-		klog.V(5).Info("User token has not expired and is already validated with token review. Can continue with authorization..")
+		klog.V(5).Info("User token still valid.")
 		return true, nil
 	} else {
 		// if it's been more than a minute re-validate
@@ -158,13 +158,13 @@ func (user *UserRbac) isValidToken(clientToken string, r *http.Request) (bool, e
 		if authenticated {
 			klog.V(5).Info("User token re-validated. Updating Timestamp.")
 			//update timestamp:
-			user.UpdateTokenTime(clientToken)
+			user.UpdateAuthenTime(clientToken)
 			//update expiration:
 			user.SetExpTime(clientToken, user.ValidatedTokens[clientToken])
 			// Return true if the token is valid.
 			return true, nil
 		} else {
-			// cache.removeToken(clientToken)
+			user.removeToken(clientToken)
 			return false, err
 		}
 	}
