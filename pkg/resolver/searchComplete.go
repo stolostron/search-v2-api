@@ -2,6 +2,8 @@ package resolver
 
 import (
 	"context"
+	"strconv"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
@@ -25,7 +27,7 @@ func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, err
 	s.searchCompleteQuery(ctx)
 	res, autoCompleteErr := s.searchCompleteResults(ctx)
 	if autoCompleteErr != nil {
-		klog.Error("Error resolving properties in autoComplete", autoCompleteErr)
+		klog.Error("Error resolving properties in autoComplete. ", autoCompleteErr)
 	}
 	return res, autoCompleteErr
 }
@@ -58,7 +60,8 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		if s.property == "cluster" {
 			selectDs = ds.SelectDistinct(s.property).Order(goqu.C(s.property).Asc())
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
-			whereDs = append(whereDs, goqu.C(s.property).IsNotNull())
+			whereDs = append(whereDs, goqu.C(s.property).IsNotNull(),
+				goqu.C(s.property).Neq("")) // remove empty strings from results
 		} else {
 			selectDs = ds.SelectDistinct(goqu.L(`"data"->>?`, s.property)).Order(goqu.L(`"data"->>?`, s.property).Asc())
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
@@ -70,7 +73,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		} else if s.input != nil && s.input.Limit != nil && *s.input.Limit == -1 {
 			klog.Warning("No limit set. Fetching all results.")
 		} else {
-			limit = config.DEFAULT_QUERY_LIMIT
+			limit = config.Cfg.QueryLimit
 		}
 		//Get the query
 		sql, params, err := selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
@@ -79,6 +82,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		}
 		s.query = sql
 		s.params = params
+		klog.V(3).Info("SearchComplete Query: ", s.query)
 	} else {
 		s.query = ""
 		s.params = nil
@@ -88,12 +92,13 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 
 func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*string, error) {
 	klog.V(2).Info("Resolving searchCompleteResults()")
+	srchCompleteOut := make([]*string, 0)
 	rows, err := s.pool.Query(ctx, s.query, s.params...)
 	if err != nil {
 		klog.Error("Error fetching search complete results from db ", err)
+		return srchCompleteOut, err
 	}
 	defer rows.Close()
-	var srchCompleteOut []*string
 	if rows != nil {
 		for rows.Next() {
 			prop := ""
@@ -104,5 +109,41 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			srchCompleteOut = append(srchCompleteOut, &prop)
 		}
 	}
+	isNumber := isNumber(srchCompleteOut)
+	if isNumber { //check if valid number
+		isNumber := "isNumber"
+		srchCompleteOutNum := []*string{&isNumber} //isNumber should be the first argument if the property is a number
+		srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut...)
+	}
+	if !isNumber && isDate(srchCompleteOut) { //check if valid date
+		isDate := "isDate"
+		srchCompleteOutNum := []*string{&isDate}
+		srchCompleteOut = srchCompleteOutNum
+	}
+
 	return srchCompleteOut, nil
+}
+
+// check if a given string is of type date
+func isDate(vals []*string) bool {
+	for _, val := range vals {
+		// parse string date to golang time format: YYYY-MM-DDTHH:mm:ssZ i.e. "2022-01-01T17:17:09Z"
+		// const time.RFC3339 is YYYY-MM-DDTHH:mm:ssZ format ex:"2006-01-02T15:04:05Z07:00"
+
+		if _, err := time.Parse(time.RFC3339, *val); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
+// check if a given string is of type number (int)
+func isNumber(vals []*string) bool {
+
+	for _, val := range vals {
+		if _, err := strconv.Atoi(*val); err != nil {
+			return false
+		}
+	}
+	return true
 }

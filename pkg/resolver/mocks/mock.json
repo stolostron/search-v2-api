@@ -26,8 +26,8 @@
             "apigroup":"apps",
             "apiversion":"v1",
             "created":"2021-07-14T10:15:20Z",
-            "current":0,
-            "desired":0
+            "current":3,
+            "desired":3
             ,"kind":"ReplicaSet",
             "label":{
                 "app.kubernetes.io/component":"controller",
@@ -49,6 +49,25 @@
         "DestUID": "local-cluster/411e30e4-f773-41a6-b745-24c93c173f45",
         "SourceKind": "ReplicaSet",
         "DestKind": "Deployment"
+    },
+    {
+        "uid":"local-cluster/30c35f12-320a-417f-98d1-fbee28a4b2a6",
+        "resourceString":"configmaps",
+        "properties":{
+            "_clusterNamespace":"local-cluster-ns",
+            "_hubClusterResource":true,
+            "apigroup":"apps",
+            "apiversion":"v1",
+            "created":"2021-07-14T10:15:20Z",
+            "kind":"ConfigMap",
+            "name":"configmap-5f5575c669",
+            "namespace":"openshift-monitoring"
+        },
+        "EdgeType": "usedBy",
+        "DestUID": "local-cluster/30c35f12-320a-417f-98d1-fbee28a4b2a6",
+        "SourceUID": "local-cluster/411e30e4-f773-41a6-b745-24c93c173f45",
+        "DestKind": "ConfigMap",
+        "SourceKind": "Deployment"
     }
     ]
 } 
