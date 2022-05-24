@@ -2,11 +2,14 @@
 package rbac
 
 import (
+	"context"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/stolostron/search-v2-api/pkg/config"
 	authv1 "k8s.io/api/authentication/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -100,7 +103,7 @@ func (tr *UserRbac) removeToken(token string) {
 	delete(tr.ValidatedTokens, token)
 }
 
-func (rc *RbacCache) CacheData(result *authv1.TokenReview, t time.Time, clientToken string) {
+func (cache *RbacCache) CacheData(result *authv1.TokenReview, t time.Time, clientToken string) {
 	tokenTime := make(map[string]time.Time)
 	tokenTime[clientToken] = t
 	utr := New(result.Status.User.UID)
@@ -109,53 +112,60 @@ func (rc *RbacCache) CacheData(result *authv1.TokenReview, t time.Time, clientTo
 	utr.SetExpTime(clientToken, tokenTime[clientToken])
 
 	//appendng this user to the RbacCache:
-	rc.Users = append(rc.Users, utr)
+	cache.Users = append(cache.Users, utr)
 }
 
-func (rc *RbacCache) GetUser(clientToken string, r *http.Request) bool {
+func (cache *RbacCache) ValidateToken(clientId string, r *http.Request, ctx context.Context) (bool, error) {
+	// Try to find the user in the cache:
+	for _, user := range cache.Users {
+		if user.DoesTokenExist(clientId) {
+			return user.isValidToken(clientId, r)
 
-	// Iterate Users to find if any with a matching token.
-	for _, user := range rc.Users {
-		if user.DoesTokenExist(clientToken) {
-			//validate user:
-			if user.validateToken(clientToken, r) {
-				return true
-			}
-		} else if user.uid == user.GetIDFromTokenReview() {
-			//validate user:
-			if user.validateToken(clientToken, r) {
-				return true
-			}
-		} else {
-			user.removeToken(clientToken)
-			return false
 		}
-		//user does not exist:	return nil
 	}
-	return false
-
+	//If not in cache proceed with new token:
+	tr := authv1.TokenReview{
+		Spec: authv1.TokenReviewSpec{
+			Token: clientId,
+		},
+	}
+	result, err := config.KubeClient().AuthenticationV1().TokenReviews().Create(ctx, &tr, metav1.CreateOptions{})
+	if err != nil {
+		klog.Warning("Error creating the token review.", err.Error())
+		return false, err
+	}
+	klog.V(9).Infof("%v\n", prettyPrint(result.Status))
+	if result.Status.Authenticated {
+		time := time.Now()
+		cache.CacheData(result, time, clientId) //cache time authenticated,
+		return true, nil
+	}
+	klog.V(4).Info("User is not authenticated.")
+	return false, nil
 }
 
-func (ur *UserRbac) validateToken(clientToken string, r *http.Request) bool {
-	// Check the cached timestamp.
-	if !time.Now().After(ur.expiresAt) {
+func (user *UserRbac) isValidToken(clientToken string, r *http.Request) (bool, error) {
+	// Check the cached timestamp
+	if !time.Now().After(user.expiresAt) {
 		klog.V(5).Info("User token has not expired and is already validated with token review. Can continue with authorization..")
-		return true
+		return true, nil
 	} else {
 		// if it's been more than a minute re-validate
 		klog.V(5).Info("User token authentication over 1 minute, need to re-validate token")
 		//re-validate token and if the token is still valid we update the timestamp:
-		authenticated, _, _ := verifyToken(clientToken, r.Context())
+		cache := &RbacCache{}
+		authenticated, err := cache.ValidateToken(clientToken, r, r.Context())
 		if authenticated {
 			klog.V(5).Info("User token re-validated. Updating Timestamp.")
 			//update timestamp:
-			ur.UpdateTokenTime(clientToken)
+			user.UpdateTokenTime(clientToken)
 			//update expiration:
-			ur.SetExpTime(clientToken, ur.ValidatedTokens[clientToken])
+			user.SetExpTime(clientToken, user.ValidatedTokens[clientToken])
 			// Return true if the token is valid.
-			return true
+			return true, nil
 		} else {
-			return false
+			// cache.removeToken(clientToken)
+			return false, err
 		}
 	}
 }

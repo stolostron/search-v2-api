@@ -1,20 +1,15 @@
 package rbac
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
 
-	"github.com/stolostron/search-v2-api/pkg/config"
-	authv1 "k8s.io/api/authentication/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
 //verifies token (userid) with the TokenReview:
-func Middleware(rc *RbacCache) func(http.Handler) http.Handler {
+func AuthenticationMiddleware(cache *RbacCache) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
@@ -40,68 +35,16 @@ func Middleware(rc *RbacCache) func(http.Handler) http.Handler {
 				return
 			}
 
-			if len(rc.Users) > 0 {
-				//If there are users, get user:
-				ur := rc.GetUser(clientToken, r)
-				if ur {
-					klog.V(4).Info("Authorization step..")
-
-				}
-			} else {
-
-				authenticated, result, err := verifyToken(clientToken, r.Context())
-				if err != nil {
-					klog.Warning("Unexpected error while authenticating the request token.", err)
-					http.Error(w, "{\"message\":\"Unexpected error while authenticating the request token.\"}",
-						http.StatusInternalServerError)
-					return
-				}
-				if !authenticated {
-					klog.V(4).Info("Rejecting request: Invalid token.")
-					http.Error(w, "{\"message\":\"Invalid token\"}", http.StatusForbidden)
-					return
-				}
-
-				klog.V(5).Info("User authentication successful!")
-				t := time.Now()
-				klog.V(5).Info("Caching user")
-				rc.CacheData(result, t, clientToken)
-				klog.V(4).Info("Authorization step..")
-
+			isValid, validationError := cache.ValidateToken(clientToken, r, r.Context())
+			if validationError != nil {
+				klog.Warning("Unexpected error while authenticating the request token.", validationError)
+			} else if !isValid {
+				klog.V(4).Info("Rejecting request: Invalid token.")
 			}
-
-			//next we want to authorize
-			// klog.V(4).Info("Authorization step..")
 
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-
-func verifyToken(clientId string, ctx context.Context) (bool, *authv1.TokenReview, error) {
-	// tokenTime := make(map[string]time.Time)
-
-	tr := authv1.TokenReview{
-		Spec: authv1.TokenReviewSpec{
-			Token: clientId,
-		},
-	}
-	result, err := config.KubeClient().AuthenticationV1().TokenReviews().Create(ctx, &tr, metav1.CreateOptions{}) //cache tokenreview
-	// t := time.Now()
-	if err != nil {
-		klog.Warning("Error creating the token review.", err.Error())
-		// tokenTime[clientId] = t
-		return false, nil, err
-	}
-	klog.V(9).Infof("%v\n", prettyPrint(result.Status))
-	if result.Status.Authenticated {
-		// tokenTime[clientId] = t
-		// uid := result.Status.User.UID
-
-		return true, result, nil
-	}
-	klog.V(4).Info("User is not authenticated.") //should this be warning or info?
-	return false, nil, nil
 }
 
 // https://stackoverflow.com/a/51270134
