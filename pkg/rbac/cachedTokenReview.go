@@ -12,74 +12,70 @@ import (
 	"k8s.io/klog/v2"
 )
 
-var cachedTokenReview CachedTokenReview
-
-func init() { // TODO: Remove and initialize elsewhere.
-	cachedTokenReview = CachedTokenReview{
-		pending: map[string][]chan *reviewResult{},
-		cache:   map[string]*reviewResult{},
-		lock:    sync.Mutex{},
-	}
+var cachedTokenReview = CachedTokenReview{
+	pending: map[string][]chan *tokenReviewResult{},
+	cache:   map[string]*tokenReviewResult{},
+	lock:    sync.Mutex{},
 }
 
-type reviewResult struct {
+type tokenReviewResult struct {
 	t           time.Time
 	tokenReview *authv1.TokenReview
 }
 
 type CachedTokenReview struct {
-	pending map[string][]chan *reviewResult
-	cache   map[string]*reviewResult
+	pending map[string][]chan *tokenReviewResult
+	cache   map[string]*tokenReviewResult
 	lock    sync.Mutex
 }
 
 func (cache *CachedTokenReview) IsValidToken(token string) bool {
-	tr := cache.GetTokenReview(token)
+	tr := cache.getTokenReview(token)
 
 	return tr.Status.Authenticated
 }
 
-func (cache *CachedTokenReview) GetTokenReview(token string) *authv1.TokenReview {
+func (cache *CachedTokenReview) getTokenReview(token string) *authv1.TokenReview {
 	cache.lock.Lock()
 	// defer cache.lock.Unlock()
-	result := make(chan *reviewResult)
+	result := make(chan *tokenReviewResult)
 
 	// 1. Check if we can use TokenReview from the cache.
 	tr, tokenExists := cache.cache[token]
 	if tokenExists && time.Now().Before(tr.t.Add(60*time.Second)) {
-		klog.Info("Using TokenReview from cache.")
+		klog.V(5).Info("Using TokenReview from cache.")
 		cache.lock.Unlock()
 		return tr.tokenReview
-	} else if !tokenExists {
-		klog.Info("TokenReview is not in the cache.")
-	} else if time.Now().After(tr.t.Add(60 * time.Second)) {
-		klog.Info("Cached TokenReview is older than 60 seconds.")
 	}
+	// else if !tokenExists {
+	// 	klog.Info("TokenReview is not in the cache.")
+	// } else if time.Now().After(tr.t.Add(60 * time.Second)) {
+	// 	klog.Info("Cached TokenReview is older than 60 seconds.")
+	// }
 
 	// 2. Check if there's a pending request
 	pending, isPending := cache.pending[token]
 	if isPending {
-		klog.Info("Found a pending TokenReview request for this token. Adding channel to get notified when resolved.")
+		klog.V(5).Info("Found a pending TokenReview request for this token. Adding channel to get notified when resolved.")
 		cache.pending[token] = append(pending, result)
 	} else {
-		klog.Info("Triggering a new TokenReview.")
+		klog.V(5).Info("Triggering a new TokenReview.")
 		go cache.asyncTokenReview(context.TODO(), token, result)
 	}
 
-	cache.lock.Unlock()
-
 	// Wait until the TokenReview request gets resolved.
+	cache.lock.Unlock()
 	tr = <-result
 	return tr.tokenReview
 }
 
-func (cache *CachedTokenReview) asyncTokenReview(ctx context.Context, token string, ch chan *reviewResult) {
+func (cache *CachedTokenReview) asyncTokenReview(ctx context.Context, token string, ch chan *tokenReviewResult) {
 	cache.lock.Lock()
 	pending, foundPending := cache.pending[token]
 	if foundPending {
 		cache.pending[token] = append(cache.pending[token], ch)
 	} else {
-		cache.pending[token] = []chan *reviewResult{ch}
+		cache.pending[token] = []chan *tokenReviewResult{ch}
 	}
 	cache.lock.Unlock()
 
@@ -105,7 +101,7 @@ func (cache *CachedTokenReview) asyncTokenReview(ctx context.Context, token stri
 		}
 	}
 
-	resultMsg := &reviewResult{t: time.Now(), tokenReview: result}
+	resultMsg := &tokenReviewResult{t: time.Now(), tokenReview: result}
 	for _, p := range pending {
 		p <- resultMsg
 		close(p)
