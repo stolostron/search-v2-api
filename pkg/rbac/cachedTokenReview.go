@@ -1,3 +1,4 @@
+// Copyright Contributors to the Open Cluster Management project
 package rbac
 
 import (
@@ -13,7 +14,7 @@ import (
 
 var cachedTokenReview CachedTokenReview
 
-func init() {
+func init() { // TODO: Remove and initialize elsewhere.
 	cachedTokenReview = CachedTokenReview{
 		pending: map[string][]chan *reviewResult{},
 		cache:   map[string]*reviewResult{},
@@ -23,7 +24,6 @@ func init() {
 
 type reviewResult struct {
 	t           time.Time
-	valid       bool
 	tokenReview *authv1.TokenReview
 }
 
@@ -60,7 +60,7 @@ func (cache *CachedTokenReview) GetTokenReview(token string) *authv1.TokenReview
 	pending, isPending := cache.pending[token]
 	if isPending {
 		klog.Info("Found a pending TokenReview request for this token. Adding channel to get notified when resolved.")
-		pending = append(pending, result)
+		cache.pending[token] = append(pending, result)
 	} else {
 		klog.Info("Triggering a new TokenReview.")
 		go cache.asyncTokenReview(context.TODO(), token, result)
@@ -105,12 +105,12 @@ func (cache *CachedTokenReview) asyncTokenReview(ctx context.Context, token stri
 		}
 	}
 
-	resultMsg := &reviewResult{t: time.Now(), valid: result.Status.Authenticated, tokenReview: result}
+	resultMsg := &reviewResult{t: time.Now(), tokenReview: result}
 	for _, p := range pending {
 		p <- resultMsg
 		close(p)
 	}
 
-	cache.cache[token] = resultMsg
 	delete(cache.pending, token)
+	cache.cache[token] = resultMsg
 }
