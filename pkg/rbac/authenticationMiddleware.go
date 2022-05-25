@@ -2,7 +2,6 @@
 package rbac
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -49,10 +48,4 @@ func AuthenticateUser() func(http.Handler) http.Handler {
 
 		})
 	}
-}
-
-// https://stackoverflow.com/a/51270134
-func prettyPrint(i interface{}) string {
-	s, _ := json.MarshalIndent(i, "", "\t")
-	return string(s)
 }

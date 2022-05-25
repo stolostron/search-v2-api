@@ -3,6 +3,7 @@ package rbac
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -74,6 +75,7 @@ func (cache *Cache) doTokenReview(ctx context.Context, token string, ch chan *to
 	if err != nil {
 		klog.Warning("Error during TokenReview. ", err.Error())
 	}
+	klog.V(9).Infof("TokenReview result: %v\n", prettyPrint(result.Status))
 
 	cache.tokenReviewsLock.Lock()
 	defer cache.tokenReviewsLock.Unlock()
@@ -87,4 +89,10 @@ func (cache *Cache) doTokenReview(ctx context.Context, token string, ch chan *to
 
 	delete(cache.tokenReviewsPending, token)
 	cache.tokenReviews[token] = trResult
+}
+
+// https://stackoverflow.com/a/51270134
+func prettyPrint(i interface{}) string {
+	s, _ := json.MarshalIndent(i, "", "\t")
+	return string(s)
 }
