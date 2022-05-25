@@ -17,6 +17,7 @@ var Cfg = new()
 // Define a Config type to hold our config properties.
 type Config struct {
 	API_SERVER_URL string // address for Kubernetes API Server
+	AuthCacheTTL   int    // Time-to-live of Authentication (TokenReview) cache in milliseconds.
 	ContextPath    string
 	DB_HOST        string
 	DB_NAME        string
@@ -30,7 +31,6 @@ type Config struct {
 	// Placeholder for future use.
 	// QueryLoopLimit          int // number of queries handled at a time
 	// RBAC_INACTIVITY_TIMEOUT int
-	// RBAC_POLL_INTERVAL      int
 }
 
 func new() *Config {
@@ -38,6 +38,7 @@ func new() *Config {
 	// Simply put, the order of preference is env -> default values (from left to right)
 	conf := &Config{
 		API_SERVER_URL: getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
+		AuthCacheTTL:   getEnvAsInt("AUTH_CACHE_TTL", int(60000)),
 		ContextPath:    getEnv("CONTEXT_PATH", "/searchapi"),
 		DB_HOST:        getEnv("DB_HOST", "localhost"),
 		DB_NAME:        getEnv("DB_NAME", ""),
@@ -51,7 +52,6 @@ func new() *Config {
 		// Placeholder for future use.
 		// QueryLoopLimit:          getEnvAsInt("QUERY_LOOP_LIMIT", 5000),
 		// RBAC_INACTIVITY_TIMEOUT: getEnvAsInt("RBAC_INACTIVITY_TIMEOUT", 600000), // 10 minutes
-		// RBAC_POLL_INTERVAL:      getEnvAsInt("RBAC_POLL_INTERVAL", 60000),       // 1 minute
 	}
 	conf.DB_PASS = url.QueryEscape(conf.DB_PASS)
 	return conf

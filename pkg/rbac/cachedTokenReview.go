@@ -11,23 +11,11 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// var cachedTokenReview = CachedTokenReview{
-// 	pending: map[string][]chan *tokenReviewResult{},
-// 	cache:   map[string]*tokenReviewResult{},
-// 	lock:    sync.Mutex{},
-// }
-
 type tokenReviewResult struct {
 	updatedAt   time.Time
 	tokenReview *authv1.TokenReview
 	err         error
 }
-
-// type CachedTokenReview struct {
-// 	pending map[string][]chan *tokenReviewResult
-// 	cache   map[string]*tokenReviewResult
-// 	lock    sync.Mutex
-// }
 
 func (cache *Cache) IsValidToken(ctx context.Context, token string) (bool, error) {
 	tr, err := cache.getTokenReview(ctx, token)
@@ -40,7 +28,7 @@ func (cache *Cache) getTokenReview(ctx context.Context, token string) (*authv1.T
 
 	// Check if we can use TokenReview from the cache.
 	tr, tokenExists := cache.tokenReviews[token]
-	if tokenExists && time.Now().Before(tr.updatedAt.Add(60*time.Second)) {
+	if tokenExists && time.Now().Before(tr.updatedAt.Add(time.Duration(config.Cfg.AuthCacheTTL)*time.Millisecond)) {
 		klog.V(5).Info("Using TokenReview from cache.")
 		cache.tokenReviewsLock.Unlock()
 		return tr.tokenReview, tr.err
