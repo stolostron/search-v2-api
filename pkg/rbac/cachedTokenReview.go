@@ -12,17 +12,20 @@ import (
 )
 
 type tokenReviewResult struct {
+	err         error
 	updatedAt   time.Time
 	tokenReview *authv1.TokenReview
-	err         error
 }
 
+// Verify that the token is valid using a TokenReview.
+// Will use cached data if available and valid, otherwise starts a new request.
 func (cache *Cache) IsValidToken(ctx context.Context, token string) (bool, error) {
 	tr, err := cache.getTokenReview(ctx, token)
-
 	return tr.Status.Authenticated, err
 }
 
+// Get the TokenReview response for a given token.
+// Will use cached data if available and valid, otherwise starts a new request.
 func (cache *Cache) getTokenReview(ctx context.Context, token string) (*authv1.TokenReview, error) {
 	cache.tokenReviewsLock.Lock()
 
@@ -44,6 +47,8 @@ func (cache *Cache) getTokenReview(ctx context.Context, token string) (*authv1.T
 	return tr.tokenReview, tr.err
 }
 
+// Starts a new TokenReview request. Results are sent to the provided ch so this runs asynchronously.
+// Keeps track of pending requests to avoid triggering multiple concurrent requests for the same token.
 func (cache *Cache) doTokenReview(ctx context.Context, token string, ch chan *tokenReviewResult) {
 	cache.tokenReviewsLock.Lock()
 	// Check if there's a pending TokenReview
