@@ -3,7 +3,6 @@ package rbac
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -12,96 +11,87 @@ import (
 	"k8s.io/klog/v2"
 )
 
-var cachedTokenReview = CachedTokenReview{
-	pending: map[string][]chan *tokenReviewResult{},
-	cache:   map[string]*tokenReviewResult{},
-	lock:    sync.Mutex{},
-}
+// var cachedTokenReview = CachedTokenReview{
+// 	pending: map[string][]chan *tokenReviewResult{},
+// 	cache:   map[string]*tokenReviewResult{},
+// 	lock:    sync.Mutex{},
+// }
 
 type tokenReviewResult struct {
-	t           time.Time
+	updatedAt   time.Time
 	tokenReview *authv1.TokenReview
+	err         error
 }
 
-type CachedTokenReview struct {
-	pending map[string][]chan *tokenReviewResult
-	cache   map[string]*tokenReviewResult
-	lock    sync.Mutex
+// type CachedTokenReview struct {
+// 	pending map[string][]chan *tokenReviewResult
+// 	cache   map[string]*tokenReviewResult
+// 	lock    sync.Mutex
+// }
+
+func (cache *Cache) IsValidToken(ctx context.Context, token string) (bool, error) {
+	tr, err := cache.getTokenReview(ctx, token)
+
+	return tr.Status.Authenticated, err
 }
 
-func (cache *CachedTokenReview) IsValidToken(token string) bool {
-	tr := cache.getTokenReview(context.TODO(), token)
+func (cache *Cache) getTokenReview(ctx context.Context, token string) (*authv1.TokenReview, error) {
+	cache.tokenReviewsLock.Lock()
 
-	return tr.Status.Authenticated
-}
-
-func (cache *CachedTokenReview) getTokenReview(ctx context.Context, token string) *authv1.TokenReview {
-	cache.lock.Lock()
-	// defer cache.lock.Unlock()
-	result := make(chan *tokenReviewResult)
-
-	// 1. Check if we can use TokenReview from the cache.
-	tr, tokenExists := cache.cache[token]
-	if tokenExists && time.Now().Before(tr.t.Add(60*time.Second)) {
+	// Check if we can use TokenReview from the cache.
+	tr, tokenExists := cache.tokenReviews[token]
+	if tokenExists && time.Now().Before(tr.updatedAt.Add(60*time.Second)) {
 		klog.V(5).Info("Using TokenReview from cache.")
-		cache.lock.Unlock()
-		return tr.tokenReview
+		cache.tokenReviewsLock.Unlock()
+		return tr.tokenReview, tr.err
 	}
+	cache.tokenReviewsLock.Unlock()
 
-	// 2. Check if there's a pending request.
-	pending, isPending := cache.pending[token]
-	if isPending {
+	// Start a new TokenReview request.
+	result := make(chan *tokenReviewResult)
+	go cache.doTokenReview(ctx, token, result)
+
+	// Wait until the TokenReview request gets resolved.
+	tr = <-result
+	return tr.tokenReview, tr.err
+}
+
+func (cache *Cache) doTokenReview(ctx context.Context, token string, ch chan *tokenReviewResult) {
+	cache.tokenReviewsLock.Lock()
+	// Check if there's a pending TokenReview
+	_, foundPending := cache.tokenReviewsPending[token]
+	if foundPending {
 		klog.V(5).Info("Found a pending TokenReview, adding channel to get notified when resolved.")
-		cache.pending[token] = append(pending, result)
+		cache.tokenReviewsPending[token] = append(cache.tokenReviewsPending[token], ch)
+		cache.tokenReviewsLock.Unlock()
+		return
 	} else {
 		klog.V(5).Info("Triggering a new TokenReview request.")
-		go cache.asyncTokenReview(ctx, token, result)
+		cache.tokenReviewsPending[token] = []chan *tokenReviewResult{ch}
 	}
+	cache.tokenReviewsLock.Unlock()
 
-	// Wait here until the TokenReview request gets resolved.
-	cache.lock.Unlock()
-	tr = <-result
-	return tr.tokenReview
-}
-
-func (cache *CachedTokenReview) asyncTokenReview(ctx context.Context, token string, ch chan *tokenReviewResult) {
-	cache.lock.Lock()
-	pending, foundPending := cache.pending[token]
-	if foundPending {
-		cache.pending[token] = append(cache.pending[token], ch)
-	} else {
-		cache.pending[token] = []chan *tokenReviewResult{ch}
-	}
-	cache.lock.Unlock()
-
+	// Create a new TokenReview request.
 	tr := authv1.TokenReview{
 		Spec: authv1.TokenReviewSpec{
 			Token: token,
 		},
 	}
 	result, err := config.KubeClient().AuthenticationV1().TokenReviews().Create(ctx, &tr, metav1.CreateOptions{})
-
-	cache.lock.Lock()
-	defer cache.lock.Unlock()
-
-	// Refresh the channels to send the response in case a new channel was added.
-	pending, _ = cache.pending[token]
-
 	if err != nil {
 		klog.Warning("Error during TokenReview. ", err.Error())
-
-		// TODO: May need better error handling logic.
-		for _, p := range pending {
-			close(p)
-		}
 	}
 
-	resultMsg := &tokenReviewResult{t: time.Now(), tokenReview: result}
+	cache.tokenReviewsLock.Lock()
+	defer cache.tokenReviewsLock.Unlock()
+
+	// Send the response to all channels registered in the tokenReviewPending object.
+	pending := cache.tokenReviewsPending[token]
+	trResult := &tokenReviewResult{updatedAt: time.Now(), tokenReview: result, err: err}
 	for _, p := range pending {
-		p <- resultMsg
-		close(p)
+		p <- trResult
 	}
 
-	delete(cache.pending, token)
-	cache.cache[token] = resultMsg
+	delete(cache.tokenReviewsPending, token)
+	cache.tokenReviews[token] = trResult
 }

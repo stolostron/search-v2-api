@@ -9,11 +9,11 @@ import (
 	"k8s.io/klog/v2"
 )
 
-//verifies token (userid) with the TokenReview:
-func Middleware() func(http.Handler) http.Handler {
+// verifies token (userid) with the TokenReview:
+func AuthenticateUser() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			//if there is cookie available use that else use the authorization header:
+			// if there is cookie available use that else use the authorization header:
 			var clientToken string
 			cookie, err := r.Cookie("acm-access-token-cookie")
 			if err == nil {
@@ -32,14 +32,12 @@ func Middleware() func(http.Handler) http.Handler {
 				return
 			}
 
-			authenticated := cachedTokenReview.IsValidToken(clientToken)
-
-			// authenticated, err := verifyToken(clientToken, r.Context())
-			// if err != nil {
-			// 	klog.Warning("Unexpected error while authenticating the request token.", err)
-			// 	http.Error(w, "{\"message\":\"Unexpected error while authenticating the request token.\"}", http.StatusInternalServerError)
-			// 	return
-			// }
+			authenticated, err := cache.IsValidToken(r.Context(), clientToken)
+			if err != nil {
+				klog.Warning("Unexpected error while authenticating the request token.", err)
+				http.Error(w, "{\"message\":\"Unexpected error while authenticating the request token.\"}", http.StatusInternalServerError)
+				return
+			}
 			if !authenticated {
 				klog.V(4).Info("Rejecting request: Invalid token.")
 				http.Error(w, "{\"message\":\"Invalid token\"}", http.StatusForbidden)
