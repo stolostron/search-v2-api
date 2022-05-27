@@ -4,6 +4,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	pgxpool "github.com/jackc/pgx/v4/pgxpool"
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -12,23 +13,29 @@ import (
 
 var pool *pgxpool.Pool
 
-func init() {
-	klog.Info("Initializing database connection.")
-	// initializePool()
-}
-
 func initializePool() {
+	klog.Info("Initializing database connection pool.")
 	cfg := config.Cfg
 
-	database_url := fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", cfg.DB_USER, cfg.DB_PASS, cfg.DB_HOST, cfg.DB_PORT, cfg.DB_NAME)
-	klog.Info("Connecting to PostgreSQL at: ", fmt.Sprintf("postgresql://%s:%s@%s:%d/%s", cfg.DB_USER, "*********", cfg.DB_HOST, cfg.DB_PORT, cfg.DB_NAME))
+	dbConnString := fmt.Sprint(
+		"host=", cfg.DBHost,
+		" port=", cfg.DBPort,
+		" user=", cfg.DBUser,
+		" password=", cfg.DBPass,
+		" dbname=", cfg.DBName,
+		" sslmode=require", // https://www.postgresql.org/docs/current/libpq-connect.html
+	)
 
-	config, configErr := pgxpool.ParseConfig(database_url)
+	// Remove password from connection log.
+	redactedDbConn := strings.ReplaceAll(dbConnString, cfg.DBPass, "[REDACTED]")
+	klog.Infof("Connecting to PostgreSQL using: %s", redactedDbConn)
+
+	config, configErr := pgxpool.ParseConfig(dbConnString)
 	if configErr != nil {
 		klog.Error("Error parsing database connection configuration.", configErr)
 	}
 
-	conn, err := pgxpool.ConnectConfig(context.Background(), config)
+	conn, err := pgxpool.ConnectConfig(context.TODO(), config)
 	if err != nil {
 		klog.Error("Unable to connect to database: %+v\n", err)
 	}
@@ -42,7 +49,7 @@ func GetConnection() *pgxpool.Pool {
 	}
 
 	if pool != nil {
-		err := pool.Ping(context.Background())
+		err := pool.Ping(context.TODO())
 		if err != nil {
 			klog.Error("Unable to get a database connection. ", err)
 			// Here we may need to add retry.

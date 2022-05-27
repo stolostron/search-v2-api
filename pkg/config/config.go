@@ -19,11 +19,11 @@ type Config struct {
 	API_SERVER_URL string // address for Kubernetes API Server
 	AuthCacheTTL   int    // Time-to-live of Authentication (TokenReview) cache in milliseconds.
 	ContextPath    string
-	DB_HOST        string
-	DB_NAME        string
-	DB_PASS        string
-	DB_PORT        int
-	DB_USER        string
+	DBHost         string
+	DBName         string
+	DBPass         string
+	DBPort         int
+	DBUser         string
 	HttpPort       int
 	PlaygroundMode bool // Enable the GraphQL Playground client.
 	QueryLimit     int  // The default LIMIT to use on queries. Client can override.
@@ -40,11 +40,11 @@ func new() *Config {
 		API_SERVER_URL: getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
 		AuthCacheTTL:   getEnvAsInt("AUTH_CACHE_TTL", int(60000)),
 		ContextPath:    getEnv("CONTEXT_PATH", "/searchapi"),
-		DB_HOST:        getEnv("DB_HOST", "localhost"),
-		DB_NAME:        getEnv("DB_NAME", ""),
-		DB_PASS:        getEnv("DB_PASS", ""),
-		DB_PORT:        getEnvAsInt("DB_PORT", int(5432)),
-		DB_USER:        getEnv("DB_USER", ""),
+		DBHost:         getEnv("DB_HOST", "localhost"),
+		DBName:         getEnv("DB_NAME", ""),
+		DBPass:         getEnv("DB_PASS", ""),
+		DBPort:         getEnvAsInt("DB_PORT", int(5432)),
+		DBUser:         getEnv("DB_USER", ""),
 		HttpPort:       getEnvAsInt("HTTP_PORT", 4010),
 		PlaygroundMode: getEnvAsBool("PLAYGROUND_MODE", false),
 		QueryLimit:     getEnvAsInt("QUERY_LIMIT", 10000),
@@ -53,7 +53,7 @@ func new() *Config {
 		// QueryLoopLimit:          getEnvAsInt("QUERY_LOOP_LIMIT", 5000),
 		// RBAC_INACTIVITY_TIMEOUT: getEnvAsInt("RBAC_INACTIVITY_TIMEOUT", 600000), // 10 minutes
 	}
-	conf.DB_PASS = url.QueryEscape(conf.DB_PASS)
+	conf.DBPass = url.QueryEscape(conf.DBPass)
 	return conf
 }
 
@@ -61,7 +61,7 @@ func new() *Config {
 func (cfg *Config) PrintConfig() {
 	// Make a copy to redact secrets and sensitive information.
 	tmp := *cfg
-	tmp.DB_PASS = "[REDACTED]"
+	tmp.DBPass = "[REDACTED]"
 
 	// Convert to JSON for nicer formatting.
 	cfgJSON, err := json.MarshalIndent(tmp, "", "\t")
@@ -74,13 +74,13 @@ func (cfg *Config) PrintConfig() {
 
 // Validate required configuration.
 func (cfg *Config) Validate() error {
-	if cfg.DB_NAME == "" {
+	if cfg.DBName == "" {
 		return errors.New("required environment DB_NAME is not set")
 	}
-	if cfg.DB_USER == "" {
+	if cfg.DBUser == "" {
 		return errors.New("required environment DB_USER is not set")
 	}
-	if cfg.DB_PASS == "" {
+	if cfg.DBPass == "" {
 		return errors.New("required environment DB_PASS is not set")
 	}
 	return nil
