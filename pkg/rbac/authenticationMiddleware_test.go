@@ -10,19 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// var token string
-
-// func makeFakeToken() string {
-// 	t := make([]byte, 4)
-// 	rand.Read(t)
-// 	return fmt.Sprintf("%x", t)
-// }
-
-// // token from cookie provided - should return status okay
+//test valid token from cookie
 func TestTokenCookieAuthenticated(t *testing.T) {
 
 	token := "validtoken"
-
 	authenticateHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 
 	r := httptest.NewRequest("GET", "https://localhost:4010/playground", nil)
@@ -35,11 +26,47 @@ func TestTokenCookieAuthenticated(t *testing.T) {
 	authen := AuthenticateUser(authenticateHandler)
 
 	authen.ServeHTTP(response, r)
-	assert.Equal(t, response.Code, http.StatusOK)
-
+	assert.Equal(t, response.Code, http.StatusForbidden) //token is provided but not authenticated
 }
 
-// token from header provided - should return status okay (but doesn't)
+//test invalid cookie name
+func TestTokenInvalidCookieAuthenticated(t *testing.T) {
+
+	token := "validtoken"
+	authenticateHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+
+	r := httptest.NewRequest("GET", "https://localhost:4010/playground", nil)
+
+	r.AddCookie(&http.Cookie{Name: "acm-token", Value: token})
+
+	response := httptest.NewRecorder()
+
+	authenticateHandler(response, r)
+	authen := AuthenticateUser(authenticateHandler)
+
+	authen.ServeHTTP(response, r)
+	assert.Equal(t, response.Code, http.StatusUnauthorized) //token is not provided/invalid
+}
+
+//test invalid cookie value
+func TestTokenInvalidCookieValueAuthenticated(t *testing.T) {
+
+	authenticateHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+
+	r := httptest.NewRequest("GET", "https://localhost:4010/playground", nil)
+
+	r.AddCookie(&http.Cookie{Name: "acm-access-token-cookie", Value: ""})
+
+	response := httptest.NewRecorder()
+
+	authenticateHandler(response, r)
+	authen := AuthenticateUser(authenticateHandler)
+
+	authen.ServeHTTP(response, r)
+	assert.Equal(t, response.Code, http.StatusUnauthorized) //token is not provided/invalid
+}
+
+// test valid header bearer token
 func TestAuthenticateHeaderUser(t *testing.T) {
 
 	token := "validtoken"
@@ -55,28 +82,29 @@ func TestAuthenticateHeaderUser(t *testing.T) {
 	authen := AuthenticateUser(authenticateHandler)
 
 	authen.ServeHTTP(response, r)
-	assert.Equal(t, response.Code, http.StatusOK)
+	assert.Equal(t, response.Code, http.StatusForbidden) //token is provided but not authenticated
 }
 
-// Invalid token provided - should return unauthorized
+//test invalid header key
 func TestAuthenticateInvalidHeaderUser(t *testing.T) {
+	token := "validtoken"
 
 	authenticateHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 
 	r := httptest.NewRequest("GET", "https://localhost:4010/playground", nil)
 
-	r.Header.Add("Authorization", fmt.Sprintf("Bearer %v", 123))
+	r.Header.Add("Client-ID", token)
 	response := httptest.NewRecorder()
 
 	authenticateHandler(response, r)
 	authen := AuthenticateUser(authenticateHandler)
 
 	authen.ServeHTTP(response, r)
-	assert.Equal(t, response.Code, http.StatusUnauthorized)
+	assert.Equal(t, response.Code, http.StatusUnauthorized) //token is not provided/invalid
 
 }
 
-// No token provided - should return unauthorized
+//test no token provided
 func TestAuthenticateNoTokenUser(t *testing.T) {
 	authenticateHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 
@@ -87,10 +115,10 @@ func TestAuthenticateNoTokenUser(t *testing.T) {
 	authenticateHandler(response, r)
 	authen := AuthenticateUser(authenticateHandler)
 	authen.ServeHTTP(response, r)
-	assert.Equal(t, response.Code, http.StatusUnauthorized)
+	assert.Equal(t, response.Code, http.StatusUnauthorized) //token is not provided/invalid
 }
 
-// Empty token provided - should return unauthorized
+// test empty header token value
 func TestAuthenticateEmptyTokenUser(t *testing.T) {
 
 	authenticateHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
@@ -104,5 +132,6 @@ func TestAuthenticateEmptyTokenUser(t *testing.T) {
 	authen := AuthenticateUser(authenticateHandler)
 
 	authen.ServeHTTP(response, r)
-	assert.Equal(t, response.Code, http.StatusUnauthorized)
+	assert.Equal(t, response.Code, http.StatusUnauthorized) //token is not provided/invalid
+
 }
