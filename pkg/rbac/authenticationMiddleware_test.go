@@ -12,7 +12,6 @@ import (
 
 //test valid token from cookie
 func TestTokenCookieAuthenticated(t *testing.T) {
-
 	authenticateHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 
 	r := httptest.NewRequest("POST", "https://localhost:4010/searchapi/graphql", nil)
@@ -25,8 +24,8 @@ func TestTokenCookieAuthenticated(t *testing.T) {
 	authen := AuthenticateUser(authenticateHandler)
 
 	authen.ServeHTTP(response, r)
-	assert.Equal(t, response.Code, http.StatusForbidden) //valid token is provided but not authenticated
-	assert.Equal(t, response.Body.String(), "{\"message\":\"Invalid token\"}\n")
+	assert.Equal(t, response.Code, http.StatusInternalServerError)
+	assert.Equal(t, response.Body.String(), "{\"message\":\"Unexpected error while authenticating the request token.\"}\n")
 
 }
 
