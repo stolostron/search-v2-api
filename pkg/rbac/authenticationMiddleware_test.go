@@ -81,8 +81,8 @@ func TestAuthenticateHeaderUser(t *testing.T) {
 	authen := AuthenticateUser(authenticateHandler)
 
 	authen.ServeHTTP(response, r)
-	assert.Equal(t, response.Code, http.StatusForbidden) //valid token is provided but not authenticated
-	assert.Equal(t, response.Body.String(), "{\"message\":\"Invalid token\"}\n")
+	assert.Equal(t, response.Code, http.StatusInternalServerError)
+	assert.Equal(t, response.Body.String(), "{\"message\":\"Unexpected error while authenticating the request token.\"}\n")
 }
 
 //test invalid header key
