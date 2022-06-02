@@ -210,6 +210,7 @@ func (s *SearchResult) buildRelatedKindsQuery() {
 
 func (s *SearchResult) getRelations() []SearchRelatedResult {
 	klog.V(3).Infof("Resolving relationships for [%d] uids.\n", len(s.uids))
+	relatedSearch := []SearchRelatedResult{}
 
 	//defining variables
 	relatedMap := map[string][]string{} // Map to store relations
@@ -220,7 +221,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	relations, relQueryError := s.pool.Query(context.TODO(), s.query, s.params...) // how to deal with defaults.
 	if relQueryError != nil {
 		klog.Errorf("Error while executing getRelations query. Error :%s", relQueryError.Error())
-		return nil
+		return relatedSearch
 	}
 
 	defer relations.Close()
@@ -233,12 +234,10 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 
 		if relatedResultError != nil {
 			klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
-			return nil
+			return relatedSearch
 		}
 		s.updateKindMap(uid, kind, relatedMap) // Store result in a map
 	}
-
-	var relatedSearch []SearchRelatedResult
 
 	// retrieve provided kind filters only
 	if len(s.input.RelatedKinds) > 0 {
