@@ -9,6 +9,7 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/config"
 	authv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -71,7 +72,7 @@ func (cache *Cache) doTokenReview(ctx context.Context, token string, ch chan *to
 			Token: token,
 		},
 	}
-	result, err := config.KubeClient().AuthenticationV1().TokenReviews().Create(ctx, &tr, metav1.CreateOptions{})
+	result, err := cache.getAuthClient().TokenReviews().Create(ctx, &tr, metav1.CreateOptions{})
 	if err != nil {
 		klog.Warning("Error during TokenReview. ", err.Error())
 	}
@@ -95,4 +96,12 @@ func (cache *Cache) doTokenReview(ctx context.Context, token string, ch chan *to
 func prettyPrint(i interface{}) string {
 	s, _ := json.MarshalIndent(i, "", "\t")
 	return string(s)
+}
+
+// Utility to allow tests to inject a fake client to mock the k8s api call.
+func (cache *Cache) getAuthClient() v1.AuthenticationV1Interface {
+	if cache.authClient == nil {
+		cache.authClient = config.KubeClient().AuthenticationV1()
+	}
+	return cache.authClient
 }
