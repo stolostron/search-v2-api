@@ -11,6 +11,7 @@ import (
 	fake "k8s.io/client-go/kubernetes/fake"
 )
 
+// Initialize cache object to use tests.
 func newCache() Cache {
 	return Cache{
 		// Use a fake Kubernetes authentication client.
@@ -21,6 +22,7 @@ func newCache() Cache {
 	}
 }
 
+// TokenReview with empty cache.
 func Test_IsValidToken_emptyCache(t *testing.T) {
 	// Initialize cache with empty state.
 	cache := newCache()
@@ -39,7 +41,7 @@ func Test_IsValidToken_emptyCache(t *testing.T) {
 
 // TokenReview exists in cache
 func Test_IsValidToken_usingCache(t *testing.T) {
-	// Initialize cache state
+	// Initialize cache and set state.
 	cache := newCache()
 	cache.tokenReviews["1234567890"] = &tokenReviewResult{
 		updatedAt: time.Now(),
@@ -64,7 +66,7 @@ func Test_IsValidToken_usingCache(t *testing.T) {
 
 // TokenReview in cache is older than 60 seconds.
 func Test_IsValidToken_expiredCache(t *testing.T) {
-	// Initialize cache state - cache updated 2 minutes ago.
+	// Initialize cache and set state to TokenReview updated 2 minutes ago.
 	cache := newCache()
 	cache.tokenReviews["1234567890"] = &tokenReviewResult{
 		updatedAt: time.Now().Add(time.Duration(-2) * time.Minute),
@@ -92,9 +94,9 @@ func Test_IsValidToken_expiredCache(t *testing.T) {
 
 }
 
-// Pending TokenReview request.
+// TokenReview pending request for same token.
 func Test_IsValidToken_pendingRequest(t *testing.T) {
-	// Initialize cache state - pending TokenReview.
+	// Initialize cache state with a pending TokenReview.
 	cache := newCache()
 	cache.tokenReviewsPending["1234567890-pending"] = []chan *tokenReviewResult{make(chan *tokenReviewResult)}
 
