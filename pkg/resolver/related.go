@@ -234,7 +234,6 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 
 		if relatedResultError != nil {
 			klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
-			return relatedSearch
 		}
 		s.updateKindMap(uid, kind, relatedMap) // Store result in a map
 	}
