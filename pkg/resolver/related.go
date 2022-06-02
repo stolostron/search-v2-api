@@ -66,10 +66,10 @@ func (s *SearchResult) buildRelationsQuery() {
 	// -- union -- This is added if `kind:Cluster` is present in search term
 	// -- select uid as uid, data->>'kind' as kind, 1 AS "level" FROM search.resources where cluster IN ('local-cluster')
 
-	level := s.setDepth()
+	s.setDepth()
 	whereDs := []exp.Expression{
-		goqu.C("level").Lte(level),  // Add filter to select up to level (default 3) relationships
-		goqu.C("uid").NotIn(s.uids)} // Add filter to avoid selecting the search object itself
+		goqu.C("level").Lte(s.level), // Add filter to select up to level (default 3) relationships
+		goqu.C("uid").NotIn(s.uids)}  // Add filter to avoid selecting the search object itself
 
 	//Non-recursive term SELECT CLAUSE
 	schema := goqu.S("search")
@@ -103,13 +103,13 @@ func (s *SearchResult) buildRelationsQuery() {
 			goqu.On(goqu.ExOr{"sg.destid": srcDestIds, "sg.sourceid": srcDestIds})).
 		Select(selectNext...).
 		// Limiting upto default level 3 as it should suffice for application relations
-		Where(goqu.Ex{"sg.level": goqu.Op{"Lte": level},
+		Where(goqu.Ex{"sg.level": goqu.Op{"Lte": s.level},
 			// Avoid getting nodes in recursion to prevent pulling all relations for node
 			"e.destkind": goqu.Op{"neq": "Node"}})
 	var searchGraphQ *goqu.SelectDataset
 
-	if level > 1 {
-		klog.V(5).Infof("Search term includes applications. Level: %d", level)
+	if s.level > 1 {
+		klog.V(5).Infof("Search term includes applications or level set by user. Level: %d", s.level)
 		// Recursive query. Refer: https://www.postgresqltutorial.com/postgresql-tutorial/postgresql-recursive-query/
 		searchGraphQ = goqu.From("search_graph").
 			WithRecursive("search_graph(level, sourceid, destid,  sourcekind, destkind, cluster)",
@@ -303,30 +303,26 @@ func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface
 }
 
 func (s *SearchResult) updateKindMap(uid string, kind string, levelMap map[string][]string) {
-	s.mux.RLock() // Lock map to read
 	uids := levelMap[kind]
-	s.mux.RUnlock()
-
 	uids = append(uids, uid)
 
-	s.mux.Lock() // Lock map to write
 	levelMap[kind] = uids
-	s.mux.Unlock()
 }
 
-func (s *SearchResult) setDepth() int {
+func (s *SearchResult) setDepth() {
 	// This level will come into effect only in case of Application relations.
 	// For normal searches, we go only upto level 1. This can be changed later, if necessary.
-	level := config.Cfg.RelationLevel
+	s.level = config.Cfg.RelationLevel
 	//The level can be parameterized later, if needed
 
 	//Set level
-	if s.searchApplication() && level == 0 {
-		level = 3 // If search involves applications and level is not explicitly set by user, set to 3
-	} else if level == 0 {
-		level = 1 // If level is not explicitly set by user, set to 1
+	if s.searchApplication() && s.level == 0 {
+		s.level = 3 // If search involves applications and level is not explicitly set by user, set to 3
+		klog.V(3).Info("Search includes applications. Level set to %d.", s.level)
+	} else if s.level == 0 {
+		s.level = 1 // If level is not explicitly set by user, set to 1
+		klog.V(6).Info("Default value for level set: %d.", s.level)
 	}
-	return level
 }
 
 // Check if the search input filters contain Application - either in kind field or relatedKinds
