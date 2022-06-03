@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	db "github.com/stolostron/search-v2-api/pkg/database"
 	"k8s.io/klog/v2"
 )
 
@@ -45,5 +46,16 @@ func AuthenticateUser(next http.Handler) http.Handler {
 		klog.V(6).Info("User authentication successful!")
 		next.ServeHTTP(w, r)
 
+	})
+}
+
+func AuthorizeUser(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		//get user cluster-scoped resources and cache:
+		err := cache.getClusterScopedResources(db.GetConnection())
+		if err != nil {
+			klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
+		}
 	})
 }
