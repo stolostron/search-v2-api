@@ -4,7 +4,6 @@ package resolver
 import (
 	"context"
 	"fmt"
-
 	"testing"
 
 	"github.com/golang/mock/gomock"

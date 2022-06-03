@@ -1,25 +1,15 @@
 {
-    "columns": ["data", "destid", "destkind"],
+    "columns": ["uid", "kind", "level"],
     "records":[
     {
-        "uid":"local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b",
-        "resourceString":"replicasets",
-        "properties":{"kind":"ReplicaSet"},
-        "EdgeType": "ownedBy",
-        "SourceUID": "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b",
         "DestUID": "local-cluster/411e30e4-f773-41a6-b745-24c93c173f45",
-        "SourceKind": "ReplicaSet",
-        "DestKind": "Deployment"
+        "DestKind": "Deployment",
+        "Level": 1
     },
     {
-        "uid":"local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b",
-        "resourceString":"replicasets",
-        "properties":{"kind":"ReplicaSet"},
-        "EdgeType": "uses",
-        "SourceUID": "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b",
         "DestUID": "local-cluster/30c35f12-320a-417f-98d1-fbee28a4b2a6",
-        "SourceKind": "ReplicaSet",
-        "DestKind": "ConfigMap"
+        "DestKind": "ConfigMap",
+        "Level": 1
     }
     ]
 } 

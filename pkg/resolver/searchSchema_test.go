@@ -48,13 +48,3 @@ func Test_SearchSchema_Results(t *testing.T) {
 
 	AssertStringArrayEqual(t, result, expectedResult, "Search schema results doesn't match.")
 }
-
-func stringArrayToPointer(stringArray []string) []*string {
-
-	values := make([]*string, len(stringArray))
-	for i, val := range stringArray {
-		tmpVal := val
-		values[i] = &tmpVal
-	}
-	return values
-}

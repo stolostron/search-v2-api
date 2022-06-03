@@ -2,7 +2,6 @@
 package resolver
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/doug-martin/goqu/v9"
@@ -341,81 +340,6 @@ func Test_SearchWithMultipleClusterFilter_NegativeLimit_Query(t *testing.T) {
 		}
 	}
 }
-func Test_SearchResolver_Relationships(t *testing.T) {
-
-	var resultList []*string
-
-	uid1 := "local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd"
-	uid2 := "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b"
-
-	resultList = append(resultList, &uid1, &uid2)
-
-	// //take the uids from above as input
-	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "uid", Values: resultList}}}
-	resolver, mockPool2 := newMockSearchResolver(t, searchInput, resultList)
-
-	relQuery := strings.TrimSpace(`WITH RECURSIVE search_graph(uid, data, destkind, sourceid, destid, path, level) AS (SELECT "r"."uid", "r"."data", "e"."destkind", "e"."sourceid", "e"."destid", ARRAY[r.uid] AS "path", 1 AS "level" FROM "search"."resources" AS "r" INNER JOIN "search"."edges" AS "e" ON ("r"."uid" IN ("e"."sourceid", "e"."destid")) WHERE ("r"."uid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b')) UNION (SELECT "r"."uid", "r"."data", "e"."destkind", "e"."sourceid", "e"."destid", sg.path||r.uid AS "path", level+1 AS "level" FROM "search"."resources" AS "r" INNER JOIN "search"."edges" AS "e" ON ("r"."uid" = "e"."sourceid") INNER JOIN "search_graph" AS "sg" ON (("sg"."destid" = "e"."sourceid") OR ("sg"."sourceid" = "e"."destid")) WHERE (("r"."uid" != ALL ('{sg.path}')) AND ("sg"."level" = 1)))) SELECT DISTINCT ON ("destid") "data", "destid", "destkind" FROM "search_graph" WHERE ("level" = 1)`)
-
-	mockRows := newMockRows("./mocks/mock-rel-1.json", searchInput, "")
-	mockPool2.EXPECT().Query(gomock.Any(),
-		gomock.Eq(relQuery),
-		gomock.Eq([]interface{}{}),
-	).Return(mockRows, nil)
-	result := resolver.Related() // this should return a relatedResults object
-
-	resultKinds := make([]*string, len(result))
-	for i, data := range result {
-		kind := data.Kind
-		resultKinds[i] = &kind
-	}
-
-	expectedKinds := make([]*string, len(mockRows.mockData))
-	for i, data := range mockRows.mockData {
-		destKind, _ := data["destkind"].(string)
-		expectedKinds[i] = &destKind
-	}
-	// Verify expected and result kinds
-	AssertStringArrayEqual(t, resultKinds, expectedKinds, "Error in expected destKinds in Test_SearchResolver_Relationships")
-
-	// Verify returned items.
-	if len(result) != len(mockRows.mockData) {
-		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result))
-	}
-
-}
-
-func Test_SearchResolver_RelatedKindsRelationships(t *testing.T) {
-
-	var resultList []*string
-
-	uid1 := "local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd"
-	uid2 := "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b"
-
-	resultList = append(resultList, &uid1, &uid2)
-	relatedKind1 := "ConfigMap"
-	// //take the uids from above as input
-	searchInput2 := &model.SearchInput{RelatedKinds: []*string{&relatedKind1}, Filters: []*model.SearchFilter{{Property: "uid", Values: resultList}}}
-	resolver, mockPool2 := newMockSearchResolver(t, searchInput2, resultList)
-
-	relQuery := strings.TrimSpace(`WITH RECURSIVE search_graph(uid, data, destkind, sourceid, destid, path, level) AS (SELECT "r"."uid", "r"."data", "e"."destkind", "e"."sourceid", "e"."destid", ARRAY[r.uid] AS "path", 1 AS "level" FROM "search"."resources" AS "r" INNER JOIN "search"."edges" AS "e" ON ("r"."uid" IN ("e"."sourceid", "e"."destid")) WHERE ("r"."uid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b')) UNION (SELECT "r"."uid", "r"."data", "e"."destkind", "e"."sourceid", "e"."destid", sg.path||r.uid AS "path", level+1 AS "level" FROM "search"."resources" AS "r" INNER JOIN "search"."edges" AS "e" ON ("r"."uid" = "e"."sourceid") INNER JOIN "search_graph" AS "sg" ON (("sg"."destid" = "e"."sourceid") OR ("sg"."sourceid" = "e"."destid")) WHERE (("r"."uid" != ALL ('{sg.path}')) AND ("sg"."level" = 1)))) SELECT DISTINCT ON ("destid") "data", "destid", "destkind" FROM "search_graph" WHERE (("destkind" IN ('ConfigMap')) AND ("level" = 1))`)
-
-	mockRows := newMockRows("./mocks/mock-rel-1.json", searchInput2, "")
-	mockPool2.EXPECT().Query(gomock.Any(),
-		gomock.Eq(relQuery),
-		gomock.Eq([]interface{}{}),
-	).Return(mockRows, nil)
-
-	result := resolver.Related() // this should return a relatedResults object
-
-	if result[0].Kind != mockRows.mockData[0]["destkind"] {
-		t.Errorf("Kind value in mockdata does not match kind value of result")
-	}
-
-	// Verify returned items.
-	if len(result) != len(mockRows.mockData) {
-		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result))
-	}
-}
 
 func Test_SearchResolver_Keywords(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
@@ -450,6 +374,39 @@ func Test_SearchResolver_Keywords(t *testing.T) {
 			if val != expectedRow[key] {
 				t.Errorf("Value of key [%s] does not match for item [%d].\nExpected: %s\nGot: %s", key, i, expectedRow[key], val)
 			}
+		}
+	}
+}
+
+func Test_SearchResolver_Uids(t *testing.T) {
+	// Create a SearchResolver instance with a mock connection pool.
+	val1 := "template"
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
+	// Mock the database queries.
+	mockRows := newMockRows("./mocks/mock.json", searchInput, "")
+
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT "uid" FROM "search"."resources" WHERE ("data"->>'kind' IN ('template')) LIMIT 10000`),
+		gomock.Eq([]interface{}{}),
+	).Return(mockRows, nil)
+
+	// Execute the function
+	resolver.Uids()
+
+	// Verify returned items.
+	if len(resolver.uids) != len(mockRows.mockData) {
+		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(resolver.uids))
+	}
+
+	// Verify properties for each returned item.
+	for i, item := range resolver.uids {
+		mockRow := mockRows.mockData[i]
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow["_uid"] = mockRow["uid"]
+
+		if *item != mockRow["uid"].(string) {
+			t.Errorf("Value of key [uid] does not match for item [%d].\nExpected: %s\nGot: %s", i, expectedRow["_uid"], *item)
 		}
 	}
 }
