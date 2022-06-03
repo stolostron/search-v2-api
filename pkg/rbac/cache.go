@@ -9,17 +9,17 @@ import (
 
 // Cache used to optimize requests to the Kubernetes API server.
 type Cache struct {
-	authClient             v1.AuthenticationV1Interface // This allows tests to replace with mock client.
-	tokenReviews           map[string]*tokenReviewResult
-	tokenReviewsPending    map[string][]chan *tokenReviewResult
-	tokenReviewsLock       sync.Mutex
-	clusterScopedResources map[string]string
+	authClient          v1.AuthenticationV1Interface // This allows tests to replace with mock client.
+	tokenReviews        map[string]*tokenReviewResult
+	tokenReviewsPending map[string][]chan *tokenReviewResult
+	tokenReviewsLock    sync.Mutex
+	clusterScoped       map[string]*clusterScopedResourcesList
 }
 
 // Initialize the cache as a singleton instance.
 var cache = Cache{
-	tokenReviews:           map[string]*tokenReviewResult{},
-	tokenReviewsPending:    map[string][]chan *tokenReviewResult{},
-	tokenReviewsLock:       sync.Mutex{},
-	clusterScopedResources: map[string]string{},
+	tokenReviews:        map[string]*tokenReviewResult{},
+	tokenReviewsPending: map[string][]chan *tokenReviewResult{},
+	tokenReviewsLock:    sync.Mutex{},
+	clusterScoped:       map[string]*clusterScopedResourcesList{},
 }
