@@ -2,7 +2,6 @@ package rbac
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -26,12 +25,12 @@ func (cache *Cache) checkUserResources(token string) error {
 		return cr.err
 	}
 	//otherwise build query and get cluster-scoped resources for user from database and cache:
-	cache.getClusterScopedResources(db.GetConnection())
+	cache.getClusterScopedResources(db.GetConnection(), string(uid))
 
 	return cr.err
 }
 
-func (cache *Cache) getClusterScopedResources(pool *pgxpool.Pool) error {
+func (cache *Cache) getClusterScopedResources(pool *pgxpool.Pool, uid string) error {
 
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
@@ -48,7 +47,7 @@ func (cache *Cache) getClusterScopedResources(pool *pgxpool.Pool) error {
 		klog.Errorf("Error resolving query [%s]. Error: [%+v]", query, err)
 	}
 	defer rows.Close()
-
+	csrmap := make(map[string]string)
 	for rows.Next() {
 		var kind, apigroup string
 
@@ -57,13 +56,13 @@ func (cache *Cache) getClusterScopedResources(pool *pgxpool.Pool) error {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), query)
 		}
 
-		// clusterScopedResourcesLists
-		// [kind] = apigroup
-
-		//cache.clusterScopedResources[apigroup] = kind //we need to cache the resources not return
-
+		csrmap[kind] = apigroup
 	}
-	fmt.Println(cache)
+	resourcelist := &clusterScopedResourcesList{resources: csrmap, err: err} //we need to cache the resources not return
+
+	cache.clusterScoped[uid] = resourcelist
+
+	// fmt.Println(cache.clusterScoped)
 
 	return err
 }
