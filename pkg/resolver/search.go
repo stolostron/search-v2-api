@@ -126,7 +126,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	} else if uid {
 		selectDs = ds.Select("uid")
 	} else {
-		selectDs = ds.Select("uid", "cluster", "data")
+		selectDs = ds.SelectDistinct("uid", "cluster", "data")
 	}
 
 	//WHERE CLAUSE
