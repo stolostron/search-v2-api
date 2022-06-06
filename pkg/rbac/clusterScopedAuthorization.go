@@ -22,12 +22,15 @@ func (cache *Cache) checkUserResources(token string) error {
 	cr, resourcesExist := cache.clusterScoped[string(uid)]
 	if resourcesExist && cr != nil {
 		klog.V(5).Info("Using cluster scoped resources from cache.")
+		return nil
+	}
+	if resourcesExist && cr.err != nil {
 		return cr.err
 	}
 	//otherwise build query and get cluster-scoped resources for user from database and cache:
 	cache.getClusterScopedResources(db.GetConnection(), string(uid))
 
-	return cr.err
+	return nil
 }
 
 func (cache *Cache) getClusterScopedResources(pool *pgxpool.Pool, uid string) error {
@@ -38,7 +41,6 @@ func (cache *Cache) getClusterScopedResources(pool *pgxpool.Pool, uid string) er
 	//"SELECT DISTINCT(data->>apigroup, data->>kind) FROM search.resources WHERE cluster='local-cluster' AND namespace=NULL"
 	query, _, err := ds.SelectDistinct(goqu.L(`"data"->>'apigroup'`), goqu.L(`"data"->>'kind'`)).
 		Where(goqu.L(`"cluster"::TEXT = 'local-cluster'`), goqu.L(`"data"->>'namespace'`).IsNull()).ToSQL()
-
 	if err != nil {
 		klog.Errorf("Error creating query [%s]. Error: [%+v]", query, err)
 	}
@@ -50,7 +52,6 @@ func (cache *Cache) getClusterScopedResources(pool *pgxpool.Pool, uid string) er
 	csrmap := make(map[string]string)
 	for rows.Next() {
 		var kind, apigroup string
-
 		err := rows.Scan(&kind, &apigroup)
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), query)
@@ -58,11 +59,8 @@ func (cache *Cache) getClusterScopedResources(pool *pgxpool.Pool, uid string) er
 
 		csrmap[kind] = apigroup
 	}
-	resourcelist := &clusterScopedResourcesList{resources: csrmap, err: err} //we need to cache the resources not return
-
+	resourcelist := &clusterScopedResourcesList{resources: csrmap, err: err}
 	cache.clusterScoped[uid] = resourcelist
-
-	// fmt.Println(cache.clusterScoped)
 
 	return err
 }

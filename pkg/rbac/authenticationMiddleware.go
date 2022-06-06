@@ -2,6 +2,7 @@
 package rbac
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -58,4 +59,5 @@ func AuthorizeUser(token string) {
 	if err != nil {
 		klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
 	}
+	fmt.Println("Finished getting cluster-scoped resources. Now Authorizing..") //place-holder comment.
 }
