@@ -48,6 +48,8 @@ func StartAndListen() {
 	// Add authentication middleware to the /searchapi (ContextPath) subroute.
 	apiSubrouter := router.PathPrefix(config.Cfg.ContextPath).Subrouter()
 	apiSubrouter.Use(rbac.AuthenticateUser)
+	apiSubrouter.Use(rbac.AuthorizeUser)
+
 	apiSubrouter.Handle("/graphql", srv.Handler)
 
 	klog.Infof(`Search API is now running on https://localhost:%d%s/graphql`, port, config.Cfg.ContextPath)

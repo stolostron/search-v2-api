@@ -2,12 +2,16 @@
 package rbac
 
 import (
-	"fmt"
+	"context"
 	"net/http"
 	"strings"
 
 	"k8s.io/klog/v2"
 )
+
+type ContextKey string
+
+const ContextAuthTokenKey ContextKey = "authToken"
 
 // verifies token (userid) with the TokenReview:
 func AuthenticateUser(next http.Handler) http.Handler {
@@ -45,19 +49,21 @@ func AuthenticateUser(next http.Handler) http.Handler {
 
 		klog.V(6).Info("User authentication successful!")
 		//if we are authenticated can move on to next step: authorize: get cluster scopedresources and cache
-		AuthorizeUser(clientToken)
 
-		next.ServeHTTP(w, r)
+		ctx := context.WithValue(r.Context(), ContextAuthTokenKey, clientToken)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
 
 	})
 }
 
-func AuthorizeUser(token string) {
+// func AuthorizeUser(token string) {
 
-	//get user cluster-scoped resources and cache:
-	err := cache.checkUserResources(token)
-	if err != nil {
-		klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
-	}
-	fmt.Println("Finished getting cluster-scoped resources. Now Authorizing..") //place-holder comment.
-}
+// 	//get user cluster-scoped resources and cache:
+// 	clientToken := r.Context().Value(ContextAuthTokenKey).(string)
+// 	err := cache.checkUserResources(token)
+// 	if err != nil {
+// 		klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
+// 	}
+// 	fmt.Println("Finished getting cluster-scoped resources. Now Authorizing..") //place-holder comment.
+// }
