@@ -14,7 +14,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
-type tokenReviewRequest struct {
+// Encapsulates a TokenReview to store in the cache.
+type tokenReviewCacheRequest struct {
 	err         error
 	lock        sync.Mutex
 	updatedAt   time.Time
@@ -35,26 +36,26 @@ func (cache *Cache) getTokenReview(ctx context.Context, token string) (*authv1.T
 	cache.tokenReviewsLock.Lock()
 	defer cache.tokenReviewsLock.Unlock()
 
-	// Check if a TokenReviewRequest exists in the cache.
-	tr, tokenExists := cache.tokenReviews[token]
+	// Check if a TokenReviewCacheRequest exists in the cache or create a new one.
+	cachedTR, tokenExists := cache.tokenReviews[token]
 	if !tokenExists {
-		tr = &tokenReviewRequest{
+		cachedTR = &tokenReviewCacheRequest{
 			token: token,
 		}
-		cache.tokenReviews[token] = tr
+		cache.tokenReviews[token] = cachedTR
 	}
-	tr.resolveTokenReview()
-	return tr.tokenReview, tr.err
+	return cachedTR.getTokenReview()
 }
 
-func (trr *tokenReviewRequest) resolveTokenReview() *authv1.TokenReview {
+// Get the resolved TokenReview from the cached tokenReviewCachedRequest object.
+func (trr *tokenReviewCacheRequest) getTokenReview() (*authv1.TokenReview, error) {
 	// This ensures that only 1 process is updating the TokenReview data from API request.
 	trr.lock.Lock()
 	defer trr.lock.Unlock()
 
-	// Check if TokenReview data is valid.
+	// Check if cached TokenReview data is valid. Update if needed.
 	if time.Now().After(trr.updatedAt.Add(time.Duration(config.Cfg.AuthCacheTTL) * time.Millisecond)) {
-		klog.Infof("TokenReviewRequest expired or never updated. Resolving TokenReview. Last updated at: %s", trr.updatedAt)
+		klog.Infof("Resolving TokenReview. tokenReviewCacheRequest expired or never updated. Last update %s", trr.updatedAt)
 
 		tr := authv1.TokenReview{
 			Spec: authv1.TokenReviewSpec{
@@ -64,9 +65,9 @@ func (trr *tokenReviewRequest) resolveTokenReview() *authv1.TokenReview {
 		// result, err := cache.getAuthClient().TokenReviews().Create(context.TODO(), &tr, metav1.CreateOptions{})
 		result, err := config.KubeClient().AuthenticationV1().TokenReviews().Create(context.TODO(), &tr, metav1.CreateOptions{})
 		if err != nil {
-			klog.Warning("Error in Kubernetes API request to resolve TokenReview.", err.Error())
+			klog.Warning("Error resolving TokenReview from Kube API.", err.Error())
 		}
-		klog.V(9).Infof("TokenReview result: %v\n", prettyPrint(result.Status))
+		klog.V(9).Infof("TokenReview Kube API result: %v\n", prettyPrint(result.Status))
 
 		trr.updatedAt = time.Now()
 		trr.err = err
@@ -75,7 +76,7 @@ func (trr *tokenReviewRequest) resolveTokenReview() *authv1.TokenReview {
 		klog.V(6).Info("Using cached TokenReview.")
 	}
 
-	return trr.tokenReview
+	return trr.tokenReview, trr.err
 }
 
 // https://stackoverflow.com/a/51270134
