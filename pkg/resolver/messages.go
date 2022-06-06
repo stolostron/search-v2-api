@@ -39,7 +39,7 @@ func (s *Message) buildSearchAddonDisabledQuery(ctx context.Context) {
 	ds := goqu.From(schemaTable1).
 		LeftOuterJoin(schemaTable2,
 			goqu.On(goqu.L(`"mcInfo".data->>?`, "name").Eq(goqu.L(`"srchAddon".data->>?`, "namespace")),
-				goqu.L(`"srchAddon".data->>?`, "kind").Eq("ManagedClusterAddOn"),
+				goqu.L(`"srchAddon".data->>?`, "kind").Eq("managedclusteraddon"),
 				goqu.L(`"srchAddon".data->>?`, "name").Eq("search-collector")))
 
 	//SELECT CLAUSE
@@ -49,7 +49,7 @@ func (s *Message) buildSearchAddonDisabledQuery(ctx context.Context) {
 	var whereDs []exp.Expression
 
 	// select ManagedClusterInfo
-	whereDs = append(whereDs, goqu.L(`"mcInfo".data->>?`, "kind").Eq("ManagedClusterInfo"))
+	whereDs = append(whereDs, goqu.L(`"mcInfo".data->>?`, "kind").Eq("managedclusterinfo"))
 	// addon uid will be null if addon is disabled
 	whereDs = append(whereDs, goqu.L(`"srchAddon".uid`).IsNull())
 	// exclude local-cluster

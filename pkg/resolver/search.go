@@ -408,7 +408,7 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 
 	if input.Keywords != nil && len(input.Keywords) > 0 {
 		// Sample query: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data")
-		// WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' IN ('Pod')))
+		// WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' IN ('pod')))
 		keywords := pointerToStringArray(input.Keywords)
 		for _, key := range keywords {
 			key = "%" + key + "%"
