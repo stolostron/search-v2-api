@@ -14,6 +14,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
+	"github.com/lib/pq"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
@@ -268,11 +269,12 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 			exps = append(exps, goqu.L(`"data"->>?`, prop).Gt(val))
 		}
 	case "=":
-
 		exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
 	default:
 		if prop == "cluster" {
 			exps = append(exps, goqu.C(prop).In(values))
+		} else if prop == "kind" { //ILIKE to enable case-insensitive comparison for kind
+			exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
 		} else {
 			exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
 		}
@@ -408,7 +410,7 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 
 	if input.Keywords != nil && len(input.Keywords) > 0 {
 		// Sample query: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data")
-		// WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' IN ('Pod')))
+		// WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' IN ('pod')))
 		keywords := pointerToStringArray(input.Keywords)
 		for _, key := range keywords {
 			key = "%" + key + "%"
