@@ -6,48 +6,47 @@ import (
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
-	"github.com/jackc/pgx/v4/pgxpool"
-	db "github.com/stolostron/search-v2-api/pkg/database"
+	"github.com/stolostron/search-v2-api/pkg/config"
 	"k8s.io/klog/v2"
 )
 
-type clusterScopedResourcesList struct {
+type sharedList struct {
 	err       error
-	resources map[string][]string // map of apigroup:[kind1, kind2, ..etc]
+	resources map[string][]string
 	updatedAt time.Time
 }
 
-func (cache *Cache) checkUserResources(token string) error {
+func (cache *Cache) checkUserResources(uid string) (bool, error) {
 
-	// look at cache for specific user uid
-	uid := cache.tokenReviews[token].tokenReview.UID
 	//check if we already have the resources in cache
-	cr, resourcesExist := cache.clusterScoped[string(uid)]
-	if resourcesExist && cr != nil {
+	cr, resourcesExist := cache.shared[string(uid)]
+	if resourcesExist && time.Now().Before(cr.updatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Second)) {
 		klog.V(5).Info("Using cluster scoped resources from cache.")
-		return nil
+		return resourcesExist, nil
 	}
 	if resourcesExist && cr.err != nil {
-		return cr.err
+		return resourcesExist, cr.err
 	}
 	//otherwise build query and get cluster-scoped resources for user from database and cache:
-	err := cache.getClusterScopedResources(db.GetConnection(), string(uid))
+	err := cache.getClusterScopedResources(string(uid))
 
-	return err
+	return resourcesExist, err
 }
 
-func (cache *Cache) getClusterScopedResources(pool *pgxpool.Pool, uid string) error {
+func (cache *Cache) getClusterScopedResources(uid string) error {
 
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 
-	//"SELECT DISTINCT(data->>apigroup, data->>kind) FROM search.resources WHERE cluster='local-cluster' AND namespace=NULL"
-	query, _, err := ds.SelectDistinct(goqu.L(`"data"->>'apigroup'`), goqu.L(`"data"->>'kind'`)).
+	//"SELECT DISTINCT(data->>apigroup, data->>kind) FROM search.resources WHERE
+	// cluster='local-cluster' AND namespace=NULL"
+	query, _, err := ds.SelectDistinct(goqu.COALESCE(goqu.L(`"data"->>'apigroup'`), "").As("apigroup"),
+		goqu.COALESCE(goqu.L(`"data"->>'kind'`), "").As("kind")).
 		Where(goqu.L(`"cluster"::TEXT = 'local-cluster'`), goqu.L(`"data"->>'namespace'`).IsNull()).ToSQL()
 	if err != nil {
 		klog.Errorf("Error creating query [%s]. Error: [%+v]", query, err)
 	}
-	rows, err := pool.Query(context.Background(), query, nil...)
+	rows, err := cache.pool.Query(context.Background(), query, nil...)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s]. Error: [%+v]", query, err)
 	}
@@ -57,19 +56,18 @@ func (cache *Cache) getClusterScopedResources(pool *pgxpool.Pool, uid string) er
 	for rows.Next() {
 		var kind string
 		var apigroup string
-		err := rows.Scan(&kind, &apigroup)
+		err := rows.Scan(&apigroup, &kind)
 		if err != nil {
-			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), query)
+			klog.Errorf("Error %s retrieving rows for query:%s for apigroup %s and kind %s", err.Error(), query, apigroup, kind)
 		}
 
-		csrmap[kind] = append(csrmap[kind], apigroup)
+		csrmap[apigroup] = append(csrmap[apigroup], kind)
 
 	}
 
-	resourcelist := &clusterScopedResourcesList{resources: csrmap, err: err, updatedAt: time.Now()}
-	cache.clusterScoped[uid] = resourcelist
+	resourcelist := &sharedList{resources: csrmap, err: err, updatedAt: time.Now()}
+	cache.shared[uid] = resourcelist
 
 	fmt.Println(resourcelist)
-
 	return err
 }

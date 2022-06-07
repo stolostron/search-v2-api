@@ -2,33 +2,94 @@ package rbac
 
 import (
 	"testing"
+	"time"
+
+	"github.com/driftprogramming/pgxpoolmock"
+	"github.com/golang/mock/gomock"
 )
 
 // Initialize cache object to use tests.
-// func newCache() Cache {
-// 	return Cache{
-// 		// Use a fake Kubernetes authentication client.
-// 		authClient:          fake.NewSimpleClientset().AuthenticationV1(),
-// 		tokenReviews:        map[string]*tokenReviewResult{},
-// 		tokenReviewsPending: map[string][]chan *tokenReviewResult{},
-// 		tokenReviewsLock:    sync.Mutex{},
-// 	}
-// }
+func newResourcesListCache() Cache {
+	return Cache{
+		pool:   pgxpoolmock.PgxPool(),
+		shared: map[string]*sharedList{},
+	}
+}
 
-func Test_GetResourcesIfEmptyCache(t *testing.T) {
+func Test_getResources_emptyCache(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 
-	// // Initialize cache with empty state.
-	// cache := newCache()
+	cache := newResourcesListCache()
 
-	// // Execute function
-	// result, err := cache.IsValidToken(context.TODO(), "1234567890")
+	result, err := cache.checkUserResources("fakeclienttoken", mockpool)
 
-	// // Validate results
-	// if result {
-	// 	t.Error("Expected token to be invalid.")
-	// }
-	// if err != nil {
-	// 	t.Error("Received unexpected error from IsValidToken()", err)
-	// }
+	if result {
+		t.Error("Resources not in cache.")
+	}
+	if err != nil {
+		t.Error("Received unexpected error from checkUserResources()", err)
+	}
+
+}
+
+func Test_getResouces_usingCache(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
+
+	cache := newResourcesListCache()
+	resourcemap := make(map[string][]string)
+	var apigroups string
+	var kinds []string
+
+	kinds = append(kinds, "kind1", "kind2")
+	apigroups = "apigroup1"
+
+	resourcemap[apigroups] = kinds
+	cache.shared["fakeuseruid"] = &sharedList{
+		updatedAt: time.Now(),
+		resources: resourcemap,
+	}
+
+	result, err := cache.checkUserResources("fakeclient", mockPool)
+
+	if result {
+		t.Error("Expected resources in cache.")
+	}
+
+	if err != nil {
+		t.Error("Received unexpected error from checkUserResources()", err)
+	}
+}
+
+func Test_getResources_expiredCache(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
+
+	cache := newResourcesListCache()
+	resourcemap := make(map[string][]string)
+	var apigroups string
+	var kinds []string
+
+	kinds = append(kinds, "kind1", "kind2")
+	apigroups = "apigroup1"
+
+	resourcemap[apigroups] = kinds
+	cache.shared["fakeuseruid"] = &sharedList{
+		updatedAt: time.Now().Add(time.Duration(-2) * time.Minute),
+		resources: resourcemap,
+	}
+
+	result, err := cache.checkUserResources("fakeclient", mockPool)
+
+	if result {
+		t.Error("Resources need to be updated")
+	}
+	if err != nil {
+		t.Error("Received unexpected error from checkUserResources()", err)
+	}
 
 }

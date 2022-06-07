@@ -12,7 +12,8 @@ func AuthorizeUser(next http.Handler) http.Handler {
 
 		//get user cluster-scoped resources and cache:
 		clientToken := r.Context().Value(ContextAuthTokenKey).(string)
-		err := cache.checkUserResources(clientToken)
+		uid := cache.tokenReviews[clientToken].tokenReview.UID
+		_, err := cache.checkUserResources(string(uid))
 		if err != nil {
 			klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
 		}

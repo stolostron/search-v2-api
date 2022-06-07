@@ -18,6 +18,7 @@ var Cfg = new()
 type Config struct {
 	API_SERVER_URL string // address for Kubernetes API Server
 	AuthCacheTTL   int    // Time-to-live of Authentication (TokenReview) cache in milliseconds.
+	SharedCacheTTL int    // Time-to-live Hub Cluster scoped resources cache in milliseconds.
 	ContextPath    string
 	DBHost         string
 	DBName         string
@@ -39,6 +40,7 @@ func new() *Config {
 	conf := &Config{
 		API_SERVER_URL: getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
 		AuthCacheTTL:   getEnvAsInt("AUTH_CACHE_TTL", int(60000)),
+		SharedCacheTTL: getEnvAsInt("AUTHOR_CACHE_TTL", int(600000)),
 		ContextPath:    getEnv("CONTEXT_PATH", "/searchapi"),
 		DBHost:         getEnv("DB_HOST", "localhost"),
 		DBName:         getEnv("DB_NAME", ""),
