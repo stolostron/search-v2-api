@@ -27,7 +27,6 @@ type tokenReviewCache struct {
 // Will use cached data if available and valid, otherwise starts a new request.
 func (cache *Cache) IsValidToken(ctx context.Context, token string) (bool, error) {
 	tr, err := cache.getTokenReview(ctx, token)
-	klog.Infof("IsValidToken() %+v  %+v", tr, err)
 	return tr.Status.Authenticated, err
 }
 
@@ -56,15 +55,15 @@ func (trr *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
 
 	// Check if cached TokenReview data is valid. Update if needed.
 	if time.Now().After(trr.updatedAt.Add(time.Duration(config.Cfg.AuthCacheTTL) * time.Millisecond)) {
-		klog.Infof("Resolving TokenReview. tokenReviewCacheRequest expired or never updated. Last update %s", trr.updatedAt)
+		klog.V(5).Infof("Resolving TokenReview. tokenReviewCacheRequest expired or never updated. Last update %s", trr.updatedAt)
 
 		tr := authv1.TokenReview{
 			Spec: authv1.TokenReviewSpec{
 				Token: trr.token,
 			},
 		}
-		// result, err := cache.getAuthClient().TokenReviews().Create(context.TODO(), &tr, metav1.CreateOptions{})
-		result, err := config.KubeClient().AuthenticationV1().TokenReviews().Create(context.TODO(), &tr, metav1.CreateOptions{})
+
+		result, err := cache.getAuthClient().TokenReviews().Create(context.TODO(), &tr, metav1.CreateOptions{})
 		if err != nil {
 			klog.Warning("Error resolving TokenReview from Kube API.", err.Error())
 		}
