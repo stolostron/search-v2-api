@@ -15,7 +15,7 @@ import (
 )
 
 // Encapsulates a TokenReview to store in the cache.
-type tokenReviewCacheRequest struct {
+type tokenReviewCache struct {
 	err         error
 	lock        sync.Mutex
 	updatedAt   time.Time
@@ -27,6 +27,7 @@ type tokenReviewCacheRequest struct {
 // Will use cached data if available and valid, otherwise starts a new request.
 func (cache *Cache) IsValidToken(ctx context.Context, token string) (bool, error) {
 	tr, err := cache.getTokenReview(ctx, token)
+	klog.Infof("IsValidToken() %+v  %+v", tr, err)
 	return tr.Status.Authenticated, err
 }
 
@@ -39,7 +40,7 @@ func (cache *Cache) getTokenReview(ctx context.Context, token string) (*authv1.T
 	// Check if a TokenReviewCacheRequest exists in the cache or create a new one.
 	cachedTR, tokenExists := cache.tokenReviews[token]
 	if !tokenExists {
-		cachedTR = &tokenReviewCacheRequest{
+		cachedTR = &tokenReviewCache{
 			token: token,
 		}
 		cache.tokenReviews[token] = cachedTR
@@ -48,7 +49,7 @@ func (cache *Cache) getTokenReview(ctx context.Context, token string) (*authv1.T
 }
 
 // Get the resolved TokenReview from the cached tokenReviewCachedRequest object.
-func (trr *tokenReviewCacheRequest) getTokenReview() (*authv1.TokenReview, error) {
+func (trr *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
 	// This ensures that only 1 process is updating the TokenReview data from API request.
 	trr.lock.Lock()
 	defer trr.lock.Unlock()
