@@ -273,7 +273,7 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 	default:
 		if prop == "cluster" {
 			exps = append(exps, goqu.C(prop).In(values))
-		} else if prop == "kind" { //ILIKE to enable case-insensitive comparison for kind
+		} else if prop == "kind" { //ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
 			exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
 		} else {
 			exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
