@@ -34,7 +34,7 @@ func (cache *Cache) getTokenReview(ctx context.Context, token string) (*authv1.T
 	// Check if we can use TokenReview from the cache.
 	tr, tokenExists := cache.tokenReviews[token]
 	if tokenExists && time.Now().Before(tr.updatedAt.Add(time.Duration(config.Cfg.AuthCacheTTL)*time.Millisecond)) {
-		klog.V(5).Info("Using TokenReview from cache.")
+		klog.V(6).Info("Using TokenReview from cache.")
 		cache.tokenReviewsLock.Unlock()
 		return tr.tokenReview, tr.err
 	}
