@@ -34,6 +34,55 @@ func (cache *Cache) IsValidToken(ctx context.Context, token string) (bool, error
 // Will use cached data if available and valid, otherwise starts a new request.
 func (cache *Cache) getTokenReview(ctx context.Context, token string) (*authv1.TokenReview, error) {
 	cache.tokenReviewsLock.Lock()
+
+	// Check if we can use TokenReview from the cache.
+	tr, tokenExists := cache.tokenReviews[token]
+	if tokenExists && time.Now().Before(tr.updatedAt.Add(time.Duration(config.Cfg.AuthCacheTTL)*time.Millisecond)) {
+		klog.V(6).Info("Using TokenReview from cache.")
+		cache.tokenReviewsLock.Unlock()
+		return tr.tokenReview, tr.err
+	}
+	cache.tokenReviewsLock.Unlock()
+
+	// Start a new TokenReview request.
+	result := make(chan *tokenReviewResult)
+	go cache.doTokenReview(ctx, token, result)
+
+	// Wait until the TokenReview request gets resolved.
+	tr = <-result
+	return tr.tokenReview, tr.err
+}
+
+// Starts a new TokenReview request. Results are sent to the provided ch so this runs asynchronously.
+// Keeps track of pending requests to avoid triggering multiple concurrent requests for the same token.
+func (cache *Cache) doTokenReview(ctx context.Context, token string, ch chan *tokenReviewResult) {
+	cache.tokenReviewsLock.Lock()
+	// Check if there's a pending TokenReview
+	_, foundPending := cache.tokenReviewsPending[token]
+	if foundPending {
+		klog.V(5).Info("Found a pending TokenReview, adding channel to get notified when resolved.")
+		cache.tokenReviewsPending[token] = append(cache.tokenReviewsPending[token], ch)
+		cache.tokenReviewsLock.Unlock()
+		return
+	} else {
+		klog.V(5).Info("Triggering a new TokenReview request.")
+		cache.tokenReviewsPending[token] = []chan *tokenReviewResult{ch}
+	}
+	cache.tokenReviewsLock.Unlock()
+
+	// Create a new TokenReview request.
+	tr := authv1.TokenReview{
+		Spec: authv1.TokenReviewSpec{
+			Token: token,
+		},
+	}
+	result, err := cache.getAuthClient().TokenReviews().Create(ctx, &tr, metav1.CreateOptions{})
+	if err != nil {
+		klog.Warning("Error during TokenReview. ", err.Error())
+	}
+	klog.V(9).Infof("TokenReview result: %v\n", prettyPrint(result.Status))
+
+	cache.tokenReviewsLock.Lock()
 	defer cache.tokenReviewsLock.Unlock()
 
 	// Check if a TokenReviewCacheRequest exists in the cache or create a new one.
