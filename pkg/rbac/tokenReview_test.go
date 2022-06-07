@@ -24,10 +24,10 @@ func newCache() Cache {
 // TokenReview with empty cache.
 func Test_IsValidToken_emptyCache(t *testing.T) {
 	// Initialize cache with empty state.
-	cache := newCache()
+	mock_cache := newCache()
 
 	// Execute function
-	result, err := cache.IsValidToken(context.TODO(), "1234567890")
+	result, err := mock_cache.IsValidToken(context.TODO(), "1234567890")
 
 	// Validate results
 	if result {
@@ -41,8 +41,8 @@ func Test_IsValidToken_emptyCache(t *testing.T) {
 // TokenReview exists in cache
 func Test_IsValidToken_usingCache(t *testing.T) {
 	// Initialize cache and set state.
-	cache := newCache()
-	cache.tokenReviews["1234567890"] = &tokenReviewCache{
+	mock_cache := newCache()
+	mock_cache.tokenReviews["1234567890"] = &tokenReviewCache{
 		updatedAt: time.Now(),
 		tokenReview: &authv1.TokenReview{
 			Status: authv1.TokenReviewStatus{
@@ -52,7 +52,7 @@ func Test_IsValidToken_usingCache(t *testing.T) {
 	}
 
 	// Execute function
-	result, err := cache.IsValidToken(context.TODO(), "1234567890")
+	result, err := mock_cache.IsValidToken(context.TODO(), "1234567890")
 
 	// Validate results
 	if !result {
@@ -66,8 +66,8 @@ func Test_IsValidToken_usingCache(t *testing.T) {
 // TokenReview in cache is older than 60 seconds.
 func Test_IsValidToken_expiredCache(t *testing.T) {
 	// Initialize cache and set state to TokenReview updated 5 minutes ago.
-	cache := newCache()
-	cache.tokenReviews["1234567890-expired"] = &tokenReviewCache{
+	mock_cache := newCache()
+	mock_cache.tokenReviews["1234567890-expired"] = &tokenReviewCache{
 		updatedAt: time.Now().Add(time.Duration(-5) * time.Minute),
 		token:     "1234567890-expired",
 		tokenReview: &authv1.TokenReview{
@@ -78,7 +78,7 @@ func Test_IsValidToken_expiredCache(t *testing.T) {
 	}
 
 	// Execute function
-	result, err := cache.IsValidToken(context.TODO(), "1234567890-expired")
+	result, err := mock_cache.IsValidToken(context.TODO(), "1234567890-expired")
 
 	// Validate results
 	if result {
@@ -88,7 +88,7 @@ func Test_IsValidToken_expiredCache(t *testing.T) {
 		t.Error("Received unexpected error from IsValidToken()", err)
 	}
 	// Verify that cache was updated within the last 1 millisecond.
-	if cache.tokenReviews["1234567890-expired"].updatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
+	if mock_cache.tokenReviews["1234567890-expired"].updatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
 		t.Error("Expected the cached TokenReview to be updated within the last millisecond.")
 	}
 
