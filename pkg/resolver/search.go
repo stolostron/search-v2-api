@@ -14,6 +14,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
+	"github.com/lib/pq"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
@@ -268,11 +269,12 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 			exps = append(exps, goqu.L(`"data"->>?`, prop).Gt(val))
 		}
 	case "=":
-
 		exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
 	default:
 		if prop == "cluster" {
 			exps = append(exps, goqu.C(prop).In(values))
+		} else if prop == "kind" { //case-insensitive comparison for kind
+			exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
 		} else {
 			exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
 		}
