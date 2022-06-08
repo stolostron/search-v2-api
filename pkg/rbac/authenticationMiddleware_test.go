@@ -87,8 +87,6 @@ func TestAuthenticateHeaderUser(t *testing.T) {
 	authen := AuthenticateUser(authenticateHandler)
 
 	authen.ServeHTTP(response, r)
-	// assert.Equal(t, http.StatusInternalServerError, response.Code)
-	// assert.Equal(t, "{\"message\":\"Unexpected error while authenticating the request token.\"}\n", response.Body.String())
 
 	assert.Equal(t, http.StatusForbidden, response.Code)
 	assert.Equal(t, "{\"message\":\"Invalid token\"}\n", response.Body.String())

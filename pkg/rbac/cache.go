@@ -16,5 +16,6 @@ type Cache struct {
 
 // Initialize the cache as a singleton instance.
 var cache = Cache{
-	tokenReviews: map[string]*tokenReviewCache{},
+	tokenReviews:     map[string]*tokenReviewCache{},
+	tokenReviewsLock: sync.Mutex{},
 }
