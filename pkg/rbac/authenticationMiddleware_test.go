@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +15,8 @@ import (
 func TestMain(m *testing.M) {
 	// Replace the cache with a mock cache with a fake kubernetes client.
 	cache = newMockCache()
-	m.Run()
+	code := m.Run()
+	os.Exit(code)
 }
 
 //test token from cookie
