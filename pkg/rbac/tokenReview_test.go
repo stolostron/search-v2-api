@@ -68,8 +68,9 @@ func Test_IsValidToken_expiredCache(t *testing.T) {
 	// Initialize cache and set state to TokenReview updated 5 minutes ago.
 	mock_cache := newMockCache()
 	mock_cache.tokenReviews["1234567890-expired"] = &tokenReviewCache{
-		updatedAt: time.Now().Add(time.Duration(-5) * time.Minute),
-		token:     "1234567890-expired",
+		authClient: fake.NewSimpleClientset().AuthenticationV1(),
+		updatedAt:  time.Now().Add(time.Duration(-5) * time.Minute),
+		token:      "1234567890-expired",
 		tokenReview: &authv1.TokenReview{
 			Status: authv1.TokenReviewStatus{
 				Authenticated: true,

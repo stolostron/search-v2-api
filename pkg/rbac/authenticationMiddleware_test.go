@@ -14,6 +14,7 @@ import (
 func TestMain(m *testing.M) {
 	// Replace the cache with a mock cache with a fake kubernetes client.
 	cache = newMockCache()
+	m.Run()
 }
 
 //test token from cookie

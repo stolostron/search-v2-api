@@ -41,7 +41,7 @@ func (c *Cache) getTokenReview(ctx context.Context, token string) (*authv1.Token
 	cachedTR, tokenExists := c.tokenReviews[token]
 	if !tokenExists {
 		cachedTR = &tokenReviewCache{
-			authClient: c.authClient,
+			authClient: c.getAuthClient(),
 			token:      token,
 		}
 		c.tokenReviews[token] = cachedTR
