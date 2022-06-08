@@ -12,23 +12,22 @@ import (
 )
 
 // Initialize cache object to use tests.
-func newCache() Cache {
+func newMockCache() Cache {
 	return Cache{
 		// Use a fake Kubernetes authentication client.
-		authClient:          fake.NewSimpleClientset().AuthenticationV1(),
-		tokenReviews:        map[string]*tokenReviewResult{},
-		tokenReviewsPending: map[string][]chan *tokenReviewResult{},
-		tokenReviewsLock:    sync.Mutex{},
+		authClient:       fake.NewSimpleClientset().AuthenticationV1(),
+		tokenReviews:     map[string]*tokenReviewCache{},
+		tokenReviewsLock: sync.Mutex{},
 	}
 }
 
 // TokenReview with empty cache.
 func Test_IsValidToken_emptyCache(t *testing.T) {
 	// Initialize cache with empty state.
-	cache := newCache()
+	mock_cache := newMockCache()
 
 	// Execute function
-	result, err := cache.IsValidToken(context.TODO(), "1234567890")
+	result, err := mock_cache.IsValidToken(context.TODO(), "1234567890")
 
 	// Validate results
 	if result {
@@ -42,8 +41,8 @@ func Test_IsValidToken_emptyCache(t *testing.T) {
 // TokenReview exists in cache
 func Test_IsValidToken_usingCache(t *testing.T) {
 	// Initialize cache and set state.
-	cache := newCache()
-	cache.tokenReviews["1234567890"] = &tokenReviewResult{
+	mock_cache := newMockCache()
+	mock_cache.tokenReviews["1234567890"] = &tokenReviewCache{
 		updatedAt: time.Now(),
 		tokenReview: &authv1.TokenReview{
 			Status: authv1.TokenReviewStatus{
@@ -53,7 +52,7 @@ func Test_IsValidToken_usingCache(t *testing.T) {
 	}
 
 	// Execute function
-	result, err := cache.IsValidToken(context.TODO(), "1234567890")
+	result, err := mock_cache.IsValidToken(context.TODO(), "1234567890")
 
 	// Validate results
 	if !result {
@@ -66,10 +65,12 @@ func Test_IsValidToken_usingCache(t *testing.T) {
 
 // TokenReview in cache is older than 60 seconds.
 func Test_IsValidToken_expiredCache(t *testing.T) {
-	// Initialize cache and set state to TokenReview updated 2 minutes ago.
-	cache := newCache()
-	cache.tokenReviews["1234567890"] = &tokenReviewResult{
-		updatedAt: time.Now().Add(time.Duration(-2) * time.Minute),
+	// Initialize cache and set state to TokenReview updated 5 minutes ago.
+	mock_cache := newMockCache()
+	mock_cache.tokenReviews["1234567890-expired"] = &tokenReviewCache{
+		authClient: fake.NewSimpleClientset().AuthenticationV1(),
+		updatedAt:  time.Now().Add(time.Duration(-5) * time.Minute),
+		token:      "1234567890-expired",
 		tokenReview: &authv1.TokenReview{
 			Status: authv1.TokenReviewStatus{
 				Authenticated: true,
@@ -78,7 +79,7 @@ func Test_IsValidToken_expiredCache(t *testing.T) {
 	}
 
 	// Execute function
-	result, err := cache.IsValidToken(context.TODO(), "1234567890")
+	result, err := mock_cache.IsValidToken(context.TODO(), "1234567890-expired")
 
 	// Validate results
 	if result {
@@ -88,24 +89,8 @@ func Test_IsValidToken_expiredCache(t *testing.T) {
 		t.Error("Received unexpected error from IsValidToken()", err)
 	}
 	// Verify that cache was updated within the last 1 millisecond.
-	if cache.tokenReviews["1234567890"].updatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
+	if mock_cache.tokenReviews["1234567890-expired"].updatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
 		t.Error("Expected the cached TokenReview to be updated within the last millisecond.")
 	}
 
-}
-
-// TokenReview pending request for same token.
-func Test_IsValidToken_pendingRequest(t *testing.T) {
-	// Initialize cache state with a pending TokenReview.
-	cache := newCache()
-	cache.tokenReviewsPending["1234567890-pending"] = []chan *tokenReviewResult{make(chan *tokenReviewResult)}
-
-	// Execute function
-	var testCH chan *tokenReviewResult
-	cache.doTokenReview(context.TODO(), "1234567890-pending", testCH)
-
-	// Validate result
-	if len(cache.tokenReviewsPending["1234567890-pending"]) != 2 {
-		t.Error("Expected channel to be added to pendingTokenReviews.")
-	}
 }

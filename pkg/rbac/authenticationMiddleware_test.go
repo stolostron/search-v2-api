@@ -5,12 +5,21 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-//test valid token from cookie
+// Runs before the tests
+func TestMain(m *testing.M) {
+	// Replace the cache with a mock cache with a fake kubernetes client.
+	cache = newMockCache()
+	code := m.Run()
+	os.Exit(code)
+}
+
+//test token from cookie
 func TestTokenCookieAuthenticated(t *testing.T) {
 	authenticateHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
 
@@ -24,8 +33,8 @@ func TestTokenCookieAuthenticated(t *testing.T) {
 	authen := AuthenticateUser(authenticateHandler)
 
 	authen.ServeHTTP(response, r)
-	assert.Equal(t, response.Code, http.StatusInternalServerError)
-	assert.Equal(t, response.Body.String(), "{\"message\":\"Unexpected error while authenticating the request token.\"}\n")
+	assert.Equal(t, http.StatusForbidden, response.Code)
+	assert.Equal(t, "{\"message\":\"Invalid token\"}\n", response.Body.String())
 
 }
 
@@ -44,8 +53,8 @@ func TestTokenInvalidCookieAuthenticated(t *testing.T) {
 	authen := AuthenticateUser(authenticateHandler)
 
 	authen.ServeHTTP(response, r)
-	assert.Equal(t, response.Code, http.StatusUnauthorized) //token is not provided/invalid
-	assert.Equal(t, response.Body.String(), "{\"message\":\"Request didn't have a valid authentication token.\"}\n")
+	assert.Equal(t, http.StatusUnauthorized, response.Code) //token is not provided/invalid
+	assert.Equal(t, "{\"message\":\"Request didn't have a valid authentication token.\"}\n", response.Body.String())
 }
 
 //test invalid cookie value
@@ -63,11 +72,11 @@ func TestTokenInvalidCookieValueAuthenticated(t *testing.T) {
 	authen := AuthenticateUser(authenticateHandler)
 
 	authen.ServeHTTP(response, r)
-	assert.Equal(t, response.Code, http.StatusUnauthorized) //token is not provided/invalid
-	assert.Equal(t, response.Body.String(), "{\"message\":\"Request didn't have a valid authentication token.\"}\n")
+	assert.Equal(t, http.StatusUnauthorized, response.Code) //token is not provided/invalid
+	assert.Equal(t, "{\"message\":\"Request didn't have a valid authentication token.\"}\n", response.Body.String())
 }
 
-// test valid header bearer token
+// test Authorization header bearer token
 func TestAuthenticateHeaderUser(t *testing.T) {
 
 	authenticateHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
@@ -81,8 +90,9 @@ func TestAuthenticateHeaderUser(t *testing.T) {
 	authen := AuthenticateUser(authenticateHandler)
 
 	authen.ServeHTTP(response, r)
-	assert.Equal(t, response.Code, http.StatusInternalServerError)
-	assert.Equal(t, response.Body.String(), "{\"message\":\"Unexpected error while authenticating the request token.\"}\n")
+
+	assert.Equal(t, http.StatusForbidden, response.Code)
+	assert.Equal(t, "{\"message\":\"Invalid token\"}\n", response.Body.String())
 }
 
 //test invalid header key
@@ -99,8 +109,8 @@ func TestAuthenticateInvalidHeaderUser(t *testing.T) {
 	authen := AuthenticateUser(authenticateHandler)
 
 	authen.ServeHTTP(response, r)
-	assert.Equal(t, response.Code, http.StatusUnauthorized) //token is not provided/invalid
-	assert.Equal(t, response.Body.String(), "{\"message\":\"Request didn't have a valid authentication token.\"}\n")
+	assert.Equal(t, http.StatusUnauthorized, response.Code) //token is not provided/invalid
+	assert.Equal(t, "{\"message\":\"Request didn't have a valid authentication token.\"}\n", response.Body.String())
 
 }
 
@@ -115,8 +125,8 @@ func TestAuthenticateNoTokenUser(t *testing.T) {
 	authenticateHandler(response, r)
 	authen := AuthenticateUser(authenticateHandler)
 	authen.ServeHTTP(response, r)
-	assert.Equal(t, response.Code, http.StatusUnauthorized) //token is not provided/invalid
-	assert.Equal(t, response.Body.String(), "{\"message\":\"Request didn't have a valid authentication token.\"}\n")
+	assert.Equal(t, http.StatusUnauthorized, response.Code) //token is not provided/invalid
+	assert.Equal(t, "{\"message\":\"Request didn't have a valid authentication token.\"}\n", response.Body.String())
 }
 
 // test empty header token value
@@ -133,7 +143,7 @@ func TestAuthenticateEmptyTokenUser(t *testing.T) {
 	authen := AuthenticateUser(authenticateHandler)
 
 	authen.ServeHTTP(response, r)
-	assert.Equal(t, response.Code, http.StatusUnauthorized) //token is not provided/invalid
-	assert.Equal(t, response.Body.String(), "{\"message\":\"Request didn't have a valid authentication token.\"}\n")
+	assert.Equal(t, http.StatusUnauthorized, response.Code) //token is not provided/invalid
+	assert.Equal(t, "{\"message\":\"Request didn't have a valid authentication token.\"}\n", response.Body.String())
 
 }
