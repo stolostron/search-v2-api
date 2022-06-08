@@ -16,10 +16,10 @@ import (
 
 // Encapsulates a TokenReview to store in the cache.
 type tokenReviewCache struct {
+	authClient  v1.AuthenticationV1Interface // This allows tests to replace with mock client.
 	err         error
 	lock        sync.Mutex
 	updatedAt   time.Time
-	parentCache *Cache // Reference back to parent cache.
 	token       string
 	tokenReview *authv1.TokenReview
 }
@@ -41,8 +41,8 @@ func (c *Cache) getTokenReview(ctx context.Context, token string) (*authv1.Token
 	cachedTR, tokenExists := c.tokenReviews[token]
 	if !tokenExists {
 		cachedTR = &tokenReviewCache{
-			parentCache: c,
-			token:       token,
+			authClient: c.authClient,
+			token:      token,
 		}
 		c.tokenReviews[token] = cachedTR
 	}
@@ -65,7 +65,7 @@ func (trc *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
 			},
 		}
 
-		result, err := trc.parentCache.getAuthClient().TokenReviews().Create(context.TODO(), &tr, metav1.CreateOptions{})
+		result, err := trc.authClient.TokenReviews().Create(context.TODO(), &tr, metav1.CreateOptions{})
 		if err != nil {
 			klog.Warning("Error resolving TokenReview from Kube API.", err.Error())
 		}
