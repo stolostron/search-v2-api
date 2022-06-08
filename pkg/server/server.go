@@ -41,7 +41,8 @@ func StartAndListen() {
 	router.HandleFunc("/readiness", readinessProbe).Methods("GET")
 
 	if config.Cfg.PlaygroundMode {
-		router.Handle("/playground", playground.Handler("Search GraphQL playground", fmt.Sprintf("%s/graphql", config.Cfg.ContextPath)))
+		router.Handle("/playground",
+			playground.Handler("Search GraphQL playground", fmt.Sprintf("%s/graphql", config.Cfg.ContextPath)))
 		klog.Infof("GraphQL playground is now running on https://localhost:%d/playground", port)
 	}
 
