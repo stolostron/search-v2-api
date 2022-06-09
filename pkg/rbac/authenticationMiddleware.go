@@ -35,11 +35,12 @@ func AuthenticateUser(next http.Handler) http.Handler {
 			return
 		}
 
-		authenticated, err := cache.IsValidToken(r.Context(), clientToken)
+		authenticated, err := Instcache.IsValidToken(r.Context(), clientToken)
 		if err != nil {
 			klog.Warning("Unexpected error while authenticating the request token.", err)
 			http.Error(w, "{\"message\":\"Unexpected error while authenticating the request token.\"}", http.StatusInternalServerError)
 			return
+
 		}
 		if !authenticated {
 			klog.V(4).Info("Rejecting request: Invalid token.")
@@ -47,7 +48,7 @@ func AuthenticateUser(next http.Handler) http.Handler {
 			return
 		}
 
-		klog.V(6).Info("User authentication successful!")
+		klog.V(4).Info("User authentication successful!")
 		//if we are authenticated can move on to next step: authorize: get cluster scopedresources and cache
 
 		ctx := context.WithValue(r.Context(), ContextAuthTokenKey, clientToken)
@@ -56,14 +57,3 @@ func AuthenticateUser(next http.Handler) http.Handler {
 
 	})
 }
-
-// func AuthorizeUser(token string) {
-
-// 	//get user cluster-scoped resources and cache:
-// 	clientToken := r.Context().Value(ContextAuthTokenKey).(string)
-// 	err := cache.checkUserResources(token)
-// 	if err != nil {
-// 		klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
-// 	}
-// 	fmt.Println("Finished getting cluster-scoped resources. Now Authorizing..") //place-holder comment.
-// }
