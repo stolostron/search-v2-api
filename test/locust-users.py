@@ -14,6 +14,9 @@ class UserBehavior(TaskSet):
     def do_search(self):
         f = open("search-query-template.json",)
         j = json.load(f)
+        # 
+        # TODO: Here we can manipulate j.variables to pass different input parameters to the search query.
+        # 
         self.client.payload = j
         self.client.headers
         self.do_post()

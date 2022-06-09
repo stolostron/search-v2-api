@@ -38,7 +38,7 @@ N_USERS ?=2
 #HOST ?=localhost:4010
 HOST ?=search-api-open-cluster-management.apps.sno-410-2xlarge-7s7tl.dev07.red-chesterfield.com 
 test-scale: check-locust ## Sends multiple simulated requests for testing using Locust. Use N_USERS to change the number of simulated users.
-	cd test; locust --headless --users ${N_USERS} --spawn-rate ${N_USERS} -H https://localhost:3010 -f locust-users.py
+	cd test; locust --headless --users ${N_USERS} --spawn-rate ${N_USERS} -H https://${HOST} -f locust-users.py
 
 test-scale-ui: check-locust ## Start Locust and opens the UI to drive scale tests.
 	open http://0.0.0.0:8089/
