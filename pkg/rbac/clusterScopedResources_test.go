@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"testing"
+	"time"
 
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/golang/mock/gomock"
@@ -28,12 +29,10 @@ func Test_getResources_emptyCache(t *testing.T) {
 
 	// database.NewDAO(mockPool)
 	mockpool, cache := newResourcesListCache(t)
-
 	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind', '') AS "kind" FROM "search"."resources" WHERE ("cluster"::TEXT = 'local-cluster' AND ("data"->>'namespace' IS NULL))])`),
+		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind', '') AS "kind" FROM "search"."resources" WHERE ("cluster"::TEXT = 'local-cluster' AND ("data"->>'namespace' IS NULL))`),
 		gomock.Eq([]interface{}{}),
-	)
-	// .Return(mockRows, nil)
+	).Return(nil, nil)
 
 	result, err := cache.checkUserResources()
 
@@ -46,64 +45,76 @@ func Test_getResources_emptyCache(t *testing.T) {
 
 }
 
-// func Test_getResouces_usingCache(t *testing.T) {
-// 	ctrl := gomock.NewController(t)
-// 	defer ctrl.Finish()
-// 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
-// 	database.NewDAO(mockPool)
+func Test_getResouces_usingCache(t *testing.T) {
+	// ctrl := gomock.NewController(t)
+	// defer ctrl.Finish()
+	// mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
+	// database.NewDAO(mockPool)
 
-// 	cache := newResourcesListCache(t)
-// 	resourcemap := make(map[string][]string)
-// 	var apigroups string
-// 	var kinds []string
+	mockRows := newMockRows("./mocks/mock.json", searchInput, "")
 
-// 	kinds = append(kinds, "kind1", "kind2")
-// 	apigroups = "apigroup1"
+	mockpool, cache := newResourcesListCache(t)
+	mockpool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind', '') AS "kind" FROM "search"."resources" WHERE ("cluster"::TEXT = 'local-cluster' AND ("data"->>'namespace' IS NULL))`),
+		gomock.Eq([]interface{}{}),
+	).Return(mockRows, nil)
 
-// 	resourcemap[apigroups] = kinds
-// 	cache.shared = sharedList{
-// 		updatedAt: time.Now(),
-// 		resources: resourcemap,
-// 	}
+	resourcemap := make(map[string][]string)
+	var apigroups string
+	var kinds []string
 
-// 	result, err := cache.checkUserResources()
+	kinds = append(kinds, "kind1", "kind2")
+	apigroups = "apigroup1"
 
-// 	if len(result.resources) != 0 {
-// 		t.Error("Expected resources in cache.")
-// 	}
+	resourcemap[apigroups] = kinds
+	cache.shared = sharedList{
+		updatedAt: time.Now(),
+		resources: resourcemap,
+	}
 
-// 	if err != nil {
-// 		t.Error("Received unexpected error from checkUserResources()", err)
-// 	}
-// }
+	result, err := cache.checkUserResources()
 
-// func Test_getResources_expiredCache(t *testing.T) {
-// 	ctrl := gomock.NewController(t)
-// 	defer ctrl.Finish()
-// 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
-// 	database.NewDAO(mockPool)
+	if len(result.resources) != 0 {
+		t.Error("Expected resources in cache.")
+	}
 
-// 	cache := newResourcesListCache(t)
-// 	resourcemap := make(map[string][]string)
-// 	var apigroups string
-// 	var kinds []string
+	if err != nil {
+		t.Error("Received unexpected error from checkUserResources()", err)
+	}
+}
 
-// 	kinds = append(kinds, "kind1", "kind2")
-// 	apigroups = "apigroup1"
+func Test_getResources_expiredCache(t *testing.T) {
+	// ctrl := gomock.NewController(t)
+	// defer ctrl.Finish()
+	// mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
+	// database.NewDAO(mockPool)
 
-// 	resourcemap[apigroups] = kinds
-// 	cache.shared = sharedList{
-// 		updatedAt: time.Now().Add(time.Duration(-2) * time.Minute),
-// 		resources: resourcemap,
-// 	}
+	mockpool, cache := newResourcesListCache(t)
+	mockpool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind', '') AS "kind" FROM "search"."resources" WHERE ("cluster"::TEXT = 'local-cluster' AND ("data"->>'namespace' IS NULL))`),
+		gomock.Eq([]interface{}{}),
+	).Return(nil, nil)
 
-// 	result, err := cache.checkUserResources()
+	resourcemap := make(map[string][]string)
+	var apigroups string
+	var kinds []string
 
-// 	if len(result.resources) != 0 {
-// 		t.Error("Resources need to be updated")
-// 	}
-// 	if err != nil {
-// 		t.Error("Received unexpected error from checkUserResources()", err)
-// 	}
+	kinds = append(kinds, "kind1", "kind2")
+	apigroups = "apigroup1"
 
-// }
+	resourcemap[apigroups] = kinds
+	cache.shared = sharedList{
+		updatedAt: time.Now().Add(time.Duration(-2) * time.Minute),
+		resources: resourcemap,
+	}
+
+	result, err := cache.checkUserResources()
+
+	if len(result.resources) != 0 {
+		t.Error("Resources need to be updated")
+	}
+	if err != nil {
+		t.Error("Received unexpected error from checkUserResources()", err)
+	}
+
+}

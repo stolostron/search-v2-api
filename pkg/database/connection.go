@@ -6,41 +6,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/driftprogramming/pgxpoolmock"
 	pgxpool "github.com/jackc/pgx/v4/pgxpool"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	klog "k8s.io/klog/v2"
 )
 
-// Database Access Object. Use a DAO instance so we can replace the pool object in the unit tests.
-type DAO struct {
-	pool      pgxpoolmock.PgxPool
-	batchSize int
-}
+var pool *pgxpool.Pool
 
-var poolSingleton pgxpoolmock.PgxPool
-
-// Creates new DAO instance.
-func NewDAO(p pgxpoolmock.PgxPool) DAO {
-	// Crete DAO with default values.
-	dao := DAO{
-		batchSize: 500,
-	}
-	if p != nil {
-		dao.pool = p
-		return dao
-	}
-
-	if poolSingleton == nil {
-		poolSingleton = initializePool()
-	}
-	dao.pool = poolSingleton
-	return dao
-}
-
-// var pool *pgxpoolmock.PgxPool
-
-func initializePool() pgxpoolmock.PgxPool {
+func initializePool() {
 	klog.Info("Initializing database connection pool.")
 	cfg := config.Cfg
 
@@ -67,11 +40,10 @@ func initializePool() pgxpoolmock.PgxPool {
 		klog.Error("Unable to connect to database: %+v\n", err)
 	}
 
-	return conn
+	pool = conn
 }
 
 func GetConnection() *pgxpool.Pool {
-	var pool *pgxpool.Pool
 	if pool == nil {
 		initializePool()
 	}

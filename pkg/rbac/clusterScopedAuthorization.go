@@ -7,7 +7,6 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/stolostron/search-v2-api/pkg/config"
-	dao "github.com/stolostron/search-v2-api/pkg/database"
 	"k8s.io/klog/v2"
 )
 
@@ -44,7 +43,7 @@ func (cache *Cache) getClusterScopedResources() error {
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 
-	dao.NewDAO(cache.pool)
+	// dao.NewDAO(cache.pool)
 
 	//"SELECT DISTINCT(data->>apigroup, data->>kind) FROM search.resources WHERE
 	// cluster='local-cluster' AND namespace=NULL"
@@ -58,24 +57,26 @@ func (cache *Cache) getClusterScopedResources() error {
 	if queryerr != nil {
 		klog.Errorf("Error resolving query [%s]. Error: [%+v]", query, queryerr.Error())
 	}
-	defer rows.Close()
-	csrmap := make(map[string][]string)
+	if rows != nil {
+		defer rows.Close()
+		csrmap := make(map[string][]string)
 
-	for rows.Next() {
-		var kind string
-		var apigroup string
-		err := rows.Scan(&apigroup, &kind)
-		if err != nil {
-			klog.Errorf("Error %s retrieving rows for query:%s for apigroup %s and kind %s", err.Error(), query, apigroup, kind)
+		for rows.Next() {
+			var kind string
+			var apigroup string
+			err := rows.Scan(&apigroup, &kind)
+			if err != nil {
+				klog.Errorf("Error %s retrieving rows for query:%s for apigroup %s and kind %s", err.Error(), query, apigroup, kind)
+			}
+
+			csrmap[apigroup] = append(csrmap[apigroup], kind)
+
 		}
 
-		csrmap[apigroup] = append(csrmap[apigroup], kind)
+		resourcelist := sharedList{resources: csrmap, err: err, updatedAt: time.Now()}
+		cache.shared = resourcelist
 
+		fmt.Println(resourcelist)
 	}
-
-	resourcelist := sharedList{resources: csrmap, err: err, updatedAt: time.Now()}
-	cache.shared = resourcelist
-
-	fmt.Println(resourcelist)
 	return err
 }
