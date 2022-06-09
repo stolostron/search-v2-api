@@ -34,3 +34,19 @@ coverage: test ## Run unit tests and show code coverage.
 docker-build: ## Build the docker image.
 	docker build -f Dockerfile . -t search-v2-api
 
+N_USERS ?=2
+#HOST ?=localhost:4010
+HOST ?=search-api-open-cluster-management.apps.sno-410-2xlarge-7s7tl.dev07.red-chesterfield.com 
+test-scale: check-locust ## Sends multiple simulated requests for testing using Locust. Use N_USERS to change the number of simulated users.
+	cd test; locust --headless --users ${N_USERS} --spawn-rate ${N_USERS} -H https://localhost:3010 -f locust-users.py
+
+test-scale-ui: check-locust ## Start Locust and opens the UI to drive scale tests.
+	open http://0.0.0.0:8089/
+	cd test; locust --users ${N_USERS} --spawn-rate ${N_USERS} -H https://${HOST} -f locust-users.py
+
+check-locust: ## Checks if Locust is installed in the system.
+ifeq (,$(shell which locust))
+	@echo The scale tests require Locust.io, but locust was not found.
+	@echo Install locust to continue. For more info visit: https://docs.locust.io/en/stable/installation.html
+	exit 1
+endif

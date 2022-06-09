@@ -1,0 +1,5 @@
+{
+    "operationName":"searchResultItems",
+    "variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["Pod"]}],"limit":10000}]},
+    "query":"query searchResultItems($input: [SearchInput]) {\n  searchResult: search(input: $input) {\n    items\n    __typename\n  }\n}"
+}
