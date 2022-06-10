@@ -163,7 +163,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 				sql = "select title as uid from search.lookupDocs($1)"
 
 			} else {
-				sql = "select  'local-cluster'||'/'||ROW_NUMBER () OVER (ORDER BY title) as uid ,  'local-cluster' as cluster, path||'.'||title||'.'||headline as data from search.lookupDocs($1)"
+				sql = "select 'local-cluster'||'/'||ROW_NUMBER () OVER (ORDER BY title) as uid ,  'local-cluster' as cluster, jsonb_build_object('text', path||'.'||title||'.'||headline) as data from search.lookupDocs($1)"
 
 				// "select title as uid, 'local-cluster' as cluster, jsonb_build_object('text', title) as data from search.lookupDocs($1)"
 			}
