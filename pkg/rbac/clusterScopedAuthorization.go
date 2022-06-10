@@ -23,16 +23,16 @@ func (cache *Cache) ClusterScopedResources(ctx context.Context) (map[string][]st
 }
 
 func (shared *clusterScopedResources) getClusterScopedResources(cache *Cache, ctx context.Context) (map[string][]string, error) {
-	//create instance of sharedList
-	// shared := sharedList{}
 
 	//lock to prevent checking more than one at a time
 	shared.lock.Lock()
 	defer shared.lock.Unlock()
-	if shared.resources != nil && time.Now().Before(shared.updatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Second)) {
+	if shared.resources != nil &&
+		time.Now().Before(shared.updatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond)) {
 		klog.V(5).Info("Using cluster scoped resources from cache.")
 		return shared.resources, shared.err
 	}
+	klog.V(5).Info("Querying database for cluster-scoped resources.")
 	shared.err = nil // Clear previous errors.
 
 	// if data not in cache or expired
