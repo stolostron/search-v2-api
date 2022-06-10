@@ -228,6 +228,8 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 		}
 		currItem := formatDataMap(data)
 		currItem["_uid"] = uid
+		replacer := strings.NewReplacer("/", "", ".", "", "=", "", "'", "")
+		cluster = replacer.Replace(cluster)
 		currItem["cluster"] = cluster
 
 		items = append(items, currItem)
@@ -406,7 +408,12 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 			klog.Info("In string")
 			replacer := strings.NewReplacer("\n", "", "  ", "")
 			v = replacer.Replace(v)
-			item[key] = v[1:20] //strings.ToLower(v)
+			if len(v) > 21 {
+				item[key] = v[:21] //strings.ToLower(v)
+			} else {
+				item[key] = v //strings.ToLower(v)
+			}
+
 		case bool:
 			item[key] = strconv.FormatBool(v)
 		case float64:
