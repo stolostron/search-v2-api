@@ -230,9 +230,10 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 		}
 		currItem := formatDataMap(data)
 		currItem["_uid"] = uid
-		replacer := strings.NewReplacer("/", "", ".", "", "=", "", "'", "")
-		cluster = replacer.Replace(cluster)
 		currItem["cluster"] = cluster
+		klog.Info("uid:", uid)
+		klog.Info("cluster:", cluster)
+		klog.Info("currItem %+v:", currItem)
 
 		items = append(items, currItem)
 		s.uids = append(s.uids, &uid)
