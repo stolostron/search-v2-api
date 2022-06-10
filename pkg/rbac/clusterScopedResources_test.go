@@ -15,7 +15,7 @@ func mockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, Cache) {
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 	return mockPool, Cache{
-		shared: sharedList{},
+		shared: clusterScopedResources{},
 		pool:   mockPool,
 	}
 }
@@ -66,7 +66,7 @@ func Test_getResouces_usingCache(t *testing.T) {
 	apigroups = "apigroup1"
 
 	resourcemap[apigroups] = kinds
-	mock_cache.shared = sharedList{
+	mock_cache.shared = clusterScopedResources{
 		updatedAt: time.Now(),
 		resources: resourcemap,
 	}
@@ -105,7 +105,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 	apigroups = "apigroup1"
 
 	resourcemap[apigroups] = kinds
-	mock_cache.shared = sharedList{
+	mock_cache.shared = clusterScopedResources{
 		updatedAt: time.Now().Add(time.Duration(-3) * time.Minute),
 		resources: resourcemap,
 	}

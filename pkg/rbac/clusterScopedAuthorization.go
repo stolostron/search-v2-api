@@ -10,7 +10,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-type sharedList struct {
+type clusterScopedResources struct {
 	err       error
 	resources map[string][]string
 	updatedAt time.Time
@@ -22,7 +22,7 @@ func (cache *Cache) ClusterScopedResources(ctx context.Context) (map[string][]st
 	return clusterScoped, err
 }
 
-func (shared *sharedList) getClusterScopedResources(cache *Cache, ctx context.Context) (map[string][]string, error) {
+func (shared *clusterScopedResources) getClusterScopedResources(cache *Cache, ctx context.Context) (map[string][]string, error) {
 	//create instance of sharedList
 	// shared := sharedList{}
 
@@ -33,8 +33,9 @@ func (shared *sharedList) getClusterScopedResources(cache *Cache, ctx context.Co
 		klog.V(5).Info("Using cluster scoped resources from cache.")
 		return shared.resources, shared.err
 	}
+	shared.err = nil // Clear previous errors.
 
-	// if cache data non-exist or expired query shared esources:
+	// if data not in cache or expired
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 
@@ -45,6 +46,7 @@ func (shared *sharedList) getClusterScopedResources(cache *Cache, ctx context.Co
 		Where(goqu.L(`"cluster"::TEXT = 'local-cluster'`), goqu.L(`"data"->>'namespace'`).IsNull()).ToSQL()
 	if err != nil {
 		klog.Errorf("Error creating query [%s]. Error: [%+v]", query, err)
+		shared.err = err
 	}
 
 	rows, queryerr := cache.pool.Query(ctx, query)
@@ -75,7 +77,6 @@ func (shared *sharedList) getClusterScopedResources(cache *Cache, ctx context.Co
 
 	// Then update the cache.
 	shared.resources = csrmap
-	shared.err = err
 	shared.updatedAt = time.Now()
 
 	return shared.resources, shared.err
