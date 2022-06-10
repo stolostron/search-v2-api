@@ -163,7 +163,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 				sql = "select title as uid from search.lookupDocs($1)"
 
 			} else {
-				sql = "select 'local-cluster'||'/'||ROW_NUMBER () OVER (ORDER BY title) as uid ,  'local-cluster' as cluster, jsonb_build_object('text', path||'.'||title||'.'||headline) as data from search.lookupDocs($1)"
+				sql = "select 'local-cluster'||'/'||ROW_NUMBER () OVER (ORDER BY title) as uid ,  'local-cluster' as cluster,  jsonb_build_object('text', headline, 'name', title, 'namespace', path) as data from search.lookupDocs($1)"
 
 				// "select title as uid, 'local-cluster' as cluster, jsonb_build_object('text', title) as data from search.lookupDocs($1)"
 			}
@@ -409,10 +409,10 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 		switch v := value.(type) {
 		case string:
 			klog.Info("In string")
-			replacer := strings.NewReplacer("\n", "", "  ", "")
-			v = replacer.Replace(v)
-			if len(v) > 105 {
-				item[key] = v[:100] //strings.ToLower(v)
+			if key == "text" && len(v) > 105 {
+				replacer := strings.NewReplacer("\n", "", "  ", "")
+				v = replacer.Replace(v)
+				item[key] = v[:100]
 			} else {
 				item[key] = v //strings.ToLower(v)
 			}
