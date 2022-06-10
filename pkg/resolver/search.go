@@ -404,7 +404,9 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 		switch v := value.(type) {
 		case string:
 			klog.Info("In string")
-			item[key] = strings.ReplaceAll(v, "\n", "") //strings.ToLower(v)
+			replacer := strings.NewReplacer("\n", "", "  ", "")
+			v = replacer.Replace(v)
+			item[key] = v[1:20] //strings.ToLower(v)
 		case bool:
 			item[key] = strconv.FormatBool(v)
 		case float64:
