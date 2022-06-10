@@ -163,7 +163,12 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 				sql = "select title as uid from search.lookupDocs($1)"
 
 			} else {
-				sql = "select 'local-cluster'||'/'||ROW_NUMBER () OVER (ORDER BY title) as uid ,  'local-cluster' as cluster,  jsonb_build_object('text', headline, 'name', title, 'namespace', path) as data from search.lookupDocs($1)"
+
+				sql = strings.TrimSpace(`select 'local-cluster'||'/'||ROW_NUMBER () OVER (ORDER BY title) as uid ,  
+				'local-cluster' as cluster,
+				jsonb_build_object('text', substring(replace(lower(headline), '\n',''),1,10), 
+								   'name', replace(replace(replace(lower(title), '\n',''), '  ', ''),' ', '-'), 
+								   'namespace', replace(replace(replace(lower(path), '/','-'), '  ', ''),' ', '-') ) as data from search.lookupDocs($1)`)
 
 				// "select title as uid, 'local-cluster' as cluster, jsonb_build_object('text', title) as data from search.lookupDocs($1)"
 			}
