@@ -117,6 +117,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	ds := goqu.From(schemaTable)
 
 	if s.input.Keywords != nil && len(s.input.Keywords) > 0 {
+		klog.Info("keywords present")
 		jsb := goqu.L("jsonb_each_text(?)", goqu.C("data"))
 		ds = goqu.From(schemaTable, jsb)
 	}
@@ -149,22 +150,24 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		sql, params, err = selectDs.Where(whereDs...).ToSQL()
 	}
 	doc := "Doc"
-	if s.input.Keywords != nil && *s.input.Keywords[0] == doc && len(s.input.Keywords) > 1 {
-		klog.Info("******* In keywords")
-		klog.Info("len kw: ", len(s.input.Keywords))
-		klog.Info(" kw 0 : ", *s.input.Keywords[0])
-		klog.Info(" kw 1 : ", *s.input.Keywords[1])
-		kw := s.input.Keywords[1]
-		if count {
-			sql = "select count(title) from search.lookupDocs($1)"
-		} else if uid {
-			sql = "select title as uid from search.lookupDocs($1)"
+	if s.input.Keywords != nil {
+		if len(s.input.Keywords) > 1 && *s.input.Keywords[0] == doc {
+			klog.Info("******* In keywords")
+			klog.Info("len kw: ", len(s.input.Keywords))
+			klog.Info(" kw 0 : ", *s.input.Keywords[0])
+			klog.Info(" kw 1 : ", *s.input.Keywords[1])
+			kw := s.input.Keywords[1]
+			if count {
+				sql = "select count(title) from search.lookupDocs($1)"
+			} else if uid {
+				sql = "select title as uid from search.lookupDocs($1)"
 
-		} else {
-			sql = "select title as uid, path as cluster, jsonb_build_object('text', headline) as data from search.lookupDocs($1)"
+			} else {
+				sql = "select title as uid, path as cluster, jsonb_build_object('text', headline) as data from search.lookupDocs($1)"
+			}
+			params = append(params, kw)
+			err = nil
 		}
-		params = append(params, kw)
-		err = nil
 	}
 	if err != nil {
 		klog.Errorf("Error building Search query: %s", err.Error())
@@ -191,14 +194,16 @@ func (s *SearchResult) resolveUids() {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
 		return
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var uid string
-		err = rows.Scan(&uid)
-		if err != nil {
-			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), s.query)
+	if rows != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var uid string
+			err = rows.Scan(&uid)
+			if err != nil {
+				klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), s.query)
+			}
+			s.uids = append(s.uids, &uid)
 		}
-		s.uids = append(s.uids, &uid)
 	}
 
 }
@@ -393,18 +398,23 @@ func convertToString(data interface{}) string {
 }
 
 func formatDataMap(data map[string]interface{}) map[string]interface{} {
+	klog.Info("In formatDataMap")
 	item := make(map[string]interface{})
 	for key, value := range data {
 		switch v := value.(type) {
 		case string:
-			item[key] = v //strings.ToLower(v)
+			klog.Info("In string")
+			item[key] = strings.ReplaceAll(v, "\n", "") //strings.ToLower(v)
 		case bool:
 			item[key] = strconv.FormatBool(v)
 		case float64:
 			item[key] = strconv.FormatInt(int64(v), 10)
 		case map[string]interface{}:
+			klog.Info("In map[string]interface")
 			item[key] = formatLabels(v)
 		case []interface{}:
+			klog.Info("In []interface")
+
 			item[key] = formatArray(v)
 		default:
 			klog.Warningf("Error formatting property with key: %+v  type: %+v\n", key, reflect.TypeOf(v))
