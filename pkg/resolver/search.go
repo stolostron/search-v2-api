@@ -148,6 +148,24 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	} else {
 		sql, params, err = selectDs.Where(whereDs...).ToSQL()
 	}
+	doc := "Doc"
+	if s.input.Keywords != nil && *s.input.Keywords[0] == doc && len(s.input.Keywords) > 1 {
+		klog.Info("******* In keywords")
+		klog.Info("len kw: ", len(s.input.Keywords))
+		klog.Info(" kw 0 : ", *s.input.Keywords[0])
+		klog.Info(" kw 1 : ", *s.input.Keywords[1])
+		kw := s.input.Keywords[1]
+		if count {
+			sql = "select count(title) from search.lookupDocs($1)"
+		} else if uid {
+			sql = "select title as uid from search.lookupDocs($1)"
+
+		} else {
+			sql = "select title as uid, path as cluster, jsonb_build_object('text', headline) as data from search.lookupDocs($1)"
+		}
+		params = append(params, kw)
+		err = nil
+	}
 	if err != nil {
 		klog.Errorf("Error building Search query: %s", err.Error())
 	}
