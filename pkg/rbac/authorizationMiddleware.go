@@ -14,6 +14,7 @@ func AuthorizeUser(next http.Handler) http.Handler {
 			klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
 		}
 		klog.Info("Finished getting cluster-scoped resources. Now Authorizing..")
+		next.ServeHTTP(w, r.WithContext(r.Context()))
 
 	})
 }
