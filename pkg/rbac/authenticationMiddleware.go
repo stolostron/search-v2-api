@@ -35,7 +35,7 @@ func AuthenticateUser(next http.Handler) http.Handler {
 			return
 		}
 
-		authenticated, err := Instcache.IsValidToken(r.Context(), clientToken)
+		authenticated, err := cacheInst.IsValidToken(r.Context(), clientToken)
 		if err != nil {
 			klog.Warning("Unexpected error while authenticating the request token.", err)
 			http.Error(w, "{\"message\":\"Unexpected error while authenticating the request token.\"}", http.StatusInternalServerError)

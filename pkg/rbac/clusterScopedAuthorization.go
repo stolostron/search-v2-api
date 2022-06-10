@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
@@ -13,32 +14,27 @@ type sharedList struct {
 	err       error
 	resources map[string][]string
 	updatedAt time.Time
+	lock      sync.Mutex
 }
 
-func (cache *Cache) checkUserResources() (sharedList, error) {
+func (cache *Cache) ClusterScopedResources(ctx context.Context) (map[string][]string, error) {
+	clusterScoped, err := cache.shared.getClusterScopedResources(cache, ctx)
+	return clusterScoped, err
+}
 
-	cache.sharedLock.Lock()
-	//check if we already have the resources in cache
-	cr := cache.shared
-	if cr.resources != nil && time.Now().Before(cr.updatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Second)) {
+func (shared *sharedList) getClusterScopedResources(cache *Cache, ctx context.Context) (map[string][]string, error) {
+	//create instance of sharedList
+	// shared := sharedList{}
+
+	//lock to prevent checking more than one at a time
+	shared.lock.Lock()
+	defer shared.lock.Unlock()
+	if shared.resources != nil && time.Now().Before(shared.updatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Second)) {
 		klog.V(5).Info("Using cluster scoped resources from cache.")
-		cache.sharedLock.Unlock()
-		return cr, nil
-	}
-	cache.sharedLock.Unlock()
-
-	if cr.resources != nil && cr.err != nil {
-		return cr, cr.err
+		return shared.resources, shared.err
 	}
 
-	//otherwise build query and get cluster-scoped resources for user from database and cache:
-	err := cache.getClusterScopedResources()
-
-	return cr, err
-}
-
-func (cache *Cache) getClusterScopedResources() error {
-
+	// if cache data non-exist or expired query shared esources:
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 
@@ -50,13 +46,17 @@ func (cache *Cache) getClusterScopedResources() error {
 	if err != nil {
 		klog.Errorf("Error creating query [%s]. Error: [%+v]", query, err)
 	}
-	rows, queryerr := cache.pool.Query(context.Background(), query)
+
+	rows, queryerr := cache.pool.Query(ctx, query)
 	if queryerr != nil {
 		klog.Errorf("Error resolving query [%s]. Error: [%+v]", query, queryerr.Error())
+		shared.err = queryerr
+		shared.resources = map[string][]string{}
+		return shared.resources, shared.err
 	}
+	csrmap := make(map[string][]string)
 	if rows != nil {
 		defer rows.Close()
-		csrmap := make(map[string][]string)
 
 		for rows.Next() {
 			var kind string
@@ -64,15 +64,19 @@ func (cache *Cache) getClusterScopedResources() error {
 			err := rows.Scan(&apigroup, &kind)
 			if err != nil {
 				klog.Errorf("Error %s retrieving rows for query:%s for apigroup %s and kind %s", err.Error(), query, apigroup, kind)
+				shared.err = err
+				continue
 			}
 
 			csrmap[apigroup] = append(csrmap[apigroup], kind)
 
 		}
-
-		resourcelist := sharedList{resources: csrmap, err: err, updatedAt: time.Now()}
-		cache.shared = resourcelist
-
 	}
-	return err
+
+	// Then update the cache.
+	shared.resources = csrmap
+	shared.err = err
+	shared.updatedAt = time.Now()
+
+	return shared.resources, shared.err
 }

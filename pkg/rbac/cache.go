@@ -15,12 +15,11 @@ type Cache struct {
 	tokenReviews     map[string]*tokenReviewCache
 	tokenReviewsLock sync.Mutex
 	shared           sharedList
-	sharedLock       sync.Mutex
 	pool             pgxpoolmock.PgxPool
 }
 
 // Initialize the cache as a singleton instance.
-var Instcache = Cache{
+var cacheInst = Cache{
 	tokenReviews:     map[string]*tokenReviewCache{},
 	tokenReviewsLock: sync.Mutex{},
 	shared:           sharedList{},
