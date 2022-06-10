@@ -2,11 +2,16 @@
 package rbac
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
 	"k8s.io/klog/v2"
 )
+
+type ContextKey string
+
+const ContextAuthTokenKey ContextKey = "authToken"
 
 // verifies token (userid) with the TokenReview:
 func AuthenticateUser(next http.Handler) http.Handler {
@@ -30,11 +35,12 @@ func AuthenticateUser(next http.Handler) http.Handler {
 			return
 		}
 
-		authenticated, err := cache.IsValidToken(r.Context(), clientToken)
+		authenticated, err := cacheInst.IsValidToken(r.Context(), clientToken)
 		if err != nil {
 			klog.Warning("Unexpected error while authenticating the request token.", err)
 			http.Error(w, "{\"message\":\"Unexpected error while authenticating the request token.\"}", http.StatusInternalServerError)
 			return
+
 		}
 		if !authenticated {
 			klog.V(4).Info("Rejecting request: Invalid token.")
@@ -42,8 +48,11 @@ func AuthenticateUser(next http.Handler) http.Handler {
 			return
 		}
 
-		klog.V(6).Info("User authentication successful!")
-		next.ServeHTTP(w, r)
+		klog.V(4).Info("User authentication successful!")
+
+		ctx := context.WithValue(r.Context(), ContextAuthTokenKey, clientToken)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
 
 	})
 }
