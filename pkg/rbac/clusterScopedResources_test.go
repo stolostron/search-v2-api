@@ -19,20 +19,16 @@ func newResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, Cache) {
 	}
 }
 
-//from test cache:  var mockPool *pgxpoolmock.MockPgxPool
-//mockpool.EXPECT undefined (type *pgxpoolmock.PgxPool has no field or method EXPECT)
-
 func Test_getResources_emptyCache(t *testing.T) {
-	// ctrl := gomock.NewController(t)
-	// defer ctrl.Finish()
-	// mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 
-	// database.NewDAO(mockPool)
 	mockpool, cache := newResourcesListCache(t)
+	columns := []string{"apigroup", "kind"}
+	pgxRows := pgxpoolmock.NewRows(columns).AddRow("Node", "addon.open-cluster-management.io").ToPgxRows()
+
 	mockpool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind', '') AS "kind" FROM "search"."resources" WHERE ("cluster"::TEXT = 'local-cluster' AND ("data"->>'namespace' IS NULL))`),
 		gomock.Eq([]interface{}{}),
-	).Return(nil, nil)
+	).Return(pgxRows, nil)
 
 	result, err := cache.checkUserResources()
 
@@ -46,18 +42,15 @@ func Test_getResources_emptyCache(t *testing.T) {
 }
 
 func Test_getResouces_usingCache(t *testing.T) {
-	// ctrl := gomock.NewController(t)
-	// defer ctrl.Finish()
-	// mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
-	// database.NewDAO(mockPool)
-
-	mockRows := newMockRows("./mocks/mock.json", searchInput, "")
 
 	mockpool, cache := newResourcesListCache(t)
+	columns := []string{"apigroup", "kind"}
+	pgxRows := pgxpoolmock.NewRows(columns).AddRow("Node", "addon.open-cluster-management.io").ToPgxRows()
+
 	mockpool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind', '') AS "kind" FROM "search"."resources" WHERE ("cluster"::TEXT = 'local-cluster' AND ("data"->>'namespace' IS NULL))`),
 		gomock.Eq([]interface{}{}),
-	).Return(mockRows, nil)
+	).Return(pgxRows, nil)
 
 	resourcemap := make(map[string][]string)
 	var apigroups string
@@ -74,26 +67,25 @@ func Test_getResouces_usingCache(t *testing.T) {
 
 	result, err := cache.checkUserResources()
 
-	if len(result.resources) != 0 {
+	if len(result.resources) == 0 {
 		t.Error("Expected resources in cache.")
 	}
 
 	if err != nil {
-		t.Error("Received unexpected error from checkUserResources()", err)
+		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
 	}
 }
 
 func Test_getResources_expiredCache(t *testing.T) {
-	// ctrl := gomock.NewController(t)
-	// defer ctrl.Finish()
-	// mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
-	// database.NewDAO(mockPool)
 
 	mockpool, cache := newResourcesListCache(t)
+	columns := []string{"apigroup", "kind"}
+	pgxRows := pgxpoolmock.NewRows(columns).AddRow("Node", "addon.open-cluster-management.io").ToPgxRows()
+
 	mockpool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind', '') AS "kind" FROM "search"."resources" WHERE ("cluster"::TEXT = 'local-cluster' AND ("data"->>'namespace' IS NULL))`),
 		gomock.Eq([]interface{}{}),
-	).Return(nil, nil)
+	).Return(pgxRows, nil)
 
 	resourcemap := make(map[string][]string)
 	var apigroups string
@@ -110,11 +102,11 @@ func Test_getResources_expiredCache(t *testing.T) {
 
 	result, err := cache.checkUserResources()
 
-	if len(result.resources) != 0 {
+	if len(result.resources) == 0 {
 		t.Error("Resources need to be updated")
 	}
 	if err != nil {
-		t.Error("Received unexpected error from checkUserResources()", err)
+		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
 	}
 
 }
