@@ -49,7 +49,6 @@ func AuthenticateUser(next http.Handler) http.Handler {
 		}
 
 		klog.V(4).Info("User authentication successful!")
-		//if we are authenticated can move on to next step: authorize: get cluster scopedresources and cache
 
 		ctx := context.WithValue(r.Context(), ContextAuthTokenKey, clientToken)
 

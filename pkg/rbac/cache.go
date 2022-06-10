@@ -11,20 +11,18 @@ import (
 
 // Cache used to optimize requests to the Kubernetes API server.
 type Cache struct {
-	authClient          v1.AuthenticationV1Interface // This allows tests to replace with mock client.
-	tokenReviews        map[string]*tokenReviewResult
-	tokenReviewsPending map[string][]chan *tokenReviewResult
-	tokenReviewsLock    sync.Mutex
-	shared              sharedList
-	sharedLock          sync.Mutex
-	pool                pgxpoolmock.PgxPool
+	authClient       v1.AuthenticationV1Interface // This allows tests to replace with mock client.
+	tokenReviews     map[string]*tokenReviewCache
+	tokenReviewsLock sync.Mutex
+	shared           sharedList
+	sharedLock       sync.Mutex
+	pool             pgxpoolmock.PgxPool
 }
 
 // Initialize the cache as a singleton instance.
 var Instcache = Cache{
-	tokenReviews:        map[string]*tokenReviewResult{},
-	tokenReviewsPending: map[string][]chan *tokenReviewResult{},
-	tokenReviewsLock:    sync.Mutex{},
-	shared:              sharedList{},
-	pool:                db.GetConnection(),
+	tokenReviews:     map[string]*tokenReviewCache{},
+	tokenReviewsLock: sync.Mutex{},
+	shared:           sharedList{},
+	pool:             db.GetConnection(),
 }

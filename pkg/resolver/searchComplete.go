@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"time"
 
@@ -92,8 +93,9 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 
 func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*string, error) {
 	klog.V(2).Info("Resolving searchCompleteResults()")
-	srchCompleteOut := make([]*string, 0)
 	rows, err := s.pool.Query(ctx, s.query, s.params...)
+	srchCompleteOut := make([]*string, 0)
+
 	if err != nil {
 		klog.Error("Error fetching search complete results from db ", err)
 		return srchCompleteOut, err
@@ -113,7 +115,19 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 	if isNumber { //check if valid number
 		isNumber := "isNumber"
 		srchCompleteOutNum := []*string{&isNumber} //isNumber should be the first argument if the property is a number
-		srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut...)
+		// Sort the values in srchCompleteOut
+		sort.Slice(srchCompleteOut, func(i, j int) bool {
+			numA, _ := strconv.Atoi(*srchCompleteOut[i])
+			numB, _ := strconv.Atoi(*srchCompleteOut[j])
+			return numA < numB
+		})
+		if len(srchCompleteOut) > 1 {
+			// Pass only the min and max values of the numbers to show the range in the UI
+			srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut[0], srchCompleteOut[len(srchCompleteOut)-1])
+		} else {
+			srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut...)
+		}
+
 	}
 	if !isNumber && isDate(srchCompleteOut) { //check if valid date
 		isDate := "isDate"

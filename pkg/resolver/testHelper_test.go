@@ -105,22 +105,31 @@ func newMockRows(mockDataFile string, input *model.SearchInput, prop string) *Mo
 	mockData := make([]map[string]interface{}, 0)
 
 	switch prop {
-	case "": //for general search
+	case "":
 
 		for _, item := range items {
-			// if !strings.Contains(mockDataFile, "rel") { // load resources file
+			if !strings.Contains(mockDataFile, "rel") { // load resources file
 
-			if useInputFilterToLoadData(mockDataFile, input, item) {
-				uid := item.(map[string]interface{})["uid"]
+				if useInputFilterToLoadData(mockDataFile, input, item) {
+					uid := item.(map[string]interface{})["uid"]
 
-				mockDatum := map[string]interface{}{
-					"uid":      uid,
-					"cluster":  strings.Split(uid.(string), "/")[0],
-					"data":     item.(map[string]interface{})["properties"],
-					"destid":   item.(map[string]interface{})["DestUID"],
-					"destkind": item.(map[string]interface{})["DestKind"],
+					mockDatum := map[string]interface{}{
+						"uid":      uid,
+						"cluster":  strings.Split(uid.(string), "/")[0],
+						"data":     item.(map[string]interface{})["properties"],
+						"destid":   item.(map[string]interface{})["DestUID"],
+						"destkind": item.(map[string]interface{})["DestKind"],
+					}
+
+					mockData = append(mockData, mockDatum)
 				}
 
+			} else { // load relations file
+				mockDatum := map[string]interface{}{
+					"level": item.(map[string]interface{})["Level"],
+					"uid":   item.(map[string]interface{})["DestUID"],
+					"kind":  item.(map[string]interface{})["DestKind"],
+				}
 				mockData = append(mockData, mockDatum)
 			}
 		}
@@ -151,6 +160,7 @@ func newMockRows(mockDataFile string, input *model.SearchInput, prop string) *Mo
 				"prop": key,
 			}
 			mockData = append(mockData, mockDatum)
+
 		}
 	}
 
@@ -162,7 +172,7 @@ func newMockRows(mockDataFile string, input *model.SearchInput, prop string) *Mo
 }
 func stringInSlice(a string, list []string) bool {
 	for _, b := range list {
-		if b == a {
+		if strings.EqualFold(b, a) {
 			return true
 		}
 	}
@@ -174,17 +184,15 @@ func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, ite
 	// var destkind string
 	var relatedValues []string
 
-	if len(input.RelatedKinds) > 0 { //If relatedKinds filter is present
+	if len(input.RelatedKinds) > 0 {
 		relatedValues = pointerToStringArray(input.RelatedKinds)
-		// data := item.(map[string]interface{})["properties"].(map[string]interface{})
-		destkind := item.(map[string]interface{})["DestKind"].(string)
-		// destkind = data["DestKind"].(string)
+		data := item.(map[string]interface{})["properties"].(map[string]interface{})
+		destkind := data["kind"].(string)
 		if stringInSlice(destkind, relatedValues) {
-			return true
+			return true // If the resource kind is not in RelatedKinds, do not load it
 		} else {
-			return false // If the resource kind is not in RelatedKinds, do not load it
+			return false
 		}
-
 	}
 
 	for _, filter := range input.Filters {
@@ -268,6 +276,7 @@ func (r *MockRows) Next() bool {
 
 func (r *MockRows) Scan(dest ...interface{}) error {
 	if len(dest) > 1 { // For search function
+
 		for i := range dest {
 			switch v := dest[i].(type) {
 			case *int:
@@ -286,8 +295,13 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 			}
 
 		}
-	} else if len(dest) == 1 { // For searchComplete function
-		*dest[0].(*string) = r.mockData[r.index-1]["prop"].(string)
+	} else if len(dest) == 1 { // For searchComplete function and resolveUIDs function
+		_, ok := r.mockData[r.index-1]["prop"] //Check if prop is present in mockdata
+		if ok {
+			*dest[0].(*string) = r.mockData[r.index-1]["prop"].(string)
+		} else { //used by resolveUIDs function
+			*dest[0].(*string) = r.mockData[r.index-1]["uid"].(string)
+		}
 	}
 	return nil
 }

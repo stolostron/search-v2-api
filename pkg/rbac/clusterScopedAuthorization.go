@@ -2,7 +2,6 @@ package rbac
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
@@ -43,8 +42,6 @@ func (cache *Cache) getClusterScopedResources() error {
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 
-	// dao.NewDAO(cache.pool)
-
 	//"SELECT DISTINCT(data->>apigroup, data->>kind) FROM search.resources WHERE
 	// cluster='local-cluster' AND namespace=NULL"
 	query, _, err := ds.SelectDistinct(goqu.COALESCE(goqu.L(`"data"->>'apigroup'`), "").As("apigroup"),
@@ -76,7 +73,6 @@ func (cache *Cache) getClusterScopedResources() error {
 		resourcelist := sharedList{resources: csrmap, err: err, updatedAt: time.Now()}
 		cache.shared = resourcelist
 
-		fmt.Println(resourcelist)
 	}
 	return err
 }
