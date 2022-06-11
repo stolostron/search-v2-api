@@ -163,12 +163,17 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 				sql = "select title as uid from search.lookupDocs($1)"
 
 			} else {
-
 				sql = strings.TrimSpace(`select 'local-cluster'||'/'||ROW_NUMBER () OVER (ORDER BY title) as uid ,  
 				'local-cluster' as cluster,
-				jsonb_build_object('text', substring(replace(replace(replace(lower(headline), '\n',''), '  ', ''),' ', '-'),1,10), 
-								   'name', substring(replace(replace(replace(lower(title), '\n',''), '  ', ''),' ', '-'),1,10), 
-								   'namespace', substring(replace(replace(replace(lower(path), '/','-'), '  ', ''),' ', '-'),1,10) ) as data from search.lookupDocs($1)`)
+				jsonb_build_object('text', replace(replace(headline, '\n',''), '  ', ''), 
+								   'name', replace(replace(replace((title), '\n',''), '  ', ''),' ', '-'), 
+								   'kind', $1,
+								   'namespace', replace(replace(path, '  ', ''),' ', '-') ) as data from search.lookupDocs($1)`)
+				// sql = strings.TrimSpace(`select 'local-cluster'||'/'||ROW_NUMBER () OVER (ORDER BY title) as uid ,
+				// 'local-cluster' as cluster,
+				// jsonb_build_object('text', substring(replace(replace(replace(lower(headline), '\n',''), '  ', ''),' ', '-'),1,10),
+				// 				   'name', substring(replace(replace(replace(lower(title), '\n',''), '  ', ''),' ', '-'),1,10),
+				// 				   'namespace', substring(replace(replace(replace(lower(path), '/','-'), '  ', ''),' ', '-'),1,10) ) as data from search.lookupDocs($1)`)
 
 				// "select title as uid, 'local-cluster' as cluster, jsonb_build_object('text', title) as data from search.lookupDocs($1)"
 			}
@@ -414,13 +419,13 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 		switch v := value.(type) {
 		case string:
 			klog.Info("In string")
-			if key == "text" && len(v) > 105 {
-				replacer := strings.NewReplacer("\n", "", "  ", "")
-				v = replacer.Replace(v)
-				item[key] = v[:100]
-			} else {
-				item[key] = v //strings.ToLower(v)
-			}
+			// if key == "text" && len(v) > 105 {
+			replacer := strings.NewReplacer("\n", ". ", "  ", " ")
+			v = replacer.Replace(v)
+			// 	item[key] = v[:100]
+			// } else {
+			item[key] = v //strings.ToLower(v)
+			// }
 
 		case bool:
 			item[key] = strconv.FormatBool(v)
