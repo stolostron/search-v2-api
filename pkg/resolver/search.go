@@ -164,7 +164,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 			} else {
 				sql = strings.TrimSpace(`select 'local-cluster'||'/'||ROW_NUMBER () OVER (ORDER BY title) as uid ,  
 				'local-cluster' as cluster,
-				jsonb_build_object('text', replace(replace(headline, '\n',''), '  ', ''), 
+				jsonb_build_object('label', replace(replace(headline, '\n',''), '  ', ''), 
 								   'name', replace(replace(replace((title), '\n',''), '  ', ''),' ', '-'), 
 								   'kind', $1,
 								   'namespace', replace(replace(path, '  ', ''),' ', '-') ) as data from search.lookupDocs($1)`)
