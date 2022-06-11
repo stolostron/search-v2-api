@@ -161,7 +161,6 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 				sql = "select count(title) from search.lookupDocs($1)"
 			} else if uid {
 				sql = "select title as uid from search.lookupDocs($1)"
-
 			} else {
 				sql = strings.TrimSpace(`select 'local-cluster'||'/'||ROW_NUMBER () OVER (ORDER BY title) as uid ,  
 				'local-cluster' as cluster,
