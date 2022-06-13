@@ -2,27 +2,58 @@
 
 package model
 
+// A message is used to communicate conditions detected while executing a query on the server.
 type Message struct {
-	ID          string  `json:"id"`
-	Kind        *string `json:"kind"`
+	// Unique identifier to be used by clients to process the message independently of locale or gramatical changes.
+	ID string `json:"id"`
+	// Message type.
+	// **Values:** information, warning, error.
+	Kind *string `json:"kind"`
+	// Message text.
 	Description *string `json:"description"`
 }
 
+// Defines a key/value to filter results.
+// When multiple values are provided for a property, it is interpreted as an OR operation.
 type SearchFilter struct {
-	Property string    `json:"property"`
-	Values   []*string `json:"values"`
+	// Name of the property (key).
+	Property string `json:"property"`
+	// Values for the property. Multiple values per property are interpreted as an OR operation.
+	// Optionally one of these operations `=,!,!=,>,>=,<,<=` can be included at the begining of the value.
+	// By default the equality operation is used.
+	Values []*string `json:"values"`
 }
 
+// Input options to the search query.
 type SearchInput struct {
-	Keywords     []*string       `json:"keywords"`
-	Filters      []*SearchFilter `json:"filters"`
-	Limit        *int            `json:"limit"`
-	RelatedKinds []*string       `json:"relatedKinds"`
+	// List of strings to match resources.
+	// Will match resources containing any of the keywords in any text field.
+	// When multiple keywords are provided, it is interpreted as an AND operation.
+	// Matches are case insensitive.
+	Keywords []*string `json:"keywords"`
+	// List of SearchFilter, which is a key(property) and values.
+	// When multiple filters are provided, results will match all fiters (AND operation).
+	Filters []*SearchFilter `json:"filters"`
+	// Max number of results returned by the query.
+	// **Default is** 10,000
+	// A value of -1 will remove the limit. Use carefully because it may impact the service.
+	Limit *int `json:"limit"`
+	// Filter relationships to the specified kinds.
+	// If empty, all relationships will be included.
+	// This filter is used with the 'related' field on SearchResult.
+	RelatedKinds []*string `json:"relatedKinds"`
 }
 
+// Data required to save a user search query.
 type UserSearch struct {
-	ID          *string `json:"id"`
-	Name        *string `json:"name"`
+	// Unique identifier of the saved search query.
+	ID *string `json:"id"`
+	// Name of the saved search query.
+	Name *string `json:"name"`
+	// Description of the saved search query.
 	Description *string `json:"description"`
-	SearchText  *string `json:"searchText"`
+	// The search query in text format.
+	// Example:
+	// - `kind:pod,deployment namespace:default bar foo`
+	SearchText *string `json:"searchText"`
 }
