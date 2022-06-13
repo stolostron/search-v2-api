@@ -13,7 +13,13 @@ func AuthorizeUser(next http.Handler) http.Handler {
 		if err != nil {
 			klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
 		}
-		klog.Info("Finished getting cluster-scoped resources. Now Authorizing..")
+
+		_, newerr := cacheInst.NamespacedResources(r.Context())
+		if newerr != nil {
+			klog.Warning()
+		}
+
+		klog.Info("Finished getting resources. Now Authorizing..")
 		next.ServeHTTP(w, r.WithContext(r.Context()))
 
 	})

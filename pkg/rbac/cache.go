@@ -15,6 +15,7 @@ type Cache struct {
 	tokenReviews     map[string]*tokenReviewCache
 	tokenReviewsLock sync.Mutex
 	shared           clusterScopedResources
+	users            namespacedResources
 	pool             pgxpoolmock.PgxPool
 }
 
@@ -23,5 +24,6 @@ var cacheInst = Cache{
 	tokenReviews:     map[string]*tokenReviewCache{},
 	tokenReviewsLock: sync.Mutex{},
 	shared:           clusterScopedResources{},
+	users:            namespacedResources{},
 	pool:             db.GetConnection(),
 }
