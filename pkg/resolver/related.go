@@ -260,9 +260,17 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 func (s *SearchResult) relatedKindUIDs(levelsMap map[string][]string) {
 	relatedKinds := pointerToStringArray(s.input.RelatedKinds)
 	s.uids = []*string{}
+	keys := getKeys(levelsMap)
 	for _, kind := range relatedKinds {
+		// Convert kind to right case even if incoming query in RelatedKinds is all lowercase
+		for _, key := range keys {
+			if strings.EqualFold(key, kind) {
+				kind = key
+			}
+		}
 		s.uids = append(s.uids, stringArrayToPointer(levelsMap[kind])...)
 	}
+	klog.V(6).Info("Number of relatedKind UIDs: ", len(s.uids))
 }
 
 func (s *SearchResult) searchRelatedResultKindCount(levelMap map[string][]string) []SearchRelatedResult {
@@ -318,10 +326,10 @@ func (s *SearchResult) setDepth() {
 	//Set level
 	if s.searchApplication() && s.level == 0 {
 		s.level = 3 // If search involves applications and level is not explicitly set by user, set to 3
-		klog.V(3).Info("Search includes applications. Level set to %d.", s.level)
+		klog.V(3).Infof("Search includes applications. Level set to %d.", s.level)
 	} else if s.level == 0 {
 		s.level = 1 // If level is not explicitly set by user, set to 1
-		klog.V(6).Info("Default value for level set: %d.", s.level)
+		klog.V(6).Infof("Default value for level set: %d.", s.level)
 	}
 }
 
@@ -331,15 +339,18 @@ func (s *SearchResult) searchApplication() bool {
 	for _, filter := range s.input.Filters {
 		for _, val := range filter.Values {
 			if strings.EqualFold(*val, srchString) {
+				klog.V(9).Info("searchApplication returns true. Search filter includes application")
 				return true
 			}
 		}
 	}
 	for _, relKind := range s.input.RelatedKinds {
 		if strings.EqualFold(*relKind, srchString) {
+			klog.V(9).Info("searchApplication returns true. relatedkinds includes application")
 			return true
 		}
 	}
+	klog.V(9).Info("searchApplication returns false. relatedkind/filter doesn't include application")
 	return false
 }
 
