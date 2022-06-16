@@ -295,27 +295,37 @@ func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface
 
 	relatedSearch := make([]SearchRelatedResult, 0)
 	relatedItems := map[string][]map[string]interface{}{}
+	relatedKinds := pointerToStringArray(s.input.RelatedKinds)
 
 	//iterating and sending values to relatedSearch
 	for _, currItem := range items {
 		currKind := currItem["kind"].(string)
-		kindItemList := relatedItems[currKind]
+		for _, relKind := range relatedKinds {
+			if strings.EqualFold(relKind, currKind) {
+				// Convert kind to right case if incoming query in RelatedKinds is all lowercase
+				// Needed for V1 compatibility.
+				kindItemList := relatedItems[relKind]
+				currItem["kind"] = relKind
+				kindItemList = append(kindItemList, currItem)
+				relatedItems[relKind] = kindItemList
+				break
+			}
+		}
 
-		kindItemList = append(kindItemList, currItem)
-		relatedItems[currKind] = kindItemList
 	}
 
 	//iterating and sending values to relatedSearch
 	for kind, items := range relatedItems {
-		relatedKinds := pointerToStringArray(s.input.RelatedKinds)
-		for _, relKind := range relatedKinds {
-			if strings.EqualFold(relKind, kind) {
-				// Convert kind to right case if incoming query in RelatedKinds is all lowercase
-				// Needed for V1 compatibility.
-				relatedSearch = append(relatedSearch, SearchRelatedResult{Kind: relKind, Items: items})
-				break
-			}
-		}
+		relatedSearch = append(relatedSearch, SearchRelatedResult{Kind: kind, Items: items})
+
+		// for _, relKind := range relatedKinds {
+		// 	if strings.EqualFold(relKind, kind) {
+		// 		// Convert kind to right case if incoming query in RelatedKinds is all lowercase
+		// 		// Needed for V1 compatibility.
+		// 		relatedSearch = append(relatedSearch, SearchRelatedResult{Kind: relKind, Items: items})
+		// 		break
+		// 	}
+		// }
 	}
 	return relatedSearch
 }
