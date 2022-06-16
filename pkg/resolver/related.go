@@ -247,7 +247,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		items, err := s.resolveItems() // Fetch the related kind items
 		if err != nil {
 			klog.Warning("Error resolving relatedKind items", err)
-		} else { // Convert to (kind, items) format
+		} else { // Convert to (kind, items) format - when relatedKinds are requested
 			relatedSearch = s.searchRelatedResultKindItems(items)
 		}
 	} else { // Retrieve kind and count of related items
@@ -263,6 +263,7 @@ func (s *SearchResult) relatedKindUIDs(levelsMap map[string][]string) {
 	keys := getKeys(levelsMap)
 	for _, kind := range relatedKinds {
 		// Convert kind to right case even if incoming query in RelatedKinds is all lowercase
+		// Needed for V1 compatibility.
 		for _, key := range keys {
 			if strings.EqualFold(key, kind) {
 				s.uids = append(s.uids, stringArrayToPointer(levelsMap[key])...)
@@ -304,11 +305,17 @@ func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface
 		relatedItems[currKind] = kindItemList
 	}
 
-	i := 0
 	//iterating and sending values to relatedSearch
 	for kind, items := range relatedItems {
-		relatedSearch = append(relatedSearch, SearchRelatedResult{Kind: kind, Items: items})
-		i++
+		relatedKinds := pointerToStringArray(s.input.RelatedKinds)
+		for _, relKind := range relatedKinds {
+			if strings.EqualFold(relKind, kind) {
+				// Convert kind to right case if incoming query in RelatedKinds is all lowercase
+				// Needed for V1 compatibility.
+				relatedSearch = append(relatedSearch, SearchRelatedResult{Kind: relKind, Items: items})
+				break
+			}
+		}
 	}
 	return relatedSearch
 }
