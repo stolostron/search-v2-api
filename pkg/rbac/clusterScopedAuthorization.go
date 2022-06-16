@@ -29,10 +29,10 @@ func (shared *clusterScopedResources) getClusterScopedResources(cache *Cache, ct
 	defer shared.lock.Unlock()
 	if shared.resources != nil &&
 		time.Now().Before(shared.updatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond)) {
-		klog.V(5).Info("Using cluster scoped resources from cache.")
+		klog.V(8).Info("Using cluster scoped resources from cache.")
 		return shared.resources, shared.err
 	}
-	klog.V(5).Info("Querying database for cluster-scoped resources.")
+	klog.V(6).Info("Querying database for cluster-scoped resources.")
 	shared.err = nil // Clear previous errors.
 
 	// if data not in cache or expired

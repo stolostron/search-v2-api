@@ -265,12 +265,15 @@ func (s *SearchResult) relatedKindUIDs(levelsMap map[string][]string) {
 		// Convert kind to right case even if incoming query in RelatedKinds is all lowercase
 		for _, key := range keys {
 			if strings.EqualFold(key, kind) {
-				kind = key
+				s.uids = append(s.uids, stringArrayToPointer(levelsMap[key])...)
+				break
 			}
 		}
-		s.uids = append(s.uids, stringArrayToPointer(levelsMap[kind])...)
 	}
 	klog.V(6).Info("Number of relatedKind UIDs: ", len(s.uids))
+	if len(s.uids) == 0 && len(s.input.RelatedKinds) > 0 {
+		klog.Warning("No UIDs matched for relatedKinds: ", pointerToStringArray(s.input.RelatedKinds))
+	}
 }
 
 func (s *SearchResult) searchRelatedResultKindCount(levelMap map[string][]string) []SearchRelatedResult {
@@ -289,7 +292,7 @@ func (s *SearchResult) searchRelatedResultKindCount(levelMap map[string][]string
 
 func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface{}) []SearchRelatedResult {
 
-	relatedSearch := make([]SearchRelatedResult, len(s.input.RelatedKinds))
+	relatedSearch := make([]SearchRelatedResult, 0)
 	relatedItems := map[string][]map[string]interface{}{}
 
 	//iterating and sending values to relatedSearch
@@ -304,7 +307,7 @@ func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface
 	i := 0
 	//iterating and sending values to relatedSearch
 	for kind, items := range relatedItems {
-		relatedSearch[i] = SearchRelatedResult{Kind: kind, Items: items}
+		relatedSearch = append(relatedSearch, SearchRelatedResult{Kind: kind, Items: items})
 		i++
 	}
 	return relatedSearch
