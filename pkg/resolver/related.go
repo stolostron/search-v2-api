@@ -258,6 +258,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 }
 
 func (s *SearchResult) relatedKindUIDs(levelsMap map[string][]string) {
+	klog.Info("levelsMap in relatedKindUIDs: ", levelsMap)
 	relatedKinds := pointerToStringArray(s.input.RelatedKinds)
 	s.uids = []*string{}
 	keys := getKeys(levelsMap)
@@ -266,6 +267,7 @@ func (s *SearchResult) relatedKindUIDs(levelsMap map[string][]string) {
 		// Needed for V1 compatibility.
 		for _, key := range keys {
 			if strings.EqualFold(key, kind) {
+				klog.Info("key:", key, " kind:", kind)
 				s.uids = append(s.uids, stringArrayToPointer(levelsMap[key])...)
 				break
 			}
@@ -305,7 +307,9 @@ func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface
 				// Convert kind to right case if incoming query in RelatedKinds is all lowercase
 				// Needed for V1 compatibility.
 				kindItemList := relatedItems[relKind]
-				currItem["kind"] = relKind
+				if relKind != "pod" && relKind != "replicaset" {
+					currItem["kind"] = relKind
+				}
 				kindItemList = append(kindItemList, currItem)
 				relatedItems[relKind] = kindItemList
 				break
