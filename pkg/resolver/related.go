@@ -307,9 +307,7 @@ func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface
 				// Convert kind to right case if incoming query in RelatedKinds is all lowercase
 				// Needed for V1 compatibility.
 				kindItemList := relatedItems[relKind]
-				if relKind != "pod" && relKind != "replicaset" {
-					currItem["kind"] = relKind
-				}
+				currItem["kind"] = relKind
 				kindItemList = append(kindItemList, currItem)
 				relatedItems[relKind] = kindItemList
 				break
