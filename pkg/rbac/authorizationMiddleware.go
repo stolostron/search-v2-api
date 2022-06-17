@@ -14,7 +14,8 @@ func AuthorizeUser(next http.Handler) http.Handler {
 			klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
 		}
 
-		_, newerr := cacheInst.NamespacedResources(r.Context())
+		clientToken := r.Context().Value(ContextAuthTokenKey).(string)
+		_, newerr := cacheInst.NamespacedResources(r.Context(), clientToken)
 		if newerr != nil {
 			klog.Warning()
 		}
