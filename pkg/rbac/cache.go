@@ -15,7 +15,7 @@ type Cache struct {
 	tokenReviews     map[string]*tokenReviewCache
 	tokenReviewsLock sync.Mutex
 	shared           clusterScopedResources
-	users            map[string]*userData
+	users            map[string]*userData // UID:{userdata} UID comes from tokenreview
 	pool             pgxpoolmock.PgxPool
 }
 

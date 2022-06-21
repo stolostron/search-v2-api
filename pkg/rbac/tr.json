@@ -1,0 +1,43 @@
+{
+    "kind": "TokenReview",
+    "apiVersion": "authentication.k8s.io/v1",
+    "metadata": {
+        "creationTimestamp": null,
+        "managedFields": [
+            {
+                "manager": "main",
+                "operation": "Update",
+                "apiVersion": "authentication.k8s.io/v1",
+                "time": "2022-06-21T16:39:09Z",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                    "f:spec": {
+                        "f:token": {}
+                    }
+                }
+            }
+        ]
+    },
+    "spec": {
+        "token": "sha256~oKUU_nxSIAUjBJHWe7cCz6iLQ2jDn-WZ2d--S4aMda8"
+    },
+    "status": {
+        "authenticated": true,
+        "user": {
+            "username": "user1",
+            "uid": "ebad487e-3dc1-41bb-aacb-a52d1aad55a1",
+            "groups": [
+                "system:authenticated:oauth",
+                "system:authenticated"
+            ],
+            "extra": {
+                "scopes.authorization.openshift.io": [
+                    "user:full"
+                ]
+            }
+        },
+        "audiences": [
+            "https://kubernetes.default.svc"
+        ]
+    }
+}
