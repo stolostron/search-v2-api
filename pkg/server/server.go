@@ -29,8 +29,9 @@ func StartAndListen() {
 		},
 	}
 	srv := &http.Server{
-		Addr:              config.Cfg.API_SERVER_URL,
-		Handler:           handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: &graph.Resolver{}})),
+		Addr: config.Cfg.API_SERVER_URL,
+		Handler: handler.NewDefaultServer(generated.NewExecutableSchema(
+			generated.Config{Resolvers: &graph.Resolver{}})),
 		TLSConfig:         cfg,
 		TLSNextProto:      make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 		ReadHeaderTimeout: 0,

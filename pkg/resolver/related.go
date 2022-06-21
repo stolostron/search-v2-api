@@ -64,7 +64,7 @@ func (s *SearchResult) buildRelationsQuery() {
 	// AND ("uid" NOT IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc')))
 	// GROUP BY "uid", "kind"
 	// -- union -- This is added if `kind:Cluster` is present in search term
-	// -- select uid as uid, data->>'kind' as kind, 1 AS "level" FROM search.resources where cluster IN ('local-cluster')
+	//-- select uid as uid, data->>'kind' as kind, 1 AS "level" FROM search.resources where cluster IN ('local-cluster')
 
 	s.setDepth()
 	whereDs := []exp.Expression{
