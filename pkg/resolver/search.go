@@ -342,7 +342,7 @@ func formatLabels(labels map[string]interface{}) string {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		labelStrings = append(labelStrings, fmt.Sprintf("%s:%s", k, labels[k]))
+		labelStrings = append(labelStrings, fmt.Sprintf("%s=%s", k, labels[k]))
 	}
 	return strings.Join(labelStrings, "; ")
 }

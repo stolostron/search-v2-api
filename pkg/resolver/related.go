@@ -91,6 +91,7 @@ func (s *SearchResult) buildRelationsQuery() {
 	groupBy := []interface{}{goqu.C("uid"), goqu.C("kind")}
 
 	srcDestIds := []interface{}{goqu.I("e.sourceid"), goqu.I("e.destid")}
+	excludeResources := []interface{}{"Node", "Channel"}
 
 	// Non-recursive term
 	baseTerm := goqu.From(schema.Table("all_edges").As("e")).
@@ -104,8 +105,9 @@ func (s *SearchResult) buildRelationsQuery() {
 		Select(selectNext...).
 		// Limiting upto default level 3 as it should suffice for application relations
 		Where(goqu.Ex{"sg.level": goqu.Op{"Lte": s.level},
-			// Avoid getting nodes in recursion to prevent pulling all relations for node
-			"e.destkind": goqu.Op{"neq": "Node"}})
+			// Avoid getting nodes and channels in recursion to prevent pulling all relations for node and channel
+			"e.destkind":   goqu.Op{"neq": excludeResources},
+			"e.sourcekind": goqu.Op{"neq": excludeResources}})
 	var searchGraphQ *goqu.SelectDataset
 
 	if s.level > 1 {
@@ -258,7 +260,8 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 }
 
 func (s *SearchResult) relatedKindUIDs(levelsMap map[string][]string) {
-	klog.Info("levelsMap in relatedKindUIDs: ", levelsMap)
+	klog.V(6).Info("levelsMap in relatedKindUIDs: ", levelsMap)
+
 	relatedKinds := pointerToStringArray(s.input.RelatedKinds)
 	s.uids = []*string{}
 	keys := getKeys(levelsMap)
@@ -267,7 +270,6 @@ func (s *SearchResult) relatedKindUIDs(levelsMap map[string][]string) {
 		// Needed for V1 compatibility.
 		for _, key := range keys {
 			if strings.EqualFold(key, kind) {
-				klog.Info("key:", key, " kind:", kind)
 				s.uids = append(s.uids, stringArrayToPointer(levelsMap[key])...)
 				break
 			}
@@ -319,15 +321,6 @@ func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface
 	//iterating and sending values to relatedSearch
 	for kind, items := range relatedItems {
 		relatedSearch = append(relatedSearch, SearchRelatedResult{Kind: kind, Items: items})
-
-		// for _, relKind := range relatedKinds {
-		// 	if strings.EqualFold(relKind, kind) {
-		// 		// Convert kind to right case if incoming query in RelatedKinds is all lowercase
-		// 		// Needed for V1 compatibility.
-		// 		relatedSearch = append(relatedSearch, SearchRelatedResult{Kind: relKind, Items: items})
-		// 		break
-		// 	}
-		// }
 	}
 	return relatedSearch
 }
