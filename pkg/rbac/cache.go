@@ -14,6 +14,7 @@ type Cache struct {
 	authClient       v1.AuthenticationV1Interface // This allows tests to replace with mock client.
 	tokenReviews     map[string]*tokenReviewCache
 	tokenReviewsLock sync.Mutex
+	newUserLock      sync.Mutex
 	shared           clusterScopedResources
 	users            map[string]*userData // UID:{userdata} UID comes from tokenreview
 	pool             pgxpoolmock.PgxPool
@@ -23,6 +24,7 @@ type Cache struct {
 var cacheInst = Cache{
 	tokenReviews:     map[string]*tokenReviewCache{},
 	tokenReviewsLock: sync.Mutex{},
+	newUserLock:      sync.Mutex{},
 	shared:           clusterScopedResources{},
 	users:            map[string]*userData{},
 	pool:             db.GetConnection(),

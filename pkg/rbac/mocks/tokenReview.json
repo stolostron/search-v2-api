@@ -19,13 +19,13 @@
         ]
     },
     "spec": {
-        "token": "sha256~oKUU_nxSIAUjBJHWe7cCz6iLQ2jDn-WZ2d--S4aMda8"
+        "token": "mock-token"
     },
     "status": {
         "authenticated": true,
         "user": {
             "username": "user1",
-            "uid": "ebad487e-3dc1-41bb-aacb-a52d1aad55a1",
+            "uid": "mock-uid",
             "groups": [
                 "system:authenticated:oauth",
                 "system:authenticated"

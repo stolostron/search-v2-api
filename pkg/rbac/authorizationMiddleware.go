@@ -13,15 +13,15 @@ func AuthorizeUser(next http.Handler) http.Handler {
 		if err != nil {
 			klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
 		}
-		klog.Info("Finished getting resources. Now gettng user namespaces..")
+		klog.Info("Finished getting cluster-scoped resources. Now gettng user namespaces..")
 
 		clientToken := r.Context().Value(ContextAuthTokenKey).(string)
-		_, newerr := cacheInst.NamespacedResources(r.Context(), clientToken)
+		_, newerr := cacheInst.GetUserData(r.Context(), clientToken)
 		if newerr != nil {
-			klog.Warning("Unexpected error while obtaining namesapces.", newerr)
+			klog.Warning("Unexpected error while obtaining user namesapces.", newerr)
 		}
 
-		klog.Info("Finished getting resources. Now Authorizing..")
+		klog.Info("Finished getting user namesapces. Now Authorizing..")
 		next.ServeHTTP(w, r.WithContext(r.Context()))
 
 	})
