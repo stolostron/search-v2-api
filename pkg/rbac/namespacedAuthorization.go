@@ -18,20 +18,32 @@ type userData struct {
 	lock       sync.Mutex
 }
 
-func (cache *Cache) NamespacedResources(ctx context.Context, clientToken string) ([]string, error) {
-	uid := cache.tokenReviews[clientToken].tokenReview.Status.User.UID
-	namespaces, err := cache.users[uid].getNamespacedResources(cache, ctx)
-	return namespaces, err
+func (cache *Cache) NamespacedResources(ctx context.Context, clientToken string) (*userData, error) {
+	uid := cache.tokenReviews[clientToken].tokenReview.Status.User.UID //get uid from tokenreview
+
+	cachedUserData, userDataExists := cache.users[uid] //check if userdata cache exists
+	if userDataExists {
+		klog.V(5).Info("Using user data from cache.")
+		return cachedUserData, cachedUserData.err
+
+	}
+
+	// create new instance and
+	user := cache.users[uid]
+	user = &userData{}
+	userData, err := user.getNamespacedResources(cache, ctx)
+	return userData, err
 
 }
 
-func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context) ([]string, error) {
+func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context) (*userData, error) {
+	//lock to prevent checking more than one at a time
+
 	user.lock.Lock()
 	defer user.lock.Unlock()
-	if user.namespaces != nil &&
-		time.Now().Before(user.updatedAt.Add(time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond)) {
+	if len(user.namespaces) > 0 && time.Now().Before(user.updatedAt.Add(time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond)) {
 		klog.V(5).Info("Using user's namespaces from cache.")
-		return user.namespaces, user.err
+		return user, user.err
 	}
 
 	klog.V(5).Info("Getting namespaces from Kube Client")
@@ -43,7 +55,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context) 
 		klog.Warning("Error resolving namespaces from KubeClient: ", kubeErr)
 		user.err = kubeErr
 		user.namespaces = []string{}
-		return user.namespaces, kubeErr
+		return user, kubeErr
 	}
 
 	for _, n := range namespaceList.Items {
@@ -52,5 +64,5 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context) 
 
 	user.namespaces = userNamespaces
 	user.updatedAt = time.Now()
-	return user.namespaces, user.err
+	return user, user.err
 }

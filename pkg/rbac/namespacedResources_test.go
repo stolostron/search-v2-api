@@ -2,8 +2,11 @@ package rbac
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
+
+	fake "k8s.io/client-go/kubernetes/fake"
 	// fake "k8s.io/client-go/kubernetes/fake"
 )
 
@@ -11,8 +14,10 @@ import (
 func mockNamespaceCache() Cache {
 
 	return Cache{
-		users: map[string]*userData{},
-
+		users:            map[string]*userData{},
+		authClient:       fake.NewSimpleClientset().AuthenticationV1(),
+		tokenReviews:     map[string]*tokenReviewCache{},
+		tokenReviewsLock: sync.Mutex{},
 		// coreClient: fake.NewSimpleClientset(),
 	}
 }
@@ -25,7 +30,7 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 	ctx := context.Background()
 	result, err := mock_cache.NamespacedResources(ctx, "123456")
 
-	if len(result) == 0 {
+	if len(result.namespaces) == 0 {
 		t.Error("Resources not in cache.")
 	}
 	if err != nil {
@@ -51,7 +56,7 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 
 	result, err := mock_cache.NamespacedResources(ctx, "123456")
 
-	if len(result) == 0 {
+	if len(result.namespaces) == 0 {
 		t.Error("Resources not in cache.")
 	}
 	if err != nil {
@@ -77,7 +82,7 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 
 	result, err := mock_cache.NamespacedResources(ctx, "123456")
 
-	if len(result) == 0 {
+	if len(result.namespaces) == 0 {
 		t.Error("Resources not in cache.")
 	}
 	if err != nil {
