@@ -342,7 +342,7 @@ func formatLabels(labels map[string]interface{}) string {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		labelStrings = append(labelStrings, fmt.Sprintf("%s:%s", k, labels[k]))
+		labelStrings = append(labelStrings, fmt.Sprintf("%s=%s", k, labels[k]))
 	}
 	return strings.Join(labelStrings, "; ")
 }
@@ -425,10 +425,8 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 				opDateValueMap := getOperatorAndNumDateFilter(values)
 
 				//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
-				keys := make([]string, 0, len(opDateValueMap))
-				for k := range opDateValueMap {
-					keys = append(keys, k)
-				}
+				keys := getKeys(opDateValueMap)
+
 				sort.Strings(keys)
 				var operatorWhereDs []exp.Expression //store all the clauses for this filter together
 				for _, operator := range keys {
@@ -444,6 +442,14 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 	}
 
 	return whereDs
+}
+
+func getKeys(stringArrayMap map[string][]string) []string {
+	keys := make([]string, 0, len(stringArrayMap))
+	for k := range stringArrayMap {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 //Set limit for queries

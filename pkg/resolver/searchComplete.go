@@ -106,7 +106,7 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			prop := ""
 			scanErr := rows.Scan(&prop)
 			if scanErr != nil {
-				klog.Info("Error reading searchCompleteResults", scanErr)
+				klog.Error("Error reading searchCompleteResults", scanErr)
 			}
 			srchCompleteOut = append(srchCompleteOut, &prop)
 		}

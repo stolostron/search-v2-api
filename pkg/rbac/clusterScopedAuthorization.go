@@ -22,17 +22,18 @@ func (cache *Cache) ClusterScopedResources(ctx context.Context) (map[string][]st
 	return clusterScoped, err
 }
 
-func (shared *clusterScopedResources) getClusterScopedResources(cache *Cache, ctx context.Context) (map[string][]string, error) {
+func (shared *clusterScopedResources) getClusterScopedResources(cache *Cache, ctx context.Context) (map[string][]string,
+	error) {
 
 	//lock to prevent checking more than one at a time
 	shared.lock.Lock()
 	defer shared.lock.Unlock()
 	if shared.resources != nil &&
 		time.Now().Before(shared.updatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond)) {
-		klog.V(5).Info("Using cluster scoped resources from cache.")
+		klog.V(8).Info("Using cluster scoped resources from cache.")
 		return shared.resources, shared.err
 	}
-	klog.V(5).Info("Querying database for cluster-scoped resources.")
+	klog.V(6).Info("Querying database for cluster-scoped resources.")
 	shared.err = nil // Clear previous errors.
 
 	// if data not in cache or expired
@@ -65,7 +66,8 @@ func (shared *clusterScopedResources) getClusterScopedResources(cache *Cache, ct
 			var apigroup string
 			err := rows.Scan(&apigroup, &kind)
 			if err != nil {
-				klog.Errorf("Error %s retrieving rows for query:%s for apigroup %s and kind %s", err.Error(), query, apigroup, kind)
+				klog.Errorf("Error %s retrieving rows for query:%s for apigroup %s and kind %s", err.Error(), query,
+					apigroup, kind)
 				shared.err = err
 				continue
 			}
