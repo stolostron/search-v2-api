@@ -76,7 +76,7 @@ input SearchFilter {
     property: String!
     """
     Values for the property. Multiple values per property are interpreted as an OR operation.
-    Optionally one of these operations `=,!,!=,>,>=,<,<=` can be included at the begining of the value.
+    Optionally one of these operations `=,!,!=,>,>=,<,<=` can be included at the beginning of the value.
     By default the equality operation is used. 
     The values available for datetime fields (Ex: `created`, `startedAt`) are `hour`, `day`, `week`, `month` and `year`.
     Property `kind`, if included in the filter, will be matched using a case-insensitive comparison.
@@ -100,7 +100,7 @@ input SearchInput {
 
     """
     List of SearchFilter, which is a key(property) and values.  
-    When multiple filters are provided, results will match all fiters (AND operation).
+    When multiple filters are provided, results will match all filters (AND operation).
     """
     filters: [SearchFilter]
     
@@ -125,7 +125,7 @@ Data returned by the search query.
 type SearchResult {
     """
     Total number of resources matching the query.  
-    **NOTE:** Should not use count in combination with items. If items is requested, the count is simply the size of items.
+    **NOTE:** Should not use count in combination with items. If items are requested, the count is simply the size of items.
     """
     count: Int
     """
@@ -146,7 +146,7 @@ type SearchRelatedResult {
     kind: String!
     """
     Total number of related resources.  
-    **NOTE:** Should not use count in combination with items. If items is requested, the count is simply the size of items.
+    **NOTE:** Should not use count in combination with items. If items are requested, the count is simply the size of items.
     """
     count: Int
     """
@@ -184,7 +184,7 @@ A message is used to communicate conditions detected while executing a query on 
 """
 type Message {
     """
-    Unique identifier to be used by clients to process the message independently of locale or gramatical changes.
+    Unique identifier to be used by clients to process the message independently of locale or grammatical changes.
     """
     id: String!
     """
