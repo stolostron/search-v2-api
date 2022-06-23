@@ -1,7 +1,6 @@
 
 # Copyright Contributors to the Open Cluster Management project
 from locust import HttpUser, task, between, TaskSet
-import json
 import urllib3
 urllib3.disable_warnings() # Suppress warning from unverified TLS connection (verify=false)
 
@@ -11,29 +10,59 @@ token_string = "Replace with <oc whoami -t>"
 class UserBehavior(TaskSet):
 
     @task
-    def do_search(self):
-        f = open("search-query-template.json",)
-        j = json.load(f)
-        # 
-        # TODO: Here we can manipulate j.variables to pass different input parameters to the search query.
-        # 
-        self.client.payload = j
-        self.client.headers
+    def do_keyword_search(self):
+        q = {
+            "query": "query q($input: [SearchInput]) {\n  searchResult: search(input: $input) {\n    items\n    __typename\n  }\n}",
+            "variables": {"input":[{"keywords": ["prom"]}]}
+        }
+
+        self.client.payload = q
         self.do_post()
-        print("Sent search for user {}".format(self.user.name))        
+        print("Sent keyword search for user {}".format(self.user.name))  
+
+    @task
+    def do_filter_search(self):
+        q = {
+            "query": "query q($input: [SearchInput]) {\n  searchResult: search(input: $input) {\n    items\n    __typename\n  }\n}",
+            "variables": {"input":[{"filters": [{"property":"kind", "values":["Pod"]}]}]}
+        }
+        self.client.payload = q
+        self.do_post()
+        print("Sent filter search for user {}".format(self.user.name))        
+
+    @task
+    def do_count_search(self):
+        q = {
+            "query": "query q($input: [SearchInput]) {\n  searchResult: search(input: $input) {\n    count\n    __typename\n  }\n}",
+            "variables": {"input":[
+                {"filters": [{"property":"kind", "values":["Pod"]}]},
+                {"filters": [{"property":"kind", "values":["Deployment"]}]},
+            ]}
+        }
+        self.client.payload = q
+        self.do_post()
+        print("Sent count search for user {}".format(self.user.name))
+
+    # @task
+    # def do_related_search(self):
+    #     print("TODO: Send related query.")
+
+    # @task
+    # def do_autocomplete(self):
+    #     print("TODO: Send autocomplete query.")
 
     def do_post(self):
         self.client.post("/searchapi/graphql", 
-            headers={"Authorization": "Bearer " + token_string},
+            headers={"Authorization": "Bearer " + self.user.token},
             json=self.client.payload, verify=False)
 
        
 
 class User(HttpUser):
     name = ""
-    token_string=""
+    token = ""
     tasks = [UserBehavior]
-    wait_time = between(1,10)
+    wait_time = between(1,5)
 
     def on_start(self):
         global userCount
@@ -42,5 +71,5 @@ class User(HttpUser):
 
         # TODO: For an accurate result, we'll need to register OCP users and obtain individual tokens.
         #       Otherwise, the results will be inacurate because of caching.
-        self.token_string = token_string
+        self.token = token_string
         print("Starting user [%s]" % self.name)

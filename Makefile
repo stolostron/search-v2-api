@@ -41,8 +41,9 @@ test-scale: check-locust ## Sends multiple simulated requests for testing using 
 	cd test; locust --headless --users ${N_USERS} --spawn-rate ${N_USERS} -H https://${HOST} -f locust-users.py
 
 test-scale-ui: check-locust ## Start Locust and opens the UI to drive scale tests.
-	open http://0.0.0.0:8089/
-	cd test; locust --users ${N_USERS} --spawn-rate ${N_USERS} -H https://${HOST} -f locust-users.py
+	open http://0.0.0.0:8090/
+	cd test; locust --users ${N_USERS} --spawn-rate ${N_USERS} -H https://${HOST} -f locust-users.py --web-port 8090
+
 
 check-locust: ## Checks if Locust is installed in the system.
 ifeq (,$(shell which locust))
