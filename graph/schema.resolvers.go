@@ -26,9 +26,9 @@ func (r *queryResolver) Search(ctx context.Context, input []*model.SearchInput) 
 	return resolver.Search(ctx, input)
 }
 
-func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) {
-	klog.V(3).Infoln("Received Messages query")
-	return resolver.Messages(ctx)
+func (r *queryResolver) SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error) {
+	klog.V(3).Infof("Received SearchComplete query with input property **%s** and limit %d", property, limit)
+	return resolver.SearchComplete(ctx, property, query, limit)
 }
 
 func (r *queryResolver) SearchSchema(ctx context.Context) (map[string]interface{}, error) {
@@ -50,9 +50,9 @@ func (r *queryResolver) SavedSearches(ctx context.Context) ([]*model.UserSearch,
 	return savedSrches, nil
 }
 
-func (r *queryResolver) SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error) {
-	klog.V(3).Infof("Received SearchComplete query with input property **%s** and limit %d", property, limit)
-	return resolver.SearchComplete(ctx, property, query, limit)
+func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) {
+	klog.V(3).Infoln("Received Messages query")
+	return resolver.Messages(ctx)
 }
 
 // Mutation returns generated.MutationResolver implementation.

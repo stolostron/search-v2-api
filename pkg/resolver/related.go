@@ -64,7 +64,7 @@ func (s *SearchResult) buildRelationsQuery() {
 	// AND ("uid" NOT IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc')))
 	// GROUP BY "uid", "kind"
 	// -- union -- This is added if `kind:Cluster` is present in search term
-	// -- select uid as uid, data->>'kind' as kind, 1 AS "level" FROM search.resources where cluster IN ('local-cluster')
+	//-- select uid as uid, data->>'kind' as kind, 1 AS "level" FROM search.resources where cluster IN ('local-cluster')
 
 	s.setDepth()
 	whereDs := []exp.Expression{
@@ -91,6 +91,7 @@ func (s *SearchResult) buildRelationsQuery() {
 	groupBy := []interface{}{goqu.C("uid"), goqu.C("kind")}
 
 	srcDestIds := []interface{}{goqu.I("e.sourceid"), goqu.I("e.destid")}
+	excludeResources := []interface{}{"Node", "Channel"}
 
 	// Non-recursive term
 	baseTerm := goqu.From(schema.Table("all_edges").As("e")).
@@ -104,8 +105,9 @@ func (s *SearchResult) buildRelationsQuery() {
 		Select(selectNext...).
 		// Limiting upto default level 3 as it should suffice for application relations
 		Where(goqu.Ex{"sg.level": goqu.Op{"Lte": s.level},
-			// Avoid getting nodes in recursion to prevent pulling all relations for node
-			"e.destkind": goqu.Op{"neq": "Node"}})
+			// Avoid getting nodes and channels in recursion to prevent pulling all relations for node and channel
+			"e.destkind":   goqu.Op{"neq": excludeResources},
+			"e.sourcekind": goqu.Op{"neq": excludeResources}})
 	var searchGraphQ *goqu.SelectDataset
 
 	if s.level > 1 {
@@ -247,7 +249,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 		items, err := s.resolveItems() // Fetch the related kind items
 		if err != nil {
 			klog.Warning("Error resolving relatedKind items", err)
-		} else { // Convert to (kind, items) format
+		} else { // Convert to (kind, items) format - when relatedKinds are requested
 			relatedSearch = s.searchRelatedResultKindItems(items)
 		}
 	} else { // Retrieve kind and count of related items
@@ -258,10 +260,24 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 }
 
 func (s *SearchResult) relatedKindUIDs(levelsMap map[string][]string) {
+	klog.V(6).Info("levelsMap in relatedKindUIDs: ", levelsMap)
+
 	relatedKinds := pointerToStringArray(s.input.RelatedKinds)
 	s.uids = []*string{}
+	keys := getKeys(levelsMap)
 	for _, kind := range relatedKinds {
-		s.uids = append(s.uids, stringArrayToPointer(levelsMap[kind])...)
+		// Convert kind to right case even if incoming query in RelatedKinds is all lowercase
+		// Needed for V1 compatibility.
+		for _, key := range keys {
+			if strings.EqualFold(key, kind) {
+				s.uids = append(s.uids, stringArrayToPointer(levelsMap[key])...)
+				break
+			}
+		}
+	}
+	klog.V(6).Info("Number of relatedKind UIDs: ", len(s.uids))
+	if len(s.uids) == 0 && len(s.input.RelatedKinds) > 0 {
+		klog.Warning("No UIDs matched for relatedKinds: ", pointerToStringArray(s.input.RelatedKinds))
 	}
 }
 
@@ -281,23 +297,30 @@ func (s *SearchResult) searchRelatedResultKindCount(levelMap map[string][]string
 
 func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface{}) []SearchRelatedResult {
 
-	relatedSearch := make([]SearchRelatedResult, len(s.input.RelatedKinds))
+	relatedSearch := make([]SearchRelatedResult, 0)
 	relatedItems := map[string][]map[string]interface{}{}
+	relatedKinds := pointerToStringArray(s.input.RelatedKinds)
 
 	//iterating and sending values to relatedSearch
 	for _, currItem := range items {
 		currKind := currItem["kind"].(string)
-		kindItemList := relatedItems[currKind]
+		for _, relKind := range relatedKinds {
+			if strings.EqualFold(relKind, currKind) {
+				// Convert kind to right case if incoming query in RelatedKinds is all lowercase
+				// Needed for V1 compatibility.
+				kindItemList := relatedItems[relKind]
+				currItem["kind"] = relKind
+				kindItemList = append(kindItemList, currItem)
+				relatedItems[relKind] = kindItemList
+				break
+			}
+		}
 
-		kindItemList = append(kindItemList, currItem)
-		relatedItems[currKind] = kindItemList
 	}
 
-	i := 0
 	//iterating and sending values to relatedSearch
 	for kind, items := range relatedItems {
-		relatedSearch[i] = SearchRelatedResult{Kind: kind, Items: items}
-		i++
+		relatedSearch = append(relatedSearch, SearchRelatedResult{Kind: kind, Items: items})
 	}
 	return relatedSearch
 }
@@ -318,10 +341,10 @@ func (s *SearchResult) setDepth() {
 	//Set level
 	if s.searchApplication() && s.level == 0 {
 		s.level = 3 // If search involves applications and level is not explicitly set by user, set to 3
-		klog.V(3).Info("Search includes applications. Level set to %d.", s.level)
+		klog.V(3).Infof("Search includes applications. Level set to %d.", s.level)
 	} else if s.level == 0 {
 		s.level = 1 // If level is not explicitly set by user, set to 1
-		klog.V(6).Info("Default value for level set: %d.", s.level)
+		klog.V(6).Infof("Default value for level set: %d.", s.level)
 	}
 }
 
@@ -331,15 +354,18 @@ func (s *SearchResult) searchApplication() bool {
 	for _, filter := range s.input.Filters {
 		for _, val := range filter.Values {
 			if strings.EqualFold(*val, srchString) {
+				klog.V(9).Info("searchApplication returns true. Search filter includes application")
 				return true
 			}
 		}
 	}
 	for _, relKind := range s.input.RelatedKinds {
 		if strings.EqualFold(*relKind, srchString) {
+			klog.V(9).Info("searchApplication returns true. relatedkinds includes application")
 			return true
 		}
 	}
+	klog.V(9).Info("searchApplication returns false. relatedkind/filter doesn't include application")
 	return false
 }
 

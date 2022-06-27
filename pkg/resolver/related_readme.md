@@ -51,7 +51,7 @@ WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, clus
 		  ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR 
 			  ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))
 			 ) 
- 		  WHERE (("e"."destkind" != 'Node') AND  -- Avoid Node to prevent all resources on the node from showing up
+ 		  WHERE (("e"."destkind" NOT IN ('Node', 'Channel')) AND ("e"."sourcekind" NOT IN ('Node', 'Channel')) AND  -- Avoid Node and Channel to prevent all resources on the node from showing up
 				 ("sg"."level" <= 3) --Limit level to 3
  				)
 ------------------------RECURSIVE PART START------------------------

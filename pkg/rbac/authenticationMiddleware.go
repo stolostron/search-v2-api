@@ -31,14 +31,16 @@ func AuthenticateUser(next http.Handler) http.Handler {
 		// Retrieving and verifying the token
 		if clientToken == "" {
 			klog.V(4).Info("Request didn't have a valid authentication token.")
-			http.Error(w, "{\"message\":\"Request didn't have a valid authentication token.\"}", http.StatusUnauthorized)
+			http.Error(w, "{\"message\":\"Request didn't have a valid authentication token.\"}",
+				http.StatusUnauthorized)
 			return
 		}
 
 		authenticated, err := cacheInst.IsValidToken(r.Context(), clientToken)
 		if err != nil {
 			klog.Warning("Unexpected error while authenticating the request token.", err)
-			http.Error(w, "{\"message\":\"Unexpected error while authenticating the request token.\"}", http.StatusInternalServerError)
+			http.Error(w, "{\"message\":\"Unexpected error while authenticating the request token.\"}",
+				http.StatusInternalServerError)
 			return
 
 		}
@@ -48,7 +50,7 @@ func AuthenticateUser(next http.Handler) http.Handler {
 			return
 		}
 
-		klog.V(4).Info("User authentication successful!")
+		klog.V(6).Info("User authentication successful!")
 
 		ctx := context.WithValue(r.Context(), ContextAuthTokenKey, clientToken)
 

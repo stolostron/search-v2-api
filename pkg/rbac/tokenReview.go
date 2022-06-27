@@ -57,7 +57,7 @@ func (trc *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
 
 	// Check if cached TokenReview data is valid. Update if needed.
 	if time.Now().After(trc.updatedAt.Add(time.Duration(config.Cfg.AuthCacheTTL) * time.Millisecond)) {
-		klog.V(5).Infof("Starting TokenReview. tokenReviewCache expired or never updated. UpdatedAt %s", trc.updatedAt)
+		klog.V(6).Infof("Starting TokenReview. tokenReviewCache expired or never updated. UpdatedAt %s", trc.updatedAt)
 
 		tr := authv1.TokenReview{
 			Spec: authv1.TokenReviewSpec{

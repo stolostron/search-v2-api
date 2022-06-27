@@ -88,10 +88,10 @@ type MutationResolver interface {
 }
 type QueryResolver interface {
 	Search(ctx context.Context, input []*model.SearchInput) ([]*resolver.SearchResult, error)
-	Messages(ctx context.Context) ([]*model.Message, error)
+	SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error)
 	SearchSchema(ctx context.Context) (map[string]interface{}, error)
 	SavedSearches(ctx context.Context) ([]*model.UserSearch, error)
-	SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error)
+	Messages(ctx context.Context) ([]*model.Message, error)
 }
 
 type executableSchema struct {
@@ -333,74 +333,206 @@ func (ec *executionContext) introspectType(name string) (*introspection.Type, er
 }
 
 var sources = []*ast.Source{
-	{Name: "graph/schema.graphqls", Input: `# in the schema we will be doing Query and Mutations
+	{Name: "graph/schema.graphqls", Input: `"""
+Copyright Contributors to the Open Cluster Management project.
+
+Search Query API.
+"""
 schema { 
   query: Query
   mutation: Mutation
 }
 
-# These are the two queries we will be doing
+"""
+Queries supported by the Search Query API.
+"""
 type Query {
+  """
+  Search for resources and their relationships. 
+  *[PLACEHOLDER] Results only include kubernetes resources for which the authenticated user has list permission.*
+
+  For more information see the feature spec.
+  """
   search(input: [SearchInput]): [SearchResult]
-  messages : [Message]
-  searchSchema: Map
-  savedSearches: [userSearch]
+  
+  """
+  Query all values for the given property.  
+  Optionally, a query can be included to filter the results.  
+  For example, if we want to get the names of all resources in the namespace foo, we can pass a query with the filter ` + "`" + `{property: namespace, values:['foo']}` + "`" + `
+  
+  **Default limit is** 10,000  
+  A value of -1 will remove the limit. Use carefully because it may impact the service.
+  """
   searchComplete(property: String!, query: SearchInput, limit: Int): [String]
 
+  """
+  Returns all properties from resources currently in the index.
+  """
+  searchSchema: Map
+
+  """
+  Saved search queries for the authenticated user.
+  **[PLACEHOLDER] This query is not yet implemented in V2.**
+  """
+  savedSearches: [userSearch]
+
+  """
+  Additional information about the service status or conditions found while processing the query.  
+  This is similar to the errors query, but without implying that there was a problem processing the query.
+  """
+  messages: [Message]
 }
 
-# This is a mutation we will be doing
+"""
+Supported mutations
+"""
 type Mutation {
-    # Delete search query for the current user.
+    """
+    Delete search query for the authenticated user.
+    **[PLACEHOLDER] This query is not yet implemented in V2.**
+    """
     deleteSearch(resource: String): String
-    # Save a search query for the current user.
+    """
+    Save a search query for the authenticated user.
+    **[PLACEHOLDER] This query is not yet implemented in V2.**
+    """
     saveSearch(resource: String): String
 }
 
+
+"""
+Defines a key/value to filter results.  
+When multiple values are provided for a property, it is interpreted as an OR operation.
+"""
 input SearchFilter {
+    """
+    Name of the property (key).
+    """
     property: String!
+    """
+    Values for the property. Multiple values per property are interpreted as an OR operation.
+    Optionally one of these operations ` + "`" + `=,!,!=,>,>=,<,<=` + "`" + ` can be included at the begining of the value.
+    By default the equality operation is used.
+    """
     values: [String]!
   }
+
+
+"""
+Input options to the search query.
+"""
 input SearchInput {
+    """
+    List of strings to match resources.  
+    Will match resources containing any of the keywords in any text field.  
+    When multiple keywords are provided, it is interpreted as an AND operation.  
+    Matches are case insensitive.
+    """
     keywords: [String]
+
+    """
+    List of SearchFilter, which is a key(property) and values.  
+    When multiple filters are provided, results will match all fiters (AND operation).
+    """
     filters: [SearchFilter]
-    # Max number of results. Default limit: 10,000. For unlimited results use -1.
+    
+    """
+    Max number of results returned by the query.  
+    **Default is** 10,000  
+    A value of -1 will remove the limit. Use carefully because it may impact the service.
+    """
     limit: Int
-    # Filter relationships to the specified kinds.
-    # If empty, all relationships will be included. This filter is used with the 'related' field on SearchResult.
+
+    """
+    Filter relationships to the specified kinds.  
+    If empty, all relationships will be included.  
+    This filter is used with the 'related' field on SearchResult.
+    """
     relatedKinds: [String]
   }
 
-
+"""
+Data returned by the search query.
+"""
 type SearchResult {
+    """
+    Total number of resources matching the query.  
+    **NOTE:** Should not use count in combination with items. If items is requested, the count is simply the size of items.
+    """
     count: Int
+    """
+    Resources matching the search query.
+    """
     items: [Map]
+    """
+    Resources related to the query results (items).  
+    For example, if searching for deployments, this will return the related pod resources.
+    """
     related: [SearchRelatedResult]
   }
 
+"""
+Resources related to the items resolved from the search query.
+"""
 type SearchRelatedResult {
     kind: String!
+    """
+    Total number of related resources.  
+    **NOTE:** Should not use count in combination with items. If items is requested, the count is simply the size of items.
+    """
     count: Int
+    """
+    Resources matched by the query.
+    """
     items: [Map]
   }
 
-
+"""
+Data required to save a user search query.
+"""
 type userSearch {
+  """
+  Unique identifier of the saved search query.
+  """
   id: String
+  """
+  Name of the saved search query.
+  """
   name: String
+  """
+  Description of the saved search query.
+  """
   description: String
+  """
+  The search query in text format.  
+  Example:
+  - ` + "`" + `kind:pod,deployment namespace:default bar foo` + "`" + `
+  """
   searchText: String
 }
 
+"""
+A message is used to communicate conditions detected while executing a query on the server.
+"""
 type Message {
-    # Unique identifier for each message.
+    """
+    Unique identifier to be used by clients to process the message independently of locale or gramatical changes.
+    """
     id: String!
-    # Describes the type of message. Expected values are: information, warning, error.
+    """
+    Message type. 
+    **Values:** information, warning, error.
+    """
     kind: String
-    # Message text.
+    """
+    Message text.
+    """
     description: String
 }
 
+"""
+Map of strings. Used to hold data for a result item.
+"""
 scalar Map`, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
@@ -756,7 +888,7 @@ func (ec *executionContext) _Query_search(ctx context.Context, field graphql.Col
 	return ec.marshalOSearchResult2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋpkgᚋresolverᚐSearchResult(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Query_messages(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Query_searchComplete(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -772,9 +904,16 @@ func (ec *executionContext) _Query_messages(ctx context.Context, field graphql.C
 	}
 
 	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Query_searchComplete_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Messages(rctx)
+		return ec.resolvers.Query().SearchComplete(rctx, args["property"].(string), args["query"].(*model.SearchInput), args["limit"].(*int))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -783,9 +922,9 @@ func (ec *executionContext) _Query_messages(ctx context.Context, field graphql.C
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.([]*model.Message)
+	res := resTmp.([]*string)
 	fc.Result = res
-	return ec.marshalOMessage2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋgraphᚋmodelᚐMessage(ctx, field.Selections, res)
+	return ec.marshalOString2ᚕᚖstring(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query_searchSchema(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -852,7 +991,7 @@ func (ec *executionContext) _Query_savedSearches(ctx context.Context, field grap
 	return ec.marshalOuserSearch2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋgraphᚋmodelᚐUserSearch(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Query_searchComplete(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Query_messages(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -868,16 +1007,9 @@ func (ec *executionContext) _Query_searchComplete(ctx context.Context, field gra
 	}
 
 	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Query_searchComplete_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().SearchComplete(rctx, args["property"].(string), args["query"].(*model.SearchInput), args["limit"].(*int))
+		return ec.resolvers.Query().Messages(rctx)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -886,9 +1018,9 @@ func (ec *executionContext) _Query_searchComplete(ctx context.Context, field gra
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.([]*string)
+	res := resTmp.([]*model.Message)
 	fc.Result = res
-	return ec.marshalOString2ᚕᚖstring(ctx, field.Selections, res)
+	return ec.marshalOMessage2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋgraphᚋmodelᚐMessage(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -2580,7 +2712,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				res = ec._Query_search(ctx, field)
 				return res
 			})
-		case "messages":
+		case "searchComplete":
 			field := field
 			out.Concurrently(i, func() (res graphql.Marshaler) {
 				defer func() {
@@ -2588,7 +2720,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_messages(ctx, field)
+				res = ec._Query_searchComplete(ctx, field)
 				return res
 			})
 		case "searchSchema":
@@ -2613,7 +2745,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				res = ec._Query_savedSearches(ctx, field)
 				return res
 			})
-		case "searchComplete":
+		case "messages":
 			field := field
 			out.Concurrently(i, func() (res graphql.Marshaler) {
 				defer func() {
@@ -2621,7 +2753,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_searchComplete(ctx, field)
+				res = ec._Query_messages(ctx, field)
 				return res
 			})
 		case "__type":
