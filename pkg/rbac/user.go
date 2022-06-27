@@ -39,7 +39,7 @@ type RbacRecord struct {
 }
 
 func init() {
-	Users = []string{"user1", "user2", "user3"}
+	Users = []string{"user2", "user3", "user1"}
 	Options = []string{"whereClause", "Table", "matView"}
 	UserMV = make(map[string]string, len(Users))
 	_, err := db.GetConnection().Query(context.TODO(), "DROP TABLE search.rbacQueryTimes")
@@ -114,15 +114,15 @@ func GetUserPermissions(user string) exp.ExpressionList {
 				whereOrDs = append(whereOrDs, goqu.COALESCE(goqu.L(`data->>?`, "apigroup"), "").In(ma["apigroup"]),
 					goqu.L(`data->>?`, "kind").In(ma["kind"]),
 					goqu.L(`data->>?`, "namespace").In(ma["namespace"]))
-				fmt.Println("i:", i)
+				// fmt.Println("i:", i)
 				if i == 0 {
 					whereOr[0] = goqu.And(whereOrDs...)
 				} else {
 					whereOr[0] = goqu.Or(whereOr[0], goqu.And(whereOrDs...))
 				}
-				fmt.Println("whereOr after insertion:", whereOr)
+				// fmt.Println("whereOr after insertion:", whereOr)
 				// whereDs = append(whereDs, whereOrDs...)
-				fmt.Println("whereOr inside", whereOr, " for user", user)
+				// fmt.Println("whereOr inside", whereOr, " for user", user)
 
 			}
 			// return whereOr[0]
@@ -134,6 +134,6 @@ func GetUserPermissions(user string) exp.ExpressionList {
 	} else {
 		klog.Error("No permission data exists for user ", user)
 	}
-	fmt.Println("whereOr outside", whereOr, " for user", user)
+	// fmt.Println("whereOr outside", whereOr, " for user", user)
 	return whereOr[0]
 }
