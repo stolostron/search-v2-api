@@ -63,7 +63,7 @@ func InsertRbacTimes(s RbacRecord) {
 
 func loadUserPerm() {
 	// Read json file and build mock data
-	if bytes, err := ioutil.ReadFile("pkg/rbac/user_perm_table.json"); err == nil {
+	if bytes, err := ioutil.ReadFile("user_perm_table.json"); err == nil {
 		fmt.Println("Read file without err:", err)
 
 		// var v interface{}
