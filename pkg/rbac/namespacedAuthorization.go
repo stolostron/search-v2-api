@@ -57,7 +57,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 	user.impersonate = clientset
 
 	var userNamespaces []string
-	namespaceList, kubeErr := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{}) // get all namespaces in cluster
+	namespaceList, kubeErr := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if kubeErr != nil {
 		klog.Warning("Error resolving namespaces from KubeClient: ", kubeErr)
 		user.err = kubeErr
