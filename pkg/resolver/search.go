@@ -17,7 +17,10 @@ import (
 	"github.com/lib/pq"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
+
 	db "github.com/stolostron/search-v2-api/pkg/database"
+
 	"k8s.io/klog/v2"
 )
 
@@ -48,8 +51,29 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 
 func (s *SearchResult) Count() int {
 	klog.V(2).Info("Resolving SearchResult:Count()")
-	s.buildSearchQuery(context.Background(), true, false)
-	count := s.resolveCount()
+	var count int
+
+	for _, user := range rbac.Users {
+		fmt.Println("Count- user: ", user)
+		for _, op := range rbac.Options {
+			startTime := time.Now()
+			_, mvPresentBool := rbac.CheckTable(user)
+
+			s.buildSearchQuery(context.Background(), true, false, user, op)
+			count = s.resolveCount()
+			rbacrecord := rbac.RbacRecord{
+				Pool:      s.pool,
+				UserUID:   user,
+				Created:   time.Now(),
+				TimeTaken: time.Since(startTime),
+				Option:    op,
+				Function:  "Count",
+				Result:    count,
+				MVPresent: mvPresentBool,
+			}
+			rbac.InsertRbacTimes(rbacrecord)
+		}
+	}
 
 	return count
 }
@@ -58,8 +82,31 @@ func (s *SearchResult) Items() []map[string]interface{} {
 	s.wg.Add(1)
 	defer s.wg.Done()
 	klog.V(2).Info("Resolving SearchResult:Items()")
-	s.buildSearchQuery(context.Background(), false, false)
-	r, e := s.resolveItems()
+	var e error
+	var r []map[string]interface{}
+
+	for _, user := range rbac.Users {
+		for _, op := range rbac.Options {
+			fmt.Println("Items- user: ", user, " op: ", op)
+
+			startTime := time.Now()
+			_, mvPresentBool := rbac.CheckTable(user)
+			s.buildSearchQuery(context.Background(), false, false, user, op)
+			r, e = s.resolveItems()
+			rbacrecord := rbac.RbacRecord{
+				Pool:      s.pool,
+				UserUID:   user,
+				Created:   time.Now(),
+				TimeTaken: time.Since(startTime),
+				Option:    op,
+				Function:  "Items",
+				Result:    len(r),
+				MVPresent: mvPresentBool,
+			}
+			rbac.InsertRbacTimes(rbacrecord)
+		}
+	}
+
 	if e != nil {
 		klog.Error("Error resolving items.", e)
 	}
@@ -100,39 +147,101 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 
 func (s *SearchResult) Uids() {
 	klog.V(2).Info("Resolving SearchResult:Uids()")
-	s.buildSearchQuery(context.Background(), false, true)
+	s.buildSearchQuery(context.Background(), false, true, "", "")
 	s.resolveUids()
 }
 
-func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) {
+func (s *SearchResult) buildSearchQuery(ctx context.Context, count, uid bool, user, op string) {
 	var limit int
 	var selectDs *goqu.SelectDataset
 	var whereDs []exp.Expression
+	var schemaTable exp.AliasedExpression
 
 	// Example query: SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN
 	// (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 10000
 
 	//define schema table:
-	schemaTable := goqu.S("search").Table("resources")
+
+	schemaTable = goqu.S("search").Table("resources").As("r")
+
+	// schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 
 	if s.input.Keywords != nil && len(s.input.Keywords) > 0 {
 		jsb := goqu.L("jsonb_each_text(?)", goqu.C("data"))
-		ds = goqu.From(schemaTable, jsb)
-	}
-
-	//SELECT CLAUSE
-	if count {
-		selectDs = ds.Select(goqu.COUNT("uid"))
-	} else if uid {
-		selectDs = ds.Select("uid")
-	} else {
-		selectDs = ds.SelectDistinct("uid", "cluster", "data")
+		ds = goqu.From(schemaTable, jsb).As("r")
 	}
 
 	//WHERE CLAUSE
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 		whereDs = WhereClauseFilter(s.input)
+	}
+	// types of rBAC
+	// var whereOr map[int]exp.ExpressionList
+	// if user == "user2" {
+	switch op {
+	case "matView":
+		fmt.Println("************************ CASE matView ")
+		fmt.Println("************************ USER ", user)
+
+		if _, ok := rbac.CheckTable(user); !ok {
+
+			mvSql, _, e := ds.SelectDistinct(goqu.T("r").Col("uid"), "cluster", "data").Where(rbac.GetUserPermissions(user)).ToSQL()
+			if e == nil {
+				dropMVSql := fmt.Sprintf("DROP MATERIALIZED VIEW search.%s", user)
+				_, droperror := s.pool.Query(context.TODO(), dropMVSql)
+				klog.Error("Error dropping mv for user ", user, droperror, ". \n sql: ", mvSql)
+
+				s.pool.Query(context.TODO(), mvSql)
+				mvSql = fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS search.%s AS %s", user, mvSql)
+				klog.Info("MV create query: ", mvSql)
+				_, mvCreateError := s.pool.Query(context.TODO(), mvSql)
+				if mvCreateError == nil {
+					rbac.UserMV[user] = user
+				} else {
+					klog.Error("Error creating mv for user ", user, mvCreateError, ". \n sql: ", mvSql)
+				}
+			} else {
+				klog.Error("Error getting mv create script", e)
+			}
+		}
+		if mvName, ok := rbac.CheckTable(user); ok {
+			schemaTable = goqu.S("search").Table(mvName).As("r")
+			ds = goqu.From(schemaTable)
+		}
+
+	case "whereClause":
+		fmt.Println("************************ CASE whereClause ")
+		fmt.Println("************************ USER ", user)
+
+		// [map[apigroup:app.k8s.io kind:[Application] namespace:[default]] map[apigroup:apps kind:[Deployment ReplicaSet] namespace:[default]]]
+
+		whereDs = append(whereDs, rbac.GetUserPermissions(user))
+	case "Table":
+		fmt.Println("************************ CASE Table ")
+		fmt.Println("************************ USER ", user)
+
+		ds = ds.InnerJoin(goqu.T("user_perm_table").As("u"),
+			goqu.On(goqu.And(goqu.COALESCE(goqu.L(`data->>?`, "apigroup"), "").
+				Eq(goqu.T("u").Col("apigroup")),
+				goqu.L(`data->>?`, "kind").Eq(goqu.Any(goqu.T("u").Col("kind"))),
+				goqu.L(`data->>?`, "namespace").Eq(goqu.Any(goqu.T("u").Col("namespace"))),
+				goqu.T("u").Col("uid").Eq(user))))
+
+	}
+	// fmt.Println("rbac perm:", rbac.UserPerm[user])
+	// } else {
+	// 	fmt.Println("user not usrr 2, but :", user)
+
+	// }
+
+	//SELECT CLAUSE
+	if count {
+		selectDs = ds.Select(goqu.COUNT(goqu.T("r").Col("uid")))
+	} else if uid {
+		selectDs = ds.Select(goqu.T("r").Col("uid"))
+	} else {
+		selectDs = ds.SelectDistinct(goqu.T("r").Col("uid"), "cluster", "data")
 	}
 
 	//LIMIT CLAUSE
@@ -148,9 +257,14 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	} else {
 		sql, params, err = selectDs.Where(whereDs...).ToSQL()
 	}
+	// if user == "user2" {
+	// 	fmt.Println("user2 sql: ", sql)
+	// }
 	if err != nil {
 		klog.Errorf("Error building Search query: %s", err.Error())
 	}
+	klog.V(3).Infof("*******************Search query: %s\nargs: %s", sql, params)
+
 	klog.V(3).Infof("Search query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
