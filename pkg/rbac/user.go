@@ -2,9 +2,9 @@ package rbac
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"reflect"
 	"time"
 
@@ -14,6 +14,9 @@ import (
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"k8s.io/klog/v2"
 )
+
+//go:embed user_perm_table.json
+var content embed.FS
 
 // method 1: where clause
 // method 2: user_perm_table table
@@ -63,7 +66,7 @@ func InsertRbacTimes(s RbacRecord) {
 
 func loadUserPerm() {
 	// Read json file and build mock data
-	if bytes, err := ioutil.ReadFile("user_perm_table.json"); err == nil {
+	if bytes, err := content.ReadFile("user_perm_table.json"); err == nil {
 		fmt.Println("Read file without err:", err)
 
 		// var v interface{}
