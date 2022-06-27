@@ -2,10 +2,10 @@
 # Copyright Contributors to the Open Cluster Management project
 from locust import HttpUser, task, between, TaskSet
 import urllib3
+import os
 urllib3.disable_warnings() # Suppress warning from unverified TLS connection (verify=false)
 
 userCount = 0
-token_string = "Replace with <oc whoami -t>"
 
 class UserBehavior(TaskSet):
     @task
@@ -92,5 +92,9 @@ class User(HttpUser):
 
         # TODO: For an accurate result, we'll need to register OCP users and obtain individual tokens.
         #       Otherwise, the results will be inacurate because of caching.
-        self.token = token_string
+        self.token = os.getenv('API_TOKEN')
+        if not self.token:
+            print("\n\nCONFIGURATION ERROR!")
+            print("The environment variable API_TOKEN must be set with the value of <oc whoami -t>\n")
+            os._exit(1)
         print("Starting user [%s]" % self.name)

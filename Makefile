@@ -39,7 +39,7 @@ HOST ?= $(shell oc get route search-api -o custom-columns=host:.spec.host --no-h
 ifeq ($(strip $(HOST)),)
 	HOST = localhost:4010
 endif
-
+export API_TOKEN ?=$(shell oc whoami -t)
 
 test-scale: check-locust ## Sends multiple simulated requests for testing using Locust. Use N_USERS to change the number of simulated users.
 	cd test; locust --headless --users ${N_USERS} --spawn-rate ${N_USERS} -H https://${HOST} -f locust-users.py
