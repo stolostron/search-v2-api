@@ -181,59 +181,68 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count, uid bool, us
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 		whereDs = WhereClauseFilter(s.input)
 	}
+	var skip bool
 	// types of rBAC
 	// var whereOr map[int]exp.ExpressionList
 	// if user == "user2" {
-	switch op {
-	case "matView":
-		fmt.Println("************************ CASE matView ")
-		fmt.Println("************************ USER ", user)
+	for _, filter := range s.input.Filters {
+		if len(filter.Values) > 4 || filter.Property == "created" {
+			fmt.Println("************* search page filter. skipping")
+			skip = true
+		}
+	}
+	if !skip {
+		switch op {
+		case "matView":
+			fmt.Println("************************ CASE matView ")
+			fmt.Println("************************ USER ", user)
 
-		if _, ok := rbac.CheckTable(user); !ok {
+			if _, ok := rbac.CheckTable(user); !ok {
 
-			mvSql, _, e := ds.SelectDistinct(goqu.T("r").Col("uid"), "cluster", "data").Where(rbac.GetUserPermissions(user)).ToSQL()
-			if e == nil {
-				dropMVSql := fmt.Sprintf("DROP MATERIALIZED VIEW search.%s", user)
-				_, droperror := s.pool.Query(context.TODO(), dropMVSql)
-				klog.Error("Error dropping mv for user ", user, droperror, ". \n sql: ", mvSql)
+				mvSql, _, e := ds.SelectDistinct(goqu.T("r").Col("uid"), "cluster", "data").Where(rbac.GetUserPermissions(user)).ToSQL()
+				if e == nil {
+					dropMVSql := fmt.Sprintf("DROP MATERIALIZED VIEW search.%s", user)
+					_, droperror := s.pool.Query(context.TODO(), dropMVSql)
+					klog.Error("Error dropping mv for user ", user, droperror, ". \n sql: ", mvSql)
 
-				s.pool.Query(context.TODO(), mvSql)
-				mvSql = fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS search.%s AS %s", user, mvSql)
-				klog.Info("MV create query: ", mvSql)
-				_, mvCreateError := s.pool.Query(context.TODO(), mvSql)
-				if mvCreateError == nil {
-					rbac.UserMV[user] = user
-					klog.Info("MV created and inserted in rbac.UserMV: ", rbac.UserMV)
+					s.pool.Query(context.TODO(), mvSql)
+					mvSql = fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS search.%s AS %s", user, mvSql)
+					klog.Info("MV create query: ", mvSql)
+					_, mvCreateError := s.pool.Query(context.TODO(), mvSql)
+					if mvCreateError == nil {
+						rbac.UserMV[user] = user
+						klog.Info("MV created and inserted in rbac.UserMV: ", rbac.UserMV)
+					} else {
+						klog.Error("Error creating mv for user ", user, mvCreateError, ". \n sql: ", mvSql)
+					}
 				} else {
-					klog.Error("Error creating mv for user ", user, mvCreateError, ". \n sql: ", mvSql)
+					klog.Error("Error getting mv create script", e)
 				}
-			} else {
-				klog.Error("Error getting mv create script", e)
 			}
+			if mvName, ok := rbac.CheckTable(user); ok {
+				schemaTable = goqu.S("search").Table(mvName).As("r")
+				ds = goqu.From(schemaTable)
+			}
+
+		case "whereClause":
+			fmt.Println("************************ CASE whereClause ")
+			fmt.Println("************************ USER ", user)
+
+			// [map[apigroup:app.k8s.io kind:[Application] namespace:[default]] map[apigroup:apps kind:[Deployment ReplicaSet] namespace:[default]]]
+
+			whereDs = append(whereDs, rbac.GetUserPermissions(user))
+		case "Table":
+			fmt.Println("************************ CASE Table ")
+			fmt.Println("************************ USER ", user)
+
+			ds = ds.InnerJoin(goqu.T("user_perm_table").As("u"),
+				goqu.On(goqu.And(goqu.COALESCE(goqu.L(`data->>?`, "apigroup"), "").
+					Eq(goqu.T("u").Col("apigroup")),
+					goqu.L(`data->>?`, "kind").Eq(goqu.Any(goqu.T("u").Col("kind"))),
+					goqu.L(`data->>?`, "namespace").Eq(goqu.Any(goqu.T("u").Col("namespace"))),
+					goqu.T("u").Col("uid").Eq(user))))
+
 		}
-		if mvName, ok := rbac.CheckTable(user); ok {
-			schemaTable = goqu.S("search").Table(mvName).As("r")
-			ds = goqu.From(schemaTable)
-		}
-
-	case "whereClause":
-		fmt.Println("************************ CASE whereClause ")
-		fmt.Println("************************ USER ", user)
-
-		// [map[apigroup:app.k8s.io kind:[Application] namespace:[default]] map[apigroup:apps kind:[Deployment ReplicaSet] namespace:[default]]]
-
-		whereDs = append(whereDs, rbac.GetUserPermissions(user))
-	case "Table":
-		fmt.Println("************************ CASE Table ")
-		fmt.Println("************************ USER ", user)
-
-		ds = ds.InnerJoin(goqu.T("user_perm_table").As("u"),
-			goqu.On(goqu.And(goqu.COALESCE(goqu.L(`data->>?`, "apigroup"), "").
-				Eq(goqu.T("u").Col("apigroup")),
-				goqu.L(`data->>?`, "kind").Eq(goqu.Any(goqu.T("u").Col("kind"))),
-				goqu.L(`data->>?`, "namespace").Eq(goqu.Any(goqu.T("u").Col("namespace"))),
-				goqu.T("u").Col("uid").Eq(user))))
-
 	}
 	// fmt.Println("rbac perm:", rbac.UserPerm[user])
 	// } else {
