@@ -41,11 +41,11 @@ func init() {
 	Users = []string{"user3", "user2", "user3"}
 	Options = []string{"whereClause", "Table", "matView"}
 	UserMV = make(map[string]string, len(Users))
-	_, err := db.GetConnection().Query(context.TODO(), "DROP TABLE search.rbacQueryTimes")
-	if err != nil {
-		fmt.Println("Err dropping rbacQueryTimes table", err)
-	}
-	_, err = db.GetConnection().Query(context.TODO(), "CREATE TABLE IF NOT EXISTS search.rbacQueryTimes (uid TEXT, option TEXT,function TEXT, timeTaken TEXT,created timestamp, result integer, mvPresent BOOLEAN)")
+	// _, err := db.GetConnection().Query(context.TODO(), "DROP TABLE search.rbacQueryTimes")
+	// if err != nil {
+	// 	fmt.Println("Err dropping rbacQueryTimes table", err)
+	// }
+	_, err := db.GetConnection().Query(context.TODO(), "CREATE TABLE IF NOT EXISTS search.rbacQueryTimes (uid TEXT, option TEXT,function TEXT, timeTaken TEXT,created timestamp, result integer, mvPresent BOOLEAN)")
 	if err != nil {
 		fmt.Println("Err creating rbacQueryTimes table", err)
 	}
