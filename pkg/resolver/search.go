@@ -131,7 +131,7 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 	var numUIDs int
 
 	s.wg.Wait()
-	var r []SearchRelatedResult
+	r := []SearchRelatedResult{}
 
 	if len(s.uids) > 0 {
 		start = time.Now()
@@ -139,6 +139,7 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 		r = s.getRelations()
 	} else {
 		klog.Warning("No uids selected for query:Related()")
+		return r
 	}
 	defer func() {
 		// Log a warning if finding relationships is too slow.
