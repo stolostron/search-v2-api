@@ -47,6 +47,8 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 				pool:  db.GetConnection(),
 			}
 		}
+	} else {
+		klog.Warning("Search: input length <=0", len(input))
 	}
 	return srchResult, nil
 }
@@ -230,8 +232,12 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count, uid bool, us
 				} else {
 					klog.Error("Error getting mv create script", e)
 				}
+			} else {
+				klog.Info("MV already exists for user: ", user)
+
 			}
 			if mvName, ok := rbac.CheckTable(user); ok {
+				klog.Info("Querying MV for user permissions: ", user)
 				schemaTable = goqu.S("search").Table(mvName).As("r")
 				ds = goqu.From(schemaTable)
 			}

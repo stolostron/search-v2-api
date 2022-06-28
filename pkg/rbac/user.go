@@ -41,6 +41,7 @@ func init() {
 	Users = []string{"user1", "user2", "user3"}
 	Options = []string{"whereClause", "Table", "matView"}
 	UserMV = make(map[string]string, len(Users))
+	UserMV["user3"] = "user3"
 	// _, err := db.GetConnection().Query(context.TODO(), "DROP TABLE search.rbacQueryTimes")
 	// if err != nil {
 	// 	fmt.Println("Err dropping rbacQueryTimes table", err)
@@ -84,8 +85,10 @@ func loadUserPerm() {
 
 func CheckTable(user string) (string, bool) {
 	if mv, ok := UserMV[user]; ok {
+		klog.Info("MV exists for user:", user)
 		return mv, true
 	}
+	klog.Info("MV doesn't exist for user:", user)
 	return "", false
 }
 

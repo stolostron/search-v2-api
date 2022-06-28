@@ -253,6 +253,7 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 			relatedSearch = s.searchRelatedResultKindItems(items)
 		}
 	} else { // Retrieve kind and count of related items
+		klog.Info("No related kinds requested")
 		relatedSearch = s.searchRelatedResultKindCount(relatedMap)
 	}
 	klog.V(5).Info("relatedSearch: ", relatedSearch)
