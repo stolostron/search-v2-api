@@ -26,13 +26,14 @@ import (
 )
 
 type SearchResult struct {
-	input  *model.SearchInput
-	pool   pgxpoolmock.PgxPool
-	uids   []*string      // List of uids from search result to be used to get relatioinships.
-	wg     sync.WaitGroup // WORKAROUND: Used to serialize search query and relatioinships query.
-	query  string
-	params []interface{}
-	level  int // The number of levels/hops for finding relationships for a particular resource
+	input       *model.SearchInput
+	pool        pgxpoolmock.PgxPool
+	uids        []*string      // List of uids from search result to be used to get relatioinships.
+	wg          sync.WaitGroup // WORKAROUND: Used to serialize search query and relatioinships query.
+	query       string
+	params      []interface{}
+	level       int // The number of levels/hops for finding relationships for a particular resource
+	rbacSkipped bool
 	//  Related []SearchRelatedResult
 }
 
@@ -65,15 +66,17 @@ func (s *SearchResult) Count() int {
 	s.buildSearchQuery(context.Background(), true, false, user, op)
 	count = s.resolveCount()
 	rbacrecord := rbac.RbacRecord{
-		Pool:      s.pool,
-		UserUID:   user,
-		Created:   time.Now(),
-		TimeTaken: time.Since(startTime),
-		Option:    op,
-		Function:  "Count",
-		Result:    count,
-		MVPresent: mvPresentBool,
+		Pool:        s.pool,
+		UserUID:     user,
+		Created:     time.Now(),
+		TimeTaken:   time.Since(startTime),
+		Option:      op,
+		Function:    "Count",
+		Result:      count,
+		MVPresent:   mvPresentBool,
+		RBACSkipped: s.rbacSkipped,
 	}
+
 	rbac.InsertRbacTimes(rbacrecord)
 	// }
 	// }
@@ -109,6 +112,7 @@ func (s *SearchResult) Items() []map[string]interface{} {
 		MVPresent: mvPresentBool,
 	}
 	rbac.InsertRbacTimes(rbacrecord)
+
 	// }
 	// }
 
@@ -197,6 +201,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count, uid bool, us
 			}
 		}
 	}
+	s.rbacSkipped = skip
 	if !skip {
 		switch op {
 		case "matView":

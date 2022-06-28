@@ -34,7 +34,7 @@ type RbacRecord struct {
 	TimeTaken                 time.Duration
 	Created                   time.Time
 	Result                    int
-	MVPresent                 bool
+	MVPresent, RBACSkipped    bool
 }
 
 func init() {
@@ -45,7 +45,7 @@ func init() {
 	// if err != nil {
 	// 	fmt.Println("Err dropping rbacQueryTimes table", err)
 	// }
-	_, err := db.GetConnection().Query(context.TODO(), "CREATE TABLE IF NOT EXISTS search.rbacQueryTimes (uid TEXT, option TEXT,function TEXT, timeTaken TEXT,created timestamp, result integer, mvPresent BOOLEAN)")
+	_, err := db.GetConnection().Query(context.TODO(), "CREATE TABLE IF NOT EXISTS search.rbacQueryTimes (uid TEXT, option TEXT,function TEXT, timeTaken TEXT,created timestamp, result integer, mvPresent BOOLEAN, rbacSkipped BOOLEAN)")
 	if err != nil {
 		fmt.Println("Err creating rbacQueryTimes table", err)
 	}
@@ -54,8 +54,8 @@ func init() {
 }
 
 func InsertRbacTimes(s RbacRecord) {
-	sql := "INSERT into search.rbacQueryTimes values($1,$2,$3,$4,$5,$6,$7)"
-	args := []interface{}{s.UserUID, s.Option, s.Function, s.TimeTaken.String(), s.Created, s.Result, s.MVPresent}
+	sql := "INSERT into search.rbacQueryTimes values($1,$2,$3,$4,$5,$6,$7, $8)"
+	args := []interface{}{s.UserUID, s.Option, s.Function, s.TimeTaken.String(), s.Created, s.Result, s.MVPresent, s.RBACSkipped}
 	_, err := s.Pool.Query(context.TODO(), sql, args...)
 	if err != nil {
 		fmt.Println("Err Inserting result into Rbac times table: ", err)
