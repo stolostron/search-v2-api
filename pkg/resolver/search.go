@@ -4,6 +4,7 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"sort"
 	"strconv"
@@ -52,28 +53,30 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 func (s *SearchResult) Count() int {
 	klog.V(2).Info("Resolving SearchResult:Count()")
 	var count int
+	num := rand.Intn(3)
+	op := rbac.Options[num]
+	// for _, user := range rbac.Users {
+	user := rbac.Users[num]
+	fmt.Println("Resolving Count for - user: ", user, " with method: ", op)
+	// for _, op := range rbac.Options {
+	startTime := time.Now()
+	_, mvPresentBool := rbac.CheckTable(user)
 
-	for _, user := range rbac.Users {
-		fmt.Println("Count- user: ", user)
-		for _, op := range rbac.Options {
-			startTime := time.Now()
-			_, mvPresentBool := rbac.CheckTable(user)
-
-			s.buildSearchQuery(context.Background(), true, false, user, op)
-			count = s.resolveCount()
-			rbacrecord := rbac.RbacRecord{
-				Pool:      s.pool,
-				UserUID:   user,
-				Created:   time.Now(),
-				TimeTaken: time.Since(startTime),
-				Option:    op,
-				Function:  "Count",
-				Result:    count,
-				MVPresent: mvPresentBool,
-			}
-			rbac.InsertRbacTimes(rbacrecord)
-		}
+	s.buildSearchQuery(context.Background(), true, false, user, op)
+	count = s.resolveCount()
+	rbacrecord := rbac.RbacRecord{
+		Pool:      s.pool,
+		UserUID:   user,
+		Created:   time.Now(),
+		TimeTaken: time.Since(startTime),
+		Option:    op,
+		Function:  "Count",
+		Result:    count,
+		MVPresent: mvPresentBool,
 	}
+	rbac.InsertRbacTimes(rbacrecord)
+	// }
+	// }
 
 	return count
 }
@@ -84,28 +87,30 @@ func (s *SearchResult) Items() []map[string]interface{} {
 	klog.V(2).Info("Resolving SearchResult:Items()")
 	var e error
 	var r []map[string]interface{}
+	num := rand.Intn(3)
+	op := rbac.Options[num]
+	user := rbac.Users[num]
+	// for _, user := range rbac.Users {
+	// for _, op := range rbac.Options {
+	fmt.Println("Resolving Items for - user: ", user, " with method: ", op)
 
-	for _, user := range rbac.Users {
-		for _, op := range rbac.Options {
-			fmt.Println("Items- user: ", user, " op: ", op)
-
-			startTime := time.Now()
-			_, mvPresentBool := rbac.CheckTable(user)
-			s.buildSearchQuery(context.Background(), false, false, user, op)
-			r, e = s.resolveItems()
-			rbacrecord := rbac.RbacRecord{
-				Pool:      s.pool,
-				UserUID:   user,
-				Created:   time.Now(),
-				TimeTaken: time.Since(startTime),
-				Option:    op,
-				Function:  "Items",
-				Result:    len(r),
-				MVPresent: mvPresentBool,
-			}
-			rbac.InsertRbacTimes(rbacrecord)
-		}
+	startTime := time.Now()
+	_, mvPresentBool := rbac.CheckTable(user)
+	s.buildSearchQuery(context.Background(), false, false, user, op)
+	r, e = s.resolveItems()
+	rbacrecord := rbac.RbacRecord{
+		Pool:      s.pool,
+		UserUID:   user,
+		Created:   time.Now(),
+		TimeTaken: time.Since(startTime),
+		Option:    op,
+		Function:  "Items",
+		Result:    len(r),
+		MVPresent: mvPresentBool,
 	}
+	rbac.InsertRbacTimes(rbacrecord)
+	// }
+	// }
 
 	if e != nil {
 		klog.Error("Error resolving items.", e)
@@ -265,7 +270,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count, uid bool, us
 	}
 	klog.V(3).Infof("*******************Search query: %s\nargs: %s", sql, params)
 
-	klog.V(3).Infof("Search query: %s\nargs: %s", sql, params)
+	// klog.V(3).Infof("Search query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
 }

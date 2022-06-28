@@ -5,7 +5,6 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
@@ -39,12 +38,13 @@ type RbacRecord struct {
 }
 
 func init() {
-	Users = []string{"user2", "user3", "user1"}
+	Users = []string{"user1", "user2", "user3"}
 	Options = []string{"whereClause", "Table", "matView"}
 	UserMV = make(map[string]string, len(Users))
 	_, err := db.GetConnection().Query(context.TODO(), "DROP TABLE search.rbacQueryTimes")
-	fmt.Println("Err dropping rbacQueryTimes table", err)
-
+	if err != nil {
+		fmt.Println("Err dropping rbacQueryTimes table", err)
+	}
 	_, err = db.GetConnection().Query(context.TODO(), "CREATE TABLE IF NOT EXISTS search.rbacQueryTimes (uid TEXT, option TEXT,function TEXT, timeTaken TEXT,created timestamp, result integer, mvPresent BOOLEAN)")
 	if err != nil {
 		fmt.Println("Err creating rbacQueryTimes table", err)
@@ -69,19 +69,11 @@ func loadUserPerm() {
 	if bytes, err := content.ReadFile("user_perm_table.json"); err == nil {
 		fmt.Println("Read file without err:", err)
 
-		// var v interface{}
-
 		if err := json.Unmarshal(bytes, &UserPerm); err != nil {
 			fmt.Println("Err reading file and loading user_perm: ", err)
 			panic(err)
 		}
-		fmt.Println("Read file and loaded user_perm.")
-		// fmt.Printf("UserPerm:%+v\n", UserPerm)
-		fmt.Println("type: ", reflect.TypeOf(UserPerm))
-		// fmt.Println("value: ", reflect.ValueOf(UserPerm))
-		fmt.Println("1: ", UserPerm["user1"])
-		fmt.Println("2: ", UserPerm["user2"])
-		fmt.Println("3: ", UserPerm["user3"])
+		fmt.Println("Read file and loaded user_perm struct.")
 
 	} else {
 		fmt.Println("Read file err:", err)
