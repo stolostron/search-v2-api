@@ -19,7 +19,11 @@ func SearchSchemaResolver(ctx context.Context) (map[string]interface{}, error) {
 	searchSchemaResult := &SearchSchema{
 		pool: db.GetConnection(),
 	}
+	klog.V(3).Infoln("Created searchSchemaResult struct for SearchSchema")
+
 	searchSchemaResult.buildSearchSchemaQuery(ctx)
+	klog.V(3).Infoln("COmpleted buildSearchSchemaQuery")
+
 	return searchSchemaResult.searchSchemaResults(ctx)
 }
 
@@ -86,5 +90,6 @@ func (s *SearchSchema) searchSchemaResults(ctx context.Context) (map[string]inte
 		}
 	}
 	srchSchema["allProperties"] = schema
+	klog.V(3).Infoln("Returning srchSchema results")
 	return srchSchema, nil
 }
