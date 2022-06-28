@@ -35,6 +35,7 @@ func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, err
 }
 
 func SearchComplete(ctx context.Context, property string, srchInput *model.SearchInput, limit *int) ([]*string, error) {
+	klog.Info("In SearchComplete. Creating searchCompleteResult struct")
 
 	searchCompleteResult := &SearchCompleteResult{
 		input:    srchInput,

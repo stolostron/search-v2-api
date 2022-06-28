@@ -56,10 +56,9 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 func (s *SearchResult) Count() int {
 	klog.V(2).Info("Resolving SearchResult:Count()")
 	var count int
-	num := rand.Intn(3)
-	op := rbac.Options[num]
+	op := rbac.Options[rand.Intn(3)]
 	// for _, user := range rbac.Users {
-	user := rbac.Users[num]
+	user := rbac.Users[rand.Intn(3)]
 	fmt.Println("Resolving Count for - user: ", user, " with method: ", op)
 	// for _, op := range rbac.Options {
 	startTime := time.Now()
@@ -92,9 +91,8 @@ func (s *SearchResult) Items() []map[string]interface{} {
 	klog.V(2).Info("Resolving SearchResult:Items()")
 	var e error
 	var r []map[string]interface{}
-	num := rand.Intn(3)
-	op := rbac.Options[num]
-	user := rbac.Users[num]
+	op := rbac.Options[rand.Intn(3)]
+	user := rbac.Users[rand.Intn(3)]
 	// for _, user := range rbac.Users {
 	// for _, op := range rbac.Options {
 	fmt.Println("Resolving Items for - user: ", user, " with method: ", op)
