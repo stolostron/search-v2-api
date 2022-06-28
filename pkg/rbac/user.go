@@ -39,7 +39,7 @@ type RbacRecord struct {
 
 func init() {
 	Users = []string{"user3", "user2", "user3"}
-	Options = []string{"whereClause", "Table", "matView"}
+	Options = []string{"whereClause", "whereClause", "whereClause"} //, "Table", "matView"}
 	UserMV = make(map[string]string, len(Users))
 	// _, err := db.GetConnection().Query(context.TODO(), "DROP TABLE search.rbacQueryTimes")
 	// if err != nil {

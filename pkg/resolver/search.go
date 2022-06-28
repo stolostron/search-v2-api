@@ -185,10 +185,16 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count, uid bool, us
 	// types of rBAC
 	// var whereOr map[int]exp.ExpressionList
 	// if user == "user2" {
-	for _, filter := range s.input.Filters {
-		if len(filter.Values) > 4 || filter.Property == "created" {
-			fmt.Println("************* search page filter. skipping")
-			skip = true
+	if user == "" || op == "" {
+		skip = true
+	}
+	if !skip {
+		for _, filter := range s.input.Filters {
+			if len(filter.Values) > 4 || filter.Property == "created" {
+				fmt.Println("************* search page saved searches. skipping")
+				skip = true
+				break
+			}
 		}
 	}
 	if !skip {
