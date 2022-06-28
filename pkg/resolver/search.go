@@ -203,6 +203,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count, uid bool, us
 				_, mvCreateError := s.pool.Query(context.TODO(), mvSql)
 				if mvCreateError == nil {
 					rbac.UserMV[user] = user
+					klog.Info("MV created and inserted in rbac.UserMV: ", rbac.UserMV)
 				} else {
 					klog.Error("Error creating mv for user ", user, mvCreateError, ". \n sql: ", mvSql)
 				}
