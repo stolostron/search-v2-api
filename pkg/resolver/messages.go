@@ -21,7 +21,10 @@ func Messages(ctx context.Context) ([]*model.Message, error) {
 	searchSchemaResult := &Message{
 		pool: db.GetConnection(),
 	}
+	klog.Info("Created searchSchemaResult struct for messages")
 	searchSchemaResult.buildSearchAddonDisabledQuery(ctx)
+	klog.Info("Completed buildSearchAddonDisabledQuery")
+
 	return searchSchemaResult.messageResults(ctx)
 }
 
@@ -87,5 +90,6 @@ func (s *Message) messageResults(ctx context.Context) ([]*model.Message, error) 
 			return messages, nil
 		}
 	}
+	klog.Info("Completed messageResults - no messages. Returning nil")
 	return nil, nil
 }

@@ -47,6 +47,7 @@ func (r *queryResolver) SavedSearches(ctx context.Context) ([]*model.UserSearch,
 	// savedSrch1 := model.UserSearch{ID: &id, Name: &name, Description: &desc, SearchText: &srchText}
 	// savedSrches = append(savedSrches, &savedSrch1)
 	// return savedSrches, nil
+	klog.Info("Returning savedSrches")
 	return savedSrches, nil
 }
 

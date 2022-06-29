@@ -30,10 +30,12 @@ func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, err
 	if autoCompleteErr != nil {
 		klog.Error("Error resolving properties in autoComplete. ", autoCompleteErr)
 	}
+	klog.Info("Returning searchCompleteResult")
 	return res, autoCompleteErr
 }
 
 func SearchComplete(ctx context.Context, property string, srchInput *model.SearchInput, limit *int) ([]*string, error) {
+	klog.Info("In SearchComplete. Creating searchCompleteResult struct")
 
 	searchCompleteResult := &SearchCompleteResult{
 		input:    srchInput,
@@ -41,6 +43,7 @@ func SearchComplete(ctx context.Context, property string, srchInput *model.Searc
 		property: property,
 		limit:    limit,
 	}
+	klog.Info("Created searchCompleteResult struct")
 	return searchCompleteResult.autoComplete(ctx)
 
 }
