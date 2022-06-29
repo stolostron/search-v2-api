@@ -11,10 +11,11 @@ import (
 )
 
 type clusterScopedResources struct {
-	err       error
-	resources map[string][]string
-	updatedAt time.Time
-	lock      sync.Mutex
+	err        error
+	resources  map[string][]string
+	namespaces []string
+	updatedAt  time.Time
+	lock       sync.Mutex
 }
 
 func (cache *Cache) ClusterScopedResources(ctx context.Context) (map[string][]string, error) {
