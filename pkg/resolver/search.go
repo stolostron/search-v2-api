@@ -130,7 +130,7 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 	var start time.Time
 	var numUIDs int
 
-	// s.wg.Wait()
+	s.wg.Wait()
 	r := []SearchRelatedResult{}
 	start = time.Now()
 
