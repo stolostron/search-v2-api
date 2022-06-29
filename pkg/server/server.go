@@ -10,9 +10,11 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/stolostron/search-v2-api/graph"
 	"github.com/stolostron/search-v2-api/graph/generated"
 	"github.com/stolostron/search-v2-api/pkg/config"
+	"github.com/stolostron/search-v2-api/pkg/metric"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 )
 
@@ -41,6 +43,7 @@ func StartAndListen() {
 	router := mux.NewRouter()
 	router.HandleFunc("/liveness", livenessProbe).Methods("GET")
 	router.HandleFunc("/readiness", readinessProbe).Methods("GET")
+	router.Path("/metrics").Handler(promhttp.Handler())
 
 	if config.Cfg.PlaygroundMode {
 		router.Handle("/playground",
@@ -50,6 +53,8 @@ func StartAndListen() {
 
 	// Add authentication middleware to the /searchapi (ContextPath) subroute.
 	apiSubrouter := router.PathPrefix(config.Cfg.ContextPath).Subrouter()
+
+	apiSubrouter.Use(metric.PrometheusMiddleware)
 	apiSubrouter.Use(rbac.AuthenticateUser)
 	apiSubrouter.Use(rbac.AuthorizeUser)
 
