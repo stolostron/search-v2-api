@@ -57,7 +57,7 @@ func init() {
 func InsertRbacTimes(s RbacRecord) {
 	sql := "INSERT into search.rbacQueryTimes values($1,$2,$3,$4,$5,$6,$7, $8)"
 	args := []interface{}{s.UserUID, s.Option, s.Function, s.TimeTaken.String(), s.Created, s.Result, s.MVPresent, s.RBACSkipped}
-	_, err := s.Pool.Query(context.TODO(), sql, args...)
+	_, err := s.Pool.Exec(context.TODO(), sql, args...)
 	if err != nil {
 		fmt.Println("Err Inserting result into Rbac times table: ", err)
 	} else {

@@ -214,13 +214,12 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count, uid bool, us
 				mvSql, _, e := ds.SelectDistinct(goqu.T("r").Col("uid"), "cluster", "data").Where(rbac.GetUserPermissions(user)).ToSQL()
 				if e == nil {
 					dropMVSql := fmt.Sprintf("DROP MATERIALIZED VIEW search.%s", user)
-					_, droperror := s.pool.Query(context.TODO(), dropMVSql)
+					_, droperror := s.pool.Exec(context.TODO(), dropMVSql)
 					klog.Error("Error dropping mv for user ", user, droperror, ". \n sql: ", mvSql)
 
-					s.pool.Query(context.TODO(), mvSql)
 					mvSql = fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS search.%s AS %s", user, mvSql)
 					klog.Info("MV create query: ", mvSql)
-					_, mvCreateError := s.pool.Query(context.TODO(), mvSql)
+					_, mvCreateError := s.pool.Exec(context.TODO(), mvSql)
 					if mvCreateError == nil {
 						rbac.UserMV[user] = user
 						klog.Info("MV created and inserted in rbac.UserMV: ", rbac.UserMV)
