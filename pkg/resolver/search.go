@@ -15,9 +15,11 @@ import (
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/lib/pq"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
+	"github.com/stolostron/search-v2-api/pkg/metric"
 	"k8s.io/klog/v2"
 )
 
@@ -186,7 +188,10 @@ func (s *SearchResult) resolveUids() {
 }
 func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	items := []map[string]interface{}{}
+	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveItemsFunc"))
+	klog.V(4).Info("Query issued by resolver [%s] ", s.query)
 	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
+	defer timer.ObserveDuration()
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
 		return items, err
