@@ -17,8 +17,9 @@ type userData struct {
 	// impersonate kubernetes.Interface //client with impersonation config
 	err        error
 	namespaces []string
-	updatedAt  time.Time
-	lock       sync.Mutex
+	// resources  map[string][]string //key:namespace value list of resources
+	updatedAt time.Time
+	lock      sync.Mutex
 }
 
 func (cache *Cache) GetUserData(ctx context.Context, clientToken string) (*userData, error) {
@@ -49,50 +50,15 @@ func (user *userData) getNamespaces(cache *Cache, ctx context.Context, clientTok
 		return user, user.err
 	}
 
-	klog.V(5).Info("Checking shared cache for namespaces..")
+	klog.V(5).Info("Getting namespaces from shared cache.")
+	allNamespaces := cache.shared.namespaces
 	user.err = nil
-
-	var allNamespaces []string
-	if len(cache.shared.namespaces) > 0 {
-		klog.V(5).Info("Using namespaces from shared cache")
-		allNamespaces = append(allNamespaces, cache.shared.namespaces...)
-
-	} else {
-
-		klog.V(5).Info("Getting namespaces from Kube Client..")
-
-		//getting rest.Config
-		cache.resConfig = config.GetClientConfig()
-		//settign kubernetes client
-		clientset, err := kubernetes.NewForConfig(cache.resConfig)
-		if err != nil {
-			klog.Info("Error with creating a new clientset with impersonation config.", err.Error())
-		}
-
-		// get all shared namespaces using kubeclient with rest.Config:
-		namespaceList, kubeErr := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-		if kubeErr != nil {
-			klog.Warning("Error resolving namespaces from KubeClient: ", kubeErr)
-			user.err = kubeErr
-			user.namespaces = []string{}
-			return user, kubeErr //if there is an Kube client error return user struct and error
-		}
-
-		// add namespaces to allNamespace List
-		for _, n := range namespaceList.Items {
-			allNamespaces = append(allNamespaces, n.Name)
-		}
-		// cache to shared:
-		cache.shared.namespaces = allNamespaces
-	}
 
 	var impersonNamespaces []string
 	for _, ns := range allNamespaces {
 
 		impersonationClientset := cache.getImpersonationClientSet(clientToken, cache.resConfig)
-		// .List(ctx, metav1.ListOptions{})
-		v1Namespaces, kubeErr := impersonationClientset.CoreV1().Namespaces().Get(ctx, ns, metav1.GetOptions{}) //impersonating user for each namespace
-		//if we have error
+		v1Namespaces, kubeErr := impersonationClientset.CoreV1().Namespaces().Get(ctx, ns, metav1.GetOptions{})
 		if kubeErr != nil {
 			klog.Warning("Error resolving namespaces from KubeClient: ", kubeErr)
 		}
@@ -100,6 +66,7 @@ func (user *userData) getNamespaces(cache *Cache, ctx context.Context, clientTok
 		impersonNamespaces = append(impersonNamespaces, v1Namespaces.Name)
 
 	}
+
 	klog.Info("We can impersonate user for these namespaces:", impersonNamespaces)
 	user.namespaces = impersonNamespaces
 	user.updatedAt = time.Now()
@@ -111,6 +78,7 @@ func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.C
 	config.Impersonate = rest.ImpersonationConfig{
 		UID: cache.tokenReviews[clientToken].tokenReview.Status.User.UID,
 	}
+
 	clientset, err := kubernetes.NewForConfig(cache.resConfig)
 	if err != nil {
 		klog.Info("Error with creating a new clientset with impersonation config.", err.Error())
@@ -120,8 +88,3 @@ func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.C
 
 	return cache.kubeClient
 }
-
-///check shared cache for shared namesapces if exists if not:
-/// get all namepsaces using normal rest.config and cache those namespaces
-/// for each namespace impersonate the user to get namesapces they have access to
-/// cache those namespaces the user has access to within the user caches namespaces

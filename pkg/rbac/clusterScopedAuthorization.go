@@ -7,6 +7,8 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/stolostron/search-v2-api/pkg/config"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 )
 
@@ -78,7 +80,37 @@ func (shared *clusterScopedResources) getClusterScopedResources(cache *Cache, ct
 		}
 	}
 
+	//gather all namespaces in the cluster and cache in shared namespaces cache
+	var allNamespaces []string
+	if len(cache.shared.namespaces) > 0 {
+		klog.V(5).Info("Using namespaces from shared cache")
+		allNamespaces = append(allNamespaces, cache.shared.namespaces...)
+
+	} else {
+
+		klog.V(5).Info("Getting namespaces from Kube Client..")
+
+		cache.resConfig = config.GetClientConfig()
+		clientset, err := kubernetes.NewForConfig(cache.resConfig)
+		if err != nil {
+			klog.Info("Error with creating a new clientset with impersonation config.", err.Error())
+		}
+		namespaceList, kubeErr := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+		if kubeErr != nil {
+			klog.Warning("Error resolving namespaces from KubeClient: ", kubeErr)
+			shared.err = kubeErr
+			shared.namespaces = []string{}
+			return shared.resources, kubeErr
+		}
+
+		// add namespaces to allNamespace List
+		for _, n := range namespaceList.Items {
+			allNamespaces = append(allNamespaces, n.Name)
+		}
+	}
+
 	// Then update the cache.
+	shared.namespaces = allNamespaces
 	shared.resources = csrmap
 	shared.updatedAt = time.Now()
 
