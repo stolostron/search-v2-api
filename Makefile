@@ -48,11 +48,11 @@ export API_TOKEN :=$(shell oc whoami -t)
 test-scale-setup: ## Creates the search-api route in the current target cluster.
 	oc create route passthrough search-api --service=search-search-api -n open-cluster-management
 
-test-scale: check-locust ## Sends multiple simulated requests for testing using Locust. Use N_USERS to change the number of simulated users.
+test-scale: check-locust ## Simulate multiple users sending requests to the API. Use N_USERS to change the number of simulated users.
 	${CONFIGURATION_MSG}
 	cd test; locust --headless --users ${N_USERS} --spawn-rate ${N_USERS} -H https://${HOST} -f locust-users.py
 
-test-scale-ui: check-locust ## Start Locust and opens the UI to drive scale tests.
+test-scale-ui: check-locust ## Start Locust and open the web browser to drive scale tests.
 	${CONFIGURATION_MSG}
 	open http://0.0.0.0:8090/
 	cd test; locust --users ${N_USERS} --spawn-rate ${N_USERS} -H https://${HOST} -f locust-users.py --web-port 8090
