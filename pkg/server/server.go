@@ -30,6 +30,7 @@ func StartAndListen() {
 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 		},
 	}
+
 	srv := &http.Server{
 		Addr: config.Cfg.API_SERVER_URL,
 		Handler: handler.NewDefaultServer(generated.NewExecutableSchema(

@@ -188,10 +188,10 @@ func (s *SearchResult) resolveUids() {
 }
 func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	items := []map[string]interface{}{}
-	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("what-do-we-put"))
-	klog.Infof("xxxxxxxxxxxxxxxx [%s] ", s.query)
+	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveItemsFunc"))
+	klog.V(4).Info("Query issued by resolver [%s] ", s.query)
 	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
-	timer.ObserveDuration()
+	defer timer.ObserveDuration()
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
 		return items, err

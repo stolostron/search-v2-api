@@ -4,6 +4,7 @@ package rbac
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/stolostron/search-v2-api/pkg/metric"
@@ -34,7 +35,7 @@ func AuthenticateUser(next http.Handler) http.Handler {
 			klog.V(4).Info("Request didn't have a valid authentication token.")
 			http.Error(w, "{\"message\":\"Request didn't have a valid authentication token.\"}",
 				http.StatusUnauthorized)
-			metric.AuthnFailed.WithLabelValues("ValidAuthntokenMissing").Inc()
+			metric.AuthnFailed.WithLabelValues(strconv.Itoa(http.StatusUnauthorized)).Inc()
 			return
 		}
 
@@ -43,14 +44,14 @@ func AuthenticateUser(next http.Handler) http.Handler {
 			klog.Warning("Unexpected error while authenticating the request token.", err)
 			http.Error(w, "{\"message\":\"Unexpected error while authenticating the request token.\"}",
 				http.StatusInternalServerError)
-			metric.AuthnFailed.WithLabelValues("UnexpectedAuthnError").Inc()
+			metric.AuthnFailed.WithLabelValues(strconv.Itoa(http.StatusInternalServerError)).Inc()
 			return
 
 		}
 		if !authenticated {
 			klog.V(4).Info("Rejecting request: Invalid token.")
 			http.Error(w, "{\"message\":\"Invalid token\"}", http.StatusForbidden)
-			metric.AuthnFailed.WithLabelValues("InvalidAuthnToken").Inc()
+			metric.AuthnFailed.WithLabelValues(strconv.Itoa(http.StatusForbidden)).Inc()
 			return
 		}
 
