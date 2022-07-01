@@ -17,10 +17,10 @@ func mockNamespaceCache() Cache {
 
 	return Cache{
 		users:            map[string]*userData{},
-		shared:           clusterScopedResources{},
+		shared:           SharedData{},
 		kubeClient:       fake.NewSimpleClientset(),
 		corev1Client:     fake.NewSimpleClientset().CoreV1(),
-		resConfig:        &rest.Config{},
+		restConfig:       &rest.Config{},
 		tokenReviews:     map[string]*tokenReviewCache{},
 		tokenReviewsLock: sync.Mutex{},
 	}

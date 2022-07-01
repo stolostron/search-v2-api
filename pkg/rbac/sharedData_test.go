@@ -15,7 +15,7 @@ func mockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, Cache) {
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 	return mockPool, Cache{
-		shared: clusterScopedResources{},
+		shared: SharedData{},
 		pool:   mockPool,
 	}
 }
@@ -41,7 +41,7 @@ func Test_getResources_emptyCache(t *testing.T) {
 		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
 	}
 	// Verify that cache was updated within the last 1 millisecond.
-	if mock_cache.shared.updatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
+	if mock_cache.shared.csUpdatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
 		t.Error("Expected cache.shared.updatedAt to be less than 1 millisecond ago.")
 	}
 
@@ -58,11 +58,10 @@ func Test_getResouces_usingCache(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
-	resourcemap := map[string][]string{"apigroup1": {"kind1", "kind2"}}
-
-	mock_cache.shared = clusterScopedResources{
-		updatedAt: time.Now(),
-		resources: resourcemap,
+	//Adding cache:
+	mock_cache.shared = SharedData{
+		csUpdatedAt: time.Now(),
+		csResources: append(mock_cache.shared.csResources, resource{apigroup: "apigroup1", kind: "kind1"}),
 	}
 
 	result, err := mock_cache.ClusterScopedResources(ctx)
@@ -75,7 +74,7 @@ func Test_getResouces_usingCache(t *testing.T) {
 		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
 	}
 	// Verify that cache was updated within the last 1 millisecond.
-	if mock_cache.shared.updatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
+	if mock_cache.shared.csUpdatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
 		t.Error("Expected cache.shared.updatedAt to be less than 1 millisecond ago.")
 	}
 }
@@ -91,10 +90,12 @@ func Test_getResources_expiredCache(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
-	resourcemap := map[string][]string{"apigroup1": {"kind1", "kind2"}}
-	mock_cache.shared = clusterScopedResources{
-		updatedAt: time.Now().Add(time.Duration(-3) * time.Minute),
-		resources: resourcemap,
+	// resourcemap := map[string][]string{"apigroup1": {"kind1", "kind2"}}
+
+	//adding expired cache
+	mock_cache.shared = SharedData{
+		csUpdatedAt: time.Now().Add(time.Duration(-3) * time.Minute),
+		csResources: append(mock_cache.shared.csResources, resource{apigroup: "apigroup1", kind: "kind1"}),
 	}
 
 	result, err := mock_cache.ClusterScopedResources(ctx)
