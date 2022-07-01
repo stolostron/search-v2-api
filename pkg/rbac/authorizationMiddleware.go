@@ -3,6 +3,7 @@ package rbac
 import (
 	"net/http"
 
+	"github.com/stolostron/search-v2-api/pkg/metric"
 	"k8s.io/klog/v2"
 )
 
@@ -12,6 +13,7 @@ func AuthorizeUser(next http.Handler) http.Handler {
 		_, err := cacheInst.ClusterScopedResources(r.Context())
 		if err != nil {
 			klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
+			metric.AuthzFailed.WithLabelValues("UnexpectedAuthzError").Inc()
 		}
 		klog.Info("Finished getting cluster-scoped resources. Now gettng user namespaces..")
 
