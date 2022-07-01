@@ -457,18 +457,15 @@ func getKeys(stringArrayMap map[string][]string) []string {
 	return keys
 }
 
-//Set limit for queries
+// Set limit for queries
 func (s *SearchResult) setLimit() int {
 	var limit int
-	klog.Info("Limit from input. ", s.input.Limit)
 	if s.input != nil && s.input.Limit != nil && *s.input.Limit > 0 {
-		klog.Info("  >Using limit from input. ", *s.input.Limit)
 		limit = *s.input.Limit
 	} else if s.input != nil && s.input.Limit != nil && *s.input.Limit == -1 {
 		klog.Warning("No limit set. Fetching all results.")
 	} else {
 		limit = config.Cfg.QueryLimit
 	}
-	klog.Info("Usinf LIMIT ", limit)
 	return limit
 }
