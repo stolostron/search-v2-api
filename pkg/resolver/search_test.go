@@ -55,7 +55,7 @@ func Test_SearchResolver_Items(t *testing.T) {
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 	// Mock the database queries.
-	mockRows := newMockRows("./mocks/mock.json", searchInput, "")
+	mockRows := newMockRows("./mocks/mock.json", searchInput, "", 0)
 
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'kind' ILIKE ANY ('{"template"}')) LIMIT 10000`),
@@ -220,7 +220,7 @@ func testAllOperators(t *testing.T, testOperators []TestOperatorItem) {
 		resolver, mockPool := newMockSearchResolver(t, currTest.searchInput, nil)
 
 		// Mock the database queries.
-		mockRows := newMockRows("./mocks/mock.json", currTest.searchInput, "")
+		mockRows := newMockRows("./mocks/mock.json", currTest.searchInput, "", 0)
 
 		mockPool.EXPECT().Query(gomock.Any(),
 			gomock.Eq(currTest.mockQuery),
@@ -263,7 +263,7 @@ func Test_SearchResolver_Items_Multiple_Filter(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 
 	// Mock the database queries.
-	mockRows := newMockRows("./mocks/mock.json", searchInput, "")
+	mockRows := newMockRows("./mocks/mock.json", searchInput, "", 0)
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster'))) LIMIT 10`),
 		// gomock.Eq("SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'namespace')=any($1) AND cluster=$2 LIMIT 10"),
@@ -307,7 +307,7 @@ func Test_SearchWithMultipleClusterFilter_NegativeLimit_Query(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, "")
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, "", 0)
 
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
@@ -349,7 +349,7 @@ func Test_SearchResolver_Keywords(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 
 	// Mock the database queries.
-	mockRows := newMockRows("./mocks/mock.json", searchInput, "")
+	mockRows := newMockRows("./mocks/mock.json", searchInput, "", 0)
 
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources", jsonb_each_text("data") WHERE ("value" LIKE '%Template%') LIMIT 10`),
@@ -384,7 +384,7 @@ func Test_SearchResolver_Uids(t *testing.T) {
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 	// Mock the database queries.
-	mockRows := newMockRows("./mocks/mock.json", searchInput, "")
+	mockRows := newMockRows("./mocks/mock.json", searchInput, "", 0)
 
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT "uid" FROM "search"."resources" WHERE ("data"->>'kind' ILIKE ANY ('{"template"}')) LIMIT 10000`),

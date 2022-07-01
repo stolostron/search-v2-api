@@ -35,7 +35,7 @@ func Test_SearchSchema_Results(t *testing.T) {
 	}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, "kind")
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, "kind", 0)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT jsonb_object_keys(jsonb_strip_nulls("data")) FROM "search"."resources"`),
