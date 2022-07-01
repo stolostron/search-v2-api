@@ -66,9 +66,9 @@ func (user *userData) getNamespaces(cache *Cache, ctx context.Context, clientTok
 		impersonNamespaces = append(impersonNamespaces, v1Namespaces.Name)
 
 	}
-
+	user.namespaces = append(user.namespaces, impersonNamespaces...)
 	klog.Info("We can impersonate user for these namespaces:", impersonNamespaces)
-	user.namespaces = impersonNamespaces
+
 	user.updatedAt = time.Now()
 	return user, user.err
 }
