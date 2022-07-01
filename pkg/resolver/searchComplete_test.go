@@ -47,8 +47,7 @@ func Test_SearchComplete_Query_WithLimit(t *testing.T) {
 	resolver.limit = &limit //Add limit
 	val1 := "ConfigMap"
 	val2 := "ReplicaSet"
-	// val3 := "ConfigMap"
-	expectedProps := []*string{&val1, &val2} //, &val3}
+	expectedProps := []*string{&val1, &val2}
 
 	// Mock the database queries.
 	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1, limit)
