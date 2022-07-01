@@ -64,7 +64,7 @@ func Test_SearchComplete_Query_WithLimit(t *testing.T) {
 
 	}
 	// Verify response
-	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchComplete_Query")
+	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchComplete_Query_WithLimit")
 }
 
 func Test_SearchCompleteNoProp_Query(t *testing.T) {
