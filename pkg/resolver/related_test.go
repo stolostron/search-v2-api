@@ -118,7 +118,7 @@ func Test_SearchResolver_RelatedKindsRelationships(t *testing.T) {
 	).Return(mockRows, nil)
 	mockRows2 := newMockRows("./mocks/mock.json", searchInput2, "")
 
-	relatedQuery := `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("uid" IN ('local-cluster/30c35f12-320a-417f-98d1-fbee28a4b2a6')) LIMIT 10000`
+	relatedQuery := `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("uid" IN ('local-cluster/30c35f12-320a-417f-98d1-fbee28a4b2a6')) LIMIT 1000`
 	// Mock the database query
 	mockPool2.EXPECT().Query(gomock.Any(),
 		gomock.Eq(relatedQuery),
