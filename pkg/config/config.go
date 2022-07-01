@@ -49,7 +49,7 @@ func new() *Config {
 		DBUser:         getEnv("DB_USER", ""),
 		HttpPort:       getEnvAsInt("HTTP_PORT", 4010),
 		PlaygroundMode: getEnvAsBool("PLAYGROUND_MODE", false),
-		QueryLimit:     getEnvAsInt("QUERY_LIMIT", 10000),
+		QueryLimit:     getEnvAsInt("QUERY_LIMIT", 1000),
 		//Setting default level to 0 to check if user has explicitly set this variable
 		// This will be updated to 1 for default searches and 3 for applications - unless set by the user
 		RelationLevel: getEnvAsInt("RELATION_LEVEL", 0),
