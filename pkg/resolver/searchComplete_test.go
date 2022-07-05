@@ -22,7 +22,7 @@ func Test_SearchComplete_Query(t *testing.T) {
 	expectedProps := []*string{&val1, &val2, &val3}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1)
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1, 0)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "data"->>'kind' FROM "search"."resources" WHERE ("data"->>'kind' IS NOT NULL) ORDER BY "data"->>'kind' ASC LIMIT 10000`),
@@ -36,6 +36,35 @@ func Test_SearchComplete_Query(t *testing.T) {
 	}
 	// Verify response
 	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchComplete_Query")
+}
+
+func Test_SearchComplete_Query_WithLimit(t *testing.T) {
+	// Create a SearchCompleteResolver instance with a mock connection pool.
+	prop1 := "kind"
+	limit := 2
+	searchInput := &model.SearchInput{}
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1)
+	resolver.limit = &limit //Add limit
+	val1 := "ConfigMap"
+	val2 := "ReplicaSet"
+	expectedProps := []*string{&val1, &val2}
+
+	// Mock the database queries.
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1, limit)
+	fmt.Println("mockRows:", mockRows)
+	// Mock the database query
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT "data"->>'kind' FROM "search"."resources" WHERE ("data"->>'kind' IS NOT NULL) ORDER BY "data"->>'kind' ASC LIMIT 2`),
+		gomock.Eq([]interface{}{})).Return(mockRows, nil)
+
+	// Execute function
+	result, err := resolver.autoComplete(context.TODO())
+	if err != nil {
+		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
+
+	}
+	// Verify response
+	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchComplete_Query_WithLimit")
 }
 
 func Test_SearchCompleteNoProp_Query(t *testing.T) {
@@ -69,10 +98,11 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 	val1 := "Template"
 	val2 := "ReplicaSet"
 	val3 := "ConfigMap"
+	resolver.limit = &limit
 	expectedProps := []*string{&val1, &val2, &val3}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1)
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1, limit)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "data"->>'kind' FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster')) AND ("data"->>'kind' IS NOT NULL)) ORDER BY "data"->>'kind' ASC LIMIT 10`),
@@ -91,13 +121,14 @@ func Test_SearchCompleteWithCluster(t *testing.T) {
 
 	cluster := "local-cluster"
 	limit := 10
-	searchInput := &model.SearchInput{Limit: &limit}
+	searchInput := &model.SearchInput{}
 
 	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1)
+	resolver.limit = &limit
 	expectedProps := []*string{&cluster}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1)
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1, limit)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "cluster" FROM "search"."resources" WHERE (("cluster" IS NOT NULL) AND ("cluster" != '')) ORDER BY "cluster" ASC LIMIT 10`),
@@ -119,7 +150,8 @@ func Test_SearchCompleteQuery_PropDate(t *testing.T) {
 	expectedProps := []*string{&val1} //, &val2, &val3}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1)
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1, 0)
+	fmt.Println("mockRows:", mockRows)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "data"->>'created' FROM "search"."resources" WHERE ("data"->>'created' IS NOT NULL) ORDER BY "data"->>'created' ASC LIMIT 10000`),
@@ -145,7 +177,7 @@ func Test_SearchCompleteQuery_PropNum(t *testing.T) {
 	expectedProps := []*string{&val1, &val2} //, &val3}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1)
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1, 0)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "data"->>'current' FROM "search"."resources" WHERE ("data"->>'current' IS NOT NULL) ORDER BY "data"->>'current' ASC LIMIT 10000`),
