@@ -3,7 +3,6 @@ package rbac
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -19,7 +18,7 @@ import (
 type userData struct {
 	// clusters     []string              // Managed clusters where the user has view access.
 	// csResources  []resource            // Cluster-scoped resources on hub the user has list access.
-	// nsResources map[string][]resource // Namespaced resources on hub the user has list access.
+	nsResources map[string][]resource // Namespaced resources on hub the user has list access.
 
 	//   key:namespace value list of resources
 
@@ -33,9 +32,10 @@ type userData struct {
 	csrErr     error      // Error while updating cluster-scoped resources data.
 	csrLock    sync.Mutex // Locks when cluster-scoped resources data is being updated.
 	// csrUpdatedAt time.Time  // Time cluster-scoped resources was last updated.
-	nsrErr       error      // Error while updating namespaced resources data.
-	nsrLock      sync.Mutex // Locks when namespaced resources data is being updated.
-	nsrUpdatedAt time.Time  // Time namespaced resources was last updated.
+	nsrErr                 error      // Error while updating namespaced resources data.
+	nsrLock                sync.Mutex // Locks when namespaced resources data is being updated.
+	nsrUpdatedAt           time.Time  // Time namespaced resources was last updated.
+	selfsubjectrulesreview *authzv1.SelfSubjectRulesReview
 
 	// authzClient v1.AuthorizationV1Interface
 	// impersonate *kubernetes.Interface // client with impersonation config
@@ -75,14 +75,11 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 	klog.V(5).Info("Getting namespaces from shared cache.")
 	user.csrLock.Lock()
 	defer user.csrLock.Unlock()
-	allNamespaces := cache.shared.namespaces //cluster-scoped resources
+	allNamespaces := cache.shared.namespaces
 	user.csrErr = nil
 
-	//get all namespaces from user
-
-	// var nsResources []string
 	impersClientset := cache.getImpersonationClientSet(clientToken, cache.restConfig)
-	//iterate all namespaces to find rules
+	user.nsResources = make(map[string][]resource)
 	for _, ns := range allNamespaces {
 
 		selfCheck := authzv1.SelfSubjectRulesReview{
@@ -96,27 +93,22 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 			klog.Error("Error creating SelfSubjectAccessReviews ", err.Error())
 		}
 
-		for _, rules := range result.Status.ResourceRules { //iterate through rules
-			for _, verb := range rules.Verbs { //look specifically for list verb
-				if verb == "list" {
-					fmt.Printf("Verb:%s, ResourceRules:%s, ApiGroups:%s, Namespace:%s \n", rules.Verbs, rules.Resources, rules.APIGroups, ns)
+		for _, rules := range result.Status.ResourceRules { //iterate objects
+			for _, verb := range rules.Verbs {
+				if verb == "list" { //drill down to list only
 
-					// user.resources = append(user.resources, resource{apigroup: rules.APIGroups, kind: rules.Resources})
-
-					// user.nsResources[ns] = append(user.nsResources[ns], resource{apigroup: rules.APIGroups, kind: rules.Resources})
-
-					// user.nsResources[ns] =  append(resources, )
-					// = append(mock_cache.shared.csResources, resource{apigroup: "apigroup1", kind: "kind1"}),
-
+					for _, res := range rules.Resources {
+						for _, api := range rules.APIGroups {
+							user.nsResources[ns] = append(user.nsResources[ns], resource{apigroup: api, kind: res}) //cache rules to users's data
+						}
+					}
 				}
 			}
+
 		}
-
 	}
-
-	// user.namespaces = append(user.namespaces, nsResources...)
 	user.nsrUpdatedAt = time.Now()
-	return user, user.err
+	return user, user.nsrErr
 }
 
 func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.Config) kubernetes.Interface {
@@ -135,13 +127,3 @@ func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.C
 
 	return cache.kubeClient
 }
-
-//here we will get authorized cluster-scoped resources:
-
-// if !result.Status.ResourceRules {
-// 	klog.Warningf("Denied action %s on resource %s in namespace '%s' for reason %s", action.Verb, action.Resource, action.Namespace, result.Status.Reason)
-// } else {
-// 	klog.Infof("Allowed action %s on resources %s in namespace %s", action.Verb, action.Resource, ns)
-// 	nsResources = append(nsResources, ns)
-// }
-// }
