@@ -23,6 +23,7 @@ func mockNamespaceCache() Cache {
 		restConfig:       &rest.Config{},
 		tokenReviews:     map[string]*tokenReviewCache{},
 		tokenReviewsLock: sync.Mutex{},
+		// authzClient:      fake.NewSimpleClientset().AuthorizationV1(),
 	}
 }
 
@@ -86,6 +87,10 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 		t.Error("Unexpected error while obtaining namespaces.", err)
 	}
 
+	if mock_cache.users["123456"].updatedAt.After(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
+		t.Error("Expected the cache.users.updatedAt to be less than 2 millisecond ago.")
+	}
+
 }
 
 func Test_getNamespaces_expiredCache(t *testing.T) {
@@ -119,8 +124,8 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 		t.Error("Unexpected error while obtaining namespaces.", err)
 	}
 	// Verify that cache was updated within the last 2 millisecond.
-	// if mock_cache.users["123456-expired"].updatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
-	// 	t.Error("Expected the cache.users.updatedAt to be less than 2 millisecond ago.")
-	// }
+	if mock_cache.users["123456-expired"].updatedAt.After(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
+		t.Error("Expected the cache.users.updatedAt to be less than 2 millisecond ago.")
+	}
 
 }

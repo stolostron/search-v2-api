@@ -10,7 +10,8 @@ import (
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 
-	authv1 "k8s.io/client-go/kubernetes/typed/authentication/v1"
+	authnv1 "k8s.io/client-go/kubernetes/typed/authentication/v1"
+	authzv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 )
 
 // Cache used to optimize requests to the Kubernetes API server.
@@ -37,7 +38,8 @@ type Cache struct {
 
 	// Clients to external APIs.
 	// Defining these here allow the tests to replace with a mock client.
-	authClient   authv1.AuthenticationV1Interface
+	authnClient  authnv1.AuthenticationV1Interface
+	authzClient  authzv1.AuthorizationV1Interface
 	corev1Client corev1.CoreV1Interface
 	kubeClient   kubernetes.Interface
 	pool         pgxpoolmock.PgxPool // Database client

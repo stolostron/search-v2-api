@@ -7,20 +7,12 @@ import (
 	"time"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
+	authzv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 )
-
-// type userData struct {
-// 	// impersonate kubernetes.Interface //client with impersonation config
-// 	err        error
-// 	namespaces []string
-// 	// resources  map[string][]string //key:namespace value list of resources
-// 	updatedAt time.Time
-// 	lock      sync.Mutex
-// }
 
 // Contains data about the resources the user is allowed to access.
 type userData struct {
@@ -33,17 +25,17 @@ type userData struct {
 	// clustersErr       error      // Error while updating clusters data.
 	// clustersLock      sync.Mutex // Locks when clusters data is being updated.
 	// clustersUpdatedAt time.Time  // Time clusters was last updated.
-	lock       sync.Mutex
-	updatedAt  time.Time // updated at namespaces authorized.
-	namespaces []string  // need to remove
-	err        error     // Error while getting user data from cache
-	// csrErr       error      // Error while updating cluster-scoped resources data.
-	// csrLock      sync.Mutex // Locks when cluster-scoped resources data is being updated.
+	updatedAt  time.Time  // updated at namespaces authorized.
+	namespaces []string   // need to remove
+	err        error      // Error while getting user data from cache
+	csrErr     error      // Error while updating cluster-scoped resources data.
+	csrLock    sync.Mutex // Locks when cluster-scoped resources data is being updated.
 	// csrUpdatedAt time.Time  // Time cluster-scoped resources was last updated.
-	// nsrErr       error      // Error while updating namespaced resources data.
-	// nsrLock      sync.Mutex // Locks when namespaced resources data is being updated.
-	// nsrUpdatedAt time.Time  // Time namespaced resources was last updated.
+	nsrErr       error      // Error while updating namespaced resources data.
+	nsrLock      sync.Mutex // Locks when namespaced resources data is being updated.
+	nsrUpdatedAt time.Time  // Time namespaced resources was last updated.
 
+	// authzClient v1.AuthorizationV1Interface
 	// impersonate *kubernetes.Interface // client with impersonation config
 }
 
@@ -60,56 +52,75 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string) (*userD
 	}
 	// create new instance
 	cache.users[uid] = &user
-	userData, err := user.getNamespaces(cache, ctx, clientToken)
+	userData, err := user.getNamespacedResources(cache, ctx, clientToken)
 	return userData, err
 
 }
 
-func (user *userData) getNamespaces(cache *Cache, ctx context.Context, clientToken string) (*userData, error) {
+//TODO:need to change this logic to look do same as oc auth can-i --list -n <iterate-each-namespace>
+func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, clientToken string) (*userData, error) {
 
-	//need to change this logic to look do same as oc auth can-i --list -n <iterate-each-namespace>
-	//lock to prevent checking more than one at a time
-	user.lock.Lock()
-	defer user.lock.Unlock()
+	//first we check if we already have user's namespaced resources in userData cache
+	user.nsrLock.Lock()
+	defer user.nsrLock.Unlock()
 	if len(user.namespaces) > 0 &&
 		time.Now().Before(user.updatedAt.Add(time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond)) {
-		klog.V(5).Info("Using user's namespaces from cache.")
-		return user, user.err
+		klog.V(5).Info("Using user's namespaced resources from cache.")
+		return user, user.nsrErr
 	}
 
+	// get all namespaces from shared cache:
 	klog.V(5).Info("Getting namespaces from shared cache.")
-	allNamespaces := cache.shared.namespaces
-	user.err = nil
+	user.csrLock.Lock()
+	defer user.csrLock.Unlock()
+	allNamespaces := cache.shared.namespaces //cluster-scoped resources
+	user.csrErr = nil
 
-	var impersonNamespaces []string
+	//get all namespaces from user
+	var nsResources []string
+
 	for _, ns := range allNamespaces {
 
-		impersonationClientset := cache.getImpersonationClientSet(clientToken, cache.restConfig)
-		// v1Namespaces, kubeErr := impersonationClientset.CoreV1().ConfigMaps("Default").Get(ctx, ns, metav1.GetOptions{})
-		v1Namespaces, kubeErr := impersonationClientset.CoreV1().ConfigMaps("Default").Get(ctx, ns, metav1.GetOptions{})
-		if kubeErr != nil {
-			klog.Warning("Error resolving namespaces from KubeClient: ", kubeErr)
+		action := authzv1.ResourceAttributes{
+			Name:      "",
+			Namespace: ns,
+			Verb:      "list",
+			// Resource:  "configmaps", //need to iterate all resources that user has
+		}
+		selfCheck := authzv1.SelfSubjectAccessReview{
+			Spec: authzv1.SelfSubjectAccessReviewSpec{
+				ResourceAttributes: &action,
+			},
+		}
+		impersClientset := cache.getImpersonationClientSet(clientToken, cache.restConfig)
+		result, err := impersClientset.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, &selfCheck, metav1.CreateOptions{})
+		if err != nil {
+			klog.Error("Error creating SelfSubjectAccessReviews ", err.Error())
 		}
 
-		impersonNamespaces = append(impersonNamespaces, v1Namespaces.Name)
+		if !result.Status.Allowed {
+			klog.Warningf("Denied action %s on resource %s with name '%s' for reason %s", action.Verb, action.Resource, action.Name, result.Status.Reason)
+		}
 
+		klog.Infof("Allowed resources %s in namespace %s", action.Resource, ns)
+		nsResources = append(nsResources, ns)
 	}
-	user.namespaces = append(user.namespaces, impersonNamespaces...)
-	klog.Info("We can impersonate user for these namespaces:", impersonNamespaces)
 
-	user.updatedAt = time.Now()
+	user.namespaces = append(user.namespaces, nsResources...)
+	user.nsrUpdatedAt = time.Now()
 	return user, user.err
 }
 
 func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.Config) kubernetes.Interface {
 
 	config.Impersonate = rest.ImpersonationConfig{
-		UID: cache.tokenReviews[clientToken].tokenReview.Status.User.UID,
+		UserName: cache.tokenReviews[clientToken].tokenReview.Status.User.Username,
+		UID:      cache.tokenReviews[clientToken].tokenReview.Status.User.UID,
 	}
 
 	clientset, err := kubernetes.NewForConfig(cache.restConfig)
 	if err != nil {
-		klog.Info("Error with creating a new clientset with impersonation config.", err.Error())
+		klog.Error("Error with creating a new clientset with impersonation config.", err.Error())
 	}
 
 	cache.kubeClient = clientset

@@ -2,7 +2,6 @@ package rbac
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -94,34 +93,6 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 		}
 	}
 
-	// //gather all namespaces in the cluster and cache in shared namespaces cache
-	// var allNamespaces []string
-	// if len(cache.shared.namespaces) > 0 {
-	// 	klog.V(5).Info("Using namespaces from shared cache")
-	// 	allNamespaces = append(allNamespaces, cache.shared.namespaces...)
-
-	// } else {
-
-	// 	klog.V(5).Info("Getting namespaces from Kube Client..")
-
-	// 	cache.restConfig = config.GetClientConfig()
-	// 	clientset, err := kubernetes.NewForConfig(cache.restConfig)
-	// 	if err != nil {
-	// 		klog.Warning("Error with creating a new clientset.", err.Error())
-	// 	}
-	// 	namespaceList, kubeErr := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-	// 	if kubeErr != nil {
-	// 		klog.Warning("Error resolving namespaces from KubeClient: ", kubeErr)
-	// 		shared.nsErr = kubeErr
-	// 		shared.namespaces = []string{}
-	// 		return shared.csResources, kubeErr
-	// 	}
-
-	// 	// add namespaces to allNamespace List
-	// 	for _, n := range namespaceList.Items {
-	// 		allNamespaces = append(allNamespaces, n.Name)
-	// 	}
-	// }
 	shared.nsLock.Lock()
 	defer shared.nsLock.Unlock()
 	allNamespaces, nsErr := shared.GetSharedNamespaces(cache, ctx)
@@ -134,7 +105,6 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 	shared.nsUpdatedAt = time.Now()
 
 	shared.csUpdatedAt = time.Now()
-	fmt.Println(shared.csResources)
 
 	return shared.csResources, shared.csErr
 }
