@@ -13,7 +13,7 @@ class UserBehavior(TaskSet):
         self.do_post({
             "op": "searchByKeyword",
             "query": "query q($input: [SearchInput]) {\n  searchResult: search(input: $input) {\n    items\n    __typename\n  }\n}",
-            "variables": {"input":[{"keywords": ["prom"]}]}
+            "variables": {"input":[{"keywords": ["apiserver"], "limit": 1000}]}
         })
 
 
@@ -22,9 +22,8 @@ class UserBehavior(TaskSet):
         self.do_post({
             "op": "searchByFilter",
             "query": "query q($input: [SearchInput]) {\n  searchResult: search(input: $input) {\n    items\n    __typename\n  }\n}",
-            "variables": {"input":[{"filters": [{"property":"kind", "values":["Pod"]}]}]}
+            "variables": {"input":[{"filters": [{"property":"namespace", "values":["default"]}], "limit": 1000}]}
         })
-
 
     @task
     def do_count_search(self):
@@ -43,7 +42,7 @@ class UserBehavior(TaskSet):
         self.do_post({
             "op": "searchComplete",
             "query": "query q($property: String!, $query: SearchInput, $limit: Int) {\n  searchComplete(property: $property, query: $query, limit: $limit)\n}",
-            "variables": {"property": "name"},
+            "variables": {"property": "name", "limit": 1000},
         })
 
     @task
@@ -52,7 +51,7 @@ class UserBehavior(TaskSet):
             "op": "searchRelatedCount",
             "query": "query q($input: [SearchInput]) {\n  searchResult: search(input: $input) {\n    related {\n      kind\n      count\n      __typename\n    }\n    __typename\n  }\n}",
             "variables": {"input":[
-                {"filters": [{"property": "kind","values": ["Pod"]}]},
+                {"filters": [{"property": "name","values": ["apiserver"]}], "limit": 1000},
             ]}
         })
 
@@ -62,7 +61,7 @@ class UserBehavior(TaskSet):
             "op": "searchRelatedItems",
             "query": "query q($input: [SearchInput]) {\n  searchResult: search(input: $input) {\n    related {\n      kind\n      items\n      __typename\n    }\n    __typename\n  }\n}",
             "variables": {"input":[
-                {"filters": [{"property": "kind","values": ["Pod"]}]},
+                {"filters": [{"property": "kind","values": ["Pod"]}], "limit": 1000},
             ]}
         })
 

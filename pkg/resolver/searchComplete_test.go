@@ -25,7 +25,7 @@ func Test_SearchComplete_Query(t *testing.T) {
 	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1, 0)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "data"->>'kind' FROM "search"."resources" WHERE ("data"->>'kind' IS NOT NULL) ORDER BY "data"->>'kind' ASC LIMIT 10000`),
+		gomock.Eq(`SELECT DISTINCT "data"->>'kind' FROM "search"."resources" WHERE ("data"->>'kind' IS NOT NULL) ORDER BY "data"->>'kind' ASC LIMIT 1000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
@@ -154,7 +154,7 @@ func Test_SearchCompleteQuery_PropDate(t *testing.T) {
 	fmt.Println("mockRows:", mockRows)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "data"->>'created' FROM "search"."resources" WHERE ("data"->>'created' IS NOT NULL) ORDER BY "data"->>'created' ASC LIMIT 10000`),
+		gomock.Eq(`SELECT DISTINCT "data"->>'created' FROM "search"."resources" WHERE ("data"->>'created' IS NOT NULL) ORDER BY "data"->>'created' ASC LIMIT 1000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
@@ -180,7 +180,7 @@ func Test_SearchCompleteQuery_PropNum(t *testing.T) {
 	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1, 0)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "data"->>'current' FROM "search"."resources" WHERE ("data"->>'current' IS NOT NULL) ORDER BY "data"->>'current' ASC LIMIT 10000`),
+		gomock.Eq(`SELECT DISTINCT "data"->>'current' FROM "search"."resources" WHERE ("data"->>'current' IS NOT NULL) ORDER BY "data"->>'current' ASC LIMIT 1000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
