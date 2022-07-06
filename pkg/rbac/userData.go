@@ -3,6 +3,7 @@ package rbac
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -18,7 +19,8 @@ import (
 type userData struct {
 	// clusters     []string              // Managed clusters where the user has view access.
 	// csResources  []resource            // Cluster-scoped resources on hub the user has list access.
-	// nsResources  map[string][]resource // Namespaced resources on hub the user has list access.
+	// nsResources map[string][]resource // Namespaced resources on hub the user has list access.
+
 	//   key:namespace value list of resources
 
 	// Internal fields to manage the cache.
@@ -77,36 +79,42 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 	user.csrErr = nil
 
 	//get all namespaces from user
-	var nsResources []string
 
+	// var nsResources []string
+	impersClientset := cache.getImpersonationClientSet(clientToken, cache.restConfig)
+	//iterate all namespaces to find rules
 	for _, ns := range allNamespaces {
 
-		action := authzv1.ResourceAttributes{
-			Name:      "",
-			Namespace: ns,
-			Verb:      "list",
-			// Resource:  "configmaps", //need to iterate all resources that user has
-		}
-		selfCheck := authzv1.SelfSubjectAccessReview{
-			Spec: authzv1.SelfSubjectAccessReviewSpec{
-				ResourceAttributes: &action,
+		selfCheck := authzv1.SelfSubjectRulesReview{
+			Spec: authzv1.SelfSubjectRulesReviewSpec{
+				Namespace: ns,
 			},
 		}
-		impersClientset := cache.getImpersonationClientSet(clientToken, cache.restConfig)
-		result, err := impersClientset.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, &selfCheck, metav1.CreateOptions{})
+
+		result, err := impersClientset.AuthorizationV1().SelfSubjectRulesReviews().Create(ctx, &selfCheck, metav1.CreateOptions{})
 		if err != nil {
 			klog.Error("Error creating SelfSubjectAccessReviews ", err.Error())
 		}
 
-		if !result.Status.Allowed {
-			klog.Warningf("Denied action %s on resource %s with name '%s' for reason %s", action.Verb, action.Resource, action.Name, result.Status.Reason)
+		for _, rules := range result.Status.ResourceRules { //iterate through rules
+			for _, verb := range rules.Verbs { //look specifically for list verb
+				if verb == "list" {
+					fmt.Printf("Verb:%s, ResourceRules:%s, ApiGroups:%s, Namespace:%s \n", rules.Verbs, rules.Resources, rules.APIGroups, ns)
+
+					// user.resources = append(user.resources, resource{apigroup: rules.APIGroups, kind: rules.Resources})
+
+					// user.nsResources[ns] = append(user.nsResources[ns], resource{apigroup: rules.APIGroups, kind: rules.Resources})
+
+					// user.nsResources[ns] =  append(resources, )
+					// = append(mock_cache.shared.csResources, resource{apigroup: "apigroup1", kind: "kind1"}),
+
+				}
+			}
 		}
 
-		klog.Infof("Allowed resources %s in namespace %s", action.Resource, ns)
-		nsResources = append(nsResources, ns)
 	}
 
-	user.namespaces = append(user.namespaces, nsResources...)
+	// user.namespaces = append(user.namespaces, nsResources...)
 	user.nsrUpdatedAt = time.Now()
 	return user, user.err
 }
@@ -127,3 +135,13 @@ func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.C
 
 	return cache.kubeClient
 }
+
+//here we will get authorized cluster-scoped resources:
+
+// if !result.Status.ResourceRules {
+// 	klog.Warningf("Denied action %s on resource %s in namespace '%s' for reason %s", action.Verb, action.Resource, action.Namespace, result.Status.Reason)
+// } else {
+// 	klog.Infof("Allowed action %s on resources %s in namespace %s", action.Verb, action.Resource, ns)
+// 	nsResources = append(nsResources, ns)
+// }
+// }
