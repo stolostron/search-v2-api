@@ -32,6 +32,7 @@ type Config struct {
 	// Placeholder for future use.
 	// QueryLoopLimit          int // number of queries handled at a time
 	// RBAC_INACTIVITY_TIMEOUT int
+	Crunchy bool
 }
 
 func new() *Config {
@@ -49,6 +50,7 @@ func new() *Config {
 		DBUser:         getEnv("DB_USER", ""),
 		HttpPort:       getEnvAsInt("HTTP_PORT", 4010),
 		PlaygroundMode: getEnvAsBool("PLAYGROUND_MODE", false),
+		Crunchy:        getEnvAsBool("CRUNCHY", false),
 		QueryLimit:     getEnvAsInt("QUERY_LIMIT", 1000),
 		//Setting default level to 0 to check if user has explicitly set this variable
 		// This will be updated to 1 for default searches and 3 for applications - unless set by the user
