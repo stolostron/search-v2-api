@@ -10,6 +10,7 @@ import (
 	authzv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	v1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 )
@@ -32,12 +33,10 @@ type userData struct {
 	csrErr     error      // Error while updating cluster-scoped resources data.
 	csrLock    sync.Mutex // Locks when cluster-scoped resources data is being updated.
 	// csrUpdatedAt time.Time  // Time cluster-scoped resources was last updated.
-	nsrErr                 error      // Error while updating namespaced resources data.
-	nsrLock                sync.Mutex // Locks when namespaced resources data is being updated.
-	nsrUpdatedAt           time.Time  // Time namespaced resources was last updated.
-	selfsubjectrulesreview *authzv1.SelfSubjectRulesReview
+	nsrErr       error      // Error while updating namespaced resources data.
+	nsrLock      sync.Mutex // Locks when namespaced resources data is being updated.
+	nsrUpdatedAt time.Time  // Time namespaced resources was last updated.
 
-	// authzClient v1.AuthorizationV1Interface
 	// impersonate *kubernetes.Interface // client with impersonation config
 }
 
@@ -79,18 +78,20 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 	user.csrErr = nil
 
 	impersClientset := cache.getImpersonationClientSet(clientToken, cache.restConfig)
+
+	// impersonationClient := cache.getAuthzClient(clientToken)
 	user.nsResources = make(map[string][]resource)
 	for _, ns := range allNamespaces {
 
-		selfCheck := authzv1.SelfSubjectRulesReview{
+		rulesCheck := authzv1.SelfSubjectRulesReview{
 			Spec: authzv1.SelfSubjectRulesReviewSpec{
 				Namespace: ns,
 			},
 		}
 
-		result, err := impersClientset.AuthorizationV1().SelfSubjectRulesReviews().Create(ctx, &selfCheck, metav1.CreateOptions{})
+		result, err := impersClientset.SelfSubjectRulesReviews().Create(ctx, &rulesCheck, metav1.CreateOptions{})
 		if err != nil {
-			klog.Error("Error creating SelfSubjectAccessReviews ", err.Error())
+			klog.Error("Error creating SelfSubjectRulesReviews ", err.Error())
 		}
 
 		for _, rules := range result.Status.ResourceRules { //iterate objects
@@ -106,24 +107,32 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 			}
 
 		}
+
+		//delete the selfsubjectrulesreview
+		// impersClientset.RESTClient().Delete().Namespace(ns).Name("SelfSubjectRulesReviews")
 	}
 	user.nsrUpdatedAt = time.Now()
 	return user, user.nsrErr
 }
 
-func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.Config) kubernetes.Interface {
+func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.Config) v1.AuthorizationV1Interface {
 
-	config.Impersonate = rest.ImpersonationConfig{
-		UserName: cache.tokenReviews[clientToken].tokenReview.Status.User.Username,
-		UID:      cache.tokenReviews[clientToken].tokenReview.Status.User.UID,
+	if cache.authzClient == nil {
+
+		config.Impersonate = rest.ImpersonationConfig{
+			UserName: cache.tokenReviews[clientToken].tokenReview.Status.User.Username,
+			UID:      cache.tokenReviews[clientToken].tokenReview.Status.User.UID,
+		}
+
+		clientset, err := kubernetes.NewForConfig(cache.restConfig)
+		if err != nil {
+			klog.Error("Error with creating a new clientset with impersonation config.", err.Error())
+		}
+
+		cache.kubeClient = clientset
+		cache.authzClient = clientset.AuthorizationV1()
+
 	}
 
-	clientset, err := kubernetes.NewForConfig(cache.restConfig)
-	if err != nil {
-		klog.Error("Error with creating a new clientset with impersonation config.", err.Error())
-	}
-
-	cache.kubeClient = clientset
-
-	return cache.kubeClient
+	return cache.authzClient
 }
