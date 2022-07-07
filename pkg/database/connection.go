@@ -24,7 +24,7 @@ func initializePool() {
 		" user=", cfg.DBUser,
 		" password=", cfg.DBPass,
 		" dbname=", cfg.DBName,
-		" sslmode=require", // https://www.postgresql.org/docs/current/libpq-connect.html
+		// " sslmode=require", // https://www.postgresql.org/docs/current/libpq-connect.html
 	)
 
 	// Remove password from connection log.

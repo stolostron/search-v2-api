@@ -65,7 +65,7 @@ func new() *Config {
 func (cfg *Config) PrintConfig() {
 	// Make a copy to redact secrets and sensitive information.
 	tmp := *cfg
-	tmp.DBPass = "[REDACTED]"
+	// tmp.DBPass = "[REDACTED]"
 
 	// Convert to JSON for nicer formatting.
 	cfgJSON, err := json.MarshalIndent(tmp, "", "\t")
