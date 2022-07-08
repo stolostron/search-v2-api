@@ -2,7 +2,6 @@ package rbac
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -39,13 +38,13 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 		},
 	}
 	var namespaces []string
-	mock_cache.shared.namespaces = append(namespaces, "open-cluster-management", "apps")
+	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
 
 	ctx := context.Background()
 	result, err := mock_cache.GetUserData(ctx, "123456")
 
-	if len(result.namespaces) == 0 {
-		t.Error("Resources not in cache.")
+	if len(result.nsResources) > 0 {
+		t.Error("Cache should be empty.")
 	}
 	if err != nil {
 		t.Error("Unexpected error while obtaining namespaces.", err)
@@ -54,8 +53,12 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 }
 
 func Test_getNamespaces_usingCache(t *testing.T) {
+	var namespaces []string
+	nsresources := make(map[string][]resource)
+
 	mock_cache := mockNamespaceCache()
 
+	//mock cache for token review to get user data:
 	mock_cache.tokenReviews["123456"] = &tokenReviewCache{
 		tokenReview: &authv1.TokenReview{
 			Status: authv1.TokenReviewStatus{
@@ -66,36 +69,37 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 		},
 	}
 
-	mock_cache.users["123456"] = &userData{
-		err:       nil,
-		updatedAt: time.Now(),
+	//mock cache for cluster-scoped resouces to get all namespaces:
+	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
+	//mock cache for namespaced-resources:
+	nsresources["some-namespace"] = append(nsresources["some-namespace"],
+		resource{apigroup: "some-apigroup", kind: "some-kind"})
+
+	mock_cache.users["unique-user-id"] = &userData{
+		nsResources:  nsresources,
+		nsrUpdatedAt: time.Now(),
 	}
-	var namespaces []string
-	mock_cache.shared.namespaces = append(namespaces, "open-cluster-management", "apps")
 
-	ctx := context.Background()
+	result, err := mock_cache.GetUserData(context.Background(), "123456")
 
-	fmt.Println("in mock cache", mock_cache.users["123456"].namespaces)
-
-	result, err := mock_cache.GetUserData(ctx, "123456")
-
-	if len(result.namespaces) == 0 {
+	if len(result.nsResources) == 0 {
 		t.Error("Resources not in cache.")
 	}
 	if err != nil {
 		t.Error("Unexpected error while obtaining namespaces.", err)
 	}
 
-	if mock_cache.users["123456"].updatedAt.After(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
-		t.Error("Expected the cache.users.updatedAt to be less than 2 millisecond ago.")
-	}
-
 }
 
 func Test_getNamespaces_expiredCache(t *testing.T) {
+
+	var namespaces []string
+	nsresources := make(map[string][]resource)
+
 	mock_cache := mockNamespaceCache()
 
-	mock_cache.tokenReviews["123456-expired"] = &tokenReviewCache{
+	//mock cache for token review to get user data:
+	mock_cache.tokenReviews["123456"] = &tokenReviewCache{
 		tokenReview: &authv1.TokenReview{
 			Status: authv1.TokenReviewStatus{
 				User: authv1.UserInfo{
@@ -105,25 +109,28 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 		},
 	}
 
-	mock_cache.users["123456-expired"] = &userData{
-		err:       nil,
-		updatedAt: time.Now().Add(time.Duration(-5) * time.Minute)}
+	//mock cache for cluster-scoped resouces to get all namespaces:
+	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
+	//mock cache for namespaced-resources:
+	nsresources["some-namespace"] = append(nsresources["some-namespace"],
+		resource{apigroup: "some-apigroup", kind: "some-kind"})
 
-	var namespaces []string
-	mock_cache.shared.namespaces = append(namespaces, "open-cluster-management", "apps")
+	mock_cache.users["unique-user-id"] = &userData{
+		nsResources:  nsresources,
+		nsrUpdatedAt: time.Now().Add(time.Duration(-5) * time.Minute),
+	}
 
-	ctx := context.Background()
+	result, err := mock_cache.GetUserData(context.Background(), "123456")
 
-	result, err := mock_cache.GetUserData(ctx, "123456-expired")
-
-	if len(result.namespaces) == 0 {
+	if len(result.nsResources) == 0 {
 		t.Error("Resources not in cache.")
 	}
 	if err != nil {
 		t.Error("Unexpected error while obtaining namespaces.", err)
 	}
+
 	// Verify that cache was updated within the last 2 millisecond.
-	if mock_cache.users["123456-expired"].updatedAt.After(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
+	if mock_cache.users["unique-user-id"].nsrUpdatedAt.After(time.Now().Add(time.Duration(-2) * time.Millisecond)) {
 		t.Error("Expected the cache.users.updatedAt to be less than 2 millisecond ago.")
 	}
 

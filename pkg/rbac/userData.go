@@ -21,17 +21,13 @@ type userData struct {
 	// csResources  []resource            // Cluster-scoped resources on hub the user has list access.
 	nsResources map[string][]resource // Namespaced resources on hub the user has list access.
 
-	//   key:namespace value list of resources
-
 	// Internal fields to manage the cache.
 	// clustersErr       error      // Error while updating clusters data.
 	// clustersLock      sync.Mutex // Locks when clusters data is being updated.
 	// clustersUpdatedAt time.Time  // Time clusters was last updated.
-	updatedAt  time.Time  // updated at namespaces authorized.
-	namespaces []string   // need to remove
-	err        error      // Error while getting user data from cache
-	csrErr     error      // Error while updating cluster-scoped resources data.
-	csrLock    sync.Mutex // Locks when cluster-scoped resources data is being updated.
+	err     error      // Error while getting user data from cache
+	csrErr  error      // Error while updating cluster-scoped resources data.
+	csrLock sync.Mutex // Locks when cluster-scoped resources data is being updated.
 	// csrUpdatedAt time.Time  // Time cluster-scoped resources was last updated.
 	nsrErr       error      // Error while updating namespaced resources data.
 	nsrLock      sync.Mutex // Locks when namespaced resources data is being updated.
@@ -58,14 +54,14 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string) (*userD
 
 }
 
-//TODO:need to change this logic to look do same as oc auth can-i --list -n <iterate-each-namespace>
+// The following achieves same result as oc auth can-i --list -n <iterate-each-namespace>
 func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, clientToken string) (*userData, error) {
 
 	//first we check if we already have user's namespaced resources in userData cache
 	user.nsrLock.Lock()
 	defer user.nsrLock.Unlock()
-	if len(user.namespaces) > 0 &&
-		time.Now().Before(user.updatedAt.Add(time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond)) {
+	if len(user.nsResources) > 0 &&
+		time.Now().Before(user.nsrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond)) {
 		klog.V(5).Info("Using user's namespaced resources from cache.")
 		return user, user.nsrErr
 	}
@@ -75,14 +71,15 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 	user.csrLock.Lock()
 	defer user.csrLock.Unlock()
 	allNamespaces := cache.shared.namespaces
+	// allNamespaces = removeDuplicateStr(allNamespaces)
 	user.csrErr = nil
 
 	impersClientset := cache.getImpersonationClientSet(clientToken, cache.restConfig)
 
-	// impersonationClient := cache.getAuthzClient(clientToken)
 	user.nsResources = make(map[string][]resource)
-	for _, ns := range allNamespaces {
 
+	for _, ns := range allNamespaces {
+		//
 		rulesCheck := authzv1.SelfSubjectRulesReview{
 			Spec: authzv1.SelfSubjectRulesReviewSpec{
 				Namespace: ns,
@@ -91,8 +88,9 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 
 		result, err := impersClientset.SelfSubjectRulesReviews().Create(ctx, &rulesCheck, metav1.CreateOptions{})
 		if err != nil {
-			klog.Error("Error creating SelfSubjectRulesReviews ", err.Error())
+			klog.Error("Error creating SelfSubjectRulesReviews ", err)
 		}
+		klog.V(9).Infof("TokenReview Kube API result: %v\n", prettyPrint(result.Status))
 
 		for _, rules := range result.Status.ResourceRules { //iterate objects
 			for _, verb := range rules.Verbs {
@@ -107,10 +105,8 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 			}
 
 		}
-
-		//delete the selfsubjectrulesreview
-		// impersClientset.RESTClient().Delete().Namespace(ns).Name("SelfSubjectRulesReviews")
 	}
+
 	user.nsrUpdatedAt = time.Now()
 	return user, user.nsrErr
 }
@@ -136,3 +132,16 @@ func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.C
 
 	return cache.authzClient
 }
+
+// //helper function to remove duplicates from shared resources list:
+// func removeDuplicateStr(strSlice []string) []string {
+// 	allKeys := make(map[string]bool)
+// 	list := []string{}
+// 	for _, item := range strSlice {
+// 		if _, value := allKeys[item]; !value {
+// 			allKeys[item] = true
+// 			list = append(list, item)
+// 		}
+// 	}
+// 	return list
+// }
