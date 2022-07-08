@@ -98,7 +98,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 
 					for _, res := range rules.Resources {
 						for _, api := range rules.APIGroups {
-							user.nsResources[ns] = append(user.nsResources[ns], resource{apigroup: api, kind: res}) //cache rules to users's data
+							user.nsResources[ns] = append(user.nsResources[ns], resource{apigroup: api, kind: res})
 						}
 					}
 				}
