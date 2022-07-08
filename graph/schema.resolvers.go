@@ -5,21 +5,12 @@ package graph
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/stolostron/search-v2-api/graph/generated"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/resolver"
 	klog "k8s.io/klog/v2"
 )
-
-func (r *mutationResolver) DeleteSearch(ctx context.Context, resource *string) (*string, error) {
-	panic(fmt.Errorf("not implemented"))
-}
-
-func (r *mutationResolver) SaveSearch(ctx context.Context, resource *string) (*string, error) {
-	panic(fmt.Errorf("not implemented"))
-}
 
 func (r *queryResolver) Search(ctx context.Context, input []*model.SearchInput) ([]*resolver.SearchResult, error) {
 	klog.V(3).Infof("--------- Received Search query with %d inputs ---------\n", len(input))
@@ -36,30 +27,12 @@ func (r *queryResolver) SearchSchema(ctx context.Context) (map[string]interface{
 	return resolver.SearchSchemaResolver(ctx)
 }
 
-func (r *queryResolver) SavedSearches(ctx context.Context) ([]*model.UserSearch, error) {
-	klog.V(3).Infoln("Received SavedSearches query")
-
-	savedSrches := make([]*model.UserSearch, 0)
-	// id := "1"
-	// name := "savedSrch1"
-	// srchText := "Trial savedSrch1"
-	// desc := "Trial search-v2-api savedSrch1"
-	// savedSrch1 := model.UserSearch{ID: &id, Name: &name, Description: &desc, SearchText: &srchText}
-	// savedSrches = append(savedSrches, &savedSrch1)
-	// return savedSrches, nil
-	return savedSrches, nil
-}
-
 func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) {
 	klog.V(3).Infoln("Received Messages query")
 	return resolver.Messages(ctx)
 }
 
-// Mutation returns generated.MutationResolver implementation.
-func (r *Resolver) Mutation() generated.MutationResolver { return &mutationResolver{r} }
-
 // Query returns generated.QueryResolver implementation.
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 
-type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
