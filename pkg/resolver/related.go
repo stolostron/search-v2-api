@@ -94,12 +94,17 @@ func (s *SearchResult) buildRelationsQuery() {
 	excludeResources := []interface{}{"Node", "Channel"}
 
 	// Non-recursive term
-	baseTerm := goqu.From(schema.Table("all_edges").As("e")).
+	base1 := goqu.From(schema.Table("all_edges"))
+	base2 := goqu.From(schema.Table("edges"))
+	t := base1.Union(base2)
+	// t := schema.Table(base1.Union(base2).As("e"))
+	baseTerm := goqu.From(t.As("e")).
 		Select(selectBase...).
 		Where(goqu.ExOr{"sourceid": (s.uids), "destid": (s.uids)})
 
 	// Recursive term
-	recursiveTerm := goqu.From(schema.Table("all_edges").As("e")).
+	// recursiveTerm := goqu.From(schema.Table("all_edges").As("e")).
+	recursiveTerm := goqu.From(t.As("e")).
 		InnerJoin(goqu.T("search_graph").As("sg"),
 			goqu.On(goqu.ExOr{"sg.destid": srcDestIds, "sg.sourceid": srcDestIds})).
 		Select(selectNext...).
@@ -220,6 +225,10 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	// Build the relations query
 	s.buildRelationsQuery()
 
+	_, err := s.pool.Exec(context.TODO(), "REFRESH MATERIALIZED VIEW CONCURRENTLY search.all_edges")
+	if err != nil {
+		klog.Error("Error refreshing MV search.all_edges")
+	}
 	relations, relQueryError := s.pool.Query(context.TODO(), s.query, s.params...) // how to deal with defaults.
 	if relQueryError != nil {
 		klog.Errorf("Error while executing getRelations query. Error :%s", relQueryError.Error())
