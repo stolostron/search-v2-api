@@ -38,7 +38,6 @@ func initializePool() {
 	if configErr != nil {
 		klog.Error("Error parsing database connection configuration.", configErr)
 	}
-	config.MaxConns = 20
 	conn, err := pgxpool.ConnectConfig(context.TODO(), config)
 	if err != nil {
 		klog.Error("Unable to connect to database: %+v\n", err)
