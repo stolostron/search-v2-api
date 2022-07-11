@@ -40,7 +40,7 @@ func (cache *Cache) ClusterScopedResources(ctx context.Context) ([]resource, err
 func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Context) ([]resource,
 	error) {
 
-	//lock to prevent checking more than one at a time
+	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
 	shared.csLock.Lock()
 	defer shared.csLock.Unlock()
 	if shared.csResources != nil &&
@@ -48,21 +48,25 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 		klog.V(8).Info("Using cluster scoped resources from cache.")
 		return shared.csResources, shared.csErr
 	}
+
+	// if not in cache query database
 	klog.V(6).Info("Querying database for cluster-scoped resources.")
 	shared.csErr = nil // Clear previous errors.
 
-	// if data not in cache or expired
+	// Building query to get cluster scoped resources
+	// Original query: "SELECT DISTINCT(data->>apigroup, data->>kind) FROM search.resources WHERE
+	// cluster='local-cluster' AND namespace=NULL"
+
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
-
-	//"SELECT DISTINCT(data->>apigroup, data->>kind) FROM search.resources WHERE
-	// cluster='local-cluster' AND namespace=NULL"
 	query, _, err := ds.SelectDistinct(goqu.COALESCE(goqu.L(`"data"->>'apigroup'`), "").As("apigroup"),
 		goqu.COALESCE(goqu.L(`"data"->>'kind'`), "").As("kind")).
 		Where(goqu.L(`"cluster"::TEXT = 'local-cluster'`), goqu.L(`"data"->>'namespace'`).IsNull()).ToSQL()
 	if err != nil {
 		klog.Errorf("Error creating query [%s]. Error: [%+v]", query, err)
 		shared.csErr = err
+		shared.csResources = []resource{}
+		return shared.csResources, shared.csErr
 	}
 
 	rows, queryerr := cache.pool.Query(ctx, query)
@@ -73,7 +77,6 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 		return shared.csResources, shared.csErr
 	}
 
-	// var resource *resource
 	if rows != nil {
 		defer rows.Close()
 
@@ -84,7 +87,6 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 			if err != nil {
 				klog.Errorf("Error %s retrieving rows for query:%s for apigroup %s and kind %s", err.Error(), query,
 					apigroup, kind)
-				shared.csErr = err
 				continue
 			}
 
@@ -93,6 +95,9 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 		}
 	}
 
+	shared.csUpdatedAt = time.Now()
+
+	// get all namespaces in cluster and cache in shared.namespaces.
 	shared.nsLock.Lock()
 	defer shared.nsLock.Unlock()
 	allNamespaces, nsErr := shared.GetSharedNamespaces(cache, ctx)
@@ -100,21 +105,16 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 		shared.nsErr = nsErr
 	}
 
-	// Then update the cache.
+	// update the cache.
 	shared.namespaces = allNamespaces
-	shared.nsUpdatedAt = time.Now()
-
-	shared.csUpdatedAt = time.Now()
 
 	return shared.csResources, shared.csErr
 }
 
-//gather all namespaces in the cluster and cache in shared namespaces cache
 func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context) ([]string, error) {
-	var allNamespaces []string
-	if len(cache.shared.namespaces) > 0 {
+	if len(shared.namespaces) > 0 &&
+		time.Now().Before(shared.nsUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond)) {
 		klog.V(5).Info("Using namespaces from shared cache")
-		allNamespaces = append(allNamespaces, cache.shared.namespaces...)
 
 	} else {
 
@@ -129,15 +129,17 @@ func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context)
 		if kubeErr != nil {
 			klog.Warning("Error resolving namespaces from KubeClient: ", kubeErr)
 			shared.nsErr = kubeErr
-			shared.namespaces = append(shared.namespaces, allNamespaces...)
+
 			return shared.namespaces, shared.nsErr
 		}
 
 		// add namespaces to allNamespace List
 		for _, n := range namespaceList.Items {
-			allNamespaces = append(allNamespaces, n.Name)
+			shared.namespaces = append(shared.namespaces, n.Name)
 		}
+		shared.nsUpdatedAt = time.Now()
 
 	}
-	return allNamespaces, shared.nsErr
+	shared.nsErr = nil
+	return shared.namespaces, shared.nsErr
 }

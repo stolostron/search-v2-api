@@ -15,7 +15,7 @@ func AuthorizeUser(next http.Handler) http.Handler {
 			klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
 			metric.AuthzFailed.WithLabelValues("UnexpectedAuthzError").Inc()
 		}
-		klog.Info("Finished getting cluster-scoped resources. Now gettng user namespaces..")
+		klog.Info("Finished getting shared resources. Now gettng user data..")
 
 		clientToken := r.Context().Value(ContextAuthTokenKey).(string)
 		_, newerr := cacheInst.GetUserData(r.Context(), clientToken)
@@ -23,7 +23,7 @@ func AuthorizeUser(next http.Handler) http.Handler {
 			klog.Warning("Unexpected error while obtaining user namesapces.", newerr)
 		}
 
-		klog.Info("Finished getting user namesapces. Now Authorizing..")
+		klog.V(6).Info("User authorization successful!")
 		next.ServeHTTP(w, r.WithContext(r.Context()))
 
 	})

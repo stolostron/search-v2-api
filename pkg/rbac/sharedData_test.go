@@ -40,10 +40,6 @@ func Test_getResources_emptyCache(t *testing.T) {
 	if err != nil {
 		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
 	}
-	// Verify that cache was updated within the last 1 millisecond.
-	if mock_cache.shared.csUpdatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
-		t.Error("Expected cache.shared.updatedAt to be less than 1 millisecond ago.")
-	}
 
 }
 
@@ -73,10 +69,12 @@ func Test_getResouces_usingCache(t *testing.T) {
 	if err != nil {
 		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
 	}
+
 	// Verify that cache was updated within the last 1 millisecond.
-	if mock_cache.shared.csUpdatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
-		t.Error("Expected cache.shared.updatedAt to be less than 1 millisecond ago.")
+	if mock_cache.shared.csUpdatedAt.Before(time.Now().Add(time.Duration(-2) * time.Millisecond)) {
+		t.Error("Expected cache.shared.updatedAt to be less than 2 millisecond ago.")
 	}
+
 }
 
 func Test_getResources_expiredCache(t *testing.T) {
@@ -94,7 +92,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 
 	//adding expired cache
 	mock_cache.shared = SharedData{
-		csUpdatedAt: time.Now().Add(time.Duration(-3) * time.Minute),
+		csUpdatedAt: time.Now().Add(time.Duration(-5) * time.Minute),
 		csResources: append(mock_cache.shared.csResources, resource{apigroup: "apigroup1", kind: "kind1"}),
 	}
 
@@ -105,6 +103,10 @@ func Test_getResources_expiredCache(t *testing.T) {
 	}
 	if err != nil {
 		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
+	}
+	// Verify that cache was updated within the last 1 millisecond.
+	if mock_cache.shared.csUpdatedAt.After(time.Now().Add(time.Duration(-2) * time.Millisecond)) {
+		t.Error("Expected the cached cluster scoped resources to be updated within the last millisecond.")
 	}
 
 }

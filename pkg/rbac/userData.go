@@ -47,8 +47,7 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string) (*userD
 		return cachedUserData, user.err
 
 	}
-	// create new instance
-	cache.users[uid] = &user
+
 	userData, err := user.getNamespacedResources(cache, ctx, clientToken)
 	return userData, err
 
@@ -63,6 +62,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 	if len(user.nsResources) > 0 &&
 		time.Now().Before(user.nsrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond)) {
 		klog.V(5).Info("Using user's namespaced resources from cache.")
+		user.nsrErr = nil
 		return user, user.nsrErr
 	}
 
@@ -71,10 +71,18 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 	user.csrLock.Lock()
 	defer user.csrLock.Unlock()
 	allNamespaces := cache.shared.namespaces
+	if len(allNamespaces) == 0 {
+		klog.Warning("All namespaces array from shared cache is empty.", cache.shared.nsErr)
+		return user, cache.shared.nsErr
+	}
 	// allNamespaces = removeDuplicateStr(allNamespaces)
 	user.csrErr = nil
 
-	impersClientset := cache.getImpersonationClientSet(clientToken, cache.restConfig)
+	impersClientset, err := cache.getImpersonationClientSet(clientToken, cache.restConfig)
+	if err != nil {
+		klog.Warning("Error creating clientset with impersonation config.", err.Error())
+		return user, err
+	}
 
 	user.nsResources = make(map[string][]resource)
 
@@ -88,13 +96,13 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 
 		result, err := impersClientset.SelfSubjectRulesReviews().Create(ctx, &rulesCheck, metav1.CreateOptions{})
 		if err != nil {
-			klog.Error("Error creating SelfSubjectRulesReviews ", err)
+			klog.Error("Error creating SelfSubjectRulesReviews for namespace", err, ns)
+		} else {
+			klog.V(9).Infof("TokenReview Kube API result: %v\n", prettyPrint(result.Status))
 		}
-		klog.V(9).Infof("TokenReview Kube API result: %v\n", prettyPrint(result.Status))
-
 		for _, rules := range result.Status.ResourceRules { //iterate objects
 			for _, verb := range rules.Verbs {
-				if verb == "list" { //drill down to list only
+				if verb == "list" || verb == "*" { //drill down to list only
 
 					for _, res := range rules.Resources {
 						for _, api := range rules.APIGroups {
@@ -111,7 +119,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 	return user, user.nsrErr
 }
 
-func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.Config) v1.AuthorizationV1Interface {
+func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.Config) (v1.AuthorizationV1Interface, error) {
 
 	if cache.authzClient == nil {
 
@@ -123,6 +131,7 @@ func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.C
 		clientset, err := kubernetes.NewForConfig(cache.restConfig)
 		if err != nil {
 			klog.Error("Error with creating a new clientset with impersonation config.", err.Error())
+			return nil, err
 		}
 
 		cache.kubeClient = clientset
@@ -130,7 +139,7 @@ func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.C
 
 	}
 
-	return cache.authzClient
+	return cache.authzClient, nil
 }
 
 // //helper function to remove duplicates from shared resources list:
