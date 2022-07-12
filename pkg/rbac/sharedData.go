@@ -112,6 +112,7 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 }
 
 func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context) ([]string, error) {
+
 	if len(shared.namespaces) > 0 &&
 		time.Now().Before(shared.nsUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond)) {
 		klog.V(5).Info("Using namespaces from shared cache")
@@ -124,12 +125,14 @@ func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context)
 		clientset, err := kubernetes.NewForConfig(cache.restConfig)
 		if err != nil {
 			klog.Warning("Error with creating a new clientset.", err.Error())
+
 		}
+
 		namespaceList, kubeErr := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+
 		if kubeErr != nil {
 			klog.Warning("Error resolving namespaces from KubeClient: ", kubeErr)
 			shared.nsErr = kubeErr
-
 			return shared.namespaces, shared.nsErr
 		}
 
