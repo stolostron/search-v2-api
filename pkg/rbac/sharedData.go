@@ -43,70 +43,69 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
 	shared.csLock.Lock()
 	defer shared.csLock.Unlock()
-	if shared.csResources != nil &&
-		time.Now().Before(shared.csUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond)) {
-		klog.V(8).Info("Using cluster scoped resources from cache.")
-		return shared.csResources, shared.csErr
-	}
+	if shared.csResources == nil ||
+		time.Now().After(shared.csUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond)) {
 
-	// if not in cache query database
-	klog.V(6).Info("Querying database for cluster-scoped resources.")
-	shared.csErr = nil // Clear previous errors.
+		// if not in cache query database
+		klog.V(6).Info("Querying database for cluster-scoped resources.")
+		shared.csErr = nil // Clear previous errors.
 
-	// Building query to get cluster scoped resources
-	// Original query: "SELECT DISTINCT(data->>apigroup, data->>kind) FROM search.resources WHERE
-	// cluster='local-cluster' AND namespace=NULL"
+		// Building query to get cluster scoped resources
+		// Original query: "SELECT DISTINCT(data->>apigroup, data->>kind) FROM search.resources WHERE
+		// cluster='local-cluster' AND namespace=NULL"
 
-	schemaTable := goqu.S("search").Table("resources")
-	ds := goqu.From(schemaTable)
-	query, _, err := ds.SelectDistinct(goqu.COALESCE(goqu.L(`"data"->>'apigroup'`), "").As("apigroup"),
-		goqu.COALESCE(goqu.L(`"data"->>'kind'`), "").As("kind")).
-		Where(goqu.L(`"cluster"::TEXT = 'local-cluster'`), goqu.L(`"data"->>'namespace'`).IsNull()).ToSQL()
-	if err != nil {
-		klog.Errorf("Error creating query [%s]. Error: [%+v]", query, err)
-		shared.csErr = err
-		shared.csResources = []resource{}
-		return shared.csResources, shared.csErr
-	}
-
-	rows, queryerr := cache.pool.Query(ctx, query)
-	if queryerr != nil {
-		klog.Errorf("Error resolving query [%s]. Error: [%+v]", query, queryerr.Error())
-		shared.csErr = queryerr
-		shared.csResources = []resource{}
-		return shared.csResources, shared.csErr
-	}
-
-	if rows != nil {
-		defer rows.Close()
-
-		for rows.Next() {
-			var kind string
-			var apigroup string
-			err := rows.Scan(&apigroup, &kind)
-			if err != nil {
-				klog.Errorf("Error %s retrieving rows for query:%s for apigroup %s and kind %s", err.Error(), query,
-					apigroup, kind)
-				continue
-			}
-
-			shared.csResources = append(shared.csResources, resource{apigroup: apigroup, kind: kind})
-
+		schemaTable := goqu.S("search").Table("resources")
+		ds := goqu.From(schemaTable)
+		query, _, err := ds.SelectDistinct(goqu.COALESCE(goqu.L(`"data"->>'apigroup'`), "").As("apigroup"),
+			goqu.COALESCE(goqu.L(`"data"->>'kind'`), "").As("kind")).
+			Where(goqu.L(`"cluster"::TEXT = 'local-cluster'`), goqu.L(`"data"->>'namespace'`).IsNull()).ToSQL()
+		if err != nil {
+			klog.Errorf("Error creating query [%s]. Error: [%+v]", query, err)
+			shared.csErr = err
+			shared.csResources = []resource{}
+			return shared.csResources, shared.csErr
 		}
+
+		rows, queryerr := cache.pool.Query(ctx, query)
+		if queryerr != nil {
+			klog.Errorf("Error resolving query [%s]. Error: [%+v]", query, queryerr.Error())
+			shared.csErr = queryerr
+			shared.csResources = []resource{}
+			return shared.csResources, shared.csErr
+		}
+
+		if rows != nil {
+			defer rows.Close()
+
+			for rows.Next() {
+				var kind string
+				var apigroup string
+				err := rows.Scan(&apigroup, &kind)
+				if err != nil {
+					klog.Errorf("Error %s retrieving rows for query:%s for apigroup %s and kind %s", err.Error(), query,
+						apigroup, kind)
+					continue
+				}
+
+				shared.csResources = append(shared.csResources, resource{apigroup: apigroup, kind: kind})
+
+			}
+		}
+
+		// get all namespaces in cluster and cache in shared.namespaces.
+		shared.nsLock.Lock()
+		defer shared.nsLock.Unlock()
+		allNamespaces, nsErr := shared.GetSharedNamespaces(cache, ctx)
+		if nsErr != nil {
+			shared.nsErr = nsErr
+		}
+
+		// update the cache.
+		shared.namespaces = allNamespaces
+		shared.csUpdatedAt = time.Now()
+	} else {
+		klog.V(8).Info("Using cluster scoped resources from cache.")
 	}
-
-	shared.csUpdatedAt = time.Now()
-
-	// get all namespaces in cluster and cache in shared.namespaces.
-	shared.nsLock.Lock()
-	defer shared.nsLock.Unlock()
-	allNamespaces, nsErr := shared.GetSharedNamespaces(cache, ctx)
-	if nsErr != nil {
-		shared.nsErr = nsErr
-	}
-
-	// update the cache.
-	shared.namespaces = allNamespaces
 
 	return shared.csResources, shared.csErr
 }

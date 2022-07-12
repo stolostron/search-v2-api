@@ -23,7 +23,7 @@ func AuthorizeUser(next http.Handler) http.Handler {
 			klog.Warning("Unexpected error while obtaining user namesapces.", newerr)
 		}
 
-		klog.V(6).Info("User authorization successful!")
+		klog.V(5).Info("User authorization successful!")
 		next.ServeHTTP(w, r.WithContext(r.Context()))
 
 	})

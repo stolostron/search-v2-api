@@ -119,7 +119,8 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 	return user, user.nsrErr
 }
 
-func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.Config) (v1.AuthorizationV1Interface, error) {
+func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.Config) (v1.AuthorizationV1Interface,
+	error) {
 
 	if cache.authzClient == nil {
 
