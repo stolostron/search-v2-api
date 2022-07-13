@@ -3,6 +3,7 @@ package rbac
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,17 +19,17 @@ import (
 // Contains data about the resources the user is allowed to access.
 type userData struct {
 	// clusters     []string              // Managed clusters where the user has view access.
-	// csResources  []resource            // Cluster-scoped resources on hub the user has list access.
+	csResources []resource            // Cluster-scoped resources on hub the user has list access.
 	nsResources map[string][]resource // Namespaced resources on hub the user has list access.
 
 	// Internal fields to manage the cache.
 	// clustersErr       error      // Error while updating clusters data.
 	// clustersLock      sync.Mutex // Locks when clusters data is being updated.
 	// clustersUpdatedAt time.Time  // Time clusters was last updated.
-	err     error      // Error while getting user data from cache
-	csrErr  error      // Error while updating cluster-scoped resources data.
-	csrLock sync.Mutex // Locks when cluster-scoped resources data is being updated.
-	// csrUpdatedAt time.Time  // Time cluster-scoped resources was last updated.
+	err          error      // Error while getting user data from cache
+	csrErr       error      // Error while updating cluster-scoped resources data.
+	csrLock      sync.Mutex // Locks when cluster-scoped resources data is being updated.
+	csrUpdatedAt time.Time  // Time cluster-scoped resources was last updated.
 	nsrErr       error      // Error while updating namespaced resources data.
 	nsrLock      sync.Mutex // Locks when namespaced resources data is being updated.
 	nsrUpdatedAt time.Time  // Time namespaced resources was last updated.
@@ -48,9 +49,57 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string) (*userD
 
 	}
 
-	userData, err := user.getNamespacedResources(cache, ctx, clientToken)
+	//userData, err := user.getNamespacedResources(cache, ctx, clientToken)
+	// Get cluster scoped resources for the user
+	//if err == nil {
+	userData, err := user.getClusterScopedResources(cache, ctx, clientToken)
+	//}
+
 	return userData, err
 
+}
+
+// The following achieves same result as oc auth can-i list <resource> --as=<user>
+func (user *userData) getClusterScopedResources(cache *Cache, ctx context.Context, clientToken string) (*userData, error) {
+	// get all cluster scoped from shared cache:
+	klog.V(5).Info("Getting cluster scoped resources from shared cache.")
+	user.csrErr = nil
+	user.csrLock.Lock()
+	defer user.csrLock.Unlock()
+	clusterScopedResources := cache.shared.csResources
+	if len(clusterScopedResources) == 0 {
+		klog.Warning("Cluster scoped resources from shared cache empty.", user.csrErr)
+		return user, user.csrErr
+	}
+	impersClientset, err := cache.getImpersonationClientSet(clientToken, cache.restConfig)
+	if err != nil {
+		user.csrErr = err
+		klog.Warning("Error creating clientset with impersonation config.", err.Error())
+		return user, user.csrErr
+	}
+	for _, res := range clusterScopedResources {
+		accessCheck := &authzv1.SelfSubjectAccessReview{
+			Spec: authzv1.SelfSubjectAccessReviewSpec{
+				ResourceAttributes: &authzv1.ResourceAttributes{
+					Verb:     "list",
+					Group:    res.apigroup,
+					Resource: strings.ToLower(res.kind) + "s",
+				},
+			},
+		}
+		result, err := impersClientset.SelfSubjectAccessReviews().Create(ctx, accessCheck, metav1.CreateOptions{})
+		if err != nil {
+			klog.Error("Error creating SelfSubjectAccessReviews.", err, res.kind, res.apigroup)
+		} else {
+			klog.V(5).Infof("SelfSubjectAccessReviews API result for resource %s group %s : %v\n", res.kind, res.apigroup, prettyPrint(result.Status.String()))
+			if result.Status.Allowed {
+				user.csResources = append(user.csResources, resource{apigroup: res.apigroup, kind: res.kind})
+			}
+		}
+
+	}
+	user.csrUpdatedAt = time.Now()
+	return user, user.csrErr
 }
 
 // The following achieves same result as oc auth can-i --list -n <iterate-each-namespace>

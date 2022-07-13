@@ -49,6 +49,12 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 	if err != nil {
 		t.Error("Unexpected error while obtaining namespaces.", err)
 	}
+	if len(result.csResources) > 0 {
+		t.Error("Cache should be empty.")
+	}
+	if err != nil {
+		t.Error("Unexpected error while obtaining cluster scoped resources.", err)
+	}
 
 }
 
@@ -132,6 +138,40 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 	// // Verify that cache was updated within the last 2 millisecond.
 	if mock_cache.users["unique-user-id"].nsrUpdatedAt.After(time.Now().Add(time.Duration(-2) * time.Millisecond)) {
 		t.Error("Expected the cache.users.updatedAt to be less than 2 millisecond ago.")
+	}
+
+}
+
+func Test_clusterScoped_usingCache(t *testing.T) {
+
+	mock_cache := mockNamespaceCache()
+	var allowedres []resrouce
+	//mock cache for token review to get user data:
+	mock_cache.tokenReviews["123456"] = &tokenReviewCache{
+		tokenReview: &authv1.TokenReview{
+			Status: authv1.TokenReviewStatus{
+				User: authv1.UserInfo{
+					UID: "unique-user-id",
+				},
+			},
+		},
+	}
+
+	//mock cache for cluster-scoped resouces
+	mock_cache.shared.csResources = append(mock_cache.shared.csResources, resource{apigroup: "nodes", kind: ""})
+	allowedres = append(allowed, resource{apigroup: "nodes", kind: ""})
+	mock_cache.users["unique-user-id"] = &userData{
+		csResources:  allowedres,
+		csrUpdatedAt: time.Now(),
+	}
+
+	result, err := mock_cache.GetUserData(context.Background(), "123456")
+
+	if len(result.csResources) == 0 {
+		t.Error("Cluster scoped Resources not in user cache.")
+	}
+	if err != nil {
+		t.Error("Unexpected error while obtaining cluster scoped resources.", err)
 	}
 
 }
