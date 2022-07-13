@@ -4,7 +4,7 @@ package model
 
 // A message is used to communicate conditions detected while executing a query on the server.
 type Message struct {
-	// Unique identifier to be used by clients to process the message independently of locale or gramatical changes.
+	// Unique identifier to be used by clients to process the message independently of locale or grammatical changes.
 	ID string `json:"id"`
 	// Message type.
 	// **Values:** information, warning, error.
@@ -19,8 +19,11 @@ type SearchFilter struct {
 	// Name of the property (key).
 	Property string `json:"property"`
 	// Values for the property. Multiple values per property are interpreted as an OR operation.
-	// Optionally one of these operations `=,!,!=,>,>=,<,<=` can be included at the begining of the value.
+	// Optionally one of these operations `=,!,!=,>,>=,<,<=` can be included at the beginning of the value.
 	// By default the equality operation is used.
+	// The values available for datetime fields (Ex: `created`, `startedAt`) are `hour`, `day`, `week`, `month` and `year`.
+	// Property `kind`, if included in the filter, will be matched using a case-insensitive comparison.
+	// For example, `kind:Pod` and `kind:pod` will bring up all pods. This is to maintain compatibility with Search V1.
 	Values []*string `json:"values"`
 }
 
@@ -32,7 +35,7 @@ type SearchInput struct {
 	// Matches are case insensitive.
 	Keywords []*string `json:"keywords"`
 	// List of SearchFilter, which is a key(property) and values.
-	// When multiple filters are provided, results will match all fiters (AND operation).
+	// When multiple filters are provided, results will match all filters (AND operation).
 	Filters []*SearchFilter `json:"filters"`
 	// Max number of results returned by the query.
 	// **Default is** 10,000
@@ -42,18 +45,4 @@ type SearchInput struct {
 	// If empty, all relationships will be included.
 	// This filter is used with the 'related' field on SearchResult.
 	RelatedKinds []*string `json:"relatedKinds"`
-}
-
-// Data required to save a user search query.
-type UserSearch struct {
-	// Unique identifier of the saved search query.
-	ID *string `json:"id"`
-	// Name of the saved search query.
-	Name *string `json:"name"`
-	// Description of the saved search query.
-	Description *string `json:"description"`
-	// The search query in text format.
-	// Example:
-	// - `kind:pod,deployment namespace:default bar foo`
-	SearchText *string `json:"searchText"`
 }

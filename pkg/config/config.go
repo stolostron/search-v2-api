@@ -19,6 +19,7 @@ type Config struct {
 	API_SERVER_URL string // address for Kubernetes API Server
 	AuthCacheTTL   int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
 	SharedCacheTTL int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
+	UserCacheTTL   int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
 	ContextPath    string
 	DBHost         string
 	DBName         string
@@ -42,6 +43,7 @@ func new() *Config {
 		API_SERVER_URL: getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
 		AuthCacheTTL:   getEnvAsInt("AUTH_CACHE_TTL", int(60000)),    // 1 minute
 		SharedCacheTTL: getEnvAsInt("SHARED_CACHE_TTL", int(120000)), // 2 min (increase to 10min after implementation)
+		UserCacheTTL:   getEnvAsInt("USER_CACHE_TTL", int(120000)),   // 2 min (increase to 10min after implementation)
 		ContextPath:    getEnv("CONTEXT_PATH", "/searchapi"),
 		DBHost:         getEnv("DB_HOST", "localhost"),
 		DBName:         getEnv("DB_NAME", ""),
