@@ -15,7 +15,7 @@ import (
 func newMockCache() Cache {
 	return Cache{
 		// Use a fake Kubernetes authentication client.
-		authnClient:      fake.NewSimpleClientset().AuthenticationV1(),
+		authClient:       fake.NewSimpleClientset().AuthenticationV1(),
 		tokenReviews:     map[string]*tokenReviewCache{},
 		tokenReviewsLock: sync.Mutex{},
 	}

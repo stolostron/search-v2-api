@@ -7,8 +7,6 @@ import (
 
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/golang/mock/gomock"
-	fake "k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/rest"
 )
 
 // Initialize cache object to use tests.
@@ -17,11 +15,8 @@ func mockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, Cache) {
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 	return mockPool, Cache{
-		shared:       SharedData{},
-		restConfig:   &rest.Config{},
-		kubeClient:   fake.NewSimpleClientset(),
-		corev1Client: fake.NewSimpleClientset().CoreV1(),
-		pool:         mockPool,
+		shared: clusterScopedResources{},
+		pool:   mockPool,
 	}
 }
 
@@ -45,6 +40,10 @@ func Test_getResources_emptyCache(t *testing.T) {
 	if err != nil {
 		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
 	}
+	// Verify that cache was updated within the last 1 millisecond.
+	if mock_cache.shared.updatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
+		t.Error("Expected cache.shared.updatedAt to be less than 1 millisecond ago.")
+	}
 
 }
 
@@ -59,10 +58,11 @@ func Test_getResouces_usingCache(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
-	//Adding cache:
-	mock_cache.shared = SharedData{
-		csUpdatedAt: time.Now(),
-		csResources: append(mock_cache.shared.csResources, resource{apigroup: "apigroup1", kind: "kind1"}),
+	resourcemap := map[string][]string{"apigroup1": {"kind1", "kind2"}}
+
+	mock_cache.shared = clusterScopedResources{
+		updatedAt: time.Now(),
+		resources: resourcemap,
 	}
 
 	result, err := mock_cache.ClusterScopedResources(ctx)
@@ -74,7 +74,10 @@ func Test_getResouces_usingCache(t *testing.T) {
 	if err != nil {
 		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
 	}
-
+	// Verify that cache was updated within the last 1 millisecond.
+	if mock_cache.shared.updatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
+		t.Error("Expected cache.shared.updatedAt to be less than 1 millisecond ago.")
+	}
 }
 
 func Test_getResources_expiredCache(t *testing.T) {
@@ -88,10 +91,10 @@ func Test_getResources_expiredCache(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
-	//adding expired cache
-	mock_cache.shared = SharedData{
-		csUpdatedAt: time.Now().Add(time.Duration(-5) * time.Minute),
-		csResources: append(mock_cache.shared.csResources, resource{apigroup: "apigroup1", kind: "kind1"}),
+	resourcemap := map[string][]string{"apigroup1": {"kind1", "kind2"}}
+	mock_cache.shared = clusterScopedResources{
+		updatedAt: time.Now().Add(time.Duration(-3) * time.Minute),
+		resources: resourcemap,
 	}
 
 	result, err := mock_cache.ClusterScopedResources(ctx)
@@ -101,10 +104,6 @@ func Test_getResources_expiredCache(t *testing.T) {
 	}
 	if err != nil {
 		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
-	}
-	// Verify that cache was updated within the last 2 millisecond.
-	if mock_cache.shared.csUpdatedAt.Before(time.Now().Add(time.Duration(-2) * time.Millisecond)) {
-		t.Error("Expected the cached cluster scoped resources to be updated within the last 2 milliseconds.")
 	}
 
 }

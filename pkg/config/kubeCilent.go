@@ -4,17 +4,21 @@ import (
 	"os"
 	"path/filepath"
 
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 )
 
-func KubeClient() *kubernetes.Clientset {
-	config := GetClientConfig()
+var kClientset *kubernetes.Clientset
 
-	kClientset, err := kubernetes.NewForConfig(config)
+func KubeClient() *kubernetes.Clientset {
+	config, err := GetClientConfig()
+	if err != nil {
+		klog.Fatal(err.Error())
+	}
+
+	kClientset, err = kubernetes.NewForConfig(config)
 
 	if err != nil {
 		klog.Fatal(err.Error())
@@ -34,7 +38,7 @@ func getKubeConfigPath() string {
 	return kubeConfig
 }
 
-func GetClientConfig() *rest.Config {
+func GetClientConfig() (*rest.Config, error) {
 	kubeConfigPath := getKubeConfigPath()
 	var clientConfig *rest.Config
 	var clientConfigError error
@@ -51,22 +55,5 @@ func GetClientConfig() *rest.Config {
 		klog.Fatal("Error getting Kube Config: ", clientConfigError)
 	}
 
-	return clientConfig
-}
-
-var dynamicClient dynamic.Interface
-
-// Get the kubernetes dynamic client.
-func GetDynamicClient() dynamic.Interface {
-
-	if dynamicClient != nil {
-		return dynamicClient
-	}
-	newDynamicClient, err := dynamic.NewForConfig(GetClientConfig())
-	if err != nil {
-		klog.Fatal("Cannot Construct Dynamic Client ", err)
-	}
-	dynamicClient = newDynamicClient
-
-	return dynamicClient
+	return clientConfig, clientConfigError
 }
