@@ -19,7 +19,6 @@ func mockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, Cache) {
 	return mockPool, Cache{
 		shared:       SharedData{},
 		restConfig:   &rest.Config{},
-		kubeClient:   fake.NewSimpleClientset(),
 		corev1Client: fake.NewSimpleClientset().CoreV1(),
 		pool:         mockPool,
 	}

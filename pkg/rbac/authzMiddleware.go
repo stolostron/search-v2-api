@@ -18,7 +18,7 @@ func AuthorizeUser(next http.Handler) http.Handler {
 		klog.Info("Finished getting shared resources. Now gettng user data..")
 
 		clientToken := r.Context().Value(ContextAuthTokenKey).(string)
-		_, newerr := cacheInst.GetUserData(r.Context(), clientToken)
+		_, newerr := cacheInst.GetUserData(r.Context(), clientToken, nil)
 		if newerr != nil {
 			klog.Warning("Unexpected error while obtaining user namesapces.", newerr)
 		}

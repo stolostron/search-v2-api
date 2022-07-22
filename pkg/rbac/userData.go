@@ -10,7 +10,6 @@ import (
 	authz "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	authzv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	v1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -33,31 +32,45 @@ type userData struct {
 	nsrErr       error      // Error while updating namespaced resources data.
 	nsrLock      sync.Mutex // Locks when namespaced resources data is being updated.
 	nsrUpdatedAt time.Time  // Time namespaced resources was last updated.
-	authzClient  authzv1.AuthorizationV1Interface
+	authzClient  v1.AuthorizationV1Interface
 	// impersonate *kubernetes.Interface // client with impersonation config
 }
 
-func (cache *Cache) GetUserData(ctx context.Context, clientToken string) (*userData, error) {
-	var user userData
+func (cache *Cache) GetUserData(ctx context.Context, clientToken string, authzClient v1.AuthorizationV1Interface) (*userData, error) {
+	var user *userData
 	uid := cache.tokenReviews[clientToken].tokenReview.Status.User.UID //get uid from tokenreview
 	cache.usersLock.Lock()
 	defer cache.usersLock.Unlock()
 	cachedUserData, userDataExists := cache.users[uid] //check if userData cache for user already exists
+	// UserDataExists and its valid
 	if userDataExists && time.Now().Before(cachedUserData.csrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond)) {
-		klog.V(5).Info("Using user data from cache.")
-		return cachedUserData, user.err
+		klog.Info("Using user data from cache.")
+		return cachedUserData, nil
+	} else if userDataExists {
+		// User present in cache , but cache is old , use the same object
+		// We have the client in the cache
+		// We also may be able to use the previous Cluster Scoped resources and Namespaced Scoped
+		// Resources , if there is any error during API calls - Consider if this this is a
+		// Security threat
+		user = cachedUserData
+	} else {
+		// User not in cache , Initialize and assign to the UID
+		user = &userData{}
+		cache.users[uid] = user
+		// This case is only to get the test pass the authclient
+		if authzClient != nil {
+			user.authzClient = authzClient
+		}
 	}
-
 	userData, err := user.getNamespacedResources(cache, ctx, clientToken)
 
 	// Get cluster scoped resources for the user
 	if err == nil {
-		klog.Info("No errors on namespacedresources not present ....Computing now")
+		klog.Info("No errors on namespacedresources not present ....Computing now", user)
 		userData, err = user.getClusterScopedResources(cache, ctx, clientToken)
 	} else {
 		klog.Info("Errors on namespacedresources not present ....Computing now")
 	}
-
 	return userData, err
 
 }
@@ -90,8 +103,12 @@ func (user *userData) getClusterScopedResources(cache *Cache, ctx context.Contex
 		klog.Warning("Error creating clientset with impersonation config.", err.Error())
 		return user, user.csrErr
 	}
+	//If we have a new set of authorized list for the user reset the previous one
+	user.csResources = nil
 	for _, res := range clusterScopedResources {
+		klog.Info("Iterating resources")
 		if user.userAuthorizedListCSResource(ctx, impersClientset, res.apigroup, res.kind) {
+			klog.Info("Added one true")
 			user.csResources = append(user.csResources, resource{apigroup: res.apigroup, kind: res.kind})
 		}
 	}
@@ -109,16 +126,20 @@ func (user *userData) userAuthorizedListCSResource(ctx context.Context, authzCli
 			},
 		},
 	}
+	klog.Info("Authz", authzClient)
 	result, err := authzClient.SelfSubjectAccessReviews().Create(ctx, accessCheck, metav1.CreateOptions{})
+
 	if err != nil {
 		klog.Error("Error creating SelfSubjectAccessReviews.", err, apigroup, ":", kind_plural)
 	} else {
+		klog.Infof("SelfSubjectAccessReviews API result for resource %s group %s : \n", kind_plural, apigroup, prettyPrint(result))
 		klog.V(5).Infof("SelfSubjectAccessReviews API result for resource %s group %s : %v\n", kind_plural, apigroup, prettyPrint(result.Status.String()))
 		if result.Status.Allowed {
 			return true
 		}
 	}
 	return false
+
 }
 
 // The following achieves same result as oc auth can-i --list -n <iterate-each-namespace>
@@ -161,12 +182,11 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 				Namespace: ns,
 			},
 		}
-
 		result, err := impersClientset.SelfSubjectRulesReviews().Create(ctx, &rulesCheck, metav1.CreateOptions{})
 		if err != nil {
 			klog.Error("Error creating SelfSubjectRulesReviews for namespace", err, ns)
 		} else {
-			klog.V(9).Infof("TokenReview Kube API result: %v\n", prettyPrint(result.Status))
+			klog.Infof("TokenReview Kube API result: %v\n", prettyPrint(result.Status))
 		}
 		for _, rules := range result.Status.ResourceRules { //iterate objects
 			for _, verb := range rules.Verbs {
@@ -189,9 +209,9 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 
 func (user *userData) getImpersonationClientSet(clientToken string, cache *Cache) (v1.AuthorizationV1Interface,
 	error) {
-
+	klog.Info("inside get authz client ")
 	if user.authzClient == nil {
-
+		klog.Info("inside get authz client nil")
 		cache.restConfig.Impersonate = rest.ImpersonationConfig{
 			UserName: cache.tokenReviews[clientToken].tokenReview.Status.User.Username,
 			UID:      cache.tokenReviews[clientToken].tokenReview.Status.User.UID,

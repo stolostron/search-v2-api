@@ -55,7 +55,7 @@ func AuthenticateUser(next http.Handler) http.Handler {
 			return
 		}
 
-		klog.V(6).Info("User authentication successful!")
+		klog.Info("User authentication successful!")
 
 		ctx := context.WithValue(r.Context(), ContextAuthTokenKey, clientToken)
 
