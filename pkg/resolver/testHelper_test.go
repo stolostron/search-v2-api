@@ -86,7 +86,7 @@ func (r *Row) Scan(dest ...interface{}) error {
 // ====================================================
 
 //Prop will be the property input for searchComplete
-func newMockRows(mockDataFile string, input *model.SearchInput, prop string) *MockRows {
+func newMockRows(mockDataFile string, input *model.SearchInput, prop string, limit int) *MockRows {
 	// Read json file and build mock data
 	bytes, _ := ioutil.ReadFile(mockDataFile)
 	var data map[string]interface{}
@@ -155,7 +155,35 @@ func newMockRows(mockDataFile string, input *model.SearchInput, prop string) *Mo
 				}
 			}
 		}
+		mapKeys := []interface{}{}
 		for key := range props {
+			mapKeys = append(mapKeys, key)
+		}
+
+		//if limit is set, sort results and send only the assigned limit
+		if limit > 0 && len(mapKeys) >= limit {
+			switch mapKeys[0].(type) {
+			case string:
+				mapKey := make([]string, len(mapKeys))
+				for i, v := range mapKeys {
+					mapKey[i] = v.(string)
+				}
+				sort.Strings(mapKey)
+				mapKeys = []interface{}{}
+				for _, v := range mapKey {
+					mapKeys = append(mapKeys, v)
+				}
+			case int:
+				sort.Slice(mapKeys, func(i, j int) bool {
+					numA, _ := mapKeys[i].(int)
+					numB, _ := mapKeys[j].(int)
+					return numA < numB
+				})
+			}
+
+			mapKeys = mapKeys[:limit]
+		}
+		for _, key := range mapKeys {
 			mockDatum := map[string]interface{}{
 				"prop": key,
 			}
