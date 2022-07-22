@@ -35,7 +35,6 @@ type Config struct {
 }
 
 type ResolverRoot interface {
-	Mutation() MutationResolver
 	Query() QueryResolver
 }
 
@@ -49,14 +48,8 @@ type ComplexityRoot struct {
 		Kind        func(childComplexity int) int
 	}
 
-	Mutation struct {
-		DeleteSearch func(childComplexity int, resource *string) int
-		SaveSearch   func(childComplexity int, resource *string) int
-	}
-
 	Query struct {
 		Messages       func(childComplexity int) int
-		SavedSearches  func(childComplexity int) int
 		Search         func(childComplexity int, input []*model.SearchInput) int
 		SearchComplete func(childComplexity int, property string, query *model.SearchInput, limit *int) int
 		SearchSchema   func(childComplexity int) int
@@ -73,24 +66,12 @@ type ComplexityRoot struct {
 		Items   func(childComplexity int) int
 		Related func(childComplexity int) int
 	}
-
-	UserSearch struct {
-		Description func(childComplexity int) int
-		ID          func(childComplexity int) int
-		Name        func(childComplexity int) int
-		SearchText  func(childComplexity int) int
-	}
 }
 
-type MutationResolver interface {
-	DeleteSearch(ctx context.Context, resource *string) (*string, error)
-	SaveSearch(ctx context.Context, resource *string) (*string, error)
-}
 type QueryResolver interface {
 	Search(ctx context.Context, input []*model.SearchInput) ([]*resolver.SearchResult, error)
 	SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error)
 	SearchSchema(ctx context.Context) (map[string]interface{}, error)
-	SavedSearches(ctx context.Context) ([]*model.UserSearch, error)
 	Messages(ctx context.Context) ([]*model.Message, error)
 }
 
@@ -130,43 +111,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Message.Kind(childComplexity), true
 
-	case "Mutation.deleteSearch":
-		if e.complexity.Mutation.DeleteSearch == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_deleteSearch_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Mutation.DeleteSearch(childComplexity, args["resource"].(*string)), true
-
-	case "Mutation.saveSearch":
-		if e.complexity.Mutation.SaveSearch == nil {
-			break
-		}
-
-		args, err := ec.field_Mutation_saveSearch_args(context.TODO(), rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Mutation.SaveSearch(childComplexity, args["resource"].(*string)), true
-
 	case "Query.messages":
 		if e.complexity.Query.Messages == nil {
 			break
 		}
 
 		return e.complexity.Query.Messages(childComplexity), true
-
-	case "Query.savedSearches":
-		if e.complexity.Query.SavedSearches == nil {
-			break
-		}
-
-		return e.complexity.Query.SavedSearches(childComplexity), true
 
 	case "Query.search":
 		if e.complexity.Query.Search == nil {
@@ -241,34 +191,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.SearchResult.Related(childComplexity), true
 
-	case "userSearch.description":
-		if e.complexity.UserSearch.Description == nil {
-			break
-		}
-
-		return e.complexity.UserSearch.Description(childComplexity), true
-
-	case "userSearch.id":
-		if e.complexity.UserSearch.ID == nil {
-			break
-		}
-
-		return e.complexity.UserSearch.ID(childComplexity), true
-
-	case "userSearch.name":
-		if e.complexity.UserSearch.Name == nil {
-			break
-		}
-
-		return e.complexity.UserSearch.Name(childComplexity), true
-
-	case "userSearch.searchText":
-		if e.complexity.UserSearch.SearchText == nil {
-			break
-		}
-
-		return e.complexity.UserSearch.SearchText(childComplexity), true
-
 	}
 	return 0, false
 }
@@ -286,20 +208,6 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			}
 			first = false
 			data := ec._Query(ctx, rc.Operation.SelectionSet)
-			var buf bytes.Buffer
-			data.MarshalGQL(&buf)
-
-			return &graphql.Response{
-				Data: buf.Bytes(),
-			}
-		}
-	case ast.Mutation:
-		return func(ctx context.Context) *graphql.Response {
-			if !first {
-				return nil
-			}
-			first = false
-			data := ec._Mutation(ctx, rc.Operation.SelectionSet)
 			var buf bytes.Buffer
 			data.MarshalGQL(&buf)
 
@@ -340,7 +248,6 @@ Search Query API.
 """
 schema { 
   query: Query
-  mutation: Mutation
 }
 
 """
@@ -360,7 +267,7 @@ type Query {
   Optionally, a query can be included to filter the results.  
   For example, if we want to get the names of all resources in the namespace foo, we can pass a query with the filter ` + "`" + `{property: namespace, values:['foo']}` + "`" + `
   
-  **Default limit is** 10,000  
+  **Default limit is** 1,000  
   A value of -1 will remove the limit. Use carefully because it may impact the service.
   """
   searchComplete(property: String!, query: SearchInput, limit: Int): [String]
@@ -371,34 +278,11 @@ type Query {
   searchSchema: Map
 
   """
-  Saved search queries for the authenticated user.
-  **[PLACEHOLDER] This query is not yet implemented in V2.**
-  """
-  savedSearches: [userSearch]
-
-  """
   Additional information about the service status or conditions found while processing the query.  
   This is similar to the errors query, but without implying that there was a problem processing the query.
   """
   messages: [Message]
 }
-
-"""
-Supported mutations
-"""
-type Mutation {
-    """
-    Delete search query for the authenticated user.
-    **[PLACEHOLDER] This query is not yet implemented in V2.**
-    """
-    deleteSearch(resource: String): String
-    """
-    Save a search query for the authenticated user.
-    **[PLACEHOLDER] This query is not yet implemented in V2.**
-    """
-    saveSearch(resource: String): String
-}
-
 
 """
 Defines a key/value to filter results.  
@@ -411,8 +295,11 @@ input SearchFilter {
     property: String!
     """
     Values for the property. Multiple values per property are interpreted as an OR operation.
-    Optionally one of these operations ` + "`" + `=,!,!=,>,>=,<,<=` + "`" + ` can be included at the begining of the value.
-    By default the equality operation is used.
+    Optionally one of these operations ` + "`" + `=,!,!=,>,>=,<,<=` + "`" + ` can be included at the beginning of the value.
+    By default the equality operation is used. 
+    The values available for datetime fields (Ex: ` + "`" + `created` + "`" + `, ` + "`" + `startedAt` + "`" + `) are ` + "`" + `hour` + "`" + `, ` + "`" + `day` + "`" + `, ` + "`" + `week` + "`" + `, ` + "`" + `month` + "`" + ` and ` + "`" + `year` + "`" + `.
+    Property ` + "`" + `kind` + "`" + `, if included in the filter, will be matched using a case-insensitive comparison.
+    For example, ` + "`" + `kind:Pod` + "`" + ` and ` + "`" + `kind:pod` + "`" + ` will bring up all pods. This is to maintain compatibility with Search V1.
     """
     values: [String]!
   }
@@ -432,7 +319,7 @@ input SearchInput {
 
     """
     List of SearchFilter, which is a key(property) and values.  
-    When multiple filters are provided, results will match all fiters (AND operation).
+    When multiple filters are provided, results will match all filters (AND operation).
     """
     filters: [SearchFilter]
     
@@ -457,7 +344,7 @@ Data returned by the search query.
 type SearchResult {
     """
     Total number of resources matching the query.  
-    **NOTE:** Should not use count in combination with items. If items is requested, the count is simply the size of items.
+    **NOTE:** Should not use count in combination with items. If items are requested, the count is simply the size of items.
     """
     count: Int
     """
@@ -478,7 +365,7 @@ type SearchRelatedResult {
     kind: String!
     """
     Total number of related resources.  
-    **NOTE:** Should not use count in combination with items. If items is requested, the count is simply the size of items.
+    **NOTE:** Should not use count in combination with items. If items are requested, the count is simply the size of items.
     """
     count: Int
     """
@@ -488,35 +375,11 @@ type SearchRelatedResult {
   }
 
 """
-Data required to save a user search query.
-"""
-type userSearch {
-  """
-  Unique identifier of the saved search query.
-  """
-  id: String
-  """
-  Name of the saved search query.
-  """
-  name: String
-  """
-  Description of the saved search query.
-  """
-  description: String
-  """
-  The search query in text format.  
-  Example:
-  - ` + "`" + `kind:pod,deployment namespace:default bar foo` + "`" + `
-  """
-  searchText: String
-}
-
-"""
 A message is used to communicate conditions detected while executing a query on the server.
 """
 type Message {
     """
-    Unique identifier to be used by clients to process the message independently of locale or gramatical changes.
+    Unique identifier to be used by clients to process the message independently of locale or grammatical changes.
     """
     id: String!
     """
@@ -540,36 +403,6 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // endregion ************************** generated!.gotpl **************************
 
 // region    ***************************** args.gotpl *****************************
-
-func (ec *executionContext) field_Mutation_deleteSearch_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 *string
-	if tmp, ok := rawArgs["resource"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("resource"))
-		arg0, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["resource"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Mutation_saveSearch_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
-	var err error
-	args := map[string]interface{}{}
-	var arg0 *string
-	if tmp, ok := rawArgs["resource"]; ok {
-		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("resource"))
-		arg0, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["resource"] = arg0
-	return args, nil
-}
 
 func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
@@ -771,84 +604,6 @@ func (ec *executionContext) _Message_description(ctx context.Context, field grap
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Mutation_deleteSearch(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Mutation_deleteSearch_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().DeleteSearch(rctx, args["resource"].(*string))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.(*string)
-	fc.Result = res
-	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Mutation_saveSearch(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	rawArgs := field.ArgumentMap(ec.Variables)
-	args, err := ec.field_Mutation_saveSearch_args(ctx, rawArgs)
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	fc.Args = args
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().SaveSearch(rctx, args["resource"].(*string))
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.(*string)
-	fc.Result = res
-	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
-}
-
 func (ec *executionContext) _Query_search(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -957,38 +712,6 @@ func (ec *executionContext) _Query_searchSchema(ctx context.Context, field graph
 	res := resTmp.(map[string]interface{})
 	fc.Result = res
 	return ec.marshalOMap2map(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _Query_savedSearches(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   true,
-		IsResolver: true,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().SavedSearches(rctx)
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.([]*model.UserSearch)
-	fc.Result = res
-	return ec.marshalOuserSearch2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋgraphᚋmodelᚐUserSearch(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query_messages(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -2407,134 +2130,6 @@ func (ec *executionContext) ___Type_ofType(ctx context.Context, field graphql.Co
 	return ec.marshalO__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _userSearch_id(ctx context.Context, field graphql.CollectedField, obj *model.UserSearch) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "userSearch",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.ID, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.(*string)
-	fc.Result = res
-	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _userSearch_name(ctx context.Context, field graphql.CollectedField, obj *model.UserSearch) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "userSearch",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Name, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.(*string)
-	fc.Result = res
-	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _userSearch_description(ctx context.Context, field graphql.CollectedField, obj *model.UserSearch) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "userSearch",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Description, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.(*string)
-	fc.Result = res
-	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) _userSearch_searchText(ctx context.Context, field graphql.CollectedField, obj *model.UserSearch) (ret graphql.Marshaler) {
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	fc := &graphql.FieldContext{
-		Object:     "userSearch",
-		Field:      field,
-		Args:       nil,
-		IsMethod:   false,
-		IsResolver: false,
-	}
-
-	ctx = graphql.WithFieldContext(ctx, fc)
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.SearchText, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		return graphql.Null
-	}
-	res := resTmp.(*string)
-	fc.Result = res
-	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
-}
-
 // endregion **************************** field.gotpl *****************************
 
 // region    **************************** input.gotpl *****************************
@@ -2656,36 +2251,6 @@ func (ec *executionContext) _Message(ctx context.Context, sel ast.SelectionSet, 
 	return out
 }
 
-var mutationImplementors = []string{"Mutation"}
-
-func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, mutationImplementors)
-
-	ctx = graphql.WithFieldContext(ctx, &graphql.FieldContext{
-		Object: "Mutation",
-	})
-
-	out := graphql.NewFieldSet(fields)
-	var invalids uint32
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("Mutation")
-		case "deleteSearch":
-			out.Values[i] = ec._Mutation_deleteSearch(ctx, field)
-		case "saveSearch":
-			out.Values[i] = ec._Mutation_saveSearch(ctx, field)
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch()
-	if invalids > 0 {
-		return graphql.Null
-	}
-	return out
-}
-
 var queryImplementors = []string{"Query"}
 
 func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
@@ -2732,17 +2297,6 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_searchSchema(ctx, field)
-				return res
-			})
-		case "savedSearches":
-			field := field
-			out.Concurrently(i, func() (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Query_savedSearches(ctx, field)
 				return res
 			})
 		case "messages":
@@ -3065,36 +2619,6 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 			out.Values[i] = ec.___Type_inputFields(ctx, field, obj)
 		case "ofType":
 			out.Values[i] = ec.___Type_ofType(ctx, field, obj)
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch()
-	if invalids > 0 {
-		return graphql.Null
-	}
-	return out
-}
-
-var userSearchImplementors = []string{"userSearch"}
-
-func (ec *executionContext) _userSearch(ctx context.Context, sel ast.SelectionSet, obj *model.UserSearch) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, userSearchImplementors)
-
-	out := graphql.NewFieldSet(fields)
-	var invalids uint32
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("userSearch")
-		case "id":
-			out.Values[i] = ec._userSearch_id(ctx, field, obj)
-		case "name":
-			out.Values[i] = ec._userSearch_name(ctx, field, obj)
-		case "description":
-			out.Values[i] = ec._userSearch_description(ctx, field, obj)
-		case "searchText":
-			out.Values[i] = ec._userSearch_searchText(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -3991,54 +3515,6 @@ func (ec *executionContext) marshalO__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgen�
 		return graphql.Null
 	}
 	return ec.___Type(ctx, sel, v)
-}
-
-func (ec *executionContext) marshalOuserSearch2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋgraphᚋmodelᚐUserSearch(ctx context.Context, sel ast.SelectionSet, v []*model.UserSearch) graphql.Marshaler {
-	if v == nil {
-		return graphql.Null
-	}
-	ret := make(graphql.Array, len(v))
-	var wg sync.WaitGroup
-	isLen1 := len(v) == 1
-	if !isLen1 {
-		wg.Add(len(v))
-	}
-	for i := range v {
-		i := i
-		fc := &graphql.FieldContext{
-			Index:  &i,
-			Result: &v[i],
-		}
-		ctx := graphql.WithFieldContext(ctx, fc)
-		f := func(i int) {
-			defer func() {
-				if r := recover(); r != nil {
-					ec.Error(ctx, ec.Recover(ctx, r))
-					ret = nil
-				}
-			}()
-			if !isLen1 {
-				defer wg.Done()
-			}
-			ret[i] = ec.marshalOuserSearch2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋgraphᚋmodelᚐUserSearch(ctx, sel, v[i])
-		}
-		if isLen1 {
-			f(i)
-		} else {
-			go f(i)
-		}
-
-	}
-	wg.Wait()
-
-	return ret
-}
-
-func (ec *executionContext) marshalOuserSearch2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋgraphᚋmodelᚐUserSearch(ctx context.Context, sel ast.SelectionSet, v *model.UserSearch) graphql.Marshaler {
-	if v == nil {
-		return graphql.Null
-	}
-	return ec._userSearch(ctx, sel, v)
 }
 
 // endregion ***************************** type.gotpl *****************************

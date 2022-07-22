@@ -18,8 +18,9 @@ run: ## Run the service locally.
 
 .PHONY: lint
 lint: ## Run lint and gosec tools.
-	go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.38.0
-	golangci-lint run
+	GOPATH=$(go env GOPATH)
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "${GOPATH}/bin" v1.47.1
+	CGO_ENABLED=0 GOGC=25 golangci-lint run --timeout=3m
 	go mod tidy
 	gosec ./...
 

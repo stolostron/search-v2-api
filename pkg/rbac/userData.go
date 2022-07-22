@@ -82,7 +82,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 	}
 
 	//get all managed clusters:
-	user.getManagedClusterResources(ctx, cache, clientToken)
+	// user.getManagedClusterResources(ctx, cache, clientToken)
 
 	// allNamespaces = removeDuplicateStr(allNamespaces)
 	user.csrErr = nil

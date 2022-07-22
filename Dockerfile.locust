@@ -1,0 +1,20 @@
+FROM locustio/locust AS builder
+
+WORKDIR /go/src/github.com/stolostron/search-v2-api
+CMD pwd && ls
+COPY . .
+
+CMD pwd && ls
+
+ARG HOST="localhost"
+ARG N_USERS=3
+ARG RUN_TIME="20m" 
+
+ENV N_USERS=$N_USERS
+ENV API_TOKEN=$API_TOKEN
+ENV HOST=$HOST
+ENV RUN_TIME=$RUN_TIME
+
+RUN echo "APITOKEN=$API_TOKEN"
+RUN echo "RUN_TIME=$RUN_TIME"
+ENTRYPOINT "./test/locust.sh"

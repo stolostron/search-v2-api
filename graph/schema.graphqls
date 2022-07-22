@@ -5,7 +5,6 @@ Search Query API.
 """
 schema { 
   query: Query
-  mutation: Mutation
 }
 
 """
@@ -25,7 +24,7 @@ type Query {
   Optionally, a query can be included to filter the results.  
   For example, if we want to get the names of all resources in the namespace foo, we can pass a query with the filter `{property: namespace, values:['foo']}`
   
-  **Default limit is** 10,000  
+  **Default limit is** 1,000  
   A value of -1 will remove the limit. Use carefully because it may impact the service.
   """
   searchComplete(property: String!, query: SearchInput, limit: Int): [String]
@@ -36,34 +35,11 @@ type Query {
   searchSchema: Map
 
   """
-  Saved search queries for the authenticated user.
-  **[PLACEHOLDER] This query is not yet implemented in V2.**
-  """
-  savedSearches: [userSearch]
-
-  """
   Additional information about the service status or conditions found while processing the query.  
   This is similar to the errors query, but without implying that there was a problem processing the query.
   """
   messages: [Message]
 }
-
-"""
-Supported mutations
-"""
-type Mutation {
-    """
-    Delete search query for the authenticated user.
-    **[PLACEHOLDER] This query is not yet implemented in V2.**
-    """
-    deleteSearch(resource: String): String
-    """
-    Save a search query for the authenticated user.
-    **[PLACEHOLDER] This query is not yet implemented in V2.**
-    """
-    saveSearch(resource: String): String
-}
-
 
 """
 Defines a key/value to filter results.  
@@ -154,30 +130,6 @@ type SearchRelatedResult {
     """
     items: [Map]
   }
-
-"""
-Data required to save a user search query.
-"""
-type userSearch {
-  """
-  Unique identifier of the saved search query.
-  """
-  id: String
-  """
-  Name of the saved search query.
-  """
-  name: String
-  """
-  Description of the saved search query.
-  """
-  description: String
-  """
-  The search query in text format.  
-  Example:
-  - `kind:pod,deployment namespace:default bar foo`
-  """
-  searchText: String
-}
 
 """
 A message is used to communicate conditions detected while executing a query on the server.

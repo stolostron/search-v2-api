@@ -112,7 +112,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	var whereDs []exp.Expression
 
 	// Example query: SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN
-	// (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 10000
+	// (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 1000
 
 	//define schema table:
 	schemaTable := goqu.S("search").Table("resources")
@@ -457,7 +457,7 @@ func getKeys(stringArrayMap map[string][]string) []string {
 	return keys
 }
 
-//Set limit for queries
+// Set limit for queries
 func (s *SearchResult) setLimit() int {
 	var limit int
 	if s.input != nil && s.input.Limit != nil && *s.input.Limit > 0 {
