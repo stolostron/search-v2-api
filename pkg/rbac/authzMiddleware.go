@@ -10,6 +10,7 @@ import (
 func AuthorizeUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
+		//Hub Cluster resources authorization:
 		_, err := cacheInst.ClusterScopedResources(r.Context())
 		if err != nil {
 			klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
@@ -18,10 +19,13 @@ func AuthorizeUser(next http.Handler) http.Handler {
 		klog.Info("Finished getting shared resources. Now gettng user data..")
 
 		clientToken := r.Context().Value(ContextAuthTokenKey).(string)
-		_, newerr := cacheInst.GetUserData(r.Context(), clientToken)
-		if newerr != nil {
-			klog.Warning("Unexpected error while obtaining user namesapces.", newerr)
+		_, userErr := cacheInst.GetUserData(r.Context(), clientToken)
+		if userErr != nil {
+			klog.Warning("Unexpected error while obtaining user namesapces.", userErr)
 		}
+
+		//Managed Cluster resources authorization:
+		// userData.getManagedClusterResources()
 
 		klog.V(5).Info("User authorization successful!")
 		next.ServeHTTP(w, r.WithContext(r.Context()))

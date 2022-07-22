@@ -3,6 +3,8 @@ package rbac
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,17 +19,17 @@ import (
 
 // Contains data about the resources the user is allowed to access.
 type userData struct {
-	// clusters     []string              // Managed clusters where the user has view access.
-	// csResources  []resource            // Cluster-scoped resources on hub the user has list access.
+	clusters []string // Managed clusters where the user has view access.
+	// csResources  []resource            // Cluster-scoped resources on hub the user has list access. //do we need this?
 	nsResources map[string][]resource // Namespaced resources on hub the user has list access.
 
 	// Internal fields to manage the cache.
-	// clustersErr       error      // Error while updating clusters data.
-	// clustersLock      sync.Mutex // Locks when clusters data is being updated.
-	// clustersUpdatedAt time.Time  // Time clusters was last updated.
-	err     error      // Error while getting user data from cache
-	csrErr  error      // Error while updating cluster-scoped resources data.
-	csrLock sync.Mutex // Locks when cluster-scoped resources data is being updated.
+	clustersErr       error      // Error while updating clusters data.
+	clustersLock      sync.Mutex // Locks when clusters data is being updated.
+	clustersUpdatedAt time.Time  // Time clusters was last updated.
+	err               error      // Error while getting user data from cache
+	csrErr            error      // Error while updating cluster-scoped resources data.
+	csrLock           sync.Mutex // Locks when cluster-scoped resources data is being updated.
 	// csrUpdatedAt time.Time  // Time cluster-scoped resources was last updated.
 	nsrErr       error      // Error while updating namespaced resources data.
 	nsrLock      sync.Mutex // Locks when namespaced resources data is being updated.
@@ -56,6 +58,9 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string) (*userD
 // The following achieves same result as oc auth can-i --list -n <iterate-each-namespace>
 func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, clientToken string) (*userData, error) {
 
+	// getting the managed clusters
+	managedClusters, _ := user.getManagedClusterResources(ctx, cache, clientToken)
+
 	//first we check if we already have user's namespaced resources in userData cache
 	user.nsrLock.Lock()
 	defer user.nsrLock.Unlock()
@@ -75,6 +80,10 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 		klog.Warning("All namespaces array from shared cache is empty.", cache.shared.nsErr)
 		return user, cache.shared.nsErr
 	}
+
+	//get all managed clusters:
+	user.getManagedClusterResources(ctx, cache, clientToken)
+
 	// allNamespaces = removeDuplicateStr(allNamespaces)
 	user.csrErr = nil
 
@@ -85,6 +94,8 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 	}
 
 	user.nsResources = make(map[string][]resource)
+
+	allNamespaces = append(allNamespaces, managedClusters...) //list of all managed clusters and namespaces per user
 
 	for _, ns := range allNamespaces {
 		//
@@ -141,6 +152,55 @@ func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.C
 	}
 
 	return cache.authzClient, nil
+}
+
+//For resources in the Managed Clusters search will show resources only if the user is authorized to see the managed cluster
+func (user *userData) getManagedClusterResources(ctx context.Context, cache *Cache, clientToken string) ([]string, error) {
+
+	// clusters lock
+	user.clustersLock.Lock()
+	defer user.clustersLock.Unlock()
+
+	// check to see if we have any clusters in cache and if the update time has not expired
+	if len(user.clusters) > 0 &&
+		time.Now().Before(user.clustersUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond)) {
+		klog.V(5).Info("Using user's managed clusters from cache.")
+		user.clustersErr = nil
+		return user.clusters, user.err
+	}
+
+	//get user's managed clusters and cache..
+	klog.V(5).Info("Getting managed clusters from Kube Client..")
+
+	// create a kubeclient (TODO: this we already do for the user so we should use the cached client in cache.client)
+	cache.restConfig = config.GetClientConfig()
+	clientset, err := kubernetes.NewForConfig(cache.restConfig)
+	if err != nil {
+		klog.Warning("Error with creating a new clientset.", err.Error())
+
+	}
+	// get namespacelist (TODO:this we already do above so we can combine (we don't need whole new function))
+	namespaceList, _ := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+
+	var managedClusterNamespaces []string
+	for _, namespace := range namespaceList.Items {
+
+		for _, labels := range namespace.Labels {
+			if strings.Contains(labels, "managedCluster") {
+				fmt.Println("This label contains managedCluster:", namespace.Name)
+				user.clusters = append(user.clusters, namespace.Name)
+				managedClusterNamespaces = append(managedClusterNamespaces, namespace.Name)
+
+				break
+			}
+		}
+		// fmt.Println(namespace.ObjectMeta.Labels)
+
+	}
+
+	user.clustersErr = nil
+
+	return managedClusterNamespaces, user.clustersErr
 }
 
 // //helper function to remove duplicates from shared resources list:
