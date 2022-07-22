@@ -44,15 +44,8 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string, authzCl
 	cachedUserData, userDataExists := cache.users[uid] //check if userData cache for user already exists
 	// UserDataExists and its valid
 	if userDataExists && time.Now().Before(cachedUserData.csrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond)) {
-		klog.Info("Using user data from cache.")
+		klog.V(5).Info("Using user data from cache.")
 		return cachedUserData, nil
-	} else if userDataExists {
-		// User present in cache , but cache is old , use the same object
-		// We have the client in the cache
-		// We also may be able to use the previous Cluster Scoped resources and Namespaced Scoped
-		// Resources , if there is any error during API calls - Consider if this this is a
-		// Security threat
-		user = cachedUserData
 	} else {
 		// User not in cache , Initialize and assign to the UID
 		user = &userData{}
@@ -65,11 +58,10 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string, authzCl
 	userData, err := user.getNamespacedResources(cache, ctx, clientToken)
 
 	// Get cluster scoped resources for the user
+	// TO DO : Make this parallel operation
 	if err == nil {
-		klog.Info("No errors on namespacedresources not present ....Computing now", user)
+		klog.V(5).Info("No errors on namespacedresources not present ....Computing now", user)
 		userData, err = user.getClusterScopedResources(cache, ctx, clientToken)
-	} else {
-		klog.Info("Errors on namespacedresources not present ....Computing now")
 	}
 	return userData, err
 
@@ -106,9 +98,7 @@ func (user *userData) getClusterScopedResources(cache *Cache, ctx context.Contex
 	//If we have a new set of authorized list for the user reset the previous one
 	user.csResources = nil
 	for _, res := range clusterScopedResources {
-		klog.Info("Iterating resources")
 		if user.userAuthorizedListCSResource(ctx, impersClientset, res.apigroup, res.kind) {
-			klog.Info("Added one true")
 			user.csResources = append(user.csResources, resource{apigroup: res.apigroup, kind: res.kind})
 		}
 	}
@@ -126,13 +116,11 @@ func (user *userData) userAuthorizedListCSResource(ctx context.Context, authzCli
 			},
 		},
 	}
-	klog.Info("Authz", authzClient)
 	result, err := authzClient.SelfSubjectAccessReviews().Create(ctx, accessCheck, metav1.CreateOptions{})
 
 	if err != nil {
-		klog.Error("Error creating SelfSubjectAccessReviews.", err, apigroup, ":", kind_plural)
+		klog.Error("Error creating SelfSubjectAccessReviews.", err)
 	} else {
-		klog.Infof("SelfSubjectAccessReviews API result for resource %s group %s : \n", kind_plural, apigroup, prettyPrint(result))
 		klog.V(5).Infof("SelfSubjectAccessReviews API result for resource %s group %s : %v\n", kind_plural, apigroup, prettyPrint(result.Status.String()))
 		if result.Status.Allowed {
 			return true
@@ -186,12 +174,11 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 		if err != nil {
 			klog.Error("Error creating SelfSubjectRulesReviews for namespace", err, ns)
 		} else {
-			klog.Infof("TokenReview Kube API result: %v\n", prettyPrint(result.Status))
+			klog.V(5).Infof("TokenReview Kube API result: %v\n", prettyPrint(result.Status))
 		}
 		for _, rules := range result.Status.ResourceRules { //iterate objects
 			for _, verb := range rules.Verbs {
 				if verb == "list" || verb == "*" { //drill down to list only
-
 					for _, res := range rules.Resources {
 						for _, api := range rules.APIGroups {
 							user.nsResources[ns] = append(user.nsResources[ns], resource{apigroup: api, kind: res})
@@ -209,36 +196,19 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 
 func (user *userData) getImpersonationClientSet(clientToken string, cache *Cache) (v1.AuthorizationV1Interface,
 	error) {
-	klog.Info("inside get authz client ")
 	if user.authzClient == nil {
-		klog.Info("inside get authz client nil")
+		klog.V(5).Info("Creating New ImpersonationClientSet. ")
 		cache.restConfig.Impersonate = rest.ImpersonationConfig{
 			UserName: cache.tokenReviews[clientToken].tokenReview.Status.User.Username,
 			UID:      cache.tokenReviews[clientToken].tokenReview.Status.User.UID,
 		}
-
 		clientset, err := kubernetes.NewForConfig(cache.restConfig)
 		if err != nil {
 			klog.Error("Error with creating a new clientset with impersonation config.", err.Error())
 			return nil, err
 		}
-
 		user.authzClient = clientset.AuthorizationV1()
 
 	}
-
 	return user.authzClient, nil
 }
-
-// //helper function to remove duplicates from shared resources list:
-// func removeDuplicateStr(strSlice []string) []string {
-// 	allKeys := make(map[string]bool)
-// 	list := []string{}
-// 	for _, item := range strSlice {
-// 		if _, value := allKeys[item]; !value {
-// 			allKeys[item] = true
-// 			list = append(list, item)
-// 		}
-// 	}
-// 	return list
-// }

@@ -70,7 +70,7 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 	fs := fake.NewSimpleClientset()
 	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
 		ret = action.(testingk8s.CreateAction).GetObject()
-		meta, ok := ret.(metav1.Object)
+		_, ok := ret.(metav1.Object)
 		if !ok {
 			t.Error("Unexpected Error - expecting MetaObject with type *v1.SelfSubjectRulesReview")
 			return
@@ -84,7 +84,7 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 		result.nsResources["some-namespace"][0].apigroup != "k8s.io" ||
 		result.nsResources["some-namespace"][1].apigroup != "k8s.io" ||
 		result.nsResources["some-namespace"][0].kind != "nodes1" ||
-		result.nsResources["some-namespace"][0].kind != "nodes2" {
+		result.nsResources["some-namespace"][1].kind != "nodes2" {
 		t.Errorf("Cache does not have expected namespace resources ")
 
 	}
@@ -111,10 +111,35 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 
 	mock_cache.users["unique-user-id"] = &userData{
 		nsResources:  nsresources,
-		nsrUpdatedAt: time.Now(),
+		csrUpdatedAt: time.Now(),
 	}
 
-	result, err := mock_cache.GetUserData(context.Background(), "123456", nil)
+	rulesCheck := &authz.SelfSubjectRulesReview{
+		Spec: authz.SelfSubjectRulesReviewSpec{
+			Namespace: "some-namespace",
+		},
+		Status: authz.SubjectRulesReviewStatus{
+			ResourceRules: []authz.ResourceRule{
+				{
+					Verbs:     []string{"list"},
+					APIGroups: []string{"k8s.io"},
+					Resources: []string{"nodes1", "nodes2"},
+				},
+			},
+		},
+	}
+	fs := fake.NewSimpleClientset()
+	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		ret = action.(testingk8s.CreateAction).GetObject()
+		_, ok := ret.(metav1.Object)
+		if !ok {
+			t.Error("Unexpected Error - expecting MetaObject with type *v1.SelfSubjectRulesReview")
+			return
+		}
+		return true, rulesCheck, nil
+	})
+
+	result, err := mock_cache.GetUserData(context.Background(), "123456", fs.AuthorizationV1())
 
 	if len(result.nsResources) != 1 ||
 		result.nsResources["some-namespace"][0].apigroup != "some-apigroup" ||
@@ -135,15 +160,7 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 	mock_cache := mockNamespaceCache()
 
 	//mock cache for token review to get user data:
-	mock_cache.tokenReviews["123456"] = &tokenReviewCache{
-		tokenReview: &authv1.TokenReview{
-			Status: authv1.TokenReviewStatus{
-				User: authv1.UserInfo{
-					UID: "unique-user-id",
-				},
-			},
-		},
-	}
+	mock_cache = setupToken(mock_cache)
 
 	//mock cache for cluster-scoped resouces to get all namespaces:
 	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
@@ -151,25 +168,53 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 	nsresources["some-namespace"] = append(nsresources["some-namespace"],
 		resource{apigroup: "some-apigroup", kind: "some-kind"})
 
+	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
 	mock_cache.users["unique-user-id"] = &userData{
 		nsResources:  nsresources,
-		nsrUpdatedAt: time.Now().Add(time.Duration(-5) * time.Minute),
+		nsrUpdatedAt: last_cache_time,
 	}
+	rulesCheck := &authz.SelfSubjectRulesReview{
+		Spec: authz.SelfSubjectRulesReviewSpec{
+			Namespace: "some-namespace",
+		},
+		Status: authz.SubjectRulesReviewStatus{
+			ResourceRules: []authz.ResourceRule{
+				{
+					Verbs:     []string{"list"},
+					APIGroups: []string{"k8s.io"},
+					Resources: []string{"nodes1", "nodes2"},
+				},
+			},
+		},
+	}
+	fs := fake.NewSimpleClientset()
+	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		ret = action.(testingk8s.CreateAction).GetObject()
+		_, ok := ret.(metav1.Object)
+		if !ok {
+			t.Error("Unexpected Error - expecting MetaObject with type *v1.SelfSubjectRulesReview")
+			return
+		}
+		return true, rulesCheck, nil
+	})
+	result, err := mock_cache.GetUserData(context.Background(), "123456", fs.AuthorizationV1())
 
-	result, err := mock_cache.GetUserData(context.Background(), "123456", nil)
+	if len(result.nsResources) != 1 || len(result.nsResources["some-namespace"]) != 2 ||
+		result.nsResources["some-namespace"][0].apigroup != "k8s.io" ||
+		result.nsResources["some-namespace"][1].apigroup != "k8s.io" ||
+		result.nsResources["some-namespace"][0].kind != "nodes1" ||
+		result.nsResources["some-namespace"][1].kind != "nodes2" {
+		t.Errorf("Cache does not have expected namespace resources ")
 
-	if len(result.nsResources) == 0 {
-		t.Error("Resources not in cache.")
 	}
 	if err != nil {
 		t.Error("Unexpected error while obtaining namespaces.", err)
 	}
 
-	// // Verify that cache was updated within the last 2 millisecond.
-	if mock_cache.users["unique-user-id"].nsrUpdatedAt.After(time.Now().Add(time.Duration(-2) * time.Millisecond)) {
-		t.Error("Expected the cache.users.updatedAt to be less than 2 millisecond ago.")
+	//  Verify that cache was updated by checking the timestamp
+	if !mock_cache.users["unique-user-id"].nsrUpdatedAt.After(last_cache_time) {
+		t.Error("Expected the cache.users.updatedAt to have a later timestamp")
 	}
-
 }
 
 func Test_clusterScoped_usingCache(t *testing.T) {
@@ -259,7 +304,7 @@ func Test_clusterScoped_expiredCache(t *testing.T) {
 		authzClient:  fs.AuthorizationV1(),
 	}
 
-	result, err := mock_cache.GetUserData(context.Background(), "123456", nil)
+	result, err := mock_cache.GetUserData(context.Background(), "123456", fs.AuthorizationV1())
 
 	if len(result.csResources) != 1 || result.csResources[0].kind != "nodes" {
 		t.Error("Cluster scoped Resources not in user cache.")
