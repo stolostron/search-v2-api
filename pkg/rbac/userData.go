@@ -61,6 +61,8 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string, authzCl
 
 }
 
+/* Cache is Valid if the csrUpdatedAt and nsrUpdatedAt times are before the
+Cache expiry time */
 func userCacheValid(user *userData) bool {
 	if (time.Now().Before(user.csrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) &&
 		(time.Now().Before(user.nsrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) {
