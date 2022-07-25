@@ -3,7 +3,6 @@ package rbac
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -20,7 +19,7 @@ import (
 // Contains data about the resources the user is allowed to access.
 type userData struct {
 	clusters []string // Managed clusters where the user has view access.
-	// csResources  []resource            // Cluster-scoped resources on hub the user has list access. //do we need this?
+	// csResources  []resource            // Cluster-scoped resources on hub the user has list access. (featured in next rabc story)
 	nsResources map[string][]resource // Namespaced resources on hub the user has list access.
 
 	// Internal fields to manage the cache.
@@ -30,7 +29,7 @@ type userData struct {
 	err               error      // Error while getting user data from cache
 	csrErr            error      // Error while updating cluster-scoped resources data.
 	csrLock           sync.Mutex // Locks when cluster-scoped resources data is being updated.
-	// csrUpdatedAt time.Time  // Time cluster-scoped resources was last updated.
+	// csrUpdatedAt time.Time  // Time cluster-scoped resources was last updated. (featured in next rabc story)
 	nsrErr       error      // Error while updating namespaced resources data.
 	nsrLock      sync.Mutex // Locks when namespaced resources data is being updated.
 	nsrUpdatedAt time.Time  // Time namespaced resources was last updated.
@@ -50,18 +49,17 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string) (*userD
 
 	}
 
-	userData, err := user.getNamespacedResources(cache, ctx, clientToken)
+	userData, err := user.getUserResources(cache, ctx, clientToken)
 	return userData, err
 
 }
 
-// The following achieves same result as oc auth can-i --list -n <iterate-each-namespace>
-func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, clientToken string) (*userData, error) {
+func (user *userData) getUserResources(cache *Cache, ctx context.Context, clientToken string) (*userData, error) {
 
 	// getting the managed clusters
-	managedClusters, _ := user.getManagedClusterResources(ctx, cache, clientToken)
+	managedClusters, _ := user.getManagedClusters(ctx, cache, clientToken)
 
-	//first we check if we already have user's namespaced resources in userData cache
+	// check if we already have user's namespaced resources in userData cache and check if time is expired
 	user.nsrLock.Lock()
 	defer user.nsrLock.Unlock()
 	if len(user.nsResources) > 0 &&
@@ -81,9 +79,6 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 		return user, cache.shared.nsErr
 	}
 
-	//get all managed clusters:
-	// user.getManagedClusterResources(ctx, cache, clientToken)
-
 	// allNamespaces = removeDuplicateStr(allNamespaces)
 	user.csrErr = nil
 
@@ -95,7 +90,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 
 	user.nsResources = make(map[string][]resource)
 
-	allNamespaces = append(allNamespaces, managedClusters...) //list of all managed clusters and namespaces per user
+	allNamespaces = append(allNamespaces, managedClusters...) //array of all managed clusters and namespaces per user
 
 	for _, ns := range allNamespaces {
 		//
@@ -104,7 +99,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 				Namespace: ns,
 			},
 		}
-
+		// The following achieves same result as oc auth can-i --list -n <iterate-each-namespace>
 		result, err := impersClientset.SelfSubjectRulesReviews().Create(ctx, &rulesCheck, metav1.CreateOptions{})
 		if err != nil {
 			klog.Error("Error creating SelfSubjectRulesReviews for namespace", err, ns)
@@ -113,7 +108,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 		}
 		for _, rules := range result.Status.ResourceRules { //iterate objects
 			for _, verb := range rules.Verbs {
-				if verb == "list" || verb == "*" { //drill down to list only
+				if verb == "list" || verb == "*" { // list only
 
 					for _, res := range rules.Resources {
 						for _, api := range rules.APIGroups {
@@ -155,7 +150,7 @@ func (cache *Cache) getImpersonationClientSet(clientToken string, config *rest.C
 }
 
 //For resources in the Managed Clusters search will show resources only if the user is authorized to see the managed cluster
-func (user *userData) getManagedClusterResources(ctx context.Context, cache *Cache, clientToken string) ([]string, error) {
+func (user *userData) getManagedClusters(ctx context.Context, cache *Cache, clientToken string) ([]string, error) {
 
 	// clusters lock
 	user.clustersLock.Lock()
@@ -187,17 +182,14 @@ func (user *userData) getManagedClusterResources(ctx context.Context, cache *Cac
 
 		for _, labels := range namespace.Labels {
 			if strings.Contains(labels, "managedCluster") {
-				fmt.Println("This label contains managedCluster:", namespace.Name)
+				klog.V(9).Info("This label contains managedCluster:", namespace.Name)
 				user.clusters = append(user.clusters, namespace.Name)
 				managedClusterNamespaces = append(managedClusterNamespaces, namespace.Name)
-
 				break
 			}
 		}
-		// fmt.Println(namespace.ObjectMeta.Labels)
-
 	}
-
+	user.clustersUpdatedAt = time.Now()
 	user.clustersErr = nil
 
 	return managedClusterNamespaces, user.clustersErr
