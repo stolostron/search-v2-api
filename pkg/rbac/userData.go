@@ -21,7 +21,6 @@ type userData struct {
 	csResources []resource            // Cluster-scoped resources on hub the user has list access.
 	nsResources map[string][]resource // Namespaced resources on hub the user has list access.
 
-	err          error      // Error while getting user data from cache
 	csrErr       error      // Error while updating cluster-scoped resources data.
 	csrLock      sync.Mutex // Locks when cluster-scoped resources data is being updated.
 	csrUpdatedAt time.Time  // Time cluster-scoped resources was last updated.

@@ -17,9 +17,9 @@ import (
 )
 
 // Initialize cache object to use tests.
-func mockNamespaceCache() Cache {
+func mockNamespaceCache() *Cache {
 
-	return Cache{
+	return &Cache{
 		users:            map[string]*userData{},
 		shared:           SharedData{},
 		restConfig:       &rest.Config{},
@@ -28,7 +28,7 @@ func mockNamespaceCache() Cache {
 	}
 }
 
-func setupToken(cache Cache) Cache {
+func setupToken(cache *Cache) *Cache {
 	cache.tokenReviews["123456"] = &tokenReviewCache{
 		tokenReview: &authv1.TokenReview{
 			Status: authv1.TokenReviewStatus{
@@ -41,7 +41,7 @@ func setupToken(cache Cache) Cache {
 	return cache
 }
 
-func addCSResources(cache Cache, res []resource) Cache {
+func addCSResources(cache *Cache, res []resource) *Cache {
 	cache.shared.csResources = append(cache.shared.csResources, res...)
 	return cache
 }
