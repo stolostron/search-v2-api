@@ -112,6 +112,7 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 	mock_cache.users["unique-user-id"] = &userData{
 		nsResources:  nsresources,
 		csrUpdatedAt: time.Now(),
+		nsrUpdatedAt: time.Now(),
 	}
 
 	rulesCheck := &authz.SelfSubjectRulesReview{
@@ -232,6 +233,7 @@ func Test_clusterScoped_usingCache(t *testing.T) {
 		csResources: allowedres,
 		// Using current time , GetUserData should have the same values as cache
 		csrUpdatedAt: time.Now(),
+		nsrUpdatedAt: time.Now(),
 	}
 
 	result, err := mock_cache.GetUserData(context.Background(), "123456", nil)

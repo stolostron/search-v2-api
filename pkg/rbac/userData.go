@@ -21,10 +21,6 @@ type userData struct {
 	csResources []resource            // Cluster-scoped resources on hub the user has list access.
 	nsResources map[string][]resource // Namespaced resources on hub the user has list access.
 
-	// Internal fields to manage the cache.
-	// clustersErr       error      // Error while updating clusters data.
-	// clustersLock      sync.Mutex // Locks when clusters data is being updated.
-	// clustersUpdatedAt time.Time  // Time clusters was last updated.
 	err          error      // Error while getting user data from cache
 	csrErr       error      // Error while updating cluster-scoped resources data.
 	csrLock      sync.Mutex // Locks when cluster-scoped resources data is being updated.
@@ -33,7 +29,6 @@ type userData struct {
 	nsrLock      sync.Mutex // Locks when namespaced resources data is being updated.
 	nsrUpdatedAt time.Time  // Time namespaced resources was last updated.
 	authzClient  v1.AuthorizationV1Interface
-	// impersonate *kubernetes.Interface // client with impersonation config
 }
 
 func (cache *Cache) GetUserData(ctx context.Context, clientToken string, authzClient v1.AuthorizationV1Interface) (*userData, error) {
@@ -43,14 +38,14 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string, authzCl
 	defer cache.usersLock.Unlock()
 	cachedUserData, userDataExists := cache.users[uid] //check if userData cache for user already exists
 	// UserDataExists and its valid
-	if userDataExists && time.Now().Before(cachedUserData.csrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond)) {
+	if userDataExists && userCacheValid(cachedUserData) {
 		klog.V(5).Info("Using user data from cache.")
 		return cachedUserData, nil
 	} else {
 		// User not in cache , Initialize and assign to the UID
 		user = &userData{}
 		cache.users[uid] = user
-		// This case is only to get the test pass the authclient
+		// We want to setup the client if passed, this is only for unit tests
 		if authzClient != nil {
 			user.authzClient = authzClient
 		}
@@ -67,6 +62,14 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string, authzCl
 
 }
 
+func userCacheValid(user *userData) bool {
+	if (time.Now().Before(user.csrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) &&
+		(time.Now().Before(user.nsrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) {
+		return true
+	}
+	return false
+}
+
 // The following achieves same result as oc auth can-i list <resource> --as=<user>
 func (user *userData) getClusterScopedResources(cache *Cache, ctx context.Context, clientToken string) (*userData, error) {
 
@@ -76,13 +79,6 @@ func (user *userData) getClusterScopedResources(cache *Cache, ctx context.Contex
 	user.csrLock.Lock()
 	defer user.csrLock.Unlock()
 
-	//Check if the user has the Cluster scoped resources in cache
-	if len(user.csResources) > 0 &&
-		time.Now().Before(user.csrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond)) {
-		klog.V(5).Info("Using user's cluster scoped resources from cache.")
-		user.csrErr = nil
-		return user, user.csrErr
-	}
 	// Not present in cache, find all cluster scoped resources
 	clusterScopedResources := cache.shared.csResources
 	if len(clusterScopedResources) == 0 {
@@ -174,7 +170,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 		if err != nil {
 			klog.Error("Error creating SelfSubjectRulesReviews for namespace", err, ns)
 		} else {
-			klog.V(5).Infof("TokenReview Kube API result: %v\n", prettyPrint(result.Status))
+			klog.V(9).Infof("TokenReview Kube API result: %v\n", prettyPrint(result.Status))
 		}
 		for _, rules := range result.Status.ResourceRules { //iterate objects
 			for _, verb := range rules.Verbs {
@@ -198,17 +194,17 @@ func (user *userData) getImpersonationClientSet(clientToken string, cache *Cache
 	error) {
 	if user.authzClient == nil {
 		klog.V(5).Info("Creating New ImpersonationClientSet. ")
-		cache.restConfig.Impersonate = rest.ImpersonationConfig{
+		restConfig := config.GetClientConfig()
+		restConfig.Impersonate = rest.ImpersonationConfig{
 			UserName: cache.tokenReviews[clientToken].tokenReview.Status.User.Username,
 			UID:      cache.tokenReviews[clientToken].tokenReview.Status.User.UID,
 		}
-		clientset, err := kubernetes.NewForConfig(cache.restConfig)
+		clientset, err := kubernetes.NewForConfig(restConfig)
 		if err != nil {
 			klog.Error("Error with creating a new clientset with impersonation config.", err.Error())
 			return nil, err
 		}
 		user.authzClient = clientset.AuthorizationV1()
-
 	}
 	return user.authzClient, nil
 }

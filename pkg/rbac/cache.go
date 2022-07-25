@@ -13,7 +13,7 @@ import (
 
 // Cache used to minimize requests to external APIs (Kubernetes and Database)
 type Cache struct {
-	tokenReviews     map[string]*tokenReviewCache
+	tokenReviews     map[string]*tokenReviewCache //Key:ClientToken
 	tokenReviewsLock sync.Mutex
 	shared           SharedData
 	users            map[string]*userData // UID:{userdata} UID comes from tokenreview
