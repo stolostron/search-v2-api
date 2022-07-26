@@ -16,12 +16,12 @@ func AuthorizeUser(next http.Handler) http.Handler {
 			klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
 			metric.AuthzFailed.WithLabelValues("UnexpectedAuthzError").Inc()
 		}
-		klog.Info("Finished getting shared resources. Now gettng user data..")
+		klog.Info("Finished getting shared resources. Now getting user data..")
 
 		clientToken := r.Context().Value(ContextAuthTokenKey).(string)
-		_, userErr := cacheInst.GetUserData(r.Context(), clientToken)
+		_, userErr := cacheInst.GetUserData(r.Context(), clientToken, nil)
 		if userErr != nil {
-			klog.Warning("Unexpected error while obtaining user namesapces.", userErr)
+			klog.Warning("Unexpected error while obtaining user namespaces.", userErr)
 		}
 
 		//Managed Cluster resources authorization:
