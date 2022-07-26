@@ -30,7 +30,8 @@ type userData struct {
 	authzClient  v1.AuthorizationV1Interface
 }
 
-func (cache *Cache) GetUserData(ctx context.Context, clientToken string, authzClient v1.AuthorizationV1Interface) (*userData, error) {
+func (cache *Cache) GetUserData(ctx context.Context, clientToken string,
+	authzClient v1.AuthorizationV1Interface) (*userData, error) {
 	var user *userData
 	uid := cache.tokenReviews[clientToken].tokenReview.Status.User.UID //get uid from tokenreview
 	cache.usersLock.Lock()
@@ -54,7 +55,8 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string, authzCl
 	// Get cluster scoped resources for the user
 	// TO DO : Make this parallel operation
 	if err == nil {
-		klog.V(5).Info("No errors on namespacedresources present for: ", cache.tokenReviews[clientToken].tokenReview.Status.User.Username)
+		klog.V(5).Info("No errors on namespacedresources present for: ",
+			cache.tokenReviews[clientToken].tokenReview.Status.User.Username)
 		userData, err = user.getClusterScopedResources(cache, ctx, clientToken)
 	}
 	return userData, err
@@ -72,7 +74,8 @@ func userCacheValid(user *userData) bool {
 }
 
 // The following achieves same result as oc auth can-i list <resource> --as=<user>
-func (user *userData) getClusterScopedResources(cache *Cache, ctx context.Context, clientToken string) (*userData, error) {
+func (user *userData) getClusterScopedResources(cache *Cache, ctx context.Context,
+	clientToken string) (*userData, error) {
 
 	// get all cluster scoped from shared cache:
 	klog.V(5).Info("Getting cluster scoped resources from shared cache.")
@@ -103,7 +106,8 @@ func (user *userData) getClusterScopedResources(cache *Cache, ctx context.Contex
 	return user, user.csrErr
 }
 
-func (user *userData) userAuthorizedListCSResource(ctx context.Context, authzClient v1.AuthorizationV1Interface, apigroup string, kind_plural string) bool {
+func (user *userData) userAuthorizedListCSResource(ctx context.Context, authzClient v1.AuthorizationV1Interface,
+	apigroup string, kind_plural string) bool {
 	accessCheck := &authz.SelfSubjectAccessReview{
 		Spec: authz.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authz.ResourceAttributes{
@@ -118,7 +122,8 @@ func (user *userData) userAuthorizedListCSResource(ctx context.Context, authzCli
 	if err != nil {
 		klog.Error("Error creating SelfSubjectAccessReviews.", err)
 	} else {
-		klog.V(5).Infof("SelfSubjectAccessReviews API result for resource %s group %s : %v\n", kind_plural, apigroup, prettyPrint(result.Status.String()))
+		klog.V(5).Infof("SelfSubjectAccessReviews API result for resource %s group %s : %v\n",
+			kind_plural, apigroup, prettyPrint(result.Status.String()))
 		if result.Status.Allowed {
 			return true
 		}
