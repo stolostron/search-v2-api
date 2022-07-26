@@ -57,7 +57,7 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string) (*userD
 func (user *userData) getUserResources(cache *Cache, ctx context.Context, clientToken string) (*userData, error) {
 
 	// getting the managed clusters
-	managedClusters, _ := user.getManagedClusters(ctx, cache, clientToken)
+	managedClusterNamespaces, _ := user.getManagedClusters(ctx, cache, clientToken)
 
 	// check if we already have user's namespaced resources in userData cache and check if time is expired
 	user.nsrLock.Lock()
@@ -90,8 +90,10 @@ func (user *userData) getUserResources(cache *Cache, ctx context.Context, client
 
 	user.nsResources = make(map[string][]resource)
 
-	allNamespaces = append(allNamespaces, managedClusters...) //array of all managed clusters and namespaces per user
-
+	allNamespaces, err = intersection(allNamespaces, managedClusterNamespaces) //array of all managed clusters and namespaces per user
+	if err != nil {
+		klog.Warning("Error getting intersection of resources", err)
+	}
 	for _, ns := range allNamespaces {
 		//
 		rulesCheck := authzv1.SelfSubjectRulesReview{
@@ -179,8 +181,7 @@ func (user *userData) getManagedClusters(ctx context.Context, cache *Cache, clie
 
 	var managedClusterNamespaces []string
 	for _, namespace := range namespaceList.Items {
-
-		for _, labels := range namespace.Labels {
+		for labels, _ := range namespace.Labels {
 			if strings.Contains(labels, "managedCluster") {
 				klog.V(9).Info("This label contains managedCluster:", namespace.Name)
 				user.clusters = append(user.clusters, namespace.Name)
@@ -207,3 +208,21 @@ func (user *userData) getManagedClusters(ctx context.Context, cache *Cache, clie
 // 	}
 // 	return list
 // }
+
+//helper funtion to get intersection:
+func intersection(a1, a2 []string) ([]string, error) {
+	var intersection []string
+	for _, x := range a1 {
+		ok := false
+		for _, y := range a2 {
+			if x == y {
+				ok = true
+				break
+			}
+		}
+		if ok {
+			intersection = append(intersection, x)
+		}
+	}
+	return intersection, nil
+}
