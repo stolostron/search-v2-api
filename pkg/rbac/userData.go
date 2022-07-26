@@ -54,7 +54,7 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string, authzCl
 	// Get cluster scoped resources for the user
 	// TO DO : Make this parallel operation
 	if err == nil {
-		klog.V(5).Info("No errors on namespacedresources present for: ", user)
+		klog.V(5).Info("No errors on namespacedresources present for: ", cache.tokenReviews[clientToken].tokenReview.Status.User.Username)
 		userData, err = user.getClusterScopedResources(cache, ctx, clientToken)
 	}
 	return userData, err
