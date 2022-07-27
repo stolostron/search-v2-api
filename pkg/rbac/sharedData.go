@@ -8,6 +8,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 )
@@ -15,13 +16,19 @@ import (
 // Cache data shared across all users.
 type SharedData struct {
 	// These are the data fields.
-	csResources []resource // Cluster-scoped resources (ie. Node, ManagedCluster)
-	namespaces  []string
+	csResources     []resource // Cluster-scoped resources (ie. Node, ManagedCluster)
+	namespaces      []string
+	managedClusters []string
 
 	// These are internal objects to track the state of the cache.
+	mcErr       error      // Error while updating clusters data.
+	mcLock      sync.Mutex // Locks when clusters data is being updated.
+	mcUpdatedAt time.Time  // Time clusters was last updated.
+
 	csErr       error      // Capture errors retrieving cluster-scoped resources.
 	csLock      sync.Mutex // Locks the csResources map while updating it.
 	csUpdatedAt time.Time  // Time when cluster-scoped data was last updated.
+
 	nsErr       error      // Capture errors retrieving namespaces.
 	nsLock      sync.Mutex // Locks the namespaces array while updating it.
 	nsUpdatedAt time.Time  // Time when namespaces data was last updated.
@@ -99,10 +106,19 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 		if nsErr != nil {
 			shared.nsErr = nsErr
 		}
-
 		// update the cache.
 		shared.namespaces = allNamespaces
 		shared.csUpdatedAt = time.Now()
+
+		shared.mcLock.Lock()
+		defer shared.mcLock.Unlock()
+		managedClusters, mcErr := shared.GetSharedManagedClusterNamespaces(cache, ctx)
+		if mcErr != nil {
+			shared.mcErr = mcErr
+		}
+		shared.managedClusters = managedClusters
+		shared.mcUpdatedAt = time.Now()
+
 	} else {
 		klog.V(8).Info("Using cluster scoped resources from cache.")
 	}
@@ -144,4 +160,38 @@ func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context)
 	}
 	shared.nsErr = nil
 	return shared.namespaces, shared.nsErr
+}
+
+func (shared *SharedData) GetSharedManagedClusterNamespaces(cache *Cache, ctx context.Context) ([]string, error) {
+
+	if shared.managedClusters == nil ||
+		time.Now().After(shared.mcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond)) {
+
+		var managedClusters []string
+
+		var clusterVersionGvr = schema.GroupVersionResource{
+			Group:    "cluster.open-cluster-management.io",
+			Version:  "v1",
+			Resource: "managedclusters",
+		}
+
+		cache.dynamicConfig = config.GetDynamicClient()
+
+		resourceObj, err := cache.dynamicConfig.Resource(clusterVersionGvr).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			klog.Warning("Error resolving resources")
+		}
+
+		for _, item := range resourceObj.Items {
+			managedClusters = append(managedClusters, item.GetName())
+
+		}
+
+		shared.managedClusters = managedClusters
+		shared.mcErr = nil
+		return shared.managedClusters, shared.mcErr
+	} else {
+		klog.V(8).Info("Using managed clusters from cache.")
+		return shared.managedClusters, shared.mcErr
+	}
 }

@@ -2,7 +2,6 @@ package rbac
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -95,6 +94,58 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 
 }
 
+func Test_getManagedCusterNamespaces_emptyCache(t *testing.T) {
+	mock_cache := mockNamespaceCache()
+	mock_cache = setupToken(mock_cache)
+
+	var managedclusters []string
+	var namespace []string
+	mock_cache.shared.managedClusters = append(managedclusters, "some-managed-cluster")
+	mock_cache.shared.managedClusters = append(managedclusters, "some-different-managed-cluster") //SHOULD NOT SHOW UP IN RESULT
+	mock_cache.shared.namespaces = append(namespace, "some-managed-cluster")
+
+	rulesCheck := &authz.SelfSubjectRulesReview{
+		Spec: authz.SelfSubjectRulesReviewSpec{
+			Namespace: "some-managed-cluster",
+		},
+		Status: authz.SubjectRulesReviewStatus{
+			ResourceRules: []authz.ResourceRule{
+				{
+					Verbs:     []string{"list"},
+					APIGroups: []string{"k8s.io"},
+					Resources: []string{"nodes1", "nodes2"},
+				},
+			},
+		},
+	}
+	fs := fake.NewSimpleClientset()
+	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		ret = action.(testingk8s.CreateAction).GetObject()
+		_, ok := ret.(metav1.Object)
+		if !ok {
+			t.Error("Unexpected Error - expecting MetaObject with type *v1.SelfSubjectRulesReview")
+			return
+		}
+		return true, rulesCheck, nil
+	})
+	ctx := context.Background()
+	result, err := mock_cache.GetUserData(ctx, "123456", fs.AuthorizationV1())
+
+	if len(result.nsResources) != 1 || len(result.nsResources["some-managed-cluster"]) != 2 ||
+		result.nsResources["some-different-managed-cluster"] != nil ||
+		result.nsResources["some-managed-cluster"][0].apigroup != "k8s.io" ||
+		result.nsResources["some-managed-cluster"][1].apigroup != "k8s.io" ||
+		result.nsResources["some-managed-cluster"][0].kind != "nodes1" ||
+		result.nsResources["some-managed-cluster"][1].kind != "nodes2" {
+		t.Errorf("Cache does not have expected namespace resources ")
+
+	}
+	if err != nil {
+		t.Error("Unexpected error while obtaining namespaces.", err)
+	}
+
+}
+
 func Test_getNamespaces_usingCache(t *testing.T) {
 	var namespaces []string
 	nsresources := make(map[string][]resource)
@@ -144,6 +195,72 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 	result, err := mock_cache.GetUserData(context.Background(), "123456", fs.AuthorizationV1())
 
 	if len(result.nsResources) != 1 ||
+		result.nsResources["some-namespace"][0].apigroup != "some-apigroup" ||
+		result.nsResources["some-namespace"][0].kind != "some-kind" {
+		t.Error("Resources not in cache.")
+	}
+	if err != nil {
+		t.Error("Unexpected error while obtaining namespaces.", err)
+	}
+
+}
+
+func Test_getManagedClusterNamespaces_usingCache(t *testing.T) {
+	var managedclusters []string
+	var namespace []string
+	nsresources := make(map[string][]resource)
+
+	mock_cache := mockNamespaceCache()
+
+	//mock cache for token review to get user data:
+	mock_cache = setupToken(mock_cache)
+
+	//mock cache for cluster-scoped resouces to get all namespaces:
+	mock_cache.shared.namespaces = append(namespace, "some-managed-cluster")
+
+	//mock cache for managed clusters:
+	mock_cache.shared.managedClusters = append(managedclusters, "some-managed-cluster")
+	mock_cache.shared.managedClusters = append(managedclusters, "some-different-managed-cluster") //SHOULD NOT SHOW UP IN RESULT
+
+	//mock cache for namespaced-resources:
+	nsresources["some-namespace"] = append(nsresources["some-namespace"],
+		resource{apigroup: "some-apigroup", kind: "some-kind"})
+
+	mock_cache.users["unique-user-id"] = &userData{
+		nsResources:  nsresources,
+		csrUpdatedAt: time.Now(),
+		nsrUpdatedAt: time.Now(),
+	}
+
+	rulesCheck := &authz.SelfSubjectRulesReview{
+		Spec: authz.SelfSubjectRulesReviewSpec{
+			Namespace: "some-namespace",
+		},
+		Status: authz.SubjectRulesReviewStatus{
+			ResourceRules: []authz.ResourceRule{
+				{
+					Verbs:     []string{"list"},
+					APIGroups: []string{"k8s.io"},
+					Resources: []string{"nodes1", "nodes2"},
+				},
+			},
+		},
+	}
+	fs := fake.NewSimpleClientset()
+	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		ret = action.(testingk8s.CreateAction).GetObject()
+		_, ok := ret.(metav1.Object)
+		if !ok {
+			t.Error("Unexpected Error - expecting MetaObject with type *v1.SelfSubjectRulesReview")
+			return
+		}
+		return true, rulesCheck, nil
+	})
+
+	result, err := mock_cache.GetUserData(context.Background(), "123456", fs.AuthorizationV1())
+
+	if len(result.nsResources) != 1 ||
+		result.nsResources["some-different-managed-cluster"] != nil ||
 		result.nsResources["some-namespace"][0].apigroup != "some-apigroup" ||
 		result.nsResources["some-namespace"][0].kind != "some-kind" {
 		t.Error("Resources not in cache.")
@@ -312,149 +429,6 @@ func Test_clusterScoped_expiredCache(t *testing.T) {
 	if len(result.csResources) != 1 || result.csResources[0].kind != "nodes" {
 		t.Error("Cluster scoped Resources not in user cache.")
 		t.Errorf("Resource count present in cache %d", len(result.csResources))
-	}
-	if err != nil {
-		t.Error("Unexpected error while obtaining namespaces.", err)
-	}
-
-	//  Verify that cache was updated by checking the timestamp
-	if !mock_cache.users["unique-user-id"].csrUpdatedAt.After(last_cache_time) {
-		t.Error("Expected the cache.users.updatedAt to have a later timestamp")
-	}
-
-}
-
-func Test_getManagedClusterNamespaces_usingCache(t *testing.T) {
-	var namespaces []string
-	nsresources := make(map[string][]resource)
-	clusters := make(map[string]string)
-
-	mock_cache := mockNamespaceCache()
-	//mock cache for token review to get user data:
-	mock_cache = setupToken(mock_cache)
-
-	//mock cache for cluster-scoped resouces to get all namespaces:
-	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
-
-	//mock cache for clusters:
-	clusters["some-managed-cluster"] = "some-label-with-managedCluster-tag"
-
-	// Once we take the intersection of managed cluster and namespaces our managed cluster namespace mock data can be:
-	nsresources["some-managed-cluster"] = append(nsresources["some-managed-cluster"],
-		resource{apigroup: "some-apigroup", kind: "some-kind"})
-
-	mock_cache.users["unique-user-id"] = &userData{
-		managedClusters:   clusters,
-		clustersUpdatedAt: time.Now(),
-		nsResources:       nsresources,
-		csrUpdatedAt:      time.Now(),
-		nsrUpdatedAt:      time.Now(),
-	}
-
-	rulesCheck := &authz.SelfSubjectRulesReview{
-		Spec: authz.SelfSubjectRulesReviewSpec{
-			Namespace: "some-managed-cluster",
-		},
-		Status: authz.SubjectRulesReviewStatus{
-			ResourceRules: []authz.ResourceRule{
-				{
-					Verbs:     []string{"list"},
-					APIGroups: []string{"k8s.io"},
-					Resources: []string{"nodes1", "nodes2"},
-				},
-			},
-		},
-	}
-	fs := fake.NewSimpleClientset()
-	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
-		ret = action.(testingk8s.CreateAction).GetObject()
-		_, ok := ret.(metav1.Object)
-		if !ok {
-			t.Error("Unexpected Error - expecting MetaObject with type *v1.SelfSubjectRulesReview")
-			return
-		}
-		return true, rulesCheck, nil
-	})
-
-	result, err := mock_cache.GetUserData(context.Background(), "123456", fs.AuthorizationV1())
-
-	fmt.Println(result.nsResources)
-
-	if len(result.nsResources) != 1 ||
-		result.nsResources["some-managed-cluster"][0].apigroup != "some-apigroup" ||
-		result.nsResources["some-managed-cluster"][0].kind != "some-kind" ||
-		result.managedClusters["some-managed-cluster"] != "some-label-with-managedCluster-tag" {
-		t.Error("Resources not in cache.")
-	}
-	if err != nil {
-		t.Error("Unexpected error while obtaining namespaces.", err)
-	}
-
-}
-
-func Test_getManagedClusterNamespaces_usingExpiredCache(t *testing.T) {
-	var namespaces []string
-	nsresources := make(map[string][]resource)
-	clusters := make(map[string]string)
-
-	mock_cache := mockNamespaceCache()
-	//mock cache for token review to get user data:
-	mock_cache = setupToken(mock_cache)
-
-	//mock cache for cluster-scoped resouces to get all namespaces:
-	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
-
-	//mock cache for clusters:
-	clusters["some-managed-cluster"] = "some-label-with-managedCluster-tag"
-
-	// Once we take the intersection of managed cluster and namespaces our managed cluster namespace mock data can be:
-	nsresources["some-managed-cluster"] = append(nsresources["some-managed-cluster"],
-		resource{apigroup: "some-apigroup", kind: "some-kind"})
-
-	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
-
-	mock_cache.users["unique-user-id"] = &userData{
-		managedClusters:   clusters,
-		clustersUpdatedAt: last_cache_time,
-		nsResources:       nsresources,
-		csrUpdatedAt:      time.Now(),
-		nsrUpdatedAt:      time.Now(),
-	}
-
-	rulesCheck := &authz.SelfSubjectRulesReview{
-		Spec: authz.SelfSubjectRulesReviewSpec{
-			Namespace: "some-managed-cluster",
-		},
-		Status: authz.SubjectRulesReviewStatus{
-			ResourceRules: []authz.ResourceRule{
-				{
-					Verbs:     []string{"list"},
-					APIGroups: []string{"k8s.io"},
-					Resources: []string{"nodes1", "nodes2"},
-				},
-			},
-		},
-	}
-	fs := fake.NewSimpleClientset()
-	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
-		ret = action.(testingk8s.CreateAction).GetObject()
-		_, ok := ret.(metav1.Object)
-		if !ok {
-			t.Error("Unexpected Error - expecting MetaObject with type *v1.SelfSubjectRulesReview")
-			return
-		}
-		return true, rulesCheck, nil
-	})
-
-	result, err := mock_cache.GetUserData(context.Background(), "123456", fs.AuthorizationV1())
-
-	fmt.Println(result.nsResources)
-
-	if len(result.nsResources) != 1 ||
-		result.nsResources["some-managed-cluster"][0].apigroup != "some-apigroup" ||
-		result.nsResources["some-managed-cluster"][0].kind != "some-kind" ||
-		result.managedClusters["some-managed-cluster"] != "some-label-with-managedCluster-tag" {
-		t.Error("Resources not in cache.")
 	}
 	if err != nil {
 		t.Error("Unexpected error while obtaining namespaces.", err)

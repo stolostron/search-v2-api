@@ -17,7 +17,8 @@ func mockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, Cache) {
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 	return mockPool, Cache{
-		shared:       SharedData{},
+		shared: SharedData{},
+		// dynamicConfig: dynamic.Interface{},
 		restConfig:   &rest.Config{},
 		corev1Client: fake.NewSimpleClientset().CoreV1(),
 		pool:         mockPool,

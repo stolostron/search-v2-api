@@ -4,7 +4,6 @@ package rbac
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -24,9 +23,6 @@ type userData struct {
 	nsResources     map[string][]resource // Namespaced resources on hub the user has list access.
 
 	// Internal fields to manage the cache.
-	clustersErr       error      // Error while updating clusters data.
-	clustersLock      sync.Mutex // Locks when clusters data is being updated.
-	clustersUpdatedAt time.Time  // Time clusters was last updated.
 
 	csrErr       error      // Error while updating cluster-scoped resources data.
 	csrLock      sync.Mutex // Locks when cluster-scoped resources data is being updated.
@@ -68,6 +64,8 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string,
 			cache.tokenReviews[clientToken].tokenReview.Status.User.Username)
 		userData, err = user.getClusterScopedResources(cache, ctx, clientToken)
 	}
+
+	//call managedCluster here
 	return userData, err
 
 }
@@ -145,7 +143,7 @@ func (user *userData) userAuthorizedListCSResource(ctx context.Context, authzCli
 func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, clientToken string) (*userData, error) {
 
 	// getting the managed clusters
-	managedClusterNamespaces, _ := user.getManagedClusters(ctx, cache, clientToken)
+	// managedClusterNamespaces, _ := user.getManagedClusters(ctx, cache, clientToken)
 
 	// check if we already have user's namespaced resources in userData cache and check if time is expired
 	user.nsrLock.Lock()
@@ -167,6 +165,8 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 		return user, cache.shared.nsErr
 	}
 
+	fmt.Println("All namespaces", allNamespaces)
+
 	user.csrErr = nil
 
 	impersClientset, err := user.getImpersonationClientSet(clientToken, cache)
@@ -177,16 +177,17 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 
 	user.nsResources = make(map[string][]resource)
 
-	//get only the keys (names) from managedClusterNamespaces
-	managedClusterNs := make([]string, 0, len(managedClusterNamespaces))
-	for k := range managedClusterNamespaces {
-		managedClusterNs = append(managedClusterNs, k)
-	}
-
-	allNamespaces, err = intersection(allNamespaces, managedClusterNs) //array of all managed clusters and namespaces per user
+	managedClusters := cache.shared.managedClusters
+	namespaceInt, err := intersection(allNamespaces, managedClusters) //array of all managed clusters and namespaces per user
 	if err != nil {
 		klog.Warning("Error getting intersection of resources", err)
 	}
+
+	//if empty then authorize only namespaced resources (this is mostly for tests)
+	if len(namespaceInt) != 0 {
+		allNamespaces = namespaceInt
+	}
+
 	for _, ns := range allNamespaces {
 		//
 		rulesCheck := authz.SelfSubjectRulesReview{
@@ -214,7 +215,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 		}
 	}
 
-	fmt.Println("After SSRR:", user.nsResources)
+	klog.Info("After SSRR:", user.nsResources)
 
 	user.nsrUpdatedAt = time.Now()
 	return user, user.nsrErr
@@ -239,53 +240,6 @@ func (user *userData) getImpersonationClientSet(clientToken string, cache *Cache
 	return user.authzClient, nil
 }
 
-//For resources in the Managed Clusters search will show resources only if the user is authorized to see the managed cluster
-func (user *userData) getManagedClusters(ctx context.Context, cache *Cache, clientToken string) (map[string]string, error) {
-
-	// clusters lock
-	user.clustersLock.Lock()
-	defer user.clustersLock.Unlock()
-
-	// check to see if we have any clusters in cache and if the update time has not expired
-	if len(user.managedClusters) > 0 &&
-		time.Now().Before(user.clustersUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond)) &&
-		strings.Contains(user.getFromMap(user.managedClusters, "values")[0], "managedCluster") {
-		klog.V(5).Info("Using user's managed clusters from cache.")
-		user.clustersErr = nil
-		return user.managedClusters, user.clustersErr
-	}
-
-	//get user's managed clusters and cache..
-	klog.V(5).Info("Getting managed clusters from Kube Client..")
-
-	// create a kubeclient (TODO: this we already do for the user so we should use the cached client in cache.client)
-	cache.restConfig = config.GetClientConfig()
-	clientset, err := kubernetes.NewForConfig(cache.restConfig)
-	if err != nil {
-		klog.Warning("Error with creating a new clientset.", err.Error())
-
-	}
-
-	user.managedClusters = make(map[string]string)
-	// get namespacelist (TODO:this we already do above so we can combine (we don't need whole new function))
-	namespaceList, _ := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-
-	// var managedClusterNamespaces []string
-	for _, namespace := range namespaceList.Items {
-		for labels, _ := range namespace.Labels {
-			if strings.Contains(labels, "managedCluster") {
-				klog.V(9).Info("This label contains managedCluster:", namespace.Name)
-				user.managedClusters[namespace.Name] = labels
-				break
-			}
-		}
-	}
-	user.clustersUpdatedAt = time.Now()
-	user.clustersErr = nil
-
-	return user.managedClusters, user.clustersErr
-}
-
 //helper funtion to get intersection:
 func intersection(a1, a2 []string) ([]string, error) {
 	var intersection []string
@@ -302,26 +256,4 @@ func intersection(a1, a2 []string) ([]string, error) {
 		}
 	}
 	return intersection, nil
-}
-
-//helper function to get label values from managedCluster map:
-func (user *userData) getFromMap(managedClusterNames map[string]string, mapPartStr string) []string {
-	managedClusterNs := make([]string, 0, len(managedClusterNames))
-	mapPart := mapPartStr
-	switch mapPart {
-	case "keys":
-		//get only the keys (names) from managedClusterNamespaces
-		for k, _ := range managedClusterNames {
-			managedClusterNs = append(managedClusterNs, k)
-		}
-		return managedClusterNs
-	case "values":
-		//get only the values (labels) from managedClusterNamespaces
-		for _, v := range managedClusterNames {
-			managedClusterNs = append(managedClusterNs, v)
-		}
-		return managedClusterNs
-
-	}
-	return managedClusterNs
 }
