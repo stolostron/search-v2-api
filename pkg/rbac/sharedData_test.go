@@ -104,7 +104,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
 	}
 	// Verify that cache was updated within the last 2 millisecond.
-	if mock_cache.shared.csUpdatedAt.Before(time.Now().Add(time.Duration(-2) * time.Millisecond)) {
+	if mock_cache.shared.csUpdatedAt.After(time.Now().Add(time.Duration(-2) * time.Millisecond)) {
 		t.Error("Expected the cached cluster scoped resources to be updated within the last 2 milliseconds.")
 	}
 
