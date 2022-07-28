@@ -7,7 +7,8 @@ import (
 
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/golang/mock/gomock"
-	fake "k8s.io/client-go/kubernetes/fake"
+	fakedynclient "k8s.io/client-go/dynamic/fake"
+	fakekubeclient "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 )
 
@@ -17,11 +18,11 @@ func mockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, Cache) {
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 	return mockPool, Cache{
-		shared: SharedData{},
-		// dynamicConfig: dynamic.Interface{},
-		restConfig:   &rest.Config{},
-		corev1Client: fake.NewSimpleClientset().CoreV1(),
-		pool:         mockPool,
+		shared:        SharedData{},
+		dynamicConfig: &fakedynclient.FakeDynamicClient{},
+		restConfig:    &rest.Config{},
+		corev1Client:  fakekubeclient.NewSimpleClientset().CoreV1(),
+		pool:          mockPool,
 	}
 }
 

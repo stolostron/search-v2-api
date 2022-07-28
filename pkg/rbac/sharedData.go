@@ -179,7 +179,7 @@ func (shared *SharedData) GetSharedManagedClusterNamespaces(cache *Cache, ctx co
 
 		resourceObj, err := cache.dynamicConfig.Resource(clusterVersionGvr).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
-			klog.Warning("Error resolving resources")
+			klog.Warning("Error resolving resources with dynamic client", err.Error())
 		}
 
 		for _, item := range resourceObj.Items {
