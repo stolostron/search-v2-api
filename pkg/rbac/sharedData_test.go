@@ -38,9 +38,9 @@ func Test_getResources_emptyCache(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
-	result, err := mock_cache.ClusterScopedResources(ctx)
+	err := mock_cache.PopulateSharedCache(ctx)
 
-	if len(result.csResources) == 0 {
+	if len(mock_cache.shared.csResources) == 0 {
 		t.Error("Resources not in cache.")
 	}
 	if err != nil {
@@ -66,9 +66,9 @@ func Test_getResouces_usingCache(t *testing.T) {
 		csResources: append(mock_cache.shared.csResources, resource{apigroup: "apigroup1", kind: "kind1"}),
 	}
 
-	result, err := mock_cache.ClusterScopedResources(ctx)
+	err := mock_cache.PopulateSharedCache(ctx)
 
-	if len(result.csResources) == 0 {
+	if len(mock_cache.shared.csResources) == 0 {
 		t.Error("Expected resources in cache.")
 	}
 
@@ -96,9 +96,10 @@ func Test_getResources_expiredCache(t *testing.T) {
 		csResources: append(mock_cache.shared.csResources, resource{apigroup: "apigroup1", kind: "kind1"}),
 	}
 
-	result, err := mock_cache.ClusterScopedResources(ctx)
+	err := mock_cache.PopulateSharedCache(ctx)
 
-	if len(result.csResources) == 0 {
+	//
+	if len(mock_cache.shared.csResources) == 0 {
 		t.Error("Resources need to be updated")
 	}
 	if err != nil {
@@ -130,9 +131,9 @@ func Test_getManagedClusters_usingCache(t *testing.T) {
 		managedClusters: managedClusterList,
 	}
 
-	result, err := mock_cache.ClusterScopedResources(ctx)
+	err := mock_cache.PopulateSharedCache(ctx)
 
-	if len(result.csResources) == 0 {
+	if len(mock_cache.shared.csResources) == 0 {
 		t.Error("Expected resources in cache.")
 	}
 

@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/driftprogramming/pgxpoolmock"
+	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"k8s.io/client-go/dynamic"
 	authnv1 "k8s.io/client-go/kubernetes/typed/authentication/v1"
@@ -36,5 +37,7 @@ var cacheInst = Cache{
 	usersLock:        sync.Mutex{},
 	shared:           SharedData{},
 	users:            map[string]*userData{},
+	restConfig:       config.GetClientConfig(),
 	pool:             db.GetConnection(),
+	dynamicClient:    config.GetDynamicClient(),
 }

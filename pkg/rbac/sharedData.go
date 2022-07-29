@@ -39,30 +39,36 @@ type resource struct {
 	kind     string
 }
 
-func (cache *Cache) ClusterScopedResources(ctx context.Context) (*SharedData, error) {
+var clusterVersionGvr = schema.GroupVersionResource{
+	Group:    "cluster.open-cluster-management.io",
+	Version:  "v1",
+	Resource: "managedclusters",
+}
+
+func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 
 	if sharedCacheValid(&cache.shared) { //if all cache is valid we use cache data
 		klog.V(5).Info("Using shared data from cache.")
-		return &cache.shared, nil
+		return nil
 	} else { //get data and cache
 
 		// get all cluster-scoped resources and cache in shared.csResources
-		sharedData, err := cache.shared.getClusterScopedResources(cache, ctx)
+		err := cache.shared.getClusterScopedResources(cache, ctx)
 		if err == nil {
-			klog.V(5).Info("Sucessfully retrieved cluster scoped resources!")
+			klog.V(6).Info("Sucessfully retrieved cluster scoped resources!")
 		}
 		// get all namespaces in cluster and cache in shared.namespaces.
-		sharedData, err = cache.shared.GetSharedNamespaces(cache, ctx)
+		err = cache.shared.GetSharedNamespaces(cache, ctx)
 		if err == nil {
-			klog.V(5).Info("Sucessfully retrieved shared namespaces!")
+			klog.V(6).Info("Sucessfully retrieved shared namespaces!")
 		}
 		// get all managed clustsers in cache
-		sharedData, err = cache.shared.GetSharedManagedCluster(cache, ctx)
+		err = cache.shared.GetSharedManagedCluster(cache, ctx)
 		if err == nil {
-			klog.V(5).Info("Sucessfully retrieved managed clusters!")
+			klog.V(6).Info("Sucessfully retrieved managed clusters!")
 		}
 
-		return sharedData, err
+		return err
 
 	}
 
@@ -79,7 +85,7 @@ func sharedCacheValid(shared *SharedData) bool {
 	return false
 }
 
-func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Context) (*SharedData, error) {
+func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Context) error {
 
 	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
 	shared.csLock.Lock()
@@ -101,7 +107,7 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 		klog.Errorf("Error creating query [%s]. Error: [%+v]", query, err)
 		shared.csErr = err
 		shared.csResources = []resource{}
-		return shared, shared.csErr
+		return shared.csErr
 	}
 
 	rows, queryerr := cache.pool.Query(ctx, query)
@@ -109,7 +115,7 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 		klog.Errorf("Error resolving query [%s]. Error: [%+v]", query, queryerr.Error())
 		shared.csErr = queryerr
 		shared.csResources = []resource{}
-		return shared, shared.csErr
+		return shared.csErr
 	}
 
 	if rows != nil {
@@ -131,10 +137,10 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 	}
 	shared.csUpdatedAt = time.Now()
 
-	return shared, shared.csErr
+	return shared.csErr
 }
 
-func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context) (*SharedData, error) {
+func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context) error {
 	shared.nsLock.Lock()
 	defer shared.nsLock.Unlock()
 	//empty previous cache
@@ -143,12 +149,11 @@ func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context)
 
 	klog.V(5).Info("Getting namespaces from Kube Client..")
 
-	cache.restConfig = config.GetClientConfig()
 	clientset, kubeErr := kubernetes.NewForConfig(cache.restConfig)
 	if kubeErr != nil {
 		klog.Warning("Error with creating a new clientset.", kubeErr.Error())
 		shared.nsErr = kubeErr
-		return shared, shared.nsErr
+		return shared.nsErr
 	}
 
 	namespaceList, nsErr := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
@@ -156,7 +161,7 @@ func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context)
 	if nsErr != nil {
 		klog.Warning("Error resolving namespaces from KubeClient: ", nsErr)
 		shared.nsErr = nsErr
-		return shared, shared.nsErr
+		return shared.nsErr
 	}
 
 	// add namespaces to allNamespace List
@@ -165,10 +170,10 @@ func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context)
 	}
 	shared.nsUpdatedAt = time.Now()
 
-	return shared, shared.nsErr
+	return shared.nsErr
 }
 
-func (shared *SharedData) GetSharedManagedCluster(cache *Cache, ctx context.Context) (*SharedData, error) {
+func (shared *SharedData) GetSharedManagedCluster(cache *Cache, ctx context.Context) error {
 
 	shared.mcLock.Lock()
 	defer shared.mcLock.Unlock()
@@ -178,18 +183,10 @@ func (shared *SharedData) GetSharedManagedCluster(cache *Cache, ctx context.Cont
 
 	var managedClusters []string
 
-	var clusterVersionGvr = schema.GroupVersionResource{
-		Group:    "cluster.open-cluster-management.io",
-		Version:  "v1",
-		Resource: "managedclusters",
-	}
-
-	cache.dynamicClient = config.GetDynamicClient()
-
 	resourceObj, err := cache.dynamicClient.Resource(clusterVersionGvr).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		klog.Warning("Error resolving resources with dynamic client", err.Error())
-		return shared, shared.mcErr
+		return shared.mcErr
 	}
 
 	for _, item := range resourceObj.Items {
@@ -200,6 +197,6 @@ func (shared *SharedData) GetSharedManagedCluster(cache *Cache, ctx context.Cont
 	shared.managedClusters = managedClusters
 	shared.mcUpdatedAt = time.Now()
 	shared.mcErr = nil
-	return shared, shared.mcErr
+	return shared.mcErr
 
 }
