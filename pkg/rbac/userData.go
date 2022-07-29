@@ -3,7 +3,6 @@ package rbac
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -23,7 +22,6 @@ type userData struct {
 	nsResources     map[string][]resource // Namespaced resources on hub the user has list access.
 
 	// Internal fields to manage the cache.
-
 	csrErr       error      // Error while updating cluster-scoped resources data.
 	csrLock      sync.Mutex // Locks when cluster-scoped resources data is being updated.
 	csrUpdatedAt time.Time  // Time cluster-scoped resources was last updated.
@@ -142,18 +140,13 @@ func (user *userData) userAuthorizedListCSResource(ctx context.Context, authzCli
 // The following achieves same result as oc auth can-i --list -n <iterate-each-namespace>
 func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, clientToken string) (*userData, error) {
 
-	// getting the managed clusters
-	// managedClusterNamespaces, _ := user.getManagedClusters(ctx, cache, clientToken)
-
 	// check if we already have user's namespaced resources in userData cache and check if time is expired
 	user.nsrLock.Lock()
 	defer user.nsrLock.Unlock()
-	if len(user.nsResources) > 0 &&
-		time.Now().Before(user.nsrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond)) {
-		klog.V(5).Info("Using user's namespaced resources from cache.")
-		user.nsrErr = nil
-		return user, user.nsrErr
-	}
+
+	// clear cache
+	user.csrErr = nil
+	user.nsResources = nil
 
 	// get all namespaces from shared cache:
 	klog.V(5).Info("Getting namespaces from shared cache.")
@@ -165,28 +158,13 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 		return user, cache.shared.nsErr
 	}
 
-	fmt.Println("All namespaces", allNamespaces)
-
-	user.csrErr = nil
-
 	impersClientset, err := user.getImpersonationClientSet(clientToken, cache)
 	if err != nil {
 		klog.Warning("Error creating clientset with impersonation config.", err.Error())
 		return user, err
 	}
 
-	user.nsResources = make(map[string][]resource)
-
-	managedClusters := cache.shared.managedClusters
-	namespaceInt, err := intersection(allNamespaces, managedClusters) //array of all managed clusters and namespaces per user
-	if err != nil {
-		klog.Warning("Error getting intersection of resources", err)
-	}
-
-	//if empty then authorize only namespaced resources (this is mostly for tests)
-	if len(namespaceInt) != 0 {
-		allNamespaces = namespaceInt
-	}
+	nsResourcesAuth := make(map[string][]resource)
 
 	for _, ns := range allNamespaces {
 		//
@@ -198,6 +176,8 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 		result, err := impersClientset.SelfSubjectRulesReviews().Create(ctx, &rulesCheck, metav1.CreateOptions{})
 		if err != nil {
 			klog.Error("Error creating SelfSubjectRulesReviews for namespace", err, ns)
+			user.nsrErr = err
+			return user, user.nsrErr
 		} else {
 			klog.V(9).Infof("TokenReview Kube API result: %v\n", prettyPrint(result.Status))
 		}
@@ -206,7 +186,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 				if verb == "list" || verb == "*" { //drill down to list only
 					for _, res := range rules.Resources {
 						for _, api := range rules.APIGroups {
-							user.nsResources[ns] = append(user.nsResources[ns], resource{apigroup: api, kind: res})
+							nsResourcesAuth[ns] = append(nsResourcesAuth[ns], resource{apigroup: api, kind: res})
 						}
 					}
 				}
@@ -215,9 +195,29 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 		}
 	}
 
-	klog.Info("After SSRR:", user.nsResources)
+	//take intersection of authorizaed user namespaces and managed clusters:
+	managedClusters := cache.shared.managedClusters
+	namespaceNames := make([]string, len(nsResourcesAuth))
+	for name := range nsResourcesAuth {
+		namespaceNames = append(namespaceNames, name)
+	}
 
+	namespaceInt, err := intersection(namespaceNames, managedClusters)
+	if err != nil {
+		klog.Warning("Error getting intersection of resources", err)
+		return user, user.nsrErr
+	}
+
+	nsResources := make(map[string][]resource)
+	for _, v := range namespaceInt {
+		if val, ok := nsResourcesAuth[v]; ok {
+			nsResources[v] = val
+		}
+	}
+
+	user.nsResources = nsResources
 	user.nsrUpdatedAt = time.Now()
+
 	return user, user.nsrErr
 }
 

@@ -26,7 +26,7 @@ type Cache struct {
 	corev1Client  corev1.CoreV1Interface
 	pool          pgxpoolmock.PgxPool // Database client
 	restConfig    *rest.Config
-	dynamicConfig dynamic.Interface
+	dynamicClient dynamic.Interface
 }
 
 // Initialize the cache as a singleton instance.
