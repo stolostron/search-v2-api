@@ -41,26 +41,26 @@ type resource struct {
 
 func (cache *Cache) ClusterScopedResources(ctx context.Context) (*SharedData, error) {
 
-	sharedData := cache.shared
-	if sharedCacheValid(&sharedData) { //if all cache is valid we use cache data
+	if sharedCacheValid(&cache.shared) { //if all cache is valid we use cache data
 		klog.V(5).Info("Using shared data from cache.")
-		return &sharedData, nil
+		return &cache.shared, nil
 	} else { //get data and cache
 
 		// get all cluster-scoped resources and cache in shared.csResources
-		sharedData, err := cache.shared.getClusterScopedResources(cache, ctx)
+		_, err := cache.shared.getClusterScopedResources(cache, ctx)
 		if err == nil {
 			klog.V(5).Info("Sucessfully retrieved cluster scoped resources!")
 		}
 		// get all namespaces in cluster and cache in shared.namespaces.
-		sharedData, err = cache.shared.GetSharedNamespaces(cache, ctx)
+		sharedData, err := cache.shared.GetSharedNamespaces(cache, ctx)
 		if err == nil {
 			klog.V(5).Info("Sucessfully retrieved shared namespaces!")
-		}
-		// get all managed clustsers in cache
-		sharedData, err = cache.shared.GetSharedManagedCluster(cache, ctx)
-		if err == nil {
-			klog.V(5).Info("Sucessfully retrieved managed clusters!")
+
+			// get all managed clustsers in cache
+			sharedData, err = cache.shared.GetSharedManagedCluster(cache, ctx)
+			if err == nil {
+				klog.V(5).Info("Sucessfully retrieved managed clusters!")
+			}
 		}
 
 		return sharedData, err

@@ -17,9 +17,8 @@ import (
 
 // Contains data about the resources the user is allowed to access.
 type userData struct {
-	managedClusters map[string]string     // Managed clusters where the user has view access.
-	csResources     []resource            // Cluster-scoped resources on hub the user has list access.
-	nsResources     map[string][]resource // Namespaced resources on hub the user has list access.
+	csResources []resource            // Cluster-scoped resources on hub the user has list access.
+	nsResources map[string][]resource // Namespaced resources on hub the user has list access.
 
 	// Internal fields to manage the cache.
 	csrErr       error      // Error while updating cluster-scoped resources data.
