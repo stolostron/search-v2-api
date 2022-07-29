@@ -47,20 +47,19 @@ func (cache *Cache) ClusterScopedResources(ctx context.Context) (*SharedData, er
 	} else { //get data and cache
 
 		// get all cluster-scoped resources and cache in shared.csResources
-		clusterScoped, err := cache.shared.getClusterScopedResources(cache, ctx)
+		sharedData, err := cache.shared.getClusterScopedResources(cache, ctx)
 		if err == nil {
-			klog.V(5).Info("Sucessfully retrieved cluster scoped resources!", clusterScoped)
+			klog.V(5).Info("Sucessfully retrieved cluster scoped resources!")
 		}
 		// get all namespaces in cluster and cache in shared.namespaces.
-		sharedData, err := cache.shared.GetSharedNamespaces(cache, ctx)
+		sharedData, err = cache.shared.GetSharedNamespaces(cache, ctx)
 		if err == nil {
 			klog.V(5).Info("Sucessfully retrieved shared namespaces!")
-
-			// get all managed clustsers in cache
-			sharedData, err = cache.shared.GetSharedManagedCluster(cache, ctx)
-			if err == nil {
-				klog.V(5).Info("Sucessfully retrieved managed clusters!")
-			}
+		}
+		// get all managed clustsers in cache
+		sharedData, err = cache.shared.GetSharedManagedCluster(cache, ctx)
+		if err == nil {
+			klog.V(5).Info("Sucessfully retrieved managed clusters!")
 		}
 
 		return sharedData, err
@@ -80,7 +79,7 @@ func sharedCacheValid(shared *SharedData) bool {
 	return false
 }
 
-func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Context) ([]resource, error) {
+func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Context) (*SharedData, error) {
 
 	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
 	shared.csLock.Lock()
@@ -102,7 +101,7 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 		klog.Errorf("Error creating query [%s]. Error: [%+v]", query, err)
 		shared.csErr = err
 		shared.csResources = []resource{}
-		return shared.csResources, shared.csErr
+		return shared, shared.csErr
 	}
 
 	rows, queryerr := cache.pool.Query(ctx, query)
@@ -110,7 +109,7 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 		klog.Errorf("Error resolving query [%s]. Error: [%+v]", query, queryerr.Error())
 		shared.csErr = queryerr
 		shared.csResources = []resource{}
-		return shared.csResources, shared.csErr
+		return shared, shared.csErr
 	}
 
 	if rows != nil {
@@ -132,7 +131,7 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 	}
 	shared.csUpdatedAt = time.Now()
 
-	return shared.csResources, shared.csErr
+	return shared, shared.csErr
 }
 
 func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context) (*SharedData, error) {
