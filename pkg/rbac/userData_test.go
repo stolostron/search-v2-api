@@ -311,7 +311,7 @@ func Test_clusterScoped_expiredCache(t *testing.T) {
 	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
 	mock_cache.users["unique-user-id"] = &userData{
 		csResources:  allowedres,
-		csrUpdatedAt: time.Now().Add(time.Duration(-5) * time.Minute),
+		csrUpdatedAt: last_cache_time,
 		authzClient:  fs.AuthorizationV1(),
 	}
 
