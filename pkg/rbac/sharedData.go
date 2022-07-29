@@ -47,9 +47,9 @@ func (cache *Cache) ClusterScopedResources(ctx context.Context) (*SharedData, er
 	} else { //get data and cache
 
 		// get all cluster-scoped resources and cache in shared.csResources
-		_, err := cache.shared.getClusterScopedResources(cache, ctx)
+		clusterScoped, err := cache.shared.getClusterScopedResources(cache, ctx)
 		if err == nil {
-			klog.V(5).Info("Sucessfully retrieved cluster scoped resources!")
+			klog.V(5).Info("Sucessfully retrieved cluster scoped resources!", clusterScoped)
 		}
 		// get all namespaces in cluster and cache in shared.namespaces.
 		sharedData, err := cache.shared.GetSharedNamespaces(cache, ctx)
@@ -80,7 +80,7 @@ func sharedCacheValid(shared *SharedData) bool {
 	return false
 }
 
-func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Context) (*SharedData, error) {
+func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Context) ([]resource, error) {
 
 	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
 	shared.csLock.Lock()
@@ -102,7 +102,7 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 		klog.Errorf("Error creating query [%s]. Error: [%+v]", query, err)
 		shared.csErr = err
 		shared.csResources = []resource{}
-		return shared, shared.csErr
+		return shared.csResources, shared.csErr
 	}
 
 	rows, queryerr := cache.pool.Query(ctx, query)
@@ -110,7 +110,7 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 		klog.Errorf("Error resolving query [%s]. Error: [%+v]", query, queryerr.Error())
 		shared.csErr = queryerr
 		shared.csResources = []resource{}
-		return shared, shared.csErr
+		return shared.csResources, shared.csErr
 	}
 
 	if rows != nil {
@@ -132,7 +132,7 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 	}
 	shared.csUpdatedAt = time.Now()
 
-	return shared, shared.csErr
+	return shared.csResources, shared.csErr
 }
 
 func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context) (*SharedData, error) {
