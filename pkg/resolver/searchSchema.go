@@ -5,6 +5,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/driftprogramming/pgxpoolmock"
+	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	klog "k8s.io/klog/v2"
 )
@@ -28,7 +29,8 @@ func SearchSchemaResolver(ctx context.Context) (map[string]interface{}, error) {
 func (s *SearchSchema) buildSearchSchemaQuery(ctx context.Context) {
 	var selectDs *goqu.SelectDataset
 
-	// schema query sample: "SELECT distinct jsonb_object_keys(jsonb_strip_nulls(data)) FROM search.resources"
+	// schema query sample: SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop"
+	// FROM "search"."resources" LIMIT 100000) AS "schema"
 
 	// This query doesn't show keys with null values but keys with empty string values are not excluded.
 	// The query below should exclude empty values, but will take more time to execute (182 ms vs 241 ms)
@@ -42,8 +44,11 @@ func (s *SearchSchema) buildSearchSchemaQuery(ctx context.Context) {
 	ds := goqu.From(schemaTable)
 
 	//SELECT CLAUSE
-	jsb := goqu.L("jsonb_object_keys(jsonb_strip_nulls(?))", goqu.C("data")) //remove null fields
-	selectDs = ds.SelectDistinct(jsb)
+	jsb := goqu.L("jsonb_object_keys(jsonb_strip_nulls(?))", goqu.C("data")).As("prop") //remove null fields
+	//Adding an arbitrarily high number 100000 as limit here in the inner query
+	// Adding a LIMIT helps to speed up the query
+	// Adding a high number so as to get almost all the distinct properties from the database
+	selectDs = ds.SelectDistinct("prop").From(ds.Select(jsb).Limit(uint(config.Cfg.QueryLimit) * 100).As("schema"))
 
 	//Get the query
 	sql, params, err := selectDs.ToSQL()

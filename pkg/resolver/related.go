@@ -42,13 +42,13 @@ func (s *SearchResult) buildRelationsQuery() {
 	// 	FROM (
 	// 		WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster) AS
 	// 		(SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster"
-	// 		 FROM "search"."all_edges" AS "e"
+	// 		 FROM "search"."edges" AS "e"
 	// 		 WHERE (("destid" IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc' )) OR
 	// 					("sourceid" IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc'))
 	// 			   )
 	// 				   UNION
 	// 		 (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster"
-	// 		  FROM "search"."all_edges" AS "e"
+	// 		  FROM "search"."edges" AS "e"
 	// 		  INNER JOIN "search_graph" AS "sg"
 	// 		  ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR
 	// 			  ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))
@@ -94,12 +94,12 @@ func (s *SearchResult) buildRelationsQuery() {
 	excludeResources := []interface{}{"Node", "Channel"}
 
 	// Non-recursive term
-	baseTerm := goqu.From(schema.Table("all_edges").As("e")).
+	baseTerm := goqu.From(schema.Table("edges").As("e")).
 		Select(selectBase...).
 		Where(goqu.ExOr{"sourceid": (s.uids), "destid": (s.uids)})
 
 	// Recursive term
-	recursiveTerm := goqu.From(schema.Table("all_edges").As("e")).
+	recursiveTerm := goqu.From(schema.Table("edges").As("e")).
 		InnerJoin(goqu.T("search_graph").As("sg"),
 			goqu.On(goqu.ExOr{"sg.destid": srcDestIds, "sg.sourceid": srcDestIds})).
 		Select(selectNext...).

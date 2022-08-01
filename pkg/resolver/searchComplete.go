@@ -45,6 +45,10 @@ func SearchComplete(ctx context.Context, property string, srchInput *model.Searc
 
 }
 
+// Sample query: SELECT DISTINCT name FROM
+// (SELECT "data"->>'name' as name FROM "search"."resources" WHERE ("data"->>'name' IS NOT NULL)  LIMIT 100000)a
+// ORDER BY name ASC
+// LIMIT 1000
 func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 	var limit int
 	var whereDs []exp.Expression
@@ -57,17 +61,22 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		if s.input != nil && len(s.input.Filters) > 0 {
 			whereDs = WhereClauseFilter(s.input)
 		}
+
 		//SELECT CLAUSE
 		if s.property == "cluster" {
-			selectDs = ds.SelectDistinct(s.property).Order(goqu.C(s.property).Asc())
+			selectDs = ds.SelectDistinct(goqu.C(s.property).As("prop"))
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
 			whereDs = append(whereDs, goqu.C(s.property).IsNotNull(),
 				goqu.C(s.property).Neq("")) // remove empty strings from results
 		} else {
-			selectDs = ds.SelectDistinct(goqu.L(`"data"->>?`, s.property)).Order(goqu.L(`"data"->>?`, s.property).Asc())
+			selectDs = ds.Select(goqu.L(`"data"->>?`, s.property).As("prop"))
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
 			whereDs = append(whereDs, goqu.L(`"data"->>?`, s.property).IsNotNull())
 		}
+		//Adding an arbitrarily high number 100000 as limit here in the inner query
+		// Adding a LIMIT helps to speed up the query
+		// Adding a high number so as to get almost all the distinct properties from the database
+		selectDs = selectDs.Where(whereDs...).Limit(uint(config.Cfg.QueryLimit) * 100).As("searchComplete")
 		//LIMIT CLAUSE
 		if s.limit != nil && *s.limit > 0 {
 			limit = *s.limit
@@ -77,7 +86,8 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			limit = config.Cfg.QueryLimit
 		}
 		//Get the query
-		sql, params, err := selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
+		sql, params, err := ds.SelectDistinct("prop").From(selectDs).Order(goqu.L("prop").Asc()).
+			Limit(uint(limit)).ToSQL()
 		if err != nil {
 			klog.Errorf("Error building SearchComplete query: %s", err.Error())
 		}
