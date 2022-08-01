@@ -19,6 +19,12 @@ import (
 type userData struct {
 	csResources []resource            // Cluster-scoped resources on hub the user has list access.
 	nsResources map[string][]resource // Namespaced resources on hub the user has list access.
+	clusters    []string              // Managed clusters where the user has view access.
+	// mcResources 	map[string][]resource // Do we want this cache?
+
+	clustersErr       error      // Error while updating clusters data.
+	clustersLock      sync.Mutex // Locks when clusters data is being updated.
+	clustersUpdatedAt time.Time  // Time clusters was last updated.
 
 	// Internal fields to manage the cache.
 	csrErr       error      // Error while updating cluster-scoped resources data.
@@ -63,6 +69,8 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string,
 	}
 
 	//call managedCluster here
+	userData, err = user.getManagedClusters(cache, ctx)
+
 	return userData, err
 
 }
@@ -71,7 +79,8 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string,
 Cache expiry time */
 func userCacheValid(user *userData) bool {
 	if (time.Now().Before(user.csrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) &&
-		(time.Now().Before(user.nsrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) {
+		(time.Now().Before(user.nsrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) &&
+		(time.Now().Before(user.clustersUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) {
 		return true
 	}
 	return false
@@ -163,7 +172,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 		return user, err
 	}
 
-	nsResourcesAuth := make(map[string][]resource)
+	user.nsResources = make(map[string][]resource)
 
 	for _, ns := range allNamespaces {
 		//
@@ -185,7 +194,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 				if verb == "list" || verb == "*" { //drill down to list only
 					for _, res := range rules.Resources {
 						for _, api := range rules.APIGroups {
-							nsResourcesAuth[ns] = append(nsResourcesAuth[ns], resource{apigroup: api, kind: res})
+							user.nsResources[ns] = append(user.nsResources[ns], resource{apigroup: api, kind: res})
 						}
 					}
 				}
@@ -194,30 +203,46 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 		}
 	}
 
-	//take intersection of authorizaed user namespaces and managed clusters:
-	managedClusters := cache.shared.managedClusters
-	namespaceNames := make([]string, len(nsResourcesAuth))
-	for name := range nsResourcesAuth {
-		namespaceNames = append(namespaceNames, name)
-	}
-
-	namespaceInt, err := intersection(namespaceNames, managedClusters)
-	if err != nil {
-		klog.Warning("Error getting intersection of resources", err)
-		return user, user.nsrErr
-	}
-
-	nsResources := make(map[string][]resource)
-	for _, v := range namespaceInt {
-		if val, ok := nsResourcesAuth[v]; ok {
-			nsResources[v] = val
-		}
-	}
-
-	user.nsResources = nsResources
 	user.nsrUpdatedAt = time.Now()
 
 	return user, user.nsrErr
+}
+
+func (user *userData) getManagedClusters(cache *Cache, cxt context.Context) (*userData, error) {
+
+	user.clustersLock.Lock()
+	defer user.clustersLock.Unlock()
+	user.clusters = nil
+	user.clustersErr = nil
+
+	//take intersection of authorizaed user namespaces and managed clusters:
+	managedClusters := cache.shared.managedClusters         //get managed clusterse from shared cache
+	namespaceNames := make([]string, len(user.nsResources)) //get the namespaces from user authorized resources
+	i := 0
+	for name := range user.nsResources {
+		namespaceNames[i] = name
+		i++
+	}
+	// get only managed clusters user has access to
+	namespaceInt, err := intersection(namespaceNames, managedClusters)
+	if err != nil {
+		klog.Warning("Error getting intersection of Namespaces", err)
+		return user, user.clustersErr
+	}
+
+	// Caching namespaces
+	user.clusters = namespaceInt
+	user.clustersUpdatedAt = time.Now()
+
+	// Do we want to cache the specific managed cluster resources?
+	// mcResources := make(map[string][]resource)
+	// for _, v := range namespaceInt {
+	// 	if val, ok := user.mcResources[v]; ok {
+	// 		mcResources[v] = val
+	// 	}
+	// }
+	return user, user.clustersErr
+
 }
 
 func (user *userData) getImpersonationClientSet(clientToken string, cache *Cache) (v1.AuthorizationV1Interface,

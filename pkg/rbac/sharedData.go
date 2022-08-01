@@ -55,17 +55,17 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 		// get all cluster-scoped resources and cache in shared.csResources
 		err := cache.shared.getClusterScopedResources(cache, ctx)
 		if err == nil {
-			klog.V(6).Info("Sucessfully retrieved cluster scoped resources!")
+			klog.V(6).Info("Successfully retrieved cluster scoped resources!")
 		}
 		// get all namespaces in cluster and cache in shared.namespaces.
 		err = cache.shared.GetSharedNamespaces(cache, ctx)
 		if err == nil {
-			klog.V(6).Info("Sucessfully retrieved shared namespaces!")
+			klog.V(6).Info("Successfully retrieved shared namespaces!")
 		}
 		// get all managed clustsers in cache
 		err = cache.shared.GetSharedManagedCluster(cache, ctx)
 		if err == nil {
-			klog.V(6).Info("Sucessfully retrieved managed clusters!")
+			klog.V(6).Info("Successfully retrieved managed clusters!")
 		}
 
 		return err
