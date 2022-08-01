@@ -63,7 +63,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 			klog.V(6).Info("Successfully retrieved shared namespaces!")
 		}
 		// get all managed clustsers in cache
-		err = cache.shared.GetSharedManagedCluster(cache, ctx)
+		err = cache.shared.GetSharedManagedClusters(cache, ctx)
 		if err == nil {
 			klog.V(6).Info("Successfully retrieved managed clusters!")
 		}
@@ -173,7 +173,7 @@ func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context)
 	return shared.nsErr
 }
 
-func (shared *SharedData) GetSharedManagedCluster(cache *Cache, ctx context.Context) error {
+func (shared *SharedData) GetSharedManagedClusters(cache *Cache, ctx context.Context) error {
 
 	shared.mcLock.Lock()
 	defer shared.mcLock.Unlock()
