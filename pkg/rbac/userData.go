@@ -20,10 +20,9 @@ type userData struct {
 	csResources []resource            // Cluster-scoped resources on hub the user has list access.
 	nsResources map[string][]resource // Namespaced resources on hub the user has list access.
 	clusters    []string              // Managed clusters where the user has view access.
-	// mcResources 	map[string][]resource // Do we want this cache?
 
 	clustersErr error // Error while updating clusters data.
-	// clustersLock      sync.Mutex // Locks when clusters data is being updated.
+	// clustersLock      sync.Mutex // Locks when clusters data is being updated. NOTE: not implmented because we use the nsrLock
 	clustersUpdatedAt time.Time // Time clusters was last updated.
 
 	// Internal fields to manage the cache.
@@ -68,9 +67,6 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string,
 		userData, err = user.getClusterScopedResources(cache, ctx, clientToken)
 	}
 
-	//call managedCluster here
-	// userData, err = user.getManagedClusters(cache, ctx)
-
 	return userData, err
 
 }
@@ -86,7 +82,7 @@ func userCacheValid(user *userData) bool {
 	return false
 }
 
-// The following achieves same result as oc auth can-i list <resource> --as=<user>
+// Equivalent to: oc auth can-i list <resource> --as=<user>
 func (user *userData) getClusterScopedResources(cache *Cache, ctx context.Context,
 	clientToken string) (*userData, error) {
 
@@ -145,7 +141,7 @@ func (user *userData) userAuthorizedListCSResource(ctx context.Context, authzCli
 
 }
 
-// The following achieves same result as oc auth can-i --list -n <iterate-each-namespace>
+// Equivalent to: oc auth can-i --list -n <iterate-each-namespace>
 func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, clientToken string) (*userData, error) {
 
 	// check if we already have user's namespaced resources in userData cache and check if time is expired
@@ -184,24 +180,23 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 				Namespace: ns,
 			},
 		}
-		result, err := impersClientset.SelfSubjectRulesReviews().Create(ctx, &rulesCheck, metav1.CreateOptions{}) //check case to create "*" view & check if managed cluster (using shared mc cache)
+		result, err := impersClientset.SelfSubjectRulesReviews().Create(ctx, &rulesCheck, metav1.CreateOptions{})
 		if err != nil {
 			klog.Error("Error creating SelfSubjectRulesReviews for namespace", err, ns)
-			user.nsrErr = err
-			user.clustersErr = err
-			return user, user.nsrErr
 		} else {
 			klog.V(9).Infof("SelfSubjectRulesReviews Kube API result: %v\n", prettyPrint(result.Status))
 		}
-		for _, rules := range result.Status.ResourceRules { //iterate objects
+		for _, rules := range result.Status.ResourceRules {
 			for _, verb := range rules.Verbs {
-				if verb == "list" || verb == "*" { //drill down to list only
+				if verb == "list" || verb == "*" {
 					for _, res := range rules.Resources {
 						for _, api := range rules.APIGroups {
 							user.nsResources[ns] = append(user.nsResources[ns], resource{apigroup: api, kind: res})
 						}
 					}
 				}
+				// Obtain namespaces with create managedclusterveiws resource action
+				// Equivalent to: oc auth can-i create ManagedClusterView -n <managedClusterName> --as=<user>
 
 				if verb == "create" || verb == "*" {
 					for _, res := range rules.Resources {
@@ -227,43 +222,6 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 	return user, user.nsrErr
 }
 
-// func (user *userData) getManagedClusters(cache *Cache, cxt context.Context) (*userData, error) {
-
-// 	user.clustersLock.Lock()
-// 	defer user.clustersLock.Unlock()
-// 	user.clusters = nil
-// 	user.clustersErr = nil
-
-// 	//take intersection of authorizaed user namespaces and managed clusters:
-// 	managedClusters := cache.shared.managedClusters         //get managed clusterse from shared cache
-// 	namespaceNames := make([]string, len(user.nsResources)) //get the namespaces from user authorized resources
-// 	i := 0
-// 	for name := range user.nsResources {
-// 		namespaceNames[i] = name
-// 		i++
-// 	}
-// 	// get only managed clusters user has access to
-// 	namespaceInt, err := intersection(namespaceNames, managedClusters)
-// 	if err != nil {
-// 		klog.Warning("Error getting intersection of Namespaces", err)
-// 		return user, user.clustersErr
-// 	}
-
-// 	// Caching namespaces
-// 	user.clusters = namespaceInt
-// 	user.clustersUpdatedAt = time.Now()
-
-// 	// Do we want to cache the specific managed cluster resources?
-// 	// mcResources := make(map[string][]resource)
-// 	// for _, v := range namespaceInt {
-// 	// 	if val, ok := user.mcResources[v]; ok {
-// 	// 		mcResources[v] = val
-// 	// 	}
-// 	// }
-// 	return user, user.clustersErr
-
-// }
-
 func (user *userData) getImpersonationClientSet(clientToken string, cache *Cache) (v1.AuthorizationV1Interface,
 	error) {
 	if user.authzClient == nil {
@@ -282,21 +240,3 @@ func (user *userData) getImpersonationClientSet(clientToken string, cache *Cache
 	}
 	return user.authzClient, nil
 }
-
-//helper funtion to get intersection:
-// func intersection(a1, a2 []string) ([]string, error) {
-// 	var intersection []string
-// 	for _, x := range a1 {
-// 		ok := false
-// 		for _, y := range a2 {
-// 			if x == y {
-// 				ok = true
-// 				break
-// 			}
-// 		}
-// 		if ok {
-// 			intersection = append(intersection, x)
-// 		}
-// 	}
-// 	return intersection, nil
-// }

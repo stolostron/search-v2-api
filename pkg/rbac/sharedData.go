@@ -8,6 +8,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -39,7 +40,7 @@ type resource struct {
 	kind     string
 }
 
-var clusterVersionGvr = schema.GroupVersionResource{
+var managedClusterResourceGvr = schema.GroupVersionResource{
 	Group:    "cluster.open-cluster-management.io",
 	Version:  "v1",
 	Resource: "managedclusters",
@@ -85,6 +86,8 @@ func sharedCacheValid(shared *SharedData) bool {
 	return false
 }
 
+// Obtain all the cluster-scoped resources in the hub cluster that support list and watch.
+// Equivalent to: `oc api-resources -o wide | grep false | grep watch | grep list`
 func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Context) error {
 
 	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
@@ -140,6 +143,8 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 	return shared.csErr
 }
 
+// Obtain all the namespaces in the hub cluster.
+// Equivalent to `oc get namespaces`
 func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context) error {
 	shared.nsLock.Lock()
 	defer shared.nsLock.Unlock()
@@ -153,14 +158,15 @@ func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context)
 	if kubeErr != nil {
 		klog.Warning("Error with creating a new clientset.", kubeErr.Error())
 		shared.nsErr = kubeErr
+		shared.nsUpdatedAt = time.Now()
 		return shared.nsErr
 	}
 
 	namespaceList, nsErr := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-
 	if nsErr != nil {
 		klog.Warning("Error resolving namespaces from KubeClient: ", nsErr)
 		shared.nsErr = nsErr
+		shared.nsUpdatedAt = time.Now()
 		return shared.nsErr
 	}
 
@@ -183,7 +189,11 @@ func (shared *SharedData) GetSharedManagedClusters(cache *Cache, ctx context.Con
 
 	var managedClusters []string
 
-	resourceObj, err := cache.dynamicClient.Resource(clusterVersionGvr).List(context.TODO(), metav1.ListOptions{})
+	scheme := runtime.NewScheme()
+	scheme.AddKnownTypes(managedClusterResourceGvr.GroupVersion())
+
+	resourceObj, err := cache.dynamicClient.Resource(managedClusterResourceGvr).List(ctx, metav1.ListOptions{})
+
 	if err != nil {
 		klog.Warning("Error resolving resources with dynamic client", err.Error())
 		return shared.mcErr
