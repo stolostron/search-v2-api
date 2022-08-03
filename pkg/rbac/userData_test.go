@@ -50,8 +50,10 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 	mock_cache := mockNamespaceCache()
 	mock_cache = setupToken(mock_cache)
 
-	var namespaces []string
+	var namespaces, managedclusters []string
+
 	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
+	mock_cache.shared.managedClusters = append(managedclusters, "some-namespace", "some-nonmatching-namespace")
 
 	rulesCheck := &authz.SelfSubjectRulesReview{
 		Spec: authz.SelfSubjectRulesReviewSpec{
@@ -81,6 +83,7 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 	result, err := mock_cache.GetUserData(ctx, "123456", fs.AuthorizationV1())
 
 	if len(result.nsResources) != 1 || len(result.nsResources["some-namespace"]) != 2 ||
+		result.nsResources["some-nonmatching-namespace"] != nil ||
 		result.nsResources["some-namespace"][0].apigroup != "k8s.io" ||
 		result.nsResources["some-namespace"][1].apigroup != "k8s.io" ||
 		result.nsResources["some-namespace"][0].kind != "nodes1" ||
@@ -95,24 +98,28 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 }
 
 func Test_getNamespaces_usingCache(t *testing.T) {
-	var namespaces []string
+	var namespaces, managedclusters []string
 	nsresources := make(map[string][]resource)
 
 	mock_cache := mockNamespaceCache()
-
 	//mock cache for token review to get user data:
 	mock_cache = setupToken(mock_cache)
 
 	//mock cache for cluster-scoped resouces to get all namespaces:
 	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
+	//mock cache for managed clusters
+	mock_cache.shared.managedClusters = append(managedclusters, "some-namespace", "some-nonmatching-namespace")
+
 	//mock cache for namespaced-resources:
 	nsresources["some-namespace"] = append(nsresources["some-namespace"],
 		resource{apigroup: "some-apigroup", kind: "some-kind"})
 
 	mock_cache.users["unique-user-id"] = &userData{
-		nsResources:  nsresources,
-		csrUpdatedAt: time.Now(),
-		nsrUpdatedAt: time.Now(),
+		clusters:          managedclusters,
+		nsResources:       nsresources,
+		csrUpdatedAt:      time.Now(),
+		nsrUpdatedAt:      time.Now(),
+		clustersUpdatedAt: time.Now(),
 	}
 
 	rulesCheck := &authz.SelfSubjectRulesReview{
@@ -143,6 +150,7 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 	result, err := mock_cache.GetUserData(context.Background(), "123456", fs.AuthorizationV1())
 
 	if len(result.nsResources) != 1 ||
+		result.nsResources["some-nonmatching-namespace"] != nil ||
 		result.nsResources["some-namespace"][0].apigroup != "some-apigroup" ||
 		result.nsResources["some-namespace"][0].kind != "some-kind" {
 		t.Error("Resources not in cache.")
@@ -155,7 +163,7 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 
 func Test_getNamespaces_expiredCache(t *testing.T) {
 
-	var namespaces []string
+	var namespaces, managedclusters []string
 	nsresources := make(map[string][]resource)
 
 	mock_cache := mockNamespaceCache()
@@ -165,6 +173,8 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 
 	//mock cache for cluster-scoped resouces to get all namespaces:
 	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
+	mock_cache.shared.managedClusters = append(managedclusters, "some-namespace", "some-nonmatching-namespace")
+
 	//mock cache for namespaced-resources:
 	nsresources["some-namespace"] = append(nsresources["some-namespace"],
 		resource{apigroup: "some-apigroup", kind: "some-kind"})
@@ -201,6 +211,7 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 	result, err := mock_cache.GetUserData(context.Background(), "123456", fs.AuthorizationV1())
 
 	if len(result.nsResources) != 1 || len(result.nsResources["some-namespace"]) != 2 ||
+		result.nsResources["some-nonmatching-namespace"] != nil ||
 		result.nsResources["some-namespace"][0].apigroup != "k8s.io" ||
 		result.nsResources["some-namespace"][1].apigroup != "k8s.io" ||
 		result.nsResources["some-namespace"][0].kind != "nodes1" ||
@@ -222,6 +233,7 @@ func Test_clusterScoped_usingCache(t *testing.T) {
 
 	mock_cache := mockNamespaceCache()
 	mock_cache = setupToken(mock_cache)
+	var managedClusters []string
 
 	res := []resource{{apigroup: "storage.k8s.io", kind: "nodes"}}
 	mock_cache = addCSResources(mock_cache, res)
@@ -229,8 +241,12 @@ func Test_clusterScoped_usingCache(t *testing.T) {
 	//mock cache for cluster-scoped resouces
 
 	allowedres := []resource{{apigroup: "storage.k8s.io", kind: "nodes"}}
+	managedClusters = append(managedClusters, "some-namespace")
+
 	mock_cache.users["unique-user-id"] = &userData{
-		csResources: allowedres,
+		csResources:       allowedres,
+		clusters:          managedClusters,
+		clustersUpdatedAt: time.Now(),
 		// Using current time , GetUserData should have the same values as cache
 		csrUpdatedAt: time.Now(),
 		nsrUpdatedAt: time.Now(),
@@ -302,7 +318,7 @@ func Test_clusterScoped_expiredCache(t *testing.T) {
 	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
 	mock_cache.users["unique-user-id"] = &userData{
 		csResources:  allowedres,
-		csrUpdatedAt: time.Now().Add(time.Duration(-5) * time.Minute),
+		csrUpdatedAt: last_cache_time,
 		authzClient:  fs.AuthorizationV1(),
 	}
 
