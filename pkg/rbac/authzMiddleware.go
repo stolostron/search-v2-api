@@ -21,7 +21,7 @@ func AuthorizeUser(next http.Handler) http.Handler {
 		clientToken := r.Context().Value(ContextAuthTokenKey).(string)
 		_, userErr := cacheInst.GetUserData(r.Context(), clientToken, nil)
 		if userErr != nil {
-			klog.Warning("Unexpected error while obtaining user namespaces.", userErr)
+			klog.Warning("Unexpected error while obtaining user data.", userErr)
 		}
 
 		//Managed Cluster resources authorization:

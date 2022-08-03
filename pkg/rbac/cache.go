@@ -39,5 +39,6 @@ var cacheInst = Cache{
 	users:            map[string]*userData{},
 	restConfig:       config.GetClientConfig(),
 	pool:             db.GetConnection(),
+	corev1Client:     config.GetCoreClient(),
 	dynamicClient:    config.GetDynamicClient(),
 }

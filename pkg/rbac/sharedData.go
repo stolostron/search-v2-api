@@ -10,7 +10,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 )
 
@@ -53,23 +52,29 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 		return nil
 	} else { //get data and cache
 
+		var error error
 		// get all cluster-scoped resources and cache in shared.csResources
-		err := cache.shared.getClusterScopedResources(cache, ctx)
+		err := cache.shared.GetClusterScopedResources(cache, ctx)
 		if err == nil {
 			klog.V(6).Info("Successfully retrieved cluster scoped resources!")
+		} else {
+			error = err
 		}
 		// get all namespaces in cluster and cache in shared.namespaces.
 		err = cache.shared.GetSharedNamespaces(cache, ctx)
 		if err == nil {
 			klog.V(6).Info("Successfully retrieved shared namespaces!")
+		} else {
+			error = err
 		}
 		// get all managed clustsers in cache
-		err = cache.shared.GetSharedManagedClusters(cache, ctx)
+		err = cache.shared.GetManagedClusters(cache, ctx)
 		if err == nil {
 			klog.V(6).Info("Successfully retrieved managed clusters!")
+		} else {
+			error = err
 		}
-
-		return err
+		return error
 
 	}
 
@@ -88,7 +93,7 @@ func sharedCacheValid(shared *SharedData) bool {
 
 // Obtain all the cluster-scoped resources in the hub cluster that support list and watch.
 // Equivalent to: `oc api-resources -o wide | grep false | grep watch | grep list`
-func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Context) error {
+func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Context) error {
 
 	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
 	shared.csLock.Lock()
@@ -125,11 +130,10 @@ func (shared *SharedData) getClusterScopedResources(cache *Cache, ctx context.Co
 		defer rows.Close()
 
 		for rows.Next() {
-			var kind string
-			var apigroup string
+			var kind, apigroup string
 			err := rows.Scan(&apigroup, &kind)
 			if err != nil {
-				klog.Errorf("Error %s retrieving rows for query:%s for apigroup %s and kind %s", err.Error(), query,
+				klog.Warning("Error %s retrieving rows for query:%s for apigroup %s and kind %s", err.Error(), query,
 					apigroup, kind)
 				continue
 			}
@@ -152,17 +156,9 @@ func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context)
 	shared.namespaces = nil
 	shared.nsErr = nil
 
-	klog.V(5).Info("Getting namespaces from Kube Client..")
+	klog.V(5).Info("Getting namespaces from Kube Client.")
 
-	clientset, kubeErr := kubernetes.NewForConfig(cache.restConfig)
-	if kubeErr != nil {
-		klog.Warning("Error with creating a new clientset.", kubeErr.Error())
-		shared.nsErr = kubeErr
-		shared.nsUpdatedAt = time.Now()
-		return shared.nsErr
-	}
-
-	namespaceList, nsErr := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	namespaceList, nsErr := cache.corev1Client.Namespaces().List(ctx, metav1.ListOptions{})
 	if nsErr != nil {
 		klog.Warning("Error resolving namespaces from KubeClient: ", nsErr)
 		shared.nsErr = nsErr
@@ -179,7 +175,7 @@ func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context)
 	return shared.nsErr
 }
 
-func (shared *SharedData) GetSharedManagedClusters(cache *Cache, ctx context.Context) error {
+func (shared *SharedData) GetManagedClusters(cache *Cache, ctx context.Context) error {
 
 	shared.mcLock.Lock()
 	defer shared.mcLock.Unlock()
@@ -195,7 +191,9 @@ func (shared *SharedData) GetSharedManagedClusters(cache *Cache, ctx context.Con
 	resourceObj, err := cache.dynamicClient.Resource(managedClusterResourceGvr).List(ctx, metav1.ListOptions{})
 
 	if err != nil {
-		klog.Warning("Error resolving resources with dynamic client", err.Error())
+		klog.Warning("Error resolving ManagedClusters with dynamic client", err.Error())
+		shared.mcErr = err
+		shared.mcUpdatedAt = time.Now()
 		return shared.mcErr
 	}
 
@@ -206,7 +204,6 @@ func (shared *SharedData) GetSharedManagedClusters(cache *Cache, ctx context.Con
 
 	shared.managedClusters = managedClusters
 	shared.mcUpdatedAt = time.Now()
-	shared.mcErr = nil
 	return shared.mcErr
 
 }

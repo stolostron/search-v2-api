@@ -21,11 +21,11 @@ type userData struct {
 	nsResources map[string][]resource // Namespaced resources on hub the user has list access.
 	clusters    []string              // Managed clusters where the user has view access.
 
+	// Internal fields to manage the cache.
 	clustersErr error // Error while updating clusters data.
 	// clustersLock      sync.Mutex // Locks when clusters data is being updated. NOTE: not implmented because we use the nsrLock
 	clustersUpdatedAt time.Time // Time clusters was last updated.
 
-	// Internal fields to manage the cache.
 	csrErr       error      // Error while updating cluster-scoped resources data.
 	csrLock      sync.Mutex // Locks when cluster-scoped resources data is being updated.
 	csrUpdatedAt time.Time  // Time cluster-scoped resources was last updated.
@@ -188,7 +188,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 		}
 		for _, rules := range result.Status.ResourceRules {
 			for _, verb := range rules.Verbs {
-				if verb == "list" || verb == "*" {
+				if verb == "list" || verb == "*" { //TODO: resourceName == "*" && verb == "*" then exit loop
 					for _, res := range rules.Resources {
 						for _, api := range rules.APIGroups {
 							user.nsResources[ns] = append(user.nsResources[ns], resource{apigroup: api, kind: res})
