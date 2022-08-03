@@ -115,9 +115,11 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 		resource{apigroup: "some-apigroup", kind: "some-kind"})
 
 	mock_cache.users["unique-user-id"] = &userData{
-		nsResources:  nsresources,
-		csrUpdatedAt: time.Now(),
-		nsrUpdatedAt: time.Now(),
+		clusters:          managedclusters,
+		nsResources:       nsresources,
+		csrUpdatedAt:      time.Now(),
+		nsrUpdatedAt:      time.Now(),
+		clustersUpdatedAt: time.Now(),
 	}
 
 	rulesCheck := &authz.SelfSubjectRulesReview{
@@ -231,6 +233,7 @@ func Test_clusterScoped_usingCache(t *testing.T) {
 
 	mock_cache := mockNamespaceCache()
 	mock_cache = setupToken(mock_cache)
+	var managedClusters []string
 
 	res := []resource{{apigroup: "storage.k8s.io", kind: "nodes"}}
 	mock_cache = addCSResources(mock_cache, res)
@@ -238,8 +241,12 @@ func Test_clusterScoped_usingCache(t *testing.T) {
 	//mock cache for cluster-scoped resouces
 
 	allowedres := []resource{{apigroup: "storage.k8s.io", kind: "nodes"}}
+	managedClusters = append(managedClusters, "some-namespace")
+
 	mock_cache.users["unique-user-id"] = &userData{
-		csResources: allowedres,
+		csResources:       allowedres,
+		clusters:          managedClusters,
+		clustersUpdatedAt: time.Now(),
 		// Using current time , GetUserData should have the same values as cache
 		csrUpdatedAt: time.Now(),
 		nsrUpdatedAt: time.Now(),
