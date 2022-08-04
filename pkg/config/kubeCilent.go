@@ -51,6 +51,8 @@ func GetClientConfig() *rest.Config {
 	if clientConfigError != nil {
 		klog.Fatal("Error getting Kube Config: ", clientConfigError)
 	}
+	clientConfig.QPS = 250
+	clientConfig.Burst = 100
 
 	return clientConfig
 }

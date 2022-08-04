@@ -38,7 +38,7 @@ type userData struct {
 }
 
 func (cache *Cache) GetUserData(ctx context.Context, clientToken string,
-	authzClient v1.AuthorizationV1Interface) (*userData, error) {
+	authzClient v1.AuthorizationV1Interface) {
 	var user *userData
 	uid := cache.tokenReviews[clientToken].tokenReview.Status.User.UID //get uid from tokenreview
 	cache.usersLock.Lock()
@@ -47,7 +47,7 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string,
 	// UserDataExists and its valid
 	if userDataExists && userCacheValid(cachedUserData) {
 		klog.V(5).Info("Using user data from cache.")
-		return cachedUserData, nil
+		return //cachedUserData, nil
 	} else {
 		// User not in cache , Initialize and assign to the UID
 		user = &userData{}
@@ -57,17 +57,33 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string,
 			user.authzClient = authzClient
 		}
 	}
-	userData, err := user.getNamespacedResources(cache, ctx, clientToken)
+
+	defer func(start time.Time) {
+		klog.Infof("\t%+v \t- GetUserData()", time.Since(start))
+	}(time.Now())
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		user.getNamespacedResources(cache, ctx, clientToken)
+	}()
+
+	go func() {
+		defer wg.Done()
+		user.getClusterScopedResources(cache, ctx, clientToken)
+	}()
+
+	wg.Wait()
 
 	// Get cluster scoped resources for the user
 	// TO DO : Make this parallel operation
-	if err == nil {
-		klog.V(5).Info("No errors on namespacedresources present for: ",
-			cache.tokenReviews[clientToken].tokenReview.Status.User.Username)
-		userData, err = user.getClusterScopedResources(cache, ctx, clientToken)
-	}
+	// if err == nil {
+	// 	klog.V(5).Info("No errors on namespacedresources present for: ",
+	// 		cache.tokenReviews[clientToken].tokenReview.Status.User.Username)
+	// 	userData, err = user.getClusterScopedResources(cache, ctx, clientToken)
+	// }
 
-	return userData, err
+	// return userData, err
 
 }
 
@@ -85,6 +101,9 @@ func userCacheValid(user *userData) bool {
 // Equivalent to: oc auth can-i list <resource> --as=<user>
 func (user *userData) getClusterScopedResources(cache *Cache, ctx context.Context,
 	clientToken string) (*userData, error) {
+	defer func(start time.Time) {
+		klog.Infof("\t%+v \t- getClusterScopedResources()", time.Since(start))
+	}(time.Now())
 
 	// get all cluster scoped from shared cache:
 	klog.V(5).Info("Getting cluster scoped resources from shared cache.")
@@ -106,11 +125,17 @@ func (user *userData) getClusterScopedResources(cache *Cache, ctx context.Contex
 	}
 	//If we have a new set of authorized list for the user reset the previous one
 	user.csResources = nil
+	wg := &sync.WaitGroup{}
 	for _, res := range clusterScopedResources {
-		if user.userAuthorizedListCSResource(ctx, impersClientset, res.apigroup, res.kind) {
-			user.csResources = append(user.csResources, resource{apigroup: res.apigroup, kind: res.kind})
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if user.userAuthorizedListCSResource(ctx, impersClientset, res.apigroup, res.kind) {
+				user.csResources = append(user.csResources, resource{apigroup: res.apigroup, kind: res.kind})
+			}
+		}()
 	}
+	wg.Wait()
 	user.csrUpdatedAt = time.Now()
 	return user, user.csrErr
 }
@@ -143,6 +168,9 @@ func (user *userData) userAuthorizedListCSResource(ctx context.Context, authzCli
 
 // Equivalent to: oc auth can-i --list -n <iterate-each-namespace>
 func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, clientToken string) (*userData, error) {
+	defer func(start time.Time) {
+		klog.Infof("\t%+v \t- getNamespacedResources()", time.Since(start))
+	}(time.Now())
 
 	// check if we already have user's namespaced resources in userData cache and check if time is expired
 	user.nsrLock.Lock()
@@ -155,9 +183,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 	user.clusters = nil
 
 	// get all namespaces from shared cache:
-	klog.V(5).Info("Getting namespaces from shared cache.")
-	user.csrLock.Lock()
-	defer user.csrLock.Unlock()
+
 	allNamespaces := cache.shared.namespaces
 	if len(allNamespaces) == 0 {
 		klog.Warning("All namespaces array from shared cache is empty.", cache.shared.nsErr)
@@ -173,48 +199,56 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 	user.nsResources = make(map[string][]resource)
 	managedClusters := cache.shared.managedClusters
 
+	lock := sync.Mutex{}
+	wg := &sync.WaitGroup{}
 	for _, ns := range allNamespaces {
-		//
-		rulesCheck := authz.SelfSubjectRulesReview{
-			Spec: authz.SelfSubjectRulesReviewSpec{
-				Namespace: ns,
-			},
-		}
-		result, err := impersClientset.SelfSubjectRulesReviews().Create(ctx, &rulesCheck, metav1.CreateOptions{})
-		if err != nil {
-			klog.Error("Error creating SelfSubjectRulesReviews for namespace", err, ns)
-		} else {
-			klog.V(9).Infof("SelfSubjectRulesReviews Kube API result: %v\n", prettyPrint(result.Status))
-		}
-		for _, rules := range result.Status.ResourceRules {
-			for _, verb := range rules.Verbs {
-				if verb == "list" || verb == "*" { //TODO: resourceName == "*" && verb == "*" then exit loop
-					for _, res := range rules.Resources {
-						for _, api := range rules.APIGroups {
-							user.nsResources[ns] = append(user.nsResources[ns], resource{apigroup: api, kind: res})
-						}
-					}
-				}
-				// Obtain namespaces with create managedclusterveiws resource action
-				// Equivalent to: oc auth can-i create ManagedClusterView -n <managedClusterName> --as=<user>
-
-				if verb == "create" || verb == "*" {
-					for _, res := range rules.Resources {
-						if res == "managedclusterviews" {
-							for i := range managedClusters {
-								if managedClusters[i] == ns {
-									user.clusters = append(user.clusters, ns)
-								}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			rulesCheck := authz.SelfSubjectRulesReview{
+				Spec: authz.SelfSubjectRulesReviewSpec{
+					Namespace: ns,
+				},
+			}
+			result, err := impersClientset.SelfSubjectRulesReviews().Create(ctx, &rulesCheck, metav1.CreateOptions{})
+			if err != nil {
+				klog.Error("Error creating SelfSubjectRulesReviews for namespace", err, ns)
+			} else {
+				klog.V(9).Infof("SelfSubjectRulesReviews Kube API result: %v\n", prettyPrint(result.Status))
+			}
+			for _, rules := range result.Status.ResourceRules {
+				for _, verb := range rules.Verbs {
+					if verb == "list" || verb == "*" { //TODO: resourceName == "*" && verb == "*" then exit loop
+						for _, res := range rules.Resources {
+							for _, api := range rules.APIGroups {
+								lock.Lock()
+								user.nsResources[ns] = append(user.nsResources[ns], resource{apigroup: api, kind: res})
+								lock.Unlock()
 							}
 						}
-
 					}
+					// Obtain namespaces with create managedclusterveiws resource action
+					// Equivalent to: oc auth can-i create ManagedClusterView -n <managedClusterName> --as=<user>
+
+					if verb == "create" || verb == "*" {
+						for _, res := range rules.Resources {
+							if res == "managedclusterviews" {
+								for i := range managedClusters {
+									if managedClusters[i] == ns {
+										user.clusters = append(user.clusters, ns)
+									}
+								}
+							}
+
+						}
+					}
+
 				}
 
 			}
-
-		}
+		}()
 	}
+	wg.Wait()
 
 	user.nsrUpdatedAt = time.Now()
 	user.clustersUpdatedAt = time.Now()
