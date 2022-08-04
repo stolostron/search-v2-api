@@ -7,6 +7,7 @@ import (
 
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/golang/mock/gomock"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakedynclient "k8s.io/client-go/dynamic/fake"
 	fakekubeclient "k8s.io/client-go/kubernetes/fake"
@@ -33,11 +34,18 @@ func mockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, Cache) {
 		ObjectMeta: metav1.ObjectMeta{Name: "test-man"},
 	}
 
+	testns := &corev1.Namespace{
+		metav1.TypeMeta{Kind: "Namespace"},
+		metav1.ObjectMeta{Namespace: "test-namespace", Name: "test-namespace"},
+		corev1.NamespaceSpec{},
+		corev1.NamespaceStatus{},
+	}
+
 	return mockPool, Cache{
 		shared:        SharedData{},
 		dynamicClient: fakedynclient.NewSimpleDynamicClient(testScheme, testmc),
 		restConfig:    &rest.Config{},
-		corev1Client:  fakekubeclient.NewSimpleClientset().CoreV1(),
+		corev1Client:  fakekubeclient.NewSimpleClientset(testns).CoreV1(),
 		pool:          mockPool,
 	}
 }
@@ -54,11 +62,17 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
+	//namespace
+
 	err := mock_cache.PopulateSharedCache(ctx)
 
 	if len(mock_cache.shared.csResources) != 1 || mock_cache.shared.csResources[0].kind != "Nodes" ||
 		mock_cache.shared.csResources[0].apigroup != "addon.open-cluster-management.io" {
 		t.Error("Cluster Scoped Resources not in cache")
+	}
+
+	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" {
+		t.Error("Shared Namespaces not in cache")
 	}
 
 	if len(mock_cache.shared.managedClusters) != 1 || mock_cache.shared.managedClusters[0] != "test-man" {
@@ -82,12 +96,14 @@ func Test_getResouces_usingCache(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
-	var managedCluster []string
+	var managedCluster, namespaces []string
 
+	namespaces = append(namespaces, "test-namespace")
 	managedCluster = append(managedCluster, "test-man")
 
 	//Adding cache:
 	mock_cache.shared = SharedData{
+		namespaces:      namespaces,
 		managedClusters: managedCluster,
 		mcUpdatedAt:     time.Now(),
 		csUpdatedAt:     time.Now(),
@@ -99,6 +115,9 @@ func Test_getResouces_usingCache(t *testing.T) {
 	if len(mock_cache.shared.csResources) != 1 || mock_cache.shared.csResources[0].kind != "Nodes" ||
 		mock_cache.shared.csResources[0].apigroup != "addon.open-cluster-management.io" {
 		t.Error("Cluster Scoped Resources not in cache")
+	}
+	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" {
+		t.Error("Shared Namespaces not in cache")
 	}
 
 	if len(mock_cache.shared.managedClusters) != 1 || mock_cache.shared.managedClusters[0] != "test-man" {
@@ -122,13 +141,16 @@ func Test_getResources_expiredCache(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
-	var managedCluster []string
+	var managedCluster, namespaces []string
 
+	namespaces = append(namespaces, "test-namespace")
 	managedCluster = append(managedCluster, "test-man")
 	//adding expired cache
 	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
 	mock_cache.shared = SharedData{
+		namespaces:      namespaces,
 		managedClusters: managedCluster,
+		nsUpdatedAt:     last_cache_time,
 		mcUpdatedAt:     last_cache_time,
 		csUpdatedAt:     last_cache_time,
 		csResources:     append(mock_cache.shared.csResources, resource{apigroup: "apigroup1", kind: "kind1"}),
@@ -142,6 +164,10 @@ func Test_getResources_expiredCache(t *testing.T) {
 		t.Error("Cluster Scoped Resources not in cache")
 	}
 
+	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" {
+		t.Error("Shared Namespaces not in cache")
+	}
+
 	if len(mock_cache.shared.managedClusters) != 1 || mock_cache.shared.managedClusters[0] != "test-man" {
 		t.Error("ManagedClusters not in cache")
 	}
@@ -149,7 +175,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
 	}
 	// Verify that cache was updated within the last 2 millisecond.
-	if !mock_cache.shared.csUpdatedAt.After(last_cache_time) || !mock_cache.shared.mcUpdatedAt.After(last_cache_time) {
+	if !mock_cache.shared.csUpdatedAt.After(last_cache_time) || !mock_cache.shared.mcUpdatedAt.After(last_cache_time) || !mock_cache.shared.nsUpdatedAt.After(last_cache_time) {
 		t.Error("Expected the cache.shared.updatedAt to have a later timestamp")
 	}
 
