@@ -85,4 +85,5 @@ require (
 	k8s.io/api v0.24.3
 	k8s.io/apimachinery v0.24.3
 	k8s.io/client-go v0.24.3
+	open-cluster-management.io/api v0.8.0
 )

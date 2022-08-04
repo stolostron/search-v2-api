@@ -110,7 +110,7 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 	ds := goqu.From(schemaTable)
 	query, _, err := ds.SelectDistinct(goqu.COALESCE(goqu.L(`"data"->>'apigroup'`), "").As("apigroup"),
 		goqu.COALESCE(goqu.L(`"data"->>'kind_plural'`), "").As("kind")).
-		Where(goqu.L(`"cluster"::TEXT = 'local-cluster'`), goqu.L(`"data"->>'namespace'`).IsNull()).ToSQL()
+		Where(goqu.L(`"data"->>'_hubClusterResource'='true'`), goqu.L(`"data"->>'namespace'`).IsNull()).ToSQL()
 	if err != nil {
 		klog.Errorf("Error creating query [%s]. Error: [%+v]", query, err)
 		shared.csErr = err
