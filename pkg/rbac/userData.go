@@ -3,6 +3,7 @@ package rbac
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -201,6 +202,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 				if verb == "create" || verb == "*" {
 					for _, res := range rules.Resources {
 						if res == "managedclusterviews" {
+							fmt.Println(rules, res, ns)
 							for i := range managedClusters {
 								if managedClusters[i] == ns {
 									user.clusters = append(user.clusters, ns)

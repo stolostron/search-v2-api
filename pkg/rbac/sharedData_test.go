@@ -35,10 +35,8 @@ func mockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, Cache) {
 	}
 
 	testns := &corev1.Namespace{
-		metav1.TypeMeta{Kind: "Namespace"},
-		metav1.ObjectMeta{Namespace: "test-namespace", Name: "test-namespace"},
-		corev1.NamespaceSpec{},
-		corev1.NamespaceStatus{},
+		TypeMeta:   metav1.TypeMeta{Kind: "Namespace"},
+		ObjectMeta: metav1.ObjectMeta{Name: "test-namespace", Namespace: "test-namespace"},
 	}
 
 	return mockPool, Cache{
