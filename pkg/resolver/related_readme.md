@@ -27,12 +27,12 @@ SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" F
 			  OR ("sourceid" IN (<UID(s)>)))
 ```
 
-`edges` view stores all these relationships between the resources. Querying the view surfaces the related resources for the Search term (identified by the UID(s)).
+`edges` table stores all these relationships between the resources. Querying the table surfaces the related resources for the Search term (identified by the UID(s)).
 
 **FOR APPLICATIONS - Depth 3**
 
 If the search term involves Applications within input filters or relatedKinds, Search will surface relationships 3 levels deep on either side of the search term.
-Searching for the `Application` in the hub cluster above will bring back the Service, Replicaset, Deployment and both Subscriptions. This is done by recursively querying the  `edges` view.
+Searching for the `Application` in the hub cluster above will bring back the Service, Replicaset, Deployment and both Subscriptions. This is done by recursively querying the  `edges` table.
 
 ```
 WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster) AS
