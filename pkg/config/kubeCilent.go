@@ -52,6 +52,10 @@ func GetClientConfig() *rest.Config {
 		klog.Fatal("Error getting Kube Config: ", clientConfigError)
 	}
 
+	// Removing client-side throttling
+	clientConfig.QPS = 250
+	clientConfig.Burst = 100
+
 	return clientConfig
 }
 
