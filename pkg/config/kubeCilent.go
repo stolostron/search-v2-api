@@ -6,6 +6,7 @@ import (
 
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
@@ -69,4 +70,24 @@ func GetDynamicClient() dynamic.Interface {
 	dynamicClient = newDynamicClient
 
 	return dynamicClient
+}
+
+var coreClient v1.CoreV1Interface
+
+func GetCoreClient() v1.CoreV1Interface {
+
+	if coreClient != nil {
+		return coreClient
+	}
+
+	clientset, kubeErr := kubernetes.NewForConfig(GetClientConfig())
+	if kubeErr != nil {
+		klog.Warning("Error with creating a new clientset.", kubeErr.Error())
+	}
+	newCoreClient := clientset.CoreV1()
+
+	coreClient = newCoreClient
+
+	return coreClient
+
 }

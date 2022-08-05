@@ -7,8 +7,13 @@ import (
 
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/golang/mock/gomock"
-	fake "k8s.io/client-go/kubernetes/fake"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	fakedynclient "k8s.io/client-go/dynamic/fake"
+	fakekubeclient "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
 
 // Initialize cache object to use tests.
@@ -16,31 +21,62 @@ func mockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, Cache) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
+
+	testScheme := scheme.Scheme
+
+	err := clusterv1.AddToScheme(testScheme)
+	if err != nil {
+		t.Errorf("error adding managed cluster scheme: (%v)", err)
+	}
+
+	testmc := &clusterv1.ManagedCluster{
+		TypeMeta:   metav1.TypeMeta{Kind: "ManagedCluster"},
+		ObjectMeta: metav1.ObjectMeta{Name: "test-man"},
+	}
+
+	testns := &corev1.Namespace{
+		TypeMeta:   metav1.TypeMeta{Kind: "Namespace"},
+		ObjectMeta: metav1.ObjectMeta{Name: "test-namespace", Namespace: "test-namespace"},
+	}
+
 	return mockPool, Cache{
-		shared:       SharedData{},
-		restConfig:   &rest.Config{},
-		corev1Client: fake.NewSimpleClientset().CoreV1(),
-		pool:         mockPool,
+		shared:        SharedData{},
+		dynamicClient: fakedynclient.NewSimpleDynamicClient(testScheme, testmc),
+		restConfig:    &rest.Config{},
+		corev1Client:  fakekubeclient.NewSimpleClientset(testns).CoreV1(),
+		pool:          mockPool,
 	}
 }
 
-func Test_getResources_emptyCache(t *testing.T) {
+func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 
 	ctx := context.Background()
 	mockpool, mock_cache := mockResourcesListCache(t)
-	columns := []string{"apigroup", "kind"}
-	pgxRows := pgxpoolmock.NewRows(columns).AddRow("Node", "addon.open-cluster-management.io").ToPgxRows()
+	columns := []string{"kind", "apigroup"}
+	pgxRows := pgxpoolmock.NewRows(columns).AddRow("addon.open-cluster-management.io", "Nodes").ToPgxRows()
 
 	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("cluster"::TEXT = 'local-cluster' AND ("data"->>'namespace' IS NULL))`),
+		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"->>'_hubClusterResource'='true' AND ("data"->>'namespace' IS NULL))`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
-	result, err := mock_cache.ClusterScopedResources(ctx)
+	//namespace
 
-	if len(result) == 0 {
-		t.Error("Resources not in cache.")
+	err := mock_cache.PopulateSharedCache(ctx)
+
+	if len(mock_cache.shared.csResources) != 1 || mock_cache.shared.csResources[0].kind != "Nodes" ||
+		mock_cache.shared.csResources[0].apigroup != "addon.open-cluster-management.io" {
+		t.Error("Cluster Scoped Resources not in cache")
 	}
+
+	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" {
+		t.Error("Shared Namespaces not in cache")
+	}
+
+	if len(mock_cache.shared.managedClusters) != 1 || mock_cache.shared.managedClusters[0] != "test-man" {
+		t.Error("ManagedClusters not in cache")
+	}
+
 	if err != nil {
 		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
 	}
@@ -51,23 +87,39 @@ func Test_getResouces_usingCache(t *testing.T) {
 	ctx := context.Background()
 	mockpool, mock_cache := mockResourcesListCache(t)
 	columns := []string{"apigroup", "kind"}
-	pgxRows := pgxpoolmock.NewRows(columns).AddRow("Node", "addon.open-cluster-management.io").ToPgxRows()
+	pgxRows := pgxpoolmock.NewRows(columns).AddRow("addon.open-cluster-management.io", "Nodes").ToPgxRows()
 
 	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("cluster"::TEXT = 'local-cluster' AND ("data"->>'namespace' IS NULL))`),
+		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"->>'_hubClusterResource'='true' AND ("data"->>'namespace' IS NULL))`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
+	var managedCluster, namespaces []string
+
+	namespaces = append(namespaces, "test-namespace")
+	managedCluster = append(managedCluster, "test-man")
+
 	//Adding cache:
 	mock_cache.shared = SharedData{
-		csUpdatedAt: time.Now(),
-		csResources: append(mock_cache.shared.csResources, resource{apigroup: "apigroup1", kind: "kind1"}),
+		namespaces:      namespaces,
+		managedClusters: managedCluster,
+		mcUpdatedAt:     time.Now(),
+		csUpdatedAt:     time.Now(),
+		csResources:     append(mock_cache.shared.csResources, resource{apigroup: "apigroup1", kind: "kind1"}),
 	}
 
-	result, err := mock_cache.ClusterScopedResources(ctx)
+	err := mock_cache.PopulateSharedCache(ctx)
 
-	if len(result) == 0 {
-		t.Error("Expected resources in cache.")
+	if len(mock_cache.shared.csResources) != 1 || mock_cache.shared.csResources[0].kind != "Nodes" ||
+		mock_cache.shared.csResources[0].apigroup != "addon.open-cluster-management.io" {
+		t.Error("Cluster Scoped Resources not in cache")
+	}
+	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" {
+		t.Error("Shared Namespaces not in cache")
+	}
+
+	if len(mock_cache.shared.managedClusters) != 1 || mock_cache.shared.managedClusters[0] != "test-man" {
+		t.Error("ManagedClusters not in cache")
 	}
 
 	if err != nil {
@@ -80,30 +132,49 @@ func Test_getResources_expiredCache(t *testing.T) {
 	ctx := context.Background()
 	mockpool, mock_cache := mockResourcesListCache(t)
 	columns := []string{"apigroup", "kind"}
-	pgxRows := pgxpoolmock.NewRows(columns).AddRow("Node", "addon.open-cluster-management.io").ToPgxRows()
+	pgxRows := pgxpoolmock.NewRows(columns).AddRow("addon.open-cluster-management.io", "Nodes").ToPgxRows()
 
 	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("cluster"::TEXT = 'local-cluster' AND ("data"->>'namespace' IS NULL))`),
+		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"->>'_hubClusterResource'='true' AND ("data"->>'namespace' IS NULL))`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
+	var managedCluster, namespaces []string
+
+	namespaces = append(namespaces, "test-namespace")
+	managedCluster = append(managedCluster, "test-man")
 	//adding expired cache
+	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
 	mock_cache.shared = SharedData{
-		csUpdatedAt: time.Now().Add(time.Duration(-5) * time.Minute),
-		csResources: append(mock_cache.shared.csResources, resource{apigroup: "apigroup1", kind: "kind1"}),
+		namespaces:      namespaces,
+		managedClusters: managedCluster,
+		nsUpdatedAt:     last_cache_time,
+		mcUpdatedAt:     last_cache_time,
+		csUpdatedAt:     last_cache_time,
+		csResources:     append(mock_cache.shared.csResources, resource{apigroup: "apigroup1", kind: "kind1"}),
 	}
 
-	result, err := mock_cache.ClusterScopedResources(ctx)
+	err := mock_cache.PopulateSharedCache(ctx)
 
-	if len(result) == 0 {
-		t.Error("Resources need to be updated")
+	//
+	if len(mock_cache.shared.csResources) != 1 || mock_cache.shared.csResources[0].kind != "Nodes" ||
+		mock_cache.shared.csResources[0].apigroup != "addon.open-cluster-management.io" {
+		t.Error("Cluster Scoped Resources not in cache")
+	}
+
+	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" {
+		t.Error("Shared Namespaces not in cache")
+	}
+
+	if len(mock_cache.shared.managedClusters) != 1 || mock_cache.shared.managedClusters[0] != "test-man" {
+		t.Error("ManagedClusters not in cache")
 	}
 	if err != nil {
 		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
 	}
 	// Verify that cache was updated within the last 2 millisecond.
-	if mock_cache.shared.csUpdatedAt.Before(time.Now().Add(time.Duration(-2) * time.Millisecond)) {
-		t.Error("Expected the cached cluster scoped resources to be updated within the last 2 milliseconds.")
+	if !mock_cache.shared.csUpdatedAt.After(last_cache_time) || !mock_cache.shared.mcUpdatedAt.After(last_cache_time) || !mock_cache.shared.nsUpdatedAt.After(last_cache_time) {
+		t.Error("Expected the cache.shared.updatedAt to have a later timestamp")
 	}
 
 }
