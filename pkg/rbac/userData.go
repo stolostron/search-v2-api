@@ -3,7 +3,6 @@ package rbac
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -18,9 +17,9 @@ import (
 
 // Contains data about the resources the user is allowed to access.
 type userData struct {
-	csResources []resource            // Cluster-scoped resources on hub the user has list access.
-	nsResources map[string][]resource // Namespaced resources on hub the user has list access.
-	clusters    []string              // Managed clusters where the user has view access.
+	csResources     []resource            // Cluster-scoped resources on hub the user has list access.
+	nsResources     map[string][]resource // Namespaced resources on hub the user has list access.
+	managedClusters []string              // Managed clusters where the user has view access.
 
 	// Internal fields to manage the cache.
 	clustersErr error // Error while updating clusters data.
@@ -58,6 +57,7 @@ func (cache *Cache) GetUserData(ctx context.Context, clientToken string,
 			user.authzClient = authzClient
 		}
 	}
+
 	userData, err := user.getNamespacedResources(cache, ctx, clientToken)
 
 	// Get cluster scoped resources for the user
@@ -153,7 +153,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 	user.csrErr = nil
 	user.nsResources = nil
 	user.clustersErr = nil
-	user.clusters = nil
+	user.managedClusters = nil
 
 	// get all namespaces from shared cache:
 	klog.V(5).Info("Getting namespaces from shared cache.")
@@ -202,10 +202,10 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 				if verb == "create" || verb == "*" {
 					for _, res := range rules.Resources {
 						if res == "managedclusterviews" {
-							fmt.Println(rules, res, ns)
 							for i := range managedClusters {
 								if managedClusters[i] == ns {
-									user.clusters = append(user.clusters, ns)
+									user.managedClusters = append(user.managedClusters, ns)
+
 								}
 							}
 						}
@@ -226,6 +226,7 @@ func (user *userData) getNamespacedResources(cache *Cache, ctx context.Context, 
 
 func (user *userData) getImpersonationClientSet(clientToken string, cache *Cache) (v1.AuthorizationV1Interface,
 	error) {
+
 	if user.authzClient == nil {
 		klog.V(5).Info("Creating New ImpersonationClientSet. ")
 		restConfig := config.GetClientConfig()

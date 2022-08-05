@@ -50,10 +50,10 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 	mock_cache := mockNamespaceCache()
 	mock_cache = setupToken(mock_cache)
 
-	var namespaces, managedclusters []string
+	var namespaces []string
 
 	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
-	mock_cache.shared.managedClusters = append(managedclusters, "some-namespace", "some-nonmatching-namespace")
+	// mock_cache.shared.managedClusters = append(managedclusters, "some-namespace", "some-nonmatching-namespace")
 
 	rulesCheck := &authz.SelfSubjectRulesReview{
 		Spec: authz.SelfSubjectRulesReviewSpec{
@@ -82,8 +82,7 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 	ctx := context.Background()
 	result, err := mock_cache.GetUserData(ctx, "123456", fs.AuthorizationV1())
 
-	if len(result.nsResources) != 1 || len(result.nsResources["some-namespace"]) != 2 ||
-		result.nsResources["some-nonmatching-namespace"] != nil ||
+	if len(result.nsResources) != 1 ||
 		result.nsResources["some-namespace"][0].apigroup != "k8s.io" ||
 		result.nsResources["some-namespace"][1].apigroup != "k8s.io" ||
 		result.nsResources["some-namespace"][0].kind != "nodes1" ||
@@ -115,7 +114,7 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 		resource{apigroup: "some-apigroup", kind: "some-kind"})
 
 	mock_cache.users["unique-user-id"] = &userData{
-		clusters:          managedclusters,
+		managedClusters:   managedclusters,
 		nsResources:       nsresources,
 		csrUpdatedAt:      time.Now(),
 		nsrUpdatedAt:      time.Now(),
@@ -245,7 +244,7 @@ func Test_clusterScoped_usingCache(t *testing.T) {
 
 	mock_cache.users["unique-user-id"] = &userData{
 		csResources:       allowedres,
-		clusters:          managedClusters,
+		managedClusters:   managedClusters,
 		clustersUpdatedAt: time.Now(),
 		// Using current time , GetUserData should have the same values as cache
 		csrUpdatedAt: time.Now(),
@@ -334,6 +333,193 @@ func Test_clusterScoped_expiredCache(t *testing.T) {
 
 	//  Verify that cache was updated by checking the timestamp
 	if !mock_cache.users["unique-user-id"].csrUpdatedAt.After(last_cache_time) {
+		t.Error("Expected the cache.users.updatedAt to have a later timestamp")
+	}
+
+}
+func Test_managedClusters_emptyCache(t *testing.T) {
+
+	mock_cache := mockNamespaceCache()
+	mock_cache = setupToken(mock_cache)
+
+	var sharedmanagedclusters, namespaces []string
+	mock_cache.shared.managedClusters = append(sharedmanagedclusters, "some-managed-cluster", "some-managed-cluster1")
+	mock_cache.shared.namespaces = append(namespaces, "some-managed-cluster", "some-managed-cluster1")
+
+	//mock response objects for KUBEAPI call for SelfSubjectRulesReview
+	createRule := &authz.SelfSubjectRulesReview{
+		Spec: authz.SelfSubjectRulesReviewSpec{
+			Namespace: "some-managed-cluster",
+		},
+		Status: authz.SubjectRulesReviewStatus{
+			ResourceRules: []authz.ResourceRule{
+				{
+					Verbs:     []string{"create"},
+					APIGroups: []string{"apigroup"},
+					Resources: []string{"managedclusterviews"},
+				},
+			},
+		},
+	}
+	notCreateRule := &authz.SelfSubjectRulesReview{
+		Spec: authz.SelfSubjectRulesReviewSpec{
+			Namespace: "some-managed-cluster1",
+		},
+		Status: authz.SubjectRulesReviewStatus{
+			ResourceRules: []authz.ResourceRule{
+				{
+					Verbs:     []string{"list"},
+					APIGroups: []string{"apigroup"},
+					Resources: []string{"managedclusterviews"},
+				},
+			},
+		},
+	}
+
+	fs := fake.NewSimpleClientset()
+	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		ret = action.(testingk8s.CreateAction).GetObject()
+		meta, ok := ret.(metav1.Object)
+		if !ok {
+			t.Error("Unexpected Error - expecting MetaObject with type *v1.SelfSubjectRulesReview")
+			return
+		}
+		testSSRR := meta.(*v1.SelfSubjectRulesReview)
+		//	Mimic user has Authorization to create managedclusterview
+		if testSSRR.Spec.Namespace == "some-managed-cluster" {
+			return true, createRule, nil
+		}
+
+		// // Mimic user has no Authorization to create managedclusterview
+		return true, notCreateRule, nil
+
+	})
+	result, err := mock_cache.GetUserData(context.Background(), "123456", fs.AuthorizationV1())
+
+	if len(result.managedClusters) != 1 || result.managedClusters[0] != "some-managed-cluster" {
+		t.Errorf("Managed cluster count present in cache %d", len(result.managedClusters))
+	}
+	if err != nil {
+		t.Error("Unexpected error while obtaining namespaces.", err)
+	}
+
+}
+
+func Test_managedClusters_usingCache(t *testing.T) {
+
+	mock_cache := mockNamespaceCache()
+	mock_cache = setupToken(mock_cache)
+	var managedClusters []string
+
+	res := []resource{{apigroup: "storage.k8s.io", kind: "nodes"}}
+	mock_cache = addCSResources(mock_cache, res)
+
+	//mock cache for cluster-scoped resouces
+
+	allowedres := []resource{{apigroup: "storage.k8s.io", kind: "nodes"}}
+	managedClusters = append(managedClusters, "some-managed-cluster", "some-other-managed-cluster")
+
+	mock_cache.users["unique-user-id"] = &userData{
+		csResources:       allowedres,
+		managedClusters:   managedClusters,
+		clustersUpdatedAt: time.Now(),
+		// Using current time , GetUserData should have the same values as cache
+		csrUpdatedAt: time.Now(),
+		nsrUpdatedAt: time.Now(),
+	}
+
+	result, err := mock_cache.GetUserData(context.Background(), "123456", nil)
+	if len(result.csResources) != 1 || result.csResources[0].kind != "nodes" || result.csResources[0].apigroup != "storage.k8s.io" ||
+		result.managedClusters[0] != "some-managed-cluster" || result.managedClusters[1] != "some-other-managed-cluster" {
+		t.Error("Cluster scoped Resources not in user cache.")
+	}
+	if err != nil {
+		t.Error("Unexpected error while obtaining cluster scoped resources.", err)
+	}
+
+}
+
+func Test_managedCluster_expiredCache(t *testing.T) {
+	mock_cache := mockNamespaceCache()
+	mock_cache = setupToken(mock_cache)
+
+	// mock clusters in user cache
+	var namespaces []string
+	//mock mc from shared cache
+	var sharedmanagedclusters []string
+	mock_cache.shared.managedClusters = append(sharedmanagedclusters, "some-managed-cluster", "some-managed-cluster1")
+	mock_cache.shared.namespaces = append(namespaces, "some-managed-cluster", "some-managed-cluster1")
+
+	//mock response objects for KUBEAPI call for SelfSubjectRulesReview
+	createRule := &authz.SelfSubjectRulesReview{
+		Spec: authz.SelfSubjectRulesReviewSpec{
+			Namespace: "some-managed-cluster",
+		},
+		Status: authz.SubjectRulesReviewStatus{
+			ResourceRules: []authz.ResourceRule{
+				{
+					Verbs:     []string{"create"},
+					APIGroups: []string{"apigroup"},
+					Resources: []string{"managedclusterviews"},
+				},
+			},
+		},
+	}
+	notCreateRule := &authz.SelfSubjectRulesReview{
+		Spec: authz.SelfSubjectRulesReviewSpec{
+			Namespace: "some-managed-cluster1",
+		},
+		Status: authz.SubjectRulesReviewStatus{
+			ResourceRules: []authz.ResourceRule{
+				{
+					Verbs:     []string{"list"},
+					APIGroups: []string{"apigroup"},
+					Resources: []string{"managedclusterviews"},
+				},
+			},
+		},
+	}
+
+	fs := fake.NewSimpleClientset()
+	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		ret = action.(testingk8s.CreateAction).GetObject()
+		meta, ok := ret.(metav1.Object)
+		if !ok {
+			t.Error("Unexpected Error - expecting MetaObject with type *v1.SelfSubjectRulesReview")
+			return
+		}
+		testSSRR := meta.(*v1.SelfSubjectRulesReview)
+		//	Mimic user has Authorization to create managedclusterview
+		if testSSRR.Spec.Namespace == "some-managed-cluster" {
+			return true, createRule, nil
+		}
+
+		// // Mimic user has no Authorization to create managedclusterview
+		return true, notCreateRule, nil
+
+	})
+
+	var pastManClusters []string
+	pastManClusters = append(pastManClusters, "past-managed-cluster")
+
+	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
+	mock_cache.users["unique-user-id"] = &userData{
+		managedClusters:   pastManClusters,
+		clustersUpdatedAt: last_cache_time,
+		authzClient:       fs.AuthorizationV1(),
+	}
+
+	result, err := mock_cache.GetUserData(context.Background(), "123456", fs.AuthorizationV1())
+
+	if len(result.managedClusters) != 1 || result.managedClusters[0] != "some-managed-cluster" {
+		t.Errorf("Managed cluster count present in cache %d", len(result.managedClusters))
+	}
+	if err != nil {
+		t.Error("Unexpected error while obtaining namespaces.", err)
+	}
+
+	//  Verify that cache was updated by checking the timestamp
+	if !mock_cache.users["unique-user-id"].clustersUpdatedAt.After(last_cache_time) {
 		t.Error("Expected the cache.users.updatedAt to have a later timestamp")
 	}
 
