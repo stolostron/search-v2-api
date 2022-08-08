@@ -11,7 +11,6 @@
             "apiversion":"v1",
             "created":"2021-07-14T10:20:37Z",
             "kind":"Template",
-            "kindLower":"template",
             "label":{"samples.operator.openshift.io/managed":"true"},
             "name":"eap-cd-starter-s2i",
             "namespace":"openshift"
@@ -29,7 +28,6 @@
             "created":"2021-07-14T10:15:20Z",
             "current":3,
             "desired":3,
-            "kindLower":"replicaset",
             "kind":"ReplicaSet",
             "label":{
                 "app.kubernetes.io/component":"controller",
@@ -62,7 +60,6 @@
             "apiversion":"v1",
             "created":"2021-07-14T10:15:20Z",
             "kind":"ConfigMap",
-            "kindLower":"configmap",
             "name":"configmap-5f5575c669",
             "namespace":"openshift-monitoring"
         },
