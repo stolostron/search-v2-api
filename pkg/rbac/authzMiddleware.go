@@ -3,12 +3,16 @@ package rbac
 import (
 	"net/http"
 
+	db "github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/metric"
 	"k8s.io/klog/v2"
 )
 
 func AuthorizeUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		//Check db connection TODO: create time based check(s)
+		cacheInst.pool = db.GetConnection()
 
 		//Hub Cluster resources authorization:
 		err := cacheInst.PopulateSharedCache(r.Context())
