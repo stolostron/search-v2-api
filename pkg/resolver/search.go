@@ -14,7 +14,6 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
-	"github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -279,7 +278,11 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 		if prop == "cluster" {
 			exps = append(exps, goqu.C(prop).In(values))
 		} else if prop == "kind" { //ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
-			exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
+			if IsLower(values) { //if any of the strings are lower case, check in kindLower column too
+				exps = append(exps, goqu.Or(goqu.L(`"data"->>?`, prop).In(values), goqu.L(`"data"->>?`, "kindLower").In(values)))
+			} else {
+				exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
+			}
 		} else {
 			exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
 		}
@@ -468,4 +471,14 @@ func (s *SearchResult) setLimit() int {
 		limit = config.Cfg.QueryLimit
 	}
 	return limit
+}
+
+//if any of the strings are all lower case, return true
+func IsLower(s []string) bool {
+	for _, str := range s {
+		if str == strings.ToLower(str) {
+			return true
+		}
+	}
+	return false
 }

@@ -10,15 +10,16 @@ import (
 )
 
 func Test_SearchResolver_Count(t *testing.T) {
+
 	// Create a SearchResolver instance with a mock connection pool.
-	val1 := "pod"
+	val1 := "Pod"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil)
 
 	// Mock the database query
 	mockRow := &Row{MockValue: 10}
 	mockPool.EXPECT().QueryRow(gomock.Any(),
-		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->>'kind' ILIKE ANY ('{"pod"}'))`),
+		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->>'kind' IN ('Pod'))`),
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
@@ -58,7 +59,7 @@ func Test_SearchResolver_Items(t *testing.T) {
 	mockRows := newMockRows("./mocks/mock.json", searchInput, "", 0)
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'kind' ILIKE ANY ('{"template"}')) LIMIT 1000`),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' IN ('template')) OR ("data"->>'kindLower' IN ('template'))) LIMIT 1000`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 
@@ -387,7 +388,7 @@ func Test_SearchResolver_Uids(t *testing.T) {
 	mockRows := newMockRows("./mocks/mock.json", searchInput, "", 0)
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT "uid" FROM "search"."resources" WHERE ("data"->>'kind' ILIKE ANY ('{"template"}')) LIMIT 1000`),
+		gomock.Eq(`SELECT "uid" FROM "search"."resources" WHERE (("data"->>'kind' IN ('template')) OR ("data"->>'kindLower' IN ('template'))) LIMIT 1000`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 

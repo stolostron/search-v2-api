@@ -132,7 +132,7 @@ func (user *userData) userAuthorizedListCSResource(ctx context.Context, authzCli
 	if err != nil {
 		klog.Error("Error creating SelfSubjectAccessReviews.", err)
 	} else {
-		klog.V(5).Infof("SelfSubjectAccessReviews API result for resource %s group %s : %v\n",
+		klog.V(6).Infof("SelfSubjectAccessReviews API result for resource %s group %s : %v\n",
 			kind_plural, apigroup, prettyPrint(result.Status.String()))
 		if result.Status.Allowed {
 			return true
