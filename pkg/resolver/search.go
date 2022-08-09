@@ -294,16 +294,13 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 
 }
 
+//if any string values starts with lower case letters, return true
 func isLower(values []string) bool {
 	for _, str := range values {
-		for _, firstChar := range str {
-			if unicode.IsLower(firstChar) {
-				return true
-			} else {
-				break
-			}
+		firstChar := rune(str[0]) //check if first character of the string is lower case
+		if unicode.IsLower(firstChar) && unicode.IsLetter(firstChar) {
+			return true
 		}
-
 	}
 	return false
 }
