@@ -46,7 +46,8 @@ func SearchComplete(ctx context.Context, property string, srchInput *model.Searc
 }
 
 // Sample query: SELECT DISTINCT name FROM
-// (SELECT "data"->>'name' as name FROM "search"."resources" WHERE ("data"->>'name' IS NOT NULL)  LIMIT 100000)a
+// (SELECT "data"->>'name' as name FROM "search"."resources" WHERE ("data"->>'name' IS NOT NULL)
+// LIMIT 100000) as searchComplete
 // ORDER BY name ASC
 // LIMIT 1000
 func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
