@@ -27,8 +27,8 @@
             "apiversion":"v1",
             "created":"2021-07-14T10:15:20Z",
             "current":3,
-            "desired":3
-            ,"kind":"ReplicaSet",
+            "desired":3,
+            "kind":"ReplicaSet",
             "label":{
                 "app.kubernetes.io/component":"controller",
                 "app.kubernetes.io/managed-by":"cluster-monitoring-operator",

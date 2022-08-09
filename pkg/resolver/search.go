@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
@@ -279,13 +280,29 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 		if prop == "cluster" {
 			exps = append(exps, goqu.C(prop).In(values))
 		} else if prop == "kind" { //ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
-			exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
+			if isLower(values) {
+				exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
+				klog.Warning("Using ILIKE for lower case KIND string comparison - this behavior is needed for V1 compatibility and will be deprecated with Search V2.")
+			} else {
+				exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
+			}
 		} else {
 			exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
 		}
 	}
 	return exps
 
+}
+
+//if any string values starts with lower case letters, return true
+func isLower(values []string) bool {
+	for _, str := range values {
+		firstChar := rune(str[0]) //check if first character of the string is lower case
+		if unicode.IsLower(firstChar) && unicode.IsLetter(firstChar) {
+			return true
+		}
+	}
+	return false
 }
 
 // Check if value is a number or date and get the operator

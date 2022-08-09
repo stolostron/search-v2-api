@@ -22,23 +22,23 @@ Searching for the `Pod` in the managed cluster above will bring back the Service
 
 Query:
 ```
-SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search"."all_edges" AS "e" 
+SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search"."edges" AS "e" 
 	   WHERE (("destid" IN (<UID(s)>)) 
 			  OR ("sourceid" IN (<UID(s)>)))
 ```
 
-`all_edges` view stores all these relationships between the resources. Querying the view surfaces the related resources for the Search term (identified by the UID(s)).
+`edges` table stores all these relationships between the resources. Querying the table surfaces the related resources for the Search term (identified by the UID(s)).
 
 **FOR APPLICATIONS - Depth 3**
 
 If the search term involves Applications within input filters or relatedKinds, Search will surface relationships 3 levels deep on either side of the search term.
-Searching for the `Application` in the hub cluster above will bring back the Service, Replicaset, Deployment and both Subscriptions. This is done by recursively querying the  `all_edges` view.
+Searching for the `Application` in the hub cluster above will bring back the Service, Replicaset, Deployment and both Subscriptions. This is done by recursively querying the  `edges` table.
 
 ```
 WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster) AS
 ------------------------NON-RECURSIVE PART START------------------------
 		(SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" 
-		 FROM "search"."all_edges" AS "e" 
+		 FROM "search"."edges" AS "e" 
 		 WHERE (("destid" IN (<UID(s)>)) OR 
 					("sourceid" IN (<UID(s)>)) --Input /Control condition for non-recursive part
 			   ) 
@@ -46,7 +46,7 @@ WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, clus
 				   UNION 
 -------------------------RECURSIVE PART START------------------------
 		 (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster" 
-		  FROM "search"."all_edges" AS "e" 
+		  FROM "search"."edges" AS "e" 
 		  INNER JOIN "search_graph" AS "sg" 
 		  ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR 
 			  ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))

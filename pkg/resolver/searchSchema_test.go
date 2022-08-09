@@ -13,7 +13,7 @@ func Test_SearchSchema_Query(t *testing.T) {
 	// Create a SearchSchemaResolver instance with a mock connection pool.
 	resolver, _ := newMockSearchSchema(t)
 
-	sql := `SELECT DISTINCT jsonb_object_keys(jsonb_strip_nulls("data")) FROM "search"."resources"`
+	sql := `SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" LIMIT 100000) AS "schema"`
 	// Execute function
 	resolver.buildSearchSchemaQuery(context.TODO())
 
@@ -38,7 +38,7 @@ func Test_SearchSchema_Results(t *testing.T) {
 	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, "kind", 0)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT jsonb_object_keys(jsonb_strip_nulls("data")) FROM "search"."resources"`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" LIMIT 100000) AS "schema"`),
 	).Return(mockRows, nil)
 	resolver.buildSearchSchemaQuery(context.TODO())
 	res, _ := resolver.searchSchemaResults(context.TODO())
