@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	pgxpool "github.com/jackc/pgx/v4/pgxpool"
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -61,6 +62,33 @@ func GetConnection() *pgxpool.Pool {
 		}
 		metric.DBConnectionSuccess.WithLabelValues("DBPing").Inc()
 		klog.Info("Successfully connected to database!")
+
+		klog.Info("Testing searchComplete...")
+		start := time.Now()
+		ctx, cancelFn := context.WithCancel(context.Background())
+		query := "SELECT data->>'name' FROM search.resources"
+		rows, err := pool.Query(ctx, query)
+		resultMap := make(map[string]bool)
+
+		defer cancelFn()
+		defer rows.Close()
+		if rows != nil {
+			for rows.Next() {
+				prop := ""
+				scanErr := rows.Scan(&prop)
+				if scanErr != nil {
+					klog.Error("Error reading searchCompleteResults", scanErr)
+				}
+				resultMap[prop] = true
+				if len(resultMap) >= 100 {
+					klog.Info("Reached searchComplete limit.")
+					break
+				}
+			}
+		}
+		klog.Info("Result count: ", len(resultMap))
+		klog.Info("SearchComplete Took: ", time.Since(start))
+
 		return pool
 	}
 	return nil
