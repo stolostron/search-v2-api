@@ -227,7 +227,7 @@ func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, ite
 		if len(filter.Values) > 0 {
 			values := pointerToStringArray(filter.Values) //get the filter values
 
-			opValueMap := getOperatorAndNumDateFilter(values) // get the filter values if property is a number or date
+			opValueMap := getOperatorAndNumDateFilter(filter.Property, values) // get the filter values if property is a number or date
 			var op string
 			for key, val := range opValueMap {
 				op = key
@@ -326,7 +326,7 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 	} else if len(dest) == 1 { // For searchComplete function and resolveUIDs function
 		_, ok := r.mockData[r.index-1]["prop"] //Check if prop is present in mockdata
 		if ok {
-			*dest[0].(*string) = r.mockData[r.index-1]["prop"].(string)
+			*dest[0].(*interface{}) = r.mockData[r.index-1]["prop"].(string)
 		} else { //used by resolveUIDs function
 			*dest[0].(*string) = r.mockData[r.index-1]["uid"].(string)
 		}

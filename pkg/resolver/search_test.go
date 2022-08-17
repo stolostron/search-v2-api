@@ -152,59 +152,60 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	//define schema table:
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
+	prop := "created"
 
 	val8 := "year"
-	opValMap := getOperatorAndNumDateFilter([]string{val8})
+	opValMap := getOperatorAndNumDateFilter(prop, []string{val8})
 
-	mockQueryYear, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, "created").Gt(opValMap[">"][0])).Limit(1000).ToSQL()
+	mockQueryYear, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0])).Limit(1000).ToSQL()
 
 	testOperatorYear := TestOperatorItem{
-		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "created", Values: []*string{&val8}}}},
+		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: prop, Values: []*string{&val8}}}},
 		mockQuery:   mockQueryYear, // `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'created' > ('2021-05-16T13:11:12Z')) LIMIT 1000`,
 	}
 
 	val9 := "hour"
-	opValMap = getOperatorAndNumDateFilter([]string{val9})
-	mockQueryHour, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, "created").Gt(opValMap[">"][0])).Limit(1000).ToSQL()
+	opValMap = getOperatorAndNumDateFilter(prop, []string{val9})
+	mockQueryHour, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0])).Limit(1000).ToSQL()
 
 	testOperatorHour := TestOperatorItem{
-		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "created", Values: []*string{&val9}}}},
+		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: prop, Values: []*string{&val9}}}},
 		mockQuery:   mockQueryHour, // `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'created' > ('2021-05-16T13:11:12Z')) LIMIT 1000`,
 	}
 
 	val10 := "day"
-	opValMap = getOperatorAndNumDateFilter([]string{val10})
-	mockQueryDay, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, "created").Gt(goqu.L("?", opValMap[">"][0]))).Limit(1000).ToSQL()
+	opValMap = getOperatorAndNumDateFilter(prop, []string{val10})
+	mockQueryDay, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0]))).Limit(1000).ToSQL()
 
 	testOperatorDay := TestOperatorItem{
-		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "created", Values: []*string{&val10}}}},
+		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: prop, Values: []*string{&val10}}}},
 		mockQuery:   mockQueryDay, // `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'created' > ('2021-05-16T13:11:12Z')) LIMIT 1000`,
 	}
 
 	val11 := "week"
-	opValMap = getOperatorAndNumDateFilter([]string{val11})
-	mockQueryWeek, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, "created").Gt(goqu.L("?", opValMap[">"][0]))).Limit(1000).ToSQL()
+	opValMap = getOperatorAndNumDateFilter(prop, []string{val11})
+	mockQueryWeek, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0]))).Limit(1000).ToSQL()
 
 	testOperatorWeek := TestOperatorItem{
-		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "created", Values: []*string{&val11}}}},
+		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: prop, Values: []*string{&val11}}}},
 		mockQuery:   mockQueryWeek, // `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'created' > ('2021-05-16T13:11:12Z')) LIMIT 1000`,
 	}
 
 	val12 := "month"
-	opValMap = getOperatorAndNumDateFilter([]string{val12})
-	mockQueryMonth, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, "created").Gt(goqu.L("?", opValMap[">"][0]))).Limit(1000).ToSQL()
+	opValMap = getOperatorAndNumDateFilter(prop, []string{val12})
+	mockQueryMonth, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0]))).Limit(1000).ToSQL()
 
 	testOperatorMonth := TestOperatorItem{
-		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "created", Values: []*string{&val12}}}},
+		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: prop, Values: []*string{&val12}}}},
 		mockQuery:   mockQueryMonth, // `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'created' > ('2021-05-16T13:11:12Z')) LIMIT 1000`,
 	}
 
-	opValMap = getOperatorAndNumDateFilter([]string{val8, val9})
-	mockQueryMultiple, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.Or(goqu.L(`"data"->>?`, "created").Gt(opValMap[">"][0]),
-		goqu.L(`"data"->>?`, "created").Gt(opValMap[">"][1]))).Limit(1000).ToSQL()
+	opValMap = getOperatorAndNumDateFilter(prop, []string{val8, val9})
+	mockQueryMultiple, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.Or(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0]),
+		goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][1]))).Limit(1000).ToSQL()
 
 	testoperatorMultiple := TestOperatorItem{
-		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "created", Values: []*string{&val8, &val9}}}},
+		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: prop, Values: []*string{&val8, &val9}}}},
 		mockQuery:   mockQueryMultiple, // `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'created' > ('2021-05-16T13:11:12Z')) LIMIT 1000`,
 	}
 	testOperators := []TestOperatorItem{

@@ -252,6 +252,14 @@ func getOperator(values []string) map[string][]string {
 
 func getWhereClauseExpression(prop, operator string, values []string) []exp.Expression {
 	exps := []exp.Expression{}
+	jsonLookup := func(col exp.Expression, field string) goqu.Expression {
+		return goqu.L("?@>?", col, field)
+		// WHERE ("data"->'label' @> '{"component":"network"}')
+	}
+	jsonAnyKeyArrayLookup := func(col exp.Expression, fields []string) goqu.Expression {
+		return goqu.L("???", col, goqu.Literal("?|"), fields)
+	}
+
 	switch operator {
 	case "<=":
 		for _, val := range values {
@@ -276,6 +284,13 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 		}
 	case "=":
 		exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
+	case "@>":
+		for _, val := range values {
+			exps = append(exps, jsonLookup(goqu.L(`"data"->?`, prop), val))
+		}
+	case "?|":
+		exps = append(exps, jsonAnyKeyArrayLookup(goqu.L(`"data"->?`, prop), values))
+
 	default:
 		if prop == "cluster" {
 			exps = append(exps, goqu.C(prop).In(values))
@@ -307,7 +322,7 @@ func isLower(values []string) bool {
 
 // Check if value is a number or date and get the operator
 // Returns a map that stores operator and values
-func getOperatorAndNumDateFilter(values []string) map[string][]string {
+func getOperatorAndNumDateFilter(filter string, values []string) map[string][]string {
 
 	opValueMap := getOperator(values) //If values are numbers
 	// Store the operator and value in a map - this is to handle multiple values
@@ -343,7 +358,18 @@ func getOperatorAndNumDateFilter(values []string) map[string][]string {
 				then = now.AddDate(-1, 0, 0).Format(format)
 
 			default:
-				operator = ""
+				if filter == "label" {
+					klog.V(7).Info("filter is label. Operator is @>.")
+					operator = "@>"
+				} else {
+					if _, ok := arrayProperties[filter]; ok {
+						klog.V(7).Info("filter ", filter, " is present in arrayProperties. Using operator ?|.")
+						operator = "?|"
+					} else {
+						klog.V(7).Info("filter is neither label nor in arrayProperties: ", filter)
+						operator = ""
+					}
+				}
 				then = val
 			}
 			// Add the value and operator to map
@@ -443,13 +469,29 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 		for _, filter := range input.Filters {
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
+				// If property is of array type like label, remove the equal sign in it and use colon
+				// - to be similar to how it is stored in the database
+				if _, ok := arrayProperties[filter.Property]; ok {
+					cleanedVal := make([]string, len(values))
+					for i, val := range values {
+						labels := strings.Split(val, "=")
+						if len(labels) > 1 {
+							cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
+						} else {
+							//// If property is of array type, format it as an array for easy searching
+							cleanedVal[i] = fmt.Sprintf(`{"%s"}`, labels[0])
+						}
+					}
+					values = cleanedVal
+				}
+
 				// Check if value is a number or date and get the cleaned up value
-				opDateValueMap := getOperatorAndNumDateFilter(values)
+				opDateValueMap := getOperatorAndNumDateFilter(filter.Property, values)
 
 				//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
 				keys := getKeys(opDateValueMap)
-
 				sort.Strings(keys)
+
 				var operatorWhereDs []exp.Expression //store all the clauses for this filter together
 				for _, operator := range keys {
 					operatorWhereDs = append(operatorWhereDs,

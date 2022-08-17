@@ -28,14 +28,14 @@ func Test_SearchSchema_Results(t *testing.T) {
 	searchInput := &model.SearchInput{}
 	resolver, mockPool := newMockSearchSchema(t)
 
-	expectedList := []string{"cluster", "kind", "label", "name", "namespace", "status", "Template", "ReplicaSet", "ConfigMap"}
+	expectedList := []string{"cluster", "kind", "label", "name", "namespace", "status"}
 
 	expectedRes := map[string]interface{}{
 		"allProperties": expectedList,
 	}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, "kind", 0)
+	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, " ", 0)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" LIMIT 100000) AS "schema"`),
