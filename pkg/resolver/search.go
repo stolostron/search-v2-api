@@ -184,7 +184,8 @@ func buildRbacWhereClause(ctx context.Context, userrbac *UserResourceAccess) exp
 		}
 		sort.Strings(namespaces) //to make unit tests pass
 		for nsCount, namespace := range namespaces {
-			whereNsDs[nsCount] = goqu.And(goqu.L(`data->>?`, "namespace").Eq(namespace), loopThroughResources(userrbac.NsResources[namespace]))
+			whereNsDs[nsCount] = goqu.And(goqu.L(`data->>?`, "namespace").Eq(namespace),
+				loopThroughResources(userrbac.NsResources[namespace]))
 		}
 	}
 	combineNsAndCs := goqu.Or(whereCsDs, goqu.Or(whereNsDs...))
