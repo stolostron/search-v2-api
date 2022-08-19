@@ -21,8 +21,16 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/metric"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"k8s.io/klog/v2"
 )
+
+// Stuct to keep a copy of users access
+type UserResourceAccess struct {
+	CsResources     []rbac.Resource            // Cluster-scoped resources on hub the user has list access.
+	NsResources     map[string][]rbac.Resource // Namespaced resources on hub the user has list access.
+	ManagedClusters []string                   // Managed clusters where the user has view access.
+}
 
 type SearchResult struct {
 	input  *model.SearchInput
@@ -33,20 +41,28 @@ type SearchResult struct {
 	params []interface{}
 	level  int // The number of levels/hops for finding relationships for a particular resource
 	//  Related []SearchRelatedResult
+	userAccess *UserResourceAccess
 }
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
 	// For each input, create a SearchResult resolver.
 	srchResult := make([]*SearchResult, len(input))
-	if len(input) > 0 {
-		for index, in := range input {
-			srchResult[index] = &SearchResult{
-				input: in,
-				pool:  db.GetConnection(),
+	userAccess, userDataErr := userdataExists(ctx)
+	// Proceed if user's rbac data exists
+	if userDataErr == nil {
+		if len(input) > 0 {
+			for index, in := range input {
+				srchResult[index] = &SearchResult{
+					input:      in,
+					pool:       db.GetConnection(),
+					userAccess: userAccess,
+				}
 			}
 		}
+		return srchResult, nil
+	} else {
+		return srchResult, userDataErr
 	}
-	return srchResult, nil
 }
 
 func (s *SearchResult) Count() int {
@@ -107,6 +123,80 @@ func (s *SearchResult) Uids() {
 	s.resolveUids()
 }
 
+// Get a copy of the current user access if user data exists
+func userdataExists(ctx context.Context) (*UserResourceAccess, error) {
+	var uid string
+	clientToken := ctx.Value(rbac.ContextAuthTokenKey).(string)
+	//get uid from tokenreview
+	if tr, err := rbac.CacheInst.GetTokenReview(ctx, clientToken); err == nil {
+		uid = tr.Status.User.UID
+	}
+
+	userData, userDataExistsErr := rbac.CacheInst.GetUserData(ctx, uid, nil)
+	useraccess := UserResourceAccess{}
+	if userDataExistsErr == nil {
+		useraccess = UserResourceAccess{CsResources: userData.GetCsResources(),
+			NsResources: userData.GetNsResources(), ManagedClusters: userData.GetManagedClusters()}
+	}
+	return &useraccess, userDataExistsErr
+}
+
+// Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
+func buildRbacWhereClause(ctx context.Context, userrbac *UserResourceAccess) exp.ExpressionList {
+
+	// inner function to loop through resources and build the where clause
+	loopThroughResources := func(resources []rbac.Resource) exp.ExpressionList {
+		whereCsDs := make([]exp.ExpressionList, 1) // Stores the combined where clause for cluster scoped resources
+		for i, clusterRes := range resources {
+			whereOrDs := []exp.Expression{goqu.COALESCE(goqu.L(`data->>?`, "apigroup"), "").Eq(clusterRes.Apigroup),
+				goqu.L(`data->>?`, "kind_plural").Eq(clusterRes.Kind)}
+
+			// Using this workaround to build the AND-OR combination query in goqu.
+			// Otherwise, by default goqu will AND everything
+			// (apigroup='' AND kind='') OR (apigroup='' AND kind='')
+			if i == 0 {
+				whereCsDs[0] = goqu.And(whereOrDs...) // First time, AND all conditions
+			} else {
+				//Next time onwards, perform OR with the existing conditions
+				whereCsDs[0] = goqu.Or(whereCsDs[0], goqu.And(whereOrDs...))
+			}
+		}
+
+		return whereCsDs[0]
+	}
+	//Cluster scoped resources
+	var whereCsDs exp.ExpressionList
+
+	if len(userrbac.CsResources) > 0 {
+		whereCsDs = loopThroughResources(userrbac.CsResources)
+
+	}
+
+	//Namespace scoped resources
+	var whereNsDs []exp.Expression
+	if len(userrbac.NsResources) > 0 {
+		whereNsDs = make([]exp.Expression, len(userrbac.NsResources))
+		nsCount := 0
+		for namespace, nsRes := range userrbac.NsResources {
+			whereNsDs[nsCount] = goqu.And(goqu.L(`data->>?`, "namespace").Eq(namespace), loopThroughResources(nsRes))
+			nsCount++
+		}
+	}
+	combineNsAndCs := goqu.Or(whereCsDs, goqu.Or(whereNsDs...))
+	//check if resource is in the hub cluster
+	combineNsAndCs = goqu.And(goqu.L(`data->>?`, "_hubClusterResource").Eq("true"), combineNsAndCs)
+	rbacCombined := combineNsAndCs
+
+	//managed clusters
+	var whereMc exp.BooleanExpression
+	if len(userrbac.ManagedClusters) > 0 {
+		whereMc = goqu.C("cluster").In(userrbac.ManagedClusters)
+		rbacCombined = goqu.Or(whereMc, combineNsAndCs)
+
+	}
+	return rbacCombined
+
+}
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) {
 	var limit int
 	var selectDs *goqu.SelectDataset
@@ -136,6 +226,9 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	//WHERE CLAUSE
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 		whereDs = WhereClauseFilter(s.input)
+		if s.userAccess != nil {
+			whereDs = append(whereDs, buildRbacWhereClause(ctx, s.userAccess)) // add rbac
+		}
 	}
 
 	//LIMIT CLAUSE

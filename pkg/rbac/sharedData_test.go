@@ -64,8 +64,8 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 
 	err := mock_cache.PopulateSharedCache(ctx)
 
-	if len(mock_cache.shared.csResources) != 1 || mock_cache.shared.csResources[0].kind != "Nodes" ||
-		mock_cache.shared.csResources[0].apigroup != "addon.open-cluster-management.io" {
+	if len(mock_cache.shared.csResources) != 1 || mock_cache.shared.csResources[0].Kind != "Nodes" ||
+		mock_cache.shared.csResources[0].Apigroup != "addon.open-cluster-management.io" {
 		t.Error("Cluster Scoped Resources not in cache")
 	}
 
@@ -105,13 +105,13 @@ func Test_getResouces_usingCache(t *testing.T) {
 		managedClusters: managedCluster,
 		mcUpdatedAt:     time.Now(),
 		csUpdatedAt:     time.Now(),
-		csResources:     append(mock_cache.shared.csResources, resource{apigroup: "apigroup1", kind: "kind1"}),
+		csResources:     append(mock_cache.shared.csResources, Resource{Apigroup: "apigroup1", Kind: "kind1"}),
 	}
 
 	err := mock_cache.PopulateSharedCache(ctx)
 
-	if len(mock_cache.shared.csResources) != 1 || mock_cache.shared.csResources[0].kind != "Nodes" ||
-		mock_cache.shared.csResources[0].apigroup != "addon.open-cluster-management.io" {
+	if len(mock_cache.shared.csResources) != 1 || mock_cache.shared.csResources[0].Kind != "Nodes" ||
+		mock_cache.shared.csResources[0].Apigroup != "addon.open-cluster-management.io" {
 		t.Error("Cluster Scoped Resources not in cache")
 	}
 	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" {
@@ -151,14 +151,14 @@ func Test_getResources_expiredCache(t *testing.T) {
 		nsUpdatedAt:     last_cache_time,
 		mcUpdatedAt:     last_cache_time,
 		csUpdatedAt:     last_cache_time,
-		csResources:     append(mock_cache.shared.csResources, resource{apigroup: "apigroup1", kind: "kind1"}),
+		csResources:     append(mock_cache.shared.csResources, Resource{Apigroup: "apigroup1", Kind: "kind1"}),
 	}
 
 	err := mock_cache.PopulateSharedCache(ctx)
 
 	//
-	if len(mock_cache.shared.csResources) != 1 || mock_cache.shared.csResources[0].kind != "Nodes" ||
-		mock_cache.shared.csResources[0].apigroup != "addon.open-cluster-management.io" {
+	if len(mock_cache.shared.csResources) != 1 || mock_cache.shared.csResources[0].Kind != "Nodes" ||
+		mock_cache.shared.csResources[0].Apigroup != "addon.open-cluster-management.io" {
 		t.Error("Cluster Scoped Resources not in cache")
 	}
 

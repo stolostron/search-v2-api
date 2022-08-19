@@ -18,7 +18,7 @@ type Cache struct {
 	tokenReviews     map[string]*tokenReviewCache //Key:ClientToken
 	tokenReviewsLock sync.Mutex
 	shared           SharedData
-	users            map[string]*userData // UID:{userdata} UID comes from tokenreview
+	users            map[string]*UserData // UID:{userdata} UID comes from tokenreview
 	usersLock        sync.Mutex
 
 	// Clients to external APIs.
@@ -31,12 +31,12 @@ type Cache struct {
 }
 
 // Initialize the cache as a singleton instance.
-var cacheInst = Cache{
+var CacheInst = Cache{
 	tokenReviews:     map[string]*tokenReviewCache{},
 	tokenReviewsLock: sync.Mutex{},
 	usersLock:        sync.Mutex{},
 	shared:           SharedData{},
-	users:            map[string]*userData{},
+	users:            map[string]*UserData{},
 	restConfig:       config.GetClientConfig(),
 	pool:             db.GetConnection(),
 	corev1Client:     config.GetCoreClient(),
