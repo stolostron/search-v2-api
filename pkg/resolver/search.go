@@ -176,10 +176,15 @@ func buildRbacWhereClause(ctx context.Context, userrbac *UserResourceAccess) exp
 	var whereNsDs []exp.Expression
 	if len(userrbac.NsResources) > 0 {
 		whereNsDs = make([]exp.Expression, len(userrbac.NsResources))
-		nsCount := 0
-		for namespace, nsRes := range userrbac.NsResources {
-			whereNsDs[nsCount] = goqu.And(goqu.L(`data->>?`, "namespace").Eq(namespace), loopThroughResources(nsRes))
-			nsCount++
+		namespaces := make([]string, len(userrbac.NsResources))
+		i := 0
+		for namespace := range userrbac.NsResources {
+			namespaces[i] = namespace
+			i++
+		}
+		sort.Strings(namespaces) //to make unit tests pass
+		for nsCount, namespace := range namespaces {
+			whereNsDs[nsCount] = goqu.And(goqu.L(`data->>?`, "namespace").Eq(namespace), loopThroughResources(userrbac.NsResources[namespace]))
 		}
 	}
 	combineNsAndCs := goqu.Or(whereCsDs, goqu.Or(whereNsDs...))
@@ -560,9 +565,11 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 }
 
 func getKeys(stringArrayMap map[string][]string) []string {
-	keys := make([]string, 0, len(stringArrayMap))
+	i := 0
+	keys := make([]string, len(stringArrayMap))
 	for k := range stringArrayMap {
-		keys = append(keys, k)
+		keys[i] = k
+		i++
 	}
 	return keys
 }
