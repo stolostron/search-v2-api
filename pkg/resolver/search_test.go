@@ -35,9 +35,8 @@ func Test_SearchResolver_Count(t *testing.T) {
 }
 
 func Test_SearchResolver_Count_WithRBAC(t *testing.T) {
-	managedClusters := []string{"managed1", "managed2"}
 	csRes, nsRes, managedClusters := newUserResourceAccess()
-	ura := rbac.UserResourceAccess{csRes, nsRes, managedClusters}
+	ura := rbac.UserResourceAccess{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "Pod"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
@@ -183,7 +182,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 	csres, nsres, mc := newUserResourceAccess()
-	rbac := buildRbacWhereClause(context.TODO(), &rbac.UserResourceAccess{csres, nsres, mc})
+	rbac := buildRbacWhereClause(context.TODO(), &rbac.UserResourceAccess{CsResources: csres, NsResources: nsres, ManagedClusters: mc})
 	val8 := "year"
 	opValMap := getOperatorAndNumDateFilter([]string{val8})
 	mockQueryYear, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, "created").Gt(opValMap[">"][0]), rbac).Limit(1000).ToSQL()
@@ -247,8 +246,8 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 
 func testAllOperators(t *testing.T, testOperators []TestOperatorItem) {
 	for _, currTest := range testOperators {
-		csres, nsres, mc := newUserResourceAccess()
-		ura := rbac.UserResourceAccess{csres, nsres, mc}
+		csRes, nsRes, mc := newUserResourceAccess()
+		ura := rbac.UserResourceAccess{CsResources: csRes, NsResources: nsRes, ManagedClusters: mc}
 		// Create a SearchResolver instance with a mock connection pool.
 		resolver, mockPool := newMockSearchResolver(t, currTest.searchInput, nil, &ura)
 		// Mock the database queries.

@@ -147,7 +147,8 @@ func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserResourceAccess
 
 // inner function to loop through resources and build the where clause
 func loopThroughResources(resources []rbac.Resource) exp.ExpressionList {
-	whereCsDs := make([]exp.ExpressionList, 1) // Stores the combined where clause for cluster scoped resources
+	var whereCsDs exp.ExpressionList // Stores the where clause for cluster scoped resources
+
 	for i, clusterRes := range resources {
 		whereOrDs := []exp.Expression{goqu.COALESCE(goqu.L(`data->>?`, "apigroup"), "").Eq(clusterRes.Apigroup),
 			goqu.L(`data->>?`, "kind_plural").Eq(clusterRes.Kind)}
@@ -156,13 +157,13 @@ func loopThroughResources(resources []rbac.Resource) exp.ExpressionList {
 		// Otherwise, by default goqu will AND everything
 		// (apigroup='' AND kind='') OR (apigroup='' AND kind='')
 		if i == 0 {
-			whereCsDs[0] = goqu.And(whereOrDs...) // First time, AND all conditions
+			whereCsDs = goqu.And(whereOrDs...) // First time, AND all conditions
 		} else {
 			//Next time onwards, perform OR with the existing conditions
-			whereCsDs[0] = goqu.Or(whereCsDs[0], goqu.And(whereOrDs...))
+			whereCsDs = goqu.Or(whereCsDs, goqu.And(whereOrDs...))
 		}
 	}
-	return whereCsDs[0]
+	return whereCsDs
 }
 func matchClusterScopedResources(csRes []rbac.Resource) exp.ExpressionList {
 	var whereNsDs exp.ExpressionList
