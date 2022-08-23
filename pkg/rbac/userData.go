@@ -17,9 +17,7 @@ import (
 
 // Contains data about the resources the user is allowed to access.
 type UserData struct {
-	csResources     []Resource            // Cluster-scoped resources on hub the user has list access.
-	nsResources     map[string][]Resource // Namespaced resources on hub the user has list access.
-	managedClusters []string              // Managed clusters where the user has view access.
+	userResourceAccess UserResourceAccess
 
 	// Internal fields to manage the cache.
 	clustersErr error // Error while updating clusters data.
@@ -123,10 +121,10 @@ func (user *UserData) getClusterScopedResources(cache *Cache, ctx context.Contex
 		return user, user.csrErr
 	}
 	//If we have a new set of authorized list for the user reset the previous one
-	user.csResources = nil
+	user.userResourceAccess.CsResources = nil
 	for _, res := range clusterScopedResources {
 		if user.userAuthorizedListCSResource(ctx, impersClientset, res.Apigroup, res.Kind) {
-			user.csResources = append(user.csResources, Resource{Apigroup: res.Apigroup, Kind: res.Kind})
+			user.userResourceAccess.CsResources = append(user.userResourceAccess.CsResources, Resource{Apigroup: res.Apigroup, Kind: res.Kind})
 		}
 	}
 	user.csrUpdatedAt = time.Now()
@@ -168,9 +166,9 @@ func (user *UserData) getNamespacedResources(cache *Cache, ctx context.Context, 
 
 	// clear cache
 	user.csrErr = nil
-	user.nsResources = nil
+	user.userResourceAccess.NsResources = nil
 	user.clustersErr = nil
-	user.managedClusters = nil
+	user.userResourceAccess.ManagedClusters = nil
 
 	// get all namespaces from shared cache:
 	klog.V(5).Info("Getting namespaces from shared cache.")
@@ -188,7 +186,7 @@ func (user *UserData) getNamespacedResources(cache *Cache, ctx context.Context, 
 		return user, err
 	}
 
-	user.nsResources = make(map[string][]Resource)
+	user.userResourceAccess.NsResources = make(map[string][]Resource)
 	managedClusters := cache.shared.managedClusters
 
 	for _, ns := range allNamespaces {
@@ -209,7 +207,7 @@ func (user *UserData) getNamespacedResources(cache *Cache, ctx context.Context, 
 				if verb == "list" || verb == "*" { //TODO: resourceName == "*" && verb == "*" then exit loop
 					for _, res := range rules.Resources {
 						for _, api := range rules.APIGroups {
-							user.nsResources[ns] = append(user.nsResources[ns], Resource{Apigroup: api, Kind: res})
+							user.userResourceAccess.NsResources[ns] = append(user.userResourceAccess.NsResources[ns], Resource{Apigroup: api, Kind: res})
 						}
 					}
 				}
@@ -221,7 +219,7 @@ func (user *UserData) getNamespacedResources(cache *Cache, ctx context.Context, 
 						if res == "managedclusterviews" {
 							for i := range managedClusters {
 								if managedClusters[i] == ns {
-									user.managedClusters = append(user.managedClusters, ns)
+									user.userResourceAccess.ManagedClusters = append(user.userResourceAccess.ManagedClusters, ns)
 
 								}
 							}
@@ -262,13 +260,13 @@ func (user *UserData) getImpersonationClientSet(clientToken string, cache *Cache
 }
 
 func (user *UserData) GetCsResources() []Resource {
-	return user.csResources
+	return user.userResourceAccess.CsResources
 }
 
 func (user *UserData) GetNsResources() map[string][]Resource {
-	return user.nsResources
+	return user.userResourceAccess.NsResources
 }
 
 func (user *UserData) GetManagedClusters() []string {
-	return user.managedClusters
+	return user.userResourceAccess.ManagedClusters
 }
