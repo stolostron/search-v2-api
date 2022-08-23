@@ -415,11 +415,25 @@ func Test_SearchResolver_Uids(t *testing.T) {
 	}
 }
 
-func Test_buildRbacWhereClause(t *testing.T) {
+func Test_buildRbacWhereClauseCs(t *testing.T) {
 	res := []rbac.Resource{{Apigroup: "", Kind: "nodes"}, {Apigroup: "storage.k8s.io", Kind: "csinodes"}}
 	clScopeAccess := UserResourceAccess{CsResources: res}
 	rbacCombined := buildRbacWhereClause(context.TODO(), &clScopeAccess)
-	expectedSql := `SELECT * WHERE ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes'))))`
+	expectedSql := `SELECT * WHERE (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND ((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes'))))))`
+	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
+	assert.Equal(t, expectedSql, gotSql)
+
+}
+
+func Test_buildRbacWhereClauseNs(t *testing.T) {
+	res := []rbac.Resource{{Apigroup: "", Kind: "pods"}, {Apigroup: "apps", Kind: "replicasets"}}
+	nsScopeAccess := map[string][]rbac.Resource{}
+	nsScopeAccess["ocm"] = res
+	nsScopeAccess["default"] = res
+
+	ura := UserResourceAccess{NsResources: nsScopeAccess}
+	rbacCombined := buildRbacWhereClause(context.TODO(), &ura)
+	expectedSql := `SELECT * WHERE (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND (NULL OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'apps') AND (data->>'kind_plural' = 'replicasets')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'apps') AND (data->>'kind_plural' = 'replicasets'))))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
 
@@ -427,17 +441,18 @@ func Test_buildRbacWhereClause(t *testing.T) {
 
 func Test_buildRbacWhereClauseCsAndNs(t *testing.T) {
 	res := []rbac.Resource{{Apigroup: "", Kind: "nodes"}, {Apigroup: "storage.k8s.io", Kind: "csinodes"}}
+	nsRes := []rbac.Resource{{Apigroup: "", Kind: "pods"}, {Apigroup: "apps", Kind: "replicasets"}}
 	nsScopeAccess := map[string][]rbac.Resource{}
-	nsScopeAccess["ns1"] = res
+	nsScopeAccess["ocm"] = nsRes
 	ura := UserResourceAccess{CsResources: res, NsResources: nsScopeAccess}
 	rbacCombined := buildRbacWhereClause(context.TODO(), &ura)
-	expectedSql := `SELECT * WHERE ((data->>'_hubClusterResource' = 'true') AND ((((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes'))) OR ((data->>'namespace' = 'ns1') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes'))))))`
+	expectedSql := `SELECT * WHERE (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'apps') AND (data->>'kind_plural' = 'replicasets')))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
 
 }
 
-func Test_buildRbacWhereClauseCombined(t *testing.T) {
+func Test_buildRbacWhereClauseCsNsAndMc(t *testing.T) {
 	csres := []rbac.Resource{{Apigroup: "", Kind: "nodes"}, {Apigroup: "storage.k8s.io", Kind: "csinodes"}}
 	nsres1 := []rbac.Resource{{Apigroup: "v1", Kind: "pods"}, {Apigroup: "v2", Kind: "deployments"}}
 	nsres2 := []rbac.Resource{{Apigroup: "", Kind: "configmaps"}, {Apigroup: "v4", Kind: "services"}}
@@ -447,7 +462,7 @@ func Test_buildRbacWhereClauseCombined(t *testing.T) {
 	nsScopeAccess["ns2"] = nsres2
 	ura := UserResourceAccess{CsResources: csres, NsResources: nsScopeAccess, ManagedClusters: managedClusters}
 	rbacCombined := buildRbacWhereClause(context.TODO(), &ura)
-	expectedSql := `SELECT * WHERE (("cluster" IN ('managed1', 'managed2')) OR ((data->>'_hubClusterResource' = 'true') AND ((((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes'))) OR (((data->>'namespace' = 'ns1') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments')))) OR ((data->>'namespace' = 'ns2') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services'))))))))`
+	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'ns1') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments')))) OR ((data->>'namespace' = 'ns2') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services'))))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
 }

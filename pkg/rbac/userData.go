@@ -37,13 +37,23 @@ type UserData struct {
 	authzClient v1.AuthorizationV1Interface
 }
 
-func (cache *Cache) GetUserData(ctx context.Context, clientToken string,
+func (cache *Cache) GetUserData(ctx context.Context,
 	authzClient v1.AuthorizationV1Interface) (*UserData, error) {
 	var user *UserData
-	uid := cache.tokenReviews[clientToken].tokenReview.Status.User.UID //get uid from tokenreview
+	var uid string
+	clientToken := ctx.Value(ContextAuthTokenKey).(string)
+
+	//get uid from tokenreview
+	if tokenReview, err := cache.GetTokenReview(ctx, clientToken); err == nil {
+		uid = tokenReview.Status.User.UID
+	} else {
+		return user, err
+	}
+
 	cache.usersLock.Lock()
 	defer cache.usersLock.Unlock()
 	cachedUserData, userDataExists := cache.users[uid] //check if userData cache for user already exists
+
 	// UserDataExists and its valid
 	if userDataExists && userCacheValid(cachedUserData) {
 		klog.V(5).Info("Using user data from cache.")
@@ -244,14 +254,14 @@ func (user *UserData) getImpersonationClientSet(clientToken string, cache *Cache
 	return user.authzClient, nil
 }
 
-func (userdata *UserData) GetCsResources() []Resource {
-	return userdata.csResources
+func (user *UserData) GetCsResources() []Resource {
+	return user.csResources
 }
 
-func (userdata *UserData) GetNsResources() map[string][]Resource {
-	return userdata.nsResources
+func (user *UserData) GetNsResources() map[string][]Resource {
+	return user.nsResources
 }
 
-func (userdata *UserData) GetManagedClusters() []string {
-	return userdata.managedClusters
+func (user *UserData) GetManagedClusters() []string {
+	return user.managedClusters
 }

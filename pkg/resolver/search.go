@@ -47,22 +47,30 @@ type SearchResult struct {
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
 	// For each input, create a SearchResult resolver.
 	srchResult := make([]*SearchResult, len(input))
-	userAccess, userDataErr := userdataExists(ctx)
+	userData, userDataErr := rbac.CacheInst.GetUserData(ctx, nil)
+	if userDataErr != nil {
+		return nil, userDataErr
+	}
 	// Proceed if user's rbac data exists
-	if userDataErr == nil {
-		if len(input) > 0 {
-			for index, in := range input {
-				srchResult[index] = &SearchResult{
-					input:      in,
-					pool:       db.GetConnection(),
-					userAccess: userAccess,
-				}
+	// Get a copy of the current user access if user data exists
+
+	userAccess := &UserResourceAccess{
+		CsResources:     userData.GetCsResources(),
+		NsResources:     userData.GetNsResources(),
+		ManagedClusters: userData.GetManagedClusters(),
+	}
+
+	if len(input) > 0 {
+		for index, in := range input {
+			srchResult[index] = &SearchResult{
+				input:      in,
+				pool:       db.GetConnection(),
+				userAccess: userAccess,
 			}
 		}
-		return srchResult, nil
-	} else {
-		return srchResult, userDataErr
 	}
+	return srchResult, nil
+
 }
 
 func (s *SearchResult) Count() int {
@@ -123,86 +131,79 @@ func (s *SearchResult) Uids() {
 	s.resolveUids()
 }
 
-// Get a copy of the current user access if user data exists
-func userdataExists(ctx context.Context) (*UserResourceAccess, error) {
-	var uid string
-	clientToken := ctx.Value(rbac.ContextAuthTokenKey).(string)
-	//get uid from tokenreview
-	if tr, err := rbac.CacheInst.GetTokenReview(ctx, clientToken); err == nil {
-		uid = tr.Status.User.UID
-	}
-
-	userData, userDataExistsErr := rbac.CacheInst.GetUserData(ctx, uid, nil)
-	useraccess := UserResourceAccess{}
-	if userDataExistsErr == nil {
-		useraccess = UserResourceAccess{CsResources: userData.GetCsResources(),
-			NsResources: userData.GetNsResources(), ManagedClusters: userData.GetManagedClusters()}
-	}
-	return &useraccess, userDataExistsErr
-}
-
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac *UserResourceAccess) exp.ExpressionList {
+	return goqu.Or(
+		matchManagedCluster(userrbac.ManagedClusters), // goqu.I("cluster").In([]string{"clusterNames", ....})
+		goqu.And(
+			matchHubCluster(), // goqu.L(`data->>?`, "_hubClusterResource").Eq("true")
+			goqu.Or(
+				matchClusterScopedResources(userrbac.CsResources), // (namespace=null AND apigroup AND kind)
+				matchNamespacedResources(userrbac.NsResources),    // (namespace AND apiproup AND kind)
+			),
+		),
+	)
+}
 
-	// inner function to loop through resources and build the where clause
-	loopThroughResources := func(resources []rbac.Resource) exp.ExpressionList {
-		whereCsDs := make([]exp.ExpressionList, 1) // Stores the combined where clause for cluster scoped resources
-		for i, clusterRes := range resources {
-			whereOrDs := []exp.Expression{goqu.COALESCE(goqu.L(`data->>?`, "apigroup"), "").Eq(clusterRes.Apigroup),
-				goqu.L(`data->>?`, "kind_plural").Eq(clusterRes.Kind)}
+// inner function to loop through resources and build the where clause
+func loopThroughResources(resources []rbac.Resource) exp.ExpressionList {
+	whereCsDs := make([]exp.ExpressionList, 1) // Stores the combined where clause for cluster scoped resources
+	for i, clusterRes := range resources {
+		whereOrDs := []exp.Expression{goqu.COALESCE(goqu.L(`data->>?`, "apigroup"), "").Eq(clusterRes.Apigroup),
+			goqu.L(`data->>?`, "kind_plural").Eq(clusterRes.Kind)}
 
-			// Using this workaround to build the AND-OR combination query in goqu.
-			// Otherwise, by default goqu will AND everything
-			// (apigroup='' AND kind='') OR (apigroup='' AND kind='')
-			if i == 0 {
-				whereCsDs[0] = goqu.And(whereOrDs...) // First time, AND all conditions
-			} else {
-				//Next time onwards, perform OR with the existing conditions
-				whereCsDs[0] = goqu.Or(whereCsDs[0], goqu.And(whereOrDs...))
-			}
+		// Using this workaround to build the AND-OR combination query in goqu.
+		// Otherwise, by default goqu will AND everything
+		// (apigroup='' AND kind='') OR (apigroup='' AND kind='')
+		if i == 0 {
+			whereCsDs[0] = goqu.And(whereOrDs...) // First time, AND all conditions
+		} else {
+			//Next time onwards, perform OR with the existing conditions
+			whereCsDs[0] = goqu.Or(whereCsDs[0], goqu.And(whereOrDs...))
 		}
-
-		return whereCsDs[0]
 	}
-	//Cluster scoped resources
-	var whereCsDs exp.ExpressionList
+	return whereCsDs[0]
+}
+func matchClusterScopedResources(csRes []rbac.Resource) exp.ExpressionList {
+	var whereNsDs exp.ExpressionList
 
-	if len(userrbac.CsResources) > 0 {
-		whereCsDs = loopThroughResources(userrbac.CsResources)
+	if len(csRes) > 0 {
+		return goqu.And(goqu.COALESCE(goqu.L(`data->>?`, "namespace"), "").Eq(""),
+			loopThroughResources(csRes))
 
 	}
+	return whereNsDs
+}
 
-	//Namespace scoped resources
+func matchNamespacedResources(nsResources map[string][]rbac.Resource) exp.ExpressionList {
 	var whereNsDs []exp.Expression
-	if len(userrbac.NsResources) > 0 {
-		whereNsDs = make([]exp.Expression, len(userrbac.NsResources))
-		namespaces := make([]string, len(userrbac.NsResources))
+	if len(nsResources) > 0 {
+		whereNsDs = make([]exp.Expression, len(nsResources))
+		namespaces := make([]string, len(nsResources))
 		i := 0
-		for namespace := range userrbac.NsResources {
+		for namespace := range nsResources {
 			namespaces[i] = namespace
 			i++
 		}
 		sort.Strings(namespaces) //to make unit tests pass
 		for nsCount, namespace := range namespaces {
 			whereNsDs[nsCount] = goqu.And(goqu.L(`data->>?`, "namespace").Eq(namespace),
-				loopThroughResources(userrbac.NsResources[namespace]))
+				loopThroughResources(nsResources[namespace]))
 		}
 	}
-	combineNsAndCs := goqu.Or(whereCsDs, goqu.Or(whereNsDs...))
-	//check if resource is in the hub cluster
-	combineNsAndCs = goqu.And(goqu.L(`data->>?`, "_hubClusterResource").Eq("true"), combineNsAndCs)
-	rbacCombined := combineNsAndCs
-
-	//managed clusters
-	var whereMc exp.BooleanExpression
-	if len(userrbac.ManagedClusters) > 0 {
-		whereMc = goqu.C("cluster").In(userrbac.ManagedClusters)
-		rbacCombined = goqu.Or(whereMc, combineNsAndCs)
-
-	}
-	return rbacCombined
-
+	return goqu.Or(whereNsDs...)
 }
+
+func matchHubCluster() exp.BooleanExpression {
+	//hub cluster
+	return goqu.L(`data->>?`, "_hubClusterResource").Eq("true")
+}
+
+func matchManagedCluster(managedClusters []string) exp.BooleanExpression {
+	//managed clusters
+	return goqu.C("cluster").Eq(goqu.Any(pq.Array(managedClusters)))
+}
+
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) {
 	var limit int
 	var selectDs *goqu.SelectDataset
@@ -233,7 +234,10 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 		whereDs = WhereClauseFilter(s.input)
 		if s.userAccess != nil {
-			whereDs = append(whereDs, buildRbacWhereClause(ctx, s.userAccess)) // add rbac
+			whereDs = append(whereDs,
+				buildRbacWhereClause(ctx, s.userAccess)) // add rbac
+		} else {
+			panic("RBAC clause is required!")
 		}
 	}
 

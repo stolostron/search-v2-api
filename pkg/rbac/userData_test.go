@@ -29,6 +29,7 @@ func mockNamespaceCache() *Cache {
 
 func setupToken(cache *Cache) *Cache {
 	cache.tokenReviews["123456"] = &tokenReviewCache{
+		updatedAt: time.Now(),
 		tokenReview: &authv1.TokenReview{
 			Status: authv1.TokenReviewStatus{
 				User: authv1.UserInfo{
@@ -37,6 +38,7 @@ func setupToken(cache *Cache) *Cache {
 			},
 		},
 	}
+
 	return cache
 }
 
@@ -78,8 +80,8 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 		}
 		return true, rulesCheck, nil
 	})
-	ctx := context.Background()
-	result, err := mock_cache.GetUserData(ctx, "123456", fs.AuthorizationV1())
+	ctx := context.WithValue(context.TODO(), ContextAuthTokenKey, "123456")
+	result, err := mock_cache.GetUserData(ctx, fs.AuthorizationV1())
 
 	if len(result.nsResources) != 1 ||
 		result.nsResources["some-namespace"][0].Apigroup != "k8s.io" ||
@@ -145,7 +147,8 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 		return true, rulesCheck, nil
 	})
 
-	result, err := mock_cache.GetUserData(context.Background(), "123456", fs.AuthorizationV1())
+	ctx := context.WithValue(context.TODO(), ContextAuthTokenKey, "123456")
+	result, err := mock_cache.GetUserData(ctx, fs.AuthorizationV1())
 
 	if len(result.nsResources) != 1 ||
 		result.nsResources["some-nonmatching-namespace"] != nil ||
@@ -206,7 +209,8 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 		}
 		return true, rulesCheck, nil
 	})
-	result, err := mock_cache.GetUserData(context.Background(), "123456", fs.AuthorizationV1())
+	ctx := context.WithValue(context.TODO(), ContextAuthTokenKey, "123456")
+	result, err := mock_cache.GetUserData(ctx, fs.AuthorizationV1())
 
 	if len(result.nsResources) != 1 || len(result.nsResources["some-namespace"]) != 2 ||
 		result.nsResources["some-nonmatching-namespace"] != nil ||
@@ -249,8 +253,9 @@ func Test_clusterScoped_usingCache(t *testing.T) {
 		csrUpdatedAt: time.Now(),
 		nsrUpdatedAt: time.Now(),
 	}
+	ctx := context.WithValue(context.TODO(), ContextAuthTokenKey, "123456")
 
-	result, err := mock_cache.GetUserData(context.Background(), "123456", nil)
+	result, err := mock_cache.GetUserData(ctx, nil)
 	if len(result.csResources) != 1 || result.csResources[0].Kind != "nodes" || result.csResources[0].Apigroup != "storage.k8s.io" {
 		t.Error("Cluster scoped Resources not in user cache.")
 	}
@@ -320,7 +325,8 @@ func Test_clusterScoped_expiredCache(t *testing.T) {
 		authzClient:  fs.AuthorizationV1(),
 	}
 
-	result, err := mock_cache.GetUserData(context.Background(), "123456", fs.AuthorizationV1())
+	ctx := context.WithValue(context.TODO(), ContextAuthTokenKey, "123456")
+	result, err := mock_cache.GetUserData(ctx, fs.AuthorizationV1())
 
 	if len(result.csResources) != 1 || result.csResources[0].Kind != "nodes" {
 		t.Error("Cluster scoped Resources not in user cache.")
@@ -393,7 +399,8 @@ func Test_managedClusters_emptyCache(t *testing.T) {
 		return true, notCreateRule, nil
 
 	})
-	result, err := mock_cache.GetUserData(context.Background(), "123456", fs.AuthorizationV1())
+	ctx := context.WithValue(context.TODO(), ContextAuthTokenKey, "123456")
+	result, err := mock_cache.GetUserData(ctx, fs.AuthorizationV1())
 
 	if len(result.managedClusters) != 1 || result.managedClusters[0] != "some-managed-cluster" {
 		t.Errorf("Managed cluster count present in cache %d", len(result.managedClusters))
@@ -426,8 +433,10 @@ func Test_managedClusters_usingCache(t *testing.T) {
 		csrUpdatedAt: time.Now(),
 		nsrUpdatedAt: time.Now(),
 	}
+	ctx := context.TODO()
+	ctx = context.WithValue(ctx, ContextAuthTokenKey, "123456")
 
-	result, err := mock_cache.GetUserData(context.Background(), "123456", nil)
+	result, err := mock_cache.GetUserData(ctx, nil)
 	if len(result.csResources) != 1 || result.csResources[0].Kind != "nodes" || result.csResources[0].Apigroup != "storage.k8s.io" ||
 		result.managedClusters[0] != "some-managed-cluster" || result.managedClusters[1] != "some-other-managed-cluster" {
 		t.Error("Cluster scoped Resources not in user cache.")
@@ -508,7 +517,8 @@ func Test_managedCluster_expiredCache(t *testing.T) {
 		authzClient:       fs.AuthorizationV1(),
 	}
 
-	result, err := mock_cache.GetUserData(context.Background(), "123456", fs.AuthorizationV1())
+	ctx := context.WithValue(context.TODO(), ContextAuthTokenKey, "123456")
+	result, err := mock_cache.GetUserData(ctx, fs.AuthorizationV1())
 
 	if len(result.managedClusters) != 1 || result.managedClusters[0] != "some-managed-cluster" {
 		t.Errorf("Managed cluster count present in cache %d", len(result.managedClusters))
