@@ -26,11 +26,11 @@ import (
 )
 
 // Stuct to keep a copy of users access
-type UserResourceAccess struct {
-	CsResources     []rbac.Resource            // Cluster-scoped resources on hub the user has list access.
-	NsResources     map[string][]rbac.Resource // Namespaced resources on hub the user has list access.
-	ManagedClusters []string                   // Managed clusters where the user has view access.
-}
+// type UserResourceAccess struct {
+// 	CsResources     []rbac.Resource            // Cluster-scoped resources on hub the user has list access.
+// 	NsResources     map[string][]rbac.Resource // Namespaced resources on hub the user has list access.
+// 	ManagedClusters []string                   // Managed clusters where the user has view access.
+// }
 
 type SearchResult struct {
 	input  *model.SearchInput
@@ -41,7 +41,7 @@ type SearchResult struct {
 	params []interface{}
 	level  int // The number of levels/hops for finding relationships for a particular resource
 	//  Related []SearchRelatedResult
-	userAccess *UserResourceAccess
+	userAccess *rbac.UserResourceAccess
 }
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
@@ -54,7 +54,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 	// Proceed if user's rbac data exists
 	// Get a copy of the current user access if user data exists
 
-	userAccess := &UserResourceAccess{
+	userAccess := &rbac.UserResourceAccess{
 		CsResources:     userData.GetCsResources(),
 		NsResources:     userData.GetNsResources(),
 		ManagedClusters: userData.GetManagedClusters(),
@@ -132,7 +132,7 @@ func (s *SearchResult) Uids() {
 }
 
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
-func buildRbacWhereClause(ctx context.Context, userrbac *UserResourceAccess) exp.ExpressionList {
+func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserResourceAccess) exp.ExpressionList {
 	return goqu.Or(
 		matchManagedCluster(userrbac.ManagedClusters), // goqu.I("cluster").In([]string{"clusterNames", ....})
 		goqu.And(

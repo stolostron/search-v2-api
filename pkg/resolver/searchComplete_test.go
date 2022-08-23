@@ -22,7 +22,7 @@ func Test_SearchComplete_Query(t *testing.T) {
 	expectedProps := []*string{&val1, &val2, &val3}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1, 0)
+	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, 0)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->>'kind' AS "prop" FROM "search"."resources" WHERE ("data"->>'kind' IS NOT NULL) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
@@ -50,7 +50,7 @@ func Test_SearchComplete_Query_WithLimit(t *testing.T) {
 	expectedProps := []*string{&val1, &val2}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1, limit)
+	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
 	fmt.Println("mockRows:", mockRows)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
@@ -102,7 +102,7 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 	expectedProps := []*string{&val1, &val2, &val3}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1, limit)
+	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->>'kind' AS "prop" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster')) AND ("data"->>'kind' IS NOT NULL)) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 10`),
@@ -128,7 +128,7 @@ func Test_SearchCompleteWithCluster(t *testing.T) {
 	expectedProps := []*string{&cluster}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1, limit)
+	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT DISTINCT "cluster" AS "prop" FROM "search"."resources" WHERE (("cluster" IS NOT NULL) AND ("cluster" != '')) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 10`),
@@ -150,7 +150,7 @@ func Test_SearchCompleteQuery_PropDate(t *testing.T) {
 	expectedProps := []*string{&val1} //, &val2, &val3}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1, 0)
+	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, 0)
 	fmt.Println("mockRows:", mockRows)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
@@ -177,7 +177,7 @@ func Test_SearchCompleteQuery_PropNum(t *testing.T) {
 	expectedProps := []*string{&val1, &val2} //, &val3}
 
 	// Mock the database queries.
-	mockRows := newMockRows("../resolver/mocks/mock.json", searchInput, prop1, 0)
+	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, 0)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->>'current' AS "prop" FROM "search"."resources" WHERE ("data"->>'current' IS NOT NULL) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),

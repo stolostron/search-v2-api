@@ -37,6 +37,13 @@ type UserData struct {
 	authzClient v1.AuthorizationV1Interface
 }
 
+// Stuct to keep a copy of users access
+type UserResourceAccess struct {
+	CsResources     []Resource            // Cluster-scoped resources on hub the user has list access.
+	NsResources     map[string][]Resource // Namespaced resources on hub the user has list access.
+	ManagedClusters []string              // Managed clusters where the user has view access.
+}
+
 func (cache *Cache) GetUserData(ctx context.Context,
 	authzClient v1.AuthorizationV1Interface) (*UserData, error) {
 	var user *UserData
