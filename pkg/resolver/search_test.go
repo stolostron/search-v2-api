@@ -17,7 +17,7 @@ func Test_SearchResolver_Count(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "Pod"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserDataCache{})
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserData{})
 
 	// Mock the database query
 	mockRow := &Row{MockValue: 10}
@@ -36,11 +36,11 @@ func Test_SearchResolver_Count(t *testing.T) {
 
 func Test_SearchResolver_Count_WithRBAC(t *testing.T) {
 	csRes, nsRes, managedClusters := newUserResourceAccess()
-	udc := rbac.UserDataCache{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
+	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "Pod"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &udc)
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud)
 
 	// Mock the database query
 	mockRow := &Row{MockValue: 10}
@@ -61,8 +61,8 @@ func Test_SearchResolver_CountWithOperator(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := ">=1"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val1}}}}
-	udc := rbac.UserDataCache{}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &udc)
+	ud := rbac.UserData{}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud)
 
 	// Mock the database query
 	mockRow := &Row{MockValue: 1}
@@ -81,8 +81,8 @@ func Test_SearchResolver_Items(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "template"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
-	udc := rbac.UserDataCache{}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &udc)
+	ud := rbac.UserData{}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud)
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", 0)
 
@@ -182,7 +182,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 	csres, nsres, mc := newUserResourceAccess()
-	rbac := buildRbacWhereClause(context.TODO(), &rbac.UserDataCache{CsResources: csres, NsResources: nsres, ManagedClusters: mc})
+	rbac := buildRbacWhereClause(context.TODO(), &rbac.UserData{CsResources: csres, NsResources: nsres, ManagedClusters: mc})
 	val8 := "year"
 	opValMap := getOperatorAndNumDateFilter([]string{val8})
 	mockQueryYear, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, "created").Gt(opValMap[">"][0]), rbac).Limit(1000).ToSQL()
@@ -247,9 +247,9 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 func testAllOperators(t *testing.T, testOperators []TestOperatorItem) {
 	for _, currTest := range testOperators {
 		csRes, nsRes, mc := newUserResourceAccess()
-		udc := rbac.UserDataCache{CsResources: csRes, NsResources: nsRes, ManagedClusters: mc}
+		ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: mc}
 		// Create a SearchResolver instance with a mock connection pool.
-		resolver, mockPool := newMockSearchResolver(t, currTest.searchInput, nil, &udc)
+		resolver, mockPool := newMockSearchResolver(t, currTest.searchInput, nil, &ud)
 		// Mock the database queries.
 		mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", currTest.searchInput, "", 0)
 
@@ -291,8 +291,8 @@ func Test_SearchResolver_Items_Multiple_Filter(t *testing.T) {
 	cluster := "local-cluster"
 	limit := 10
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&val1, &val2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
-	udc := rbac.UserDataCache{}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &udc)
+	ud := rbac.UserData{}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud)
 
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", 0)
@@ -336,8 +336,8 @@ func Test_SearchWithMultipleClusterFilter_NegativeLimit_Query(t *testing.T) {
 	cluster2 := "remote-1"
 	limit := -1
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1}}, {Property: "cluster", Values: []*string{&cluster1, &cluster2}}}, Limit: &limit}
-	udc := rbac.UserDataCache{}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &udc)
+	ud := rbac.UserData{}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud)
 
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, "", 0)
@@ -379,8 +379,8 @@ func Test_SearchResolver_Keywords(t *testing.T) {
 	val1 := "Template"
 	limit := 10
 	searchInput := &model.SearchInput{Keywords: []*string{&val1}, Limit: &limit}
-	udc := rbac.UserDataCache{}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &udc)
+	ud := rbac.UserData{}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud)
 
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", 0)
@@ -416,7 +416,7 @@ func Test_SearchResolver_Uids(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "template"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserDataCache{})
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserData{})
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", 0)
 
@@ -447,9 +447,9 @@ func Test_SearchResolver_Uids(t *testing.T) {
 
 func Test_buildRbacWhereClauseCs(t *testing.T) {
 	csres, _, _ := newUserResourceAccess()
-	udc := rbac.UserDataCache{CsResources: csres}
+	ud := rbac.UserData{CsResources: csres}
 
-	rbacCombined := buildRbacWhereClause(context.TODO(), &udc)
+	rbacCombined := buildRbacWhereClause(context.TODO(), &ud)
 	expectedSql := `SELECT * WHERE (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND ((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes'))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
@@ -458,8 +458,8 @@ func Test_buildRbacWhereClauseCs(t *testing.T) {
 
 func Test_buildRbacWhereClauseNs(t *testing.T) {
 	_, nsScopeAccess, _ := newUserResourceAccess()
-	udc := rbac.UserDataCache{NsResources: nsScopeAccess}
-	rbacCombined := buildRbacWhereClause(context.TODO(), &udc)
+	ud := rbac.UserData{NsResources: nsScopeAccess}
+	rbacCombined := buildRbacWhereClause(context.TODO(), &ud)
 	expectedSql := `SELECT * WHERE (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND (NULL OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
@@ -468,8 +468,8 @@ func Test_buildRbacWhereClauseNs(t *testing.T) {
 
 func Test_buildRbacWhereClauseCsAndNs(t *testing.T) {
 	res, nsScopeAccess, _ := newUserResourceAccess()
-	udc := rbac.UserDataCache{CsResources: res, NsResources: nsScopeAccess}
-	rbacCombined := buildRbacWhereClause(context.TODO(), &udc)
+	ud := rbac.UserData{CsResources: res, NsResources: nsScopeAccess}
+	rbacCombined := buildRbacWhereClause(context.TODO(), &ud)
 	expectedSql := `SELECT * WHERE (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
@@ -478,8 +478,8 @@ func Test_buildRbacWhereClauseCsAndNs(t *testing.T) {
 
 func Test_buildRbacWhereClauseCsNsAndMc(t *testing.T) {
 	csres, nsScopeAccess, managedClusters := newUserResourceAccess()
-	udc := rbac.UserDataCache{CsResources: csres, NsResources: nsScopeAccess, ManagedClusters: managedClusters}
-	rbacCombined := buildRbacWhereClause(context.TODO(), &udc)
+	ud := rbac.UserData{CsResources: csres, NsResources: nsScopeAccess, ManagedClusters: managedClusters}
+	rbacCombined := buildRbacWhereClause(context.TODO(), &ud)
 	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)

@@ -16,8 +16,8 @@ import (
 )
 
 // Contains data about the resources the user is allowed to access.
-type UserData struct {
-	userResourceAccess UserDataCache
+type UserDataCache struct {
+	userData UserData
 
 	// Internal fields to manage the cache.
 	clustersErr error // Error while updating clusters data.
@@ -36,15 +36,15 @@ type UserData struct {
 }
 
 // Stuct to keep a copy of users access
-type UserDataCache struct {
+type UserData struct {
 	CsResources     []Resource            // Cluster-scoped resources on hub the user has list access.
 	NsResources     map[string][]Resource // Namespaced resources on hub the user has list access.
 	ManagedClusters []string              // Managed clusters where the user has view access.
 }
 
 func (cache *Cache) GetUserData(ctx context.Context,
-	authzClient v1.AuthorizationV1Interface) (*UserData, error) {
-	var user *UserData
+	authzClient v1.AuthorizationV1Interface) (*UserDataCache, error) {
+	var user *UserDataCache
 	var uid string
 	clientToken := ctx.Value(ContextAuthTokenKey).(string)
 
@@ -65,7 +65,7 @@ func (cache *Cache) GetUserData(ctx context.Context,
 		return cachedUserData, nil
 	} else {
 		// User not in cache , Initialize and assign to the UID
-		user = &UserData{}
+		user = &UserDataCache{}
 		cache.users[uid] = user
 		// We want to setup the client if passed, this is only for unit tests
 		if authzClient != nil {
@@ -89,7 +89,7 @@ func (cache *Cache) GetUserData(ctx context.Context,
 
 /* Cache is Valid if the csrUpdatedAt and nsrUpdatedAt times are before the
 Cache expiry time */
-func userCacheValid(user *UserData) bool {
+func userCacheValid(user *UserDataCache) bool {
 	if (time.Now().Before(user.csrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) &&
 		(time.Now().Before(user.nsrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) &&
 		(time.Now().Before(user.clustersUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) {
@@ -99,8 +99,8 @@ func userCacheValid(user *UserData) bool {
 }
 
 // Equivalent to: oc auth can-i list <resource> --as=<user>
-func (user *UserData) getClusterScopedResources(cache *Cache, ctx context.Context,
-	clientToken string) (*UserData, error) {
+func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.Context,
+	clientToken string) (*UserDataCache, error) {
 
 	// get all cluster scoped from shared cache:
 	klog.V(5).Info("Getting cluster scoped resources from shared cache.")
@@ -121,10 +121,10 @@ func (user *UserData) getClusterScopedResources(cache *Cache, ctx context.Contex
 		return user, user.csrErr
 	}
 	//If we have a new set of authorized list for the user reset the previous one
-	user.userResourceAccess.CsResources = nil
+	user.userData.CsResources = nil
 	for _, res := range clusterScopedResources {
 		if user.userAuthorizedListCSResource(ctx, impersClientset, res.Apigroup, res.Kind) {
-			user.userResourceAccess.CsResources = append(user.userResourceAccess.CsResources,
+			user.userData.CsResources = append(user.userData.CsResources,
 				Resource{Apigroup: res.Apigroup, Kind: res.Kind})
 		}
 	}
@@ -132,7 +132,7 @@ func (user *UserData) getClusterScopedResources(cache *Cache, ctx context.Contex
 	return user, user.csrErr
 }
 
-func (user *UserData) userAuthorizedListCSResource(ctx context.Context, authzClient v1.AuthorizationV1Interface,
+func (user *UserDataCache) userAuthorizedListCSResource(ctx context.Context, authzClient v1.AuthorizationV1Interface,
 	apigroup string, kind_plural string) bool {
 	accessCheck := &authz.SelfSubjectAccessReview{
 		Spec: authz.SelfSubjectAccessReviewSpec{
@@ -159,7 +159,7 @@ func (user *UserData) userAuthorizedListCSResource(ctx context.Context, authzCli
 }
 
 // Equivalent to: oc auth can-i --list -n <iterate-each-namespace>
-func (user *UserData) getNamespacedResources(cache *Cache, ctx context.Context, clientToken string) (*UserData, error) {
+func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Context, clientToken string) (*UserDataCache, error) {
 
 	// check if we already have user's namespaced resources in userData cache and check if time is expired
 	user.nsrLock.Lock()
@@ -167,9 +167,9 @@ func (user *UserData) getNamespacedResources(cache *Cache, ctx context.Context, 
 
 	// clear cache
 	user.csrErr = nil
-	user.userResourceAccess.NsResources = nil
+	user.userData.NsResources = nil
 	user.clustersErr = nil
-	user.userResourceAccess.ManagedClusters = nil
+	user.userData.ManagedClusters = nil
 
 	// get all namespaces from shared cache:
 	klog.V(5).Info("Getting namespaces from shared cache.")
@@ -187,7 +187,7 @@ func (user *UserData) getNamespacedResources(cache *Cache, ctx context.Context, 
 		return user, err
 	}
 
-	user.userResourceAccess.NsResources = make(map[string][]Resource)
+	user.userData.NsResources = make(map[string][]Resource)
 	managedClusters := cache.shared.managedClusters
 
 	for _, ns := range allNamespaces {
@@ -208,7 +208,7 @@ func (user *UserData) getNamespacedResources(cache *Cache, ctx context.Context, 
 				if verb == "list" || verb == "*" { //TODO: resourceName == "*" && verb == "*" then exit loop
 					for _, res := range rules.Resources {
 						for _, api := range rules.APIGroups {
-							user.userResourceAccess.NsResources[ns] = append(user.userResourceAccess.NsResources[ns],
+							user.userData.NsResources[ns] = append(user.userData.NsResources[ns],
 								Resource{Apigroup: api, Kind: res})
 						}
 					}
@@ -221,8 +221,8 @@ func (user *UserData) getNamespacedResources(cache *Cache, ctx context.Context, 
 						if res == "managedclusterviews" {
 							for i := range managedClusters {
 								if managedClusters[i] == ns {
-									user.userResourceAccess.ManagedClusters =
-										append(user.userResourceAccess.ManagedClusters, ns)
+									user.userData.ManagedClusters =
+										append(user.userData.ManagedClusters, ns)
 
 								}
 							}
@@ -242,7 +242,7 @@ func (user *UserData) getNamespacedResources(cache *Cache, ctx context.Context, 
 	return user, user.nsrErr
 }
 
-func (user *UserData) getImpersonationClientSet(clientToken string, cache *Cache) (v1.AuthorizationV1Interface,
+func (user *UserDataCache) getImpersonationClientSet(clientToken string, cache *Cache) (v1.AuthorizationV1Interface,
 	error) {
 
 	if user.authzClient == nil {
@@ -262,14 +262,14 @@ func (user *UserData) getImpersonationClientSet(clientToken string, cache *Cache
 	return user.authzClient, nil
 }
 
-func (user *UserData) GetCsResources() []Resource {
-	return user.userResourceAccess.CsResources
+func (user *UserDataCache) GetCsResources() []Resource {
+	return user.userData.CsResources
 }
 
-func (user *UserData) GetNsResources() map[string][]Resource {
-	return user.userResourceAccess.NsResources
+func (user *UserDataCache) GetNsResources() map[string][]Resource {
+	return user.userData.NsResources
 }
 
-func (user *UserData) GetManagedClusters() []string {
-	return user.userResourceAccess.ManagedClusters
+func (user *UserDataCache) GetManagedClusters() []string {
+	return user.userData.ManagedClusters
 }

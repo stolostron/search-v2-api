@@ -34,7 +34,7 @@ type SearchResult struct {
 	params []interface{}
 	level  int // The number of levels/hops for finding relationships for a particular resource
 	//  Related []SearchRelatedResult
-	userAccess *rbac.UserDataCache
+	userData *rbac.UserData
 }
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
@@ -48,9 +48,9 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 	if len(input) > 0 {
 		for index, in := range input {
 			srchResult[index] = &SearchResult{
-				input:      in,
-				pool:       db.GetConnection(),
-				userAccess: userAccess,
+				input:    in,
+				pool:     db.GetConnection(),
+				userData: userAccess,
 			}
 		}
 	}
@@ -117,7 +117,7 @@ func (s *SearchResult) Uids() {
 }
 
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
-func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserDataCache) exp.ExpressionList {
+func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData) exp.ExpressionList {
 	return goqu.Or(
 		matchManagedCluster(userrbac.ManagedClusters), // goqu.I("cluster").In([]string{"clusterNames", ....})
 		goqu.And(
@@ -159,9 +159,9 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	//WHERE CLAUSE
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 		whereDs = WhereClauseFilter(s.input)
-		if s.userAccess != nil {
+		if s.userData != nil {
 			whereDs = append(whereDs,
-				buildRbacWhereClause(ctx, s.userAccess)) // add rbac
+				buildRbacWhereClause(ctx, s.userData)) // add rbac
 		} else {
 			panic("RBAC clause is required!")
 		}

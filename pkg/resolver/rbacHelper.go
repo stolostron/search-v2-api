@@ -1,3 +1,4 @@
+// Copyright Contributors to the Open Cluster Management project
 package resolver
 
 import (
@@ -86,7 +87,7 @@ func matchManagedCluster(managedClusters []string) exp.BooleanExpression {
 	return goqu.C("cluster").Eq(goqu.Any(pq.Array(managedClusters)))
 }
 
-func getUserDataCache(ctx context.Context) (*rbac.UserDataCache, error) {
+func getUserDataCache(ctx context.Context) (*rbac.UserData, error) {
 	userData, userDataErr := rbac.CacheInst.GetUserData(ctx, nil)
 	if userDataErr != nil {
 		klog.Error("Error fetching UserAccessData: ", userDataErr)
@@ -95,7 +96,7 @@ func getUserDataCache(ctx context.Context) (*rbac.UserDataCache, error) {
 	// Proceed if user's rbac data exists
 	// Get a copy of the current user access if user data exists
 
-	userAccess := &rbac.UserDataCache{
+	userAccess := &rbac.UserData{
 		CsResources:     userData.GetCsResources(),
 		NsResources:     userData.GetNsResources(),
 		ManagedClusters: userData.GetManagedClusters(),
