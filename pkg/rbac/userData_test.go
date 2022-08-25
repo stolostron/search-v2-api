@@ -115,7 +115,7 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 		Resource{Apigroup: "some-apigroup", Kind: "some-kind"})
 
 	mock_cache.users["unique-user-id"] = &UserData{
-		userResourceAccess: UserResourceAccess{ManagedClusters: managedclusters,
+		userResourceAccess: UserDataCache{ManagedClusters: managedclusters,
 			NsResources: nsresources},
 		csrUpdatedAt:      time.Now(),
 		nsrUpdatedAt:      time.Now(),
@@ -182,7 +182,7 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 
 	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
 	mock_cache.users["unique-user-id"] = &UserData{
-		userResourceAccess: UserResourceAccess{NsResources: nsresources},
+		userResourceAccess: UserDataCache{NsResources: nsresources},
 		nsrUpdatedAt:       last_cache_time,
 	}
 	rulesCheck := &authz.SelfSubjectRulesReview{
@@ -246,7 +246,7 @@ func Test_clusterScoped_usingCache(t *testing.T) {
 	managedClusters = append(managedClusters, "some-namespace")
 
 	mock_cache.users["unique-user-id"] = &UserData{
-		userResourceAccess: UserResourceAccess{CsResources: allowedres,
+		userResourceAccess: UserDataCache{CsResources: allowedres,
 			ManagedClusters: managedClusters},
 		clustersUpdatedAt: time.Now(),
 		// Using current time , GetUserData should have the same values as cache
@@ -320,7 +320,7 @@ func Test_clusterScoped_expiredCache(t *testing.T) {
 	allowedres := []Resource{{Apigroup: "k8s.io", Kind: "csinodes"}}
 	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
 	mock_cache.users["unique-user-id"] = &UserData{
-		userResourceAccess: UserResourceAccess{CsResources: allowedres},
+		userResourceAccess: UserDataCache{CsResources: allowedres},
 		csrUpdatedAt:       last_cache_time,
 		authzClient:        fs.AuthorizationV1(),
 	}
@@ -426,7 +426,7 @@ func Test_managedClusters_usingCache(t *testing.T) {
 	managedClusters = append(managedClusters, "some-managed-cluster", "some-other-managed-cluster")
 
 	mock_cache.users["unique-user-id"] = &UserData{
-		userResourceAccess: UserResourceAccess{CsResources: allowedres, ManagedClusters: managedClusters},
+		userResourceAccess: UserDataCache{CsResources: allowedres, ManagedClusters: managedClusters},
 		clustersUpdatedAt:  time.Now(),
 		// Using current time , GetUserData should have the same values as cache
 		csrUpdatedAt: time.Now(),
@@ -511,7 +511,7 @@ func Test_managedCluster_expiredCache(t *testing.T) {
 
 	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
 	mock_cache.users["unique-user-id"] = &UserData{
-		userResourceAccess: UserResourceAccess{ManagedClusters: pastManClusters},
+		userResourceAccess: UserDataCache{ManagedClusters: pastManClusters},
 		clustersUpdatedAt:  last_cache_time,
 		authzClient:        fs.AuthorizationV1(),
 	}

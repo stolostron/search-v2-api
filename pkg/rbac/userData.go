@@ -17,7 +17,7 @@ import (
 
 // Contains data about the resources the user is allowed to access.
 type UserData struct {
-	userResourceAccess UserResourceAccess
+	userResourceAccess UserDataCache
 
 	// Internal fields to manage the cache.
 	clustersErr error // Error while updating clusters data.
@@ -36,7 +36,7 @@ type UserData struct {
 }
 
 // Stuct to keep a copy of users access
-type UserResourceAccess struct {
+type UserDataCache struct {
 	CsResources     []Resource            // Cluster-scoped resources on hub the user has list access.
 	NsResources     map[string][]Resource // Namespaced resources on hub the user has list access.
 	ManagedClusters []string              // Managed clusters where the user has view access.
