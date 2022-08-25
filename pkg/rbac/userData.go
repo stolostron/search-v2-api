@@ -124,7 +124,8 @@ func (user *UserData) getClusterScopedResources(cache *Cache, ctx context.Contex
 	user.userResourceAccess.CsResources = nil
 	for _, res := range clusterScopedResources {
 		if user.userAuthorizedListCSResource(ctx, impersClientset, res.Apigroup, res.Kind) {
-			user.userResourceAccess.CsResources = append(user.userResourceAccess.CsResources, Resource{Apigroup: res.Apigroup, Kind: res.Kind})
+			user.userResourceAccess.CsResources = append(user.userResourceAccess.CsResources,
+				Resource{Apigroup: res.Apigroup, Kind: res.Kind})
 		}
 	}
 	user.csrUpdatedAt = time.Now()
@@ -207,7 +208,8 @@ func (user *UserData) getNamespacedResources(cache *Cache, ctx context.Context, 
 				if verb == "list" || verb == "*" { //TODO: resourceName == "*" && verb == "*" then exit loop
 					for _, res := range rules.Resources {
 						for _, api := range rules.APIGroups {
-							user.userResourceAccess.NsResources[ns] = append(user.userResourceAccess.NsResources[ns], Resource{Apigroup: api, Kind: res})
+							user.userResourceAccess.NsResources[ns] = append(user.userResourceAccess.NsResources[ns],
+								Resource{Apigroup: api, Kind: res})
 						}
 					}
 				}
@@ -219,7 +221,8 @@ func (user *UserData) getNamespacedResources(cache *Cache, ctx context.Context, 
 						if res == "managedclusterviews" {
 							for i := range managedClusters {
 								if managedClusters[i] == ns {
-									user.userResourceAccess.ManagedClusters = append(user.userResourceAccess.ManagedClusters, ns)
+									user.userResourceAccess.ManagedClusters =
+										append(user.userResourceAccess.ManagedClusters, ns)
 
 								}
 							}

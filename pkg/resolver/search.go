@@ -311,7 +311,8 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 		} else if prop == "kind" { //ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
 			if isLower(values) {
 				exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
-				klog.Warning("Using ILIKE for lower case KIND string comparison - this behavior is needed for V1 compatibility and will be deprecated with Search V2.")
+				klog.Warning("Using ILIKE for lower case KIND string comparison.",
+					"- This behavior is needed for V1 compatibility and will be deprecated with Search V2.")
 			} else {
 				exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
 			}
