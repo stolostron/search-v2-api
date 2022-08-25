@@ -31,7 +31,7 @@ func newUserResourceAccess() ([]rbac.Resource, map[string][]rbac.Resource, []str
 	return csres, nsScopeAccess, managedClusters
 }
 
-func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*string, ura *rbac.UserDataCache) (*SearchResult, *pgxpoolmock.MockPgxPool) {
+func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*string, udc *rbac.UserDataCache) (*SearchResult, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
@@ -41,7 +41,7 @@ func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*strin
 		pool:       mockPool,
 		uids:       uids,
 		wg:         sync.WaitGroup{},
-		userAccess: ura,
+		userAccess: udc,
 	}
 
 	return mockResolver, mockPool

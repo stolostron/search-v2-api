@@ -40,9 +40,9 @@ type SearchResult struct {
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
 	// For each input, create a SearchResult resolver.
 	srchResult := make([]*SearchResult, len(input))
-	userAccess, userDataErr := getUserAccessData(ctx)
+	userAccess, userDataErr := getUserDataCache(ctx)
 	if userDataErr != nil {
-		return nil, userDataErr
+		return srchResult, userDataErr
 	}
 	// Proceed if user's rbac data exists
 	if len(input) > 0 {
