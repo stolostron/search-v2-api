@@ -21,6 +21,7 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/metric"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"k8s.io/klog/v2"
 )
 
@@ -33,20 +34,28 @@ type SearchResult struct {
 	params []interface{}
 	level  int // The number of levels/hops for finding relationships for a particular resource
 	//  Related []SearchRelatedResult
+	userData *rbac.UserData
 }
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
 	// For each input, create a SearchResult resolver.
 	srchResult := make([]*SearchResult, len(input))
+	userAccess, userDataErr := getUserDataCache(ctx)
+	if userDataErr != nil {
+		return srchResult, userDataErr
+	}
+	// Proceed if user's rbac data exists
 	if len(input) > 0 {
 		for index, in := range input {
 			srchResult[index] = &SearchResult{
-				input: in,
-				pool:  db.GetConnection(),
+				input:    in,
+				pool:     db.GetConnection(),
+				userData: userAccess,
 			}
 		}
 	}
 	return srchResult, nil
+
 }
 
 func (s *SearchResult) Count() int {
@@ -107,6 +116,20 @@ func (s *SearchResult) Uids() {
 	s.resolveUids()
 }
 
+// Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
+func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData) exp.ExpressionList {
+	return goqu.Or(
+		matchManagedCluster(userrbac.ManagedClusters), // goqu.I("cluster").In([]string{"clusterNames", ....})
+		goqu.And(
+			matchHubCluster(), // goqu.L(`data->>?`, "_hubClusterResource").Eq("true")
+			goqu.Or(
+				matchClusterScopedResources(userrbac.CsResources), // (namespace=null AND apigroup AND kind)
+				matchNamespacedResources(userrbac.NsResources),    // (namespace AND apiproup AND kind)
+			),
+		),
+	)
+}
+
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) {
 	var limit int
 	var selectDs *goqu.SelectDataset
@@ -136,6 +159,12 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	//WHERE CLAUSE
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 		whereDs = WhereClauseFilter(s.input)
+		if s.userData != nil {
+			whereDs = append(whereDs,
+				buildRbacWhereClause(ctx, s.userData)) // add rbac
+		} else {
+			panic("RBAC clause is required!")
+		}
 	}
 
 	//LIMIT CLAUSE
@@ -282,7 +311,8 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 		} else if prop == "kind" { //ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
 			if isLower(values) {
 				exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
-				klog.Warning("Using ILIKE for lower case KIND string comparison - this behavior is needed for V1 compatibility and will be deprecated with Search V2.")
+				klog.Warning("Using ILIKE for lower case KIND string comparison.",
+					"- This behavior is needed for V1 compatibility and will be deprecated with Search V2.")
 			} else {
 				exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
 			}
@@ -467,9 +497,11 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 }
 
 func getKeys(stringArrayMap map[string][]string) []string {
-	keys := make([]string, 0, len(stringArrayMap))
+	i := 0
+	keys := make([]string, len(stringArrayMap))
 	for k := range stringArrayMap {
-		keys = append(keys, k)
+		keys[i] = k
+		i++
 	}
 	return keys
 }

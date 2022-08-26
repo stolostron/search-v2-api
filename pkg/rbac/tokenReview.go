@@ -27,13 +27,13 @@ type tokenReviewCache struct {
 // Verify that the token is valid using a TokenReview.
 // Will use cached data if available and valid, otherwise starts a new request.
 func (c *Cache) IsValidToken(ctx context.Context, token string) (bool, error) {
-	tr, err := c.getTokenReview(ctx, token)
+	tr, err := c.GetTokenReview(ctx, token)
 	return tr.Status.Authenticated, err
 }
 
 // Get the TokenReview response for a given token.
 // Will use cached data if available and valid, otherwise starts a new request.
-func (c *Cache) getTokenReview(ctx context.Context, token string) (*authv1.TokenReview, error) {
+func (c *Cache) GetTokenReview(ctx context.Context, token string) (*authv1.TokenReview, error) {
 	c.tokenReviewsLock.Lock()
 	defer c.tokenReviewsLock.Unlock()
 
