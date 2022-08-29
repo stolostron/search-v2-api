@@ -198,8 +198,9 @@ func (shared *SharedData) GetManagedClusters(cache *Cache, ctx context.Context) 
 	}
 
 	for _, item := range resourceObj.Items {
-		managedClusters = append(managedClusters, item.GetName())
-
+		if item.GetName() != "local-cluster" {
+			managedClusters = append(managedClusters, item.GetName())
+		}
 	}
 
 	shared.managedClusters = managedClusters
