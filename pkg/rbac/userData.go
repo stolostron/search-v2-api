@@ -248,13 +248,13 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 }
 
 //SSRR has resources that are clusterscoped too
-func (shared *SharedData) isClusterScoped(kind_plural, apigroup string) bool {
+func (shared *SharedData) isClusterScoped(kindPlural, apigroup string) bool {
 	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
 	shared.csLock.Lock()
 	defer shared.csLock.Unlock()
-	_, ok := shared.csResourcesMap[Resource{Apigroup: apigroup, Kind: kind_plural}]
+	_, ok := shared.csResourcesMap[Resource{Apigroup: apigroup, Kind: kindPlural}]
 	if ok {
-		klog.V(9).Info("resource is ClusterScoped ", kind_plural, " ", apigroup, ": ", ok)
+		klog.V(9).Info("resource is ClusterScoped ", kindPlural, " ", apigroup, ": ", ok)
 	}
 	return ok
 }
