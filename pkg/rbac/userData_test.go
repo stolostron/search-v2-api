@@ -532,3 +532,33 @@ func Test_managedCluster_expiredCache(t *testing.T) {
 	}
 
 }
+
+func Test_managedCluster_GetUserData(t *testing.T) {
+	mock_cache := mockNamespaceCache()
+	mock_cache = setupToken(mock_cache)
+
+	manClusters := []string{"managed-cluster1"}
+	csRes := []Resource{{Kind: "kind1", Apigroup: ""}, {Kind: "kind2", Apigroup: "v1"}}
+	nsRes := make(map[string][]Resource)
+	nsRes["ns1"] = []Resource{{Kind: "kind1", Apigroup: ""}, {Kind: "kind2", Apigroup: "v1"}}
+	nsRes["ns2"] = []Resource{{Kind: "kind3", Apigroup: ""}, {Kind: "kind4", Apigroup: "v1"}}
+
+	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
+	mock_cache.users["unique-user-id"] = &UserDataCache{
+		userData:          UserData{ManagedClusters: manClusters, CsResources: csRes, NsResources: nsRes},
+		clustersUpdatedAt: last_cache_time,
+	}
+	csResResult := mock_cache.users["unique-user-id"].GetCsResources()
+	if len(csResResult) != 2 {
+		t.Errorf("Expected 2 clusterScoped resources but got %d", len(csResResult))
+
+	}
+	nsResResult := mock_cache.users["unique-user-id"].GetNsResources()
+	if len(nsResResult) != 2 {
+		t.Errorf("Expected 2 namespace Scoped resources but got %d", len(nsResResult))
+	}
+	mcResult := mock_cache.users["unique-user-id"].GetManagedClusters()
+	if len(mcResult) != 1 {
+		t.Errorf("Expected 1 managed cluster but got %d", len(mcResult))
+	}
+}
