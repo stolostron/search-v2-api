@@ -453,7 +453,6 @@ func Test_buildRbacWhereClauseCs(t *testing.T) {
 	expectedSql := `SELECT * WHERE (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND ((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes'))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
-
 }
 
 func Test_buildRbacWhereClauseNs(t *testing.T) {

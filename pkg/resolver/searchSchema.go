@@ -13,10 +13,10 @@ import (
 )
 
 type SearchSchema struct {
-	pool       pgxpoolmock.PgxPool
-	query      string
-	params     []interface{}
-	userAccess *rbac.UserData
+	pool     pgxpoolmock.PgxPool
+	query    string
+	params   []interface{}
+	userData *rbac.UserData
 }
 
 func SearchSchemaResolver(ctx context.Context) (map[string]interface{}, error) {
@@ -26,8 +26,8 @@ func SearchSchemaResolver(ctx context.Context) (map[string]interface{}, error) {
 	}
 	// Proceed if user's rbac data exists
 	searchSchemaResult := &SearchSchema{
-		pool:       db.GetConnection(),
-		userAccess: userAccess,
+		pool:     db.GetConnection(),
+		userData: userAccess,
 	}
 	searchSchemaResult.buildSearchSchemaQuery(ctx)
 	return searchSchemaResult.searchSchemaResults(ctx)
@@ -55,8 +55,8 @@ func (s *SearchSchema) buildSearchSchemaQuery(ctx context.Context) {
 	//WHERE CLAUSE
 	var whereDs exp.ExpressionList
 
-	if s.userAccess != nil {
-		whereDs = buildRbacWhereClause(ctx, s.userAccess) // add rbac
+	if s.userData != nil {
+		whereDs = buildRbacWhereClause(ctx, s.userData) // add rbac
 	} else {
 		panic("RBAC clause is required!")
 	}

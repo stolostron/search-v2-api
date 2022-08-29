@@ -14,7 +14,7 @@ func Test_SearchSchema_Query(t *testing.T) {
 	// Create a SearchSchemaResolver instance with a mock connection pool.
 	resolver, _ := newMockSearchSchema(t)
 
-	resolver.userAccess = &rbac.UserData{}
+	resolver.userData = &rbac.UserData{}
 	sql := `SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" WHERE (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND NULL)) LIMIT 100000) AS "schema"`
 	// Execute function
 	resolver.buildSearchSchemaQuery(context.TODO())
@@ -31,7 +31,7 @@ func Test_SearchSchema_Results(t *testing.T) {
 	resolver, mockPool := newMockSearchSchema(t)
 	csRes, nsRes, managedClusters := newUserData()
 	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
-	resolver.userAccess = &ud
+	resolver.userData = &ud
 
 	expectedList := []string{"cluster", "kind", "label", "name", "namespace", "status", "Template", "ReplicaSet", "ConfigMap"}
 
