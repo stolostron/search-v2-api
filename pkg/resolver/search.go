@@ -159,6 +159,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	//WHERE CLAUSE
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 		whereDs = WhereClauseFilter(s.input)
+		//RBAC CLAUSE
 		if s.userData != nil {
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData)) // add rbac

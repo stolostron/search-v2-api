@@ -12,6 +12,7 @@ import (
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 	klog "k8s.io/klog/v2"
 )
 
@@ -22,6 +23,7 @@ type SearchCompleteResult struct {
 	limit    *int
 	query    string
 	params   []interface{}
+	userData *rbac.UserData
 }
 
 func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, error) {
@@ -34,12 +36,17 @@ func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, err
 }
 
 func SearchComplete(ctx context.Context, property string, srchInput *model.SearchInput, limit *int) ([]*string, error) {
-
+	userAccess, userDataErr := getUserDataCache(ctx)
+	if userDataErr != nil {
+		return []*string{}, userDataErr
+	}
+	// Proceed if user's rbac data exists
 	searchCompleteResult := &SearchCompleteResult{
 		input:    srchInput,
 		pool:     db.GetConnection(),
 		property: property,
 		limit:    limit,
+		userData: userAccess,
 	}
 	return searchCompleteResult.autoComplete(ctx)
 
@@ -73,6 +80,13 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			selectDs = ds.Select(goqu.L(`"data"->>?`, s.property).As("prop"))
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
 			whereDs = append(whereDs, goqu.L(`"data"->>?`, s.property).IsNotNull())
+		}
+		//RBAC CLAUSE
+		if s.userData != nil {
+			whereDs = append(whereDs,
+				buildRbacWhereClause(ctx, s.userData)) // add rbac
+		} else {
+			panic("RBAC clause is required!")
 		}
 		//Adding an arbitrarily high number 100000 as limit here in the inner query
 		// Adding a LIMIT helps to speed up the query

@@ -51,6 +51,7 @@ func (cache *Cache) GetUserData(ctx context.Context,
 	//get uid from tokenreview
 	if tokenReview, err := cache.GetTokenReview(ctx, clientToken); err == nil {
 		uid = tokenReview.Status.User.UID
+		klog.V(7).Info("uid: ", uid, " for user: ", tokenReview.Status.User.Username)
 	} else {
 		return user, err
 	}
@@ -128,6 +129,7 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 				Resource{Apigroup: res.Apigroup, Kind: res.Kind})
 		}
 	}
+	klog.V(7).Info("User has access to these cluster scoped res: ", user.userData.CsResources)
 	user.csrUpdatedAt = time.Now()
 	return user, user.csrErr
 }
@@ -191,7 +193,6 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	managedClusters := cache.shared.managedClusters
 
 	for _, ns := range allNamespaces {
-		//
 		rulesCheck := authz.SelfSubjectRulesReview{
 			Spec: authz.SelfSubjectRulesReviewSpec{
 				Namespace: ns,
@@ -208,8 +209,10 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 				if verb == "list" || verb == "*" { //TODO: resourceName == "*" && verb == "*" then exit loop
 					for _, res := range rules.Resources {
 						for _, api := range rules.APIGroups {
-							user.userData.NsResources[ns] = append(user.userData.NsResources[ns],
-								Resource{Apigroup: api, Kind: res})
+							if !cache.shared.isClusterScoped(res, api) { //Add the resource if it is not cluster scoped
+								user.userData.NsResources[ns] = append(user.userData.NsResources[ns],
+									Resource{Apigroup: api, Kind: res})
+							}
 						}
 					}
 				}
@@ -235,11 +238,25 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 
 		}
 	}
+	klog.V(7).Info("User has access to these namespace scoped res: ", user.userData.NsResources)
+	klog.V(7).Info("User has access to these ManagedClusters: ", user.userData.ManagedClusters)
 
 	user.nsrUpdatedAt = time.Now()
 	user.clustersUpdatedAt = time.Now()
 
 	return user, user.nsrErr
+}
+
+//SSRR has resources that are clusterscoped too
+func (shared *SharedData) isClusterScoped(kind_plural, apigroup string) bool {
+	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
+	shared.csLock.Lock()
+	defer shared.csLock.Unlock()
+	_, ok := shared.csResourcesMap[Resource{Apigroup: apigroup, Kind: kind_plural}]
+	if ok {
+		klog.V(9).Info("resource is ClusterScoped ", kind_plural, " ", apigroup, ": ", ok)
+	}
+	return ok
 }
 
 func (user *UserDataCache) getImpersonationClientSet(clientToken string, cache *Cache) (v1.AuthorizationV1Interface,

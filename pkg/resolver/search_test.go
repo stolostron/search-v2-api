@@ -35,7 +35,7 @@ func Test_SearchResolver_Count(t *testing.T) {
 }
 
 func Test_SearchResolver_Count_WithRBAC(t *testing.T) {
-	csRes, nsRes, managedClusters := newUserResourceAccess()
+	csRes, nsRes, managedClusters := newUserData()
 	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "Pod"
@@ -181,7 +181,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	//define schema table:
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
-	csres, nsres, mc := newUserResourceAccess()
+	csres, nsres, mc := newUserData()
 	rbac := buildRbacWhereClause(context.TODO(), &rbac.UserData{CsResources: csres, NsResources: nsres, ManagedClusters: mc})
 	val8 := "year"
 	opValMap := getOperatorAndNumDateFilter([]string{val8})
@@ -246,7 +246,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 
 func testAllOperators(t *testing.T, testOperators []TestOperatorItem) {
 	for _, currTest := range testOperators {
-		csRes, nsRes, mc := newUserResourceAccess()
+		csRes, nsRes, mc := newUserData()
 		ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: mc}
 		// Create a SearchResolver instance with a mock connection pool.
 		resolver, mockPool := newMockSearchResolver(t, currTest.searchInput, nil, &ud)
@@ -446,7 +446,7 @@ func Test_SearchResolver_Uids(t *testing.T) {
 }
 
 func Test_buildRbacWhereClauseCs(t *testing.T) {
-	csres, _, _ := newUserResourceAccess()
+	csres, _, _ := newUserData()
 	ud := rbac.UserData{CsResources: csres}
 
 	rbacCombined := buildRbacWhereClause(context.TODO(), &ud)
@@ -457,7 +457,7 @@ func Test_buildRbacWhereClauseCs(t *testing.T) {
 }
 
 func Test_buildRbacWhereClauseNs(t *testing.T) {
-	_, nsScopeAccess, _ := newUserResourceAccess()
+	_, nsScopeAccess, _ := newUserData()
 	ud := rbac.UserData{NsResources: nsScopeAccess}
 	rbacCombined := buildRbacWhereClause(context.TODO(), &ud)
 	expectedSql := `SELECT * WHERE (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND (NULL OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))`
@@ -467,7 +467,7 @@ func Test_buildRbacWhereClauseNs(t *testing.T) {
 }
 
 func Test_buildRbacWhereClauseCsAndNs(t *testing.T) {
-	res, nsScopeAccess, _ := newUserResourceAccess()
+	res, nsScopeAccess, _ := newUserData()
 	ud := rbac.UserData{CsResources: res, NsResources: nsScopeAccess}
 	rbacCombined := buildRbacWhereClause(context.TODO(), &ud)
 	expectedSql := `SELECT * WHERE (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))`
@@ -477,7 +477,7 @@ func Test_buildRbacWhereClauseCsAndNs(t *testing.T) {
 }
 
 func Test_buildRbacWhereClauseCsNsAndMc(t *testing.T) {
-	csres, nsScopeAccess, managedClusters := newUserResourceAccess()
+	csres, nsScopeAccess, managedClusters := newUserData()
 	ud := rbac.UserData{CsResources: csres, NsResources: nsScopeAccess, ManagedClusters: managedClusters}
 	rbacCombined := buildRbacWhereClause(context.TODO(), &ud)
 	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))`
