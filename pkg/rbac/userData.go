@@ -42,17 +42,29 @@ type UserData struct {
 	ManagedClusters []string              // Managed clusters where the user has view access.
 }
 
-func (cache *Cache) GetUserData(ctx context.Context,
-	authzClient v1.AuthorizationV1Interface) (*UserDataCache, error) {
-	var user *UserDataCache
-	var uid string
+//Get user's UID
+func (cache *Cache) GetUserUID(ctx context.Context) (string, error) {
 	clientToken := ctx.Value(ContextAuthTokenKey).(string)
 
 	//get uid from tokenreview
 	if tokenReview, err := cache.GetTokenReview(ctx, clientToken); err == nil {
-		uid = tokenReview.Status.User.UID
-		klog.V(7).Info("uid: ", uid, " for user: ", tokenReview.Status.User.Username)
+		uid := tokenReview.Status.User.UID
+		klog.V(9).Info("uid: ", uid, " for user: ", tokenReview.Status.User.Username)
+		return uid, nil
 	} else {
+		return "", err
+	}
+}
+
+func (cache *Cache) GetUserData(ctx context.Context,
+	authzClient v1.AuthorizationV1Interface) (*UserDataCache, error) {
+	var user *UserDataCache
+	var uid string
+	var err error
+	clientToken := ctx.Value(ContextAuthTokenKey).(string)
+
+	//get uid from tokenreview
+	if uid, err = cache.GetUserUID(ctx); err != nil {
 		return user, err
 	}
 
@@ -102,7 +114,11 @@ func userCacheValid(user *UserDataCache) bool {
 // Equivalent to: oc auth can-i list <resource> --as=<user>
 func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.Context,
 	clientToken string) (*UserDataCache, error) {
-
+	var uid string
+	var err error
+	if uid, err = cache.GetUserUID(ctx); err != nil {
+		klog.Warning("Error getting user's uid: ", err)
+	}
 	// get all cluster scoped from shared cache:
 	klog.V(5).Info("Getting cluster scoped resources from shared cache.")
 	user.csrErr = nil
@@ -129,7 +145,7 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 				Resource{Apigroup: res.Apigroup, Kind: res.Kind})
 		}
 	}
-	klog.V(7).Info("User has access to these cluster scoped res: ", user.userData.CsResources)
+	klog.V(7).Infof("User %s has access to these cluster scoped res: %+v \n", uid, user.userData.CsResources)
 	user.csrUpdatedAt = time.Now()
 	return user, user.csrErr
 }
@@ -163,6 +179,11 @@ func (user *UserDataCache) userAuthorizedListCSResource(ctx context.Context, aut
 // Equivalent to: oc auth can-i --list -n <iterate-each-namespace>
 func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Context, clientToken string) (*UserDataCache, error) {
 
+	var uid string
+	var err error
+	if uid, err = cache.GetUserUID(ctx); err != nil {
+		klog.Warning("Error getting user's uid: ", err)
+	}
 	// check if we already have user's namespaced resources in userData cache and check if time is expired
 	user.nsrLock.Lock()
 	defer user.nsrLock.Unlock()
@@ -238,8 +259,8 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 
 		}
 	}
-	klog.V(7).Info("User has access to these namespace scoped res: ", user.userData.NsResources)
-	klog.V(7).Info("User has access to these ManagedClusters: ", user.userData.ManagedClusters)
+	klog.V(7).Infof("User %s has access to these namespace scoped res: %+v \n", uid, user.userData.NsResources)
+	klog.V(7).Infof("User %s has access to these ManagedClusters: %+v \n", uid, user.userData.ManagedClusters)
 
 	user.nsrUpdatedAt = time.Now()
 	user.clustersUpdatedAt = time.Now()
