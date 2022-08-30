@@ -183,7 +183,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	if err != nil {
 		klog.Errorf("Error building Search query: %s", err.Error())
 	}
-	klog.V(3).Infof("Search query: %s\nargs: %s", sql, params)
+	klog.V(5).Infof("Search query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
 }
@@ -219,7 +219,7 @@ func (s *SearchResult) resolveUids() {
 func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	items := []map[string]interface{}{}
 	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveItemsFunc"))
-	klog.V(4).Info("Query issued by resolver [%s] ", s.query)
+	klog.V(5).Info("Query issued by resolver [%s] ", s.query)
 	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
 	defer timer.ObserveDuration()
 	if err != nil {
