@@ -45,6 +45,7 @@ type UserData struct {
 }
 
 //Get user's UID
+// Note: kubeadmin gets an empty string for uid
 func (cache *Cache) GetUserUID(ctx context.Context) string {
 	clientToken := ctx.Value(ContextAuthTokenKey).(string)
 
@@ -54,8 +55,8 @@ func (cache *Cache) GetUserUID(ctx context.Context) string {
 		klog.V(9).Info("Found uid: ", uid, " for user: ", tokenReview.Status.User.Username)
 		return uid
 	} else {
-		klog.Error("Cannot find uid for user: ", tokenReview.Status.User.Username)
-		return ""
+		klog.Error("Error finding uid for user: ", tokenReview.Status.User.Username, err)
+		return "noUidFound"
 	}
 }
 
@@ -66,9 +67,9 @@ func (cache *Cache) GetUserData(ctx context.Context,
 	var err error
 	clientToken := ctx.Value(ContextAuthTokenKey).(string)
 
-	//get uid from tokenreview
-	if uid = cache.GetUserUID(ctx); uid == "" {
-		return user, fmt.Errorf("Cannot find user with token: %s", clientToken)
+	// get uid from tokenreview
+	if uid = cache.GetUserUID(ctx); uid == "noUidFound" {
+		return user, fmt.Errorf("cannot find user with token: %s", clientToken)
 	}
 
 	cache.usersLock.Lock()
