@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"time"
@@ -86,7 +87,8 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData)) // add rbac
 		} else {
-			panic("RBAC clause is required!")
+			msg := fmt.Sprintf("RBAC clause is required! None found for searchComplete query %+v for user %s ", s.input, ctx.Value(rbac.ContextAuthTokenKey))
+			panic(msg)
 		}
 		//Adding an arbitrarily high number 100000 as limit here in the inner query
 		// Adding a LIMIT helps to speed up the query
@@ -140,8 +142,8 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 		//Check if results are date or number
 		isNumber := isNumber(srchCompleteOut)
 		if isNumber { //check if valid number
-			isNumber := "isNumber"
-			srchCompleteOutNum := []*string{&isNumber} //isNumber should be the first argument if the property is a number
+			isNumberStr := "isNumber"
+			srchCompleteOutNum := []*string{&isNumberStr} //isNumber should be the first argument if the property is a number
 			// Sort the values in srchCompleteOut
 			sort.Slice(srchCompleteOut, func(i, j int) bool {
 				numA, _ := strconv.Atoi(*srchCompleteOut[i])
@@ -157,9 +159,9 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 
 		}
 		if !isNumber && isDate(srchCompleteOut) { //check if valid date
-			isDate := "isDate"
-			srchCompleteOutNum := []*string{&isDate}
-			srchCompleteOut = srchCompleteOutNum
+			isDateStr := "isDate"
+			srchCompleteOutDate := []*string{&isDateStr}
+			srchCompleteOut = srchCompleteOutDate
 		}
 	}
 	return srchCompleteOut, nil

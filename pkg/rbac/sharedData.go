@@ -100,7 +100,7 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 	shared.csLock.Lock()
 	defer shared.csLock.Unlock()
 	//clear previous cache
-	shared.csResources = nil
+	shared.csResources = make([]Resource, 0)
 	shared.csResourcesMap = make(map[Resource]struct{})
 	shared.csErr = nil
 	klog.V(6).Info("Querying database for cluster-scoped resources.")

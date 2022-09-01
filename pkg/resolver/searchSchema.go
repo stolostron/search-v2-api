@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
@@ -58,7 +59,8 @@ func (s *SearchSchema) buildSearchSchemaQuery(ctx context.Context) {
 	if s.userData != nil {
 		whereDs = buildRbacWhereClause(ctx, s.userData) // add rbac
 	} else {
-		panic("RBAC clause is required!")
+		msg := fmt.Sprintf("RBAC clause is required! None found for search schema query for user %s ", ctx.Value(rbac.ContextAuthTokenKey))
+		panic(msg)
 	}
 
 	//SELECT CLAUSE
