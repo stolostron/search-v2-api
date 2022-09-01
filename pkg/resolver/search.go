@@ -164,7 +164,8 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData)) // add rbac
 		} else {
-			msg := fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input, ctx.Value(rbac.ContextAuthTokenKey))
+			msg := fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
+				ctx.Value(rbac.ContextAuthTokenKey))
 			panic(msg)
 		}
 	}

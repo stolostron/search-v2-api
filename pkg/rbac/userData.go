@@ -3,6 +3,7 @@ package rbac
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -21,7 +22,8 @@ type UserDataCache struct {
 
 	// Internal fields to manage the cache.
 	clustersErr error // Error while updating clusters data.
-	// clustersLock      sync.Mutex // Locks when clusters data is being updated. NOTE: not implmented because we use the nsrLock
+	// NOTE: not implemented because we use the nsrLock
+	// clustersLock      sync.Mutex // Locks when clusters data is being updated.
 	clustersUpdatedAt time.Time // Time clusters was last updated.
 
 	csrErr       error      // Error while updating cluster-scoped resources data.
@@ -66,7 +68,7 @@ func (cache *Cache) GetUserData(ctx context.Context,
 
 	//get uid from tokenreview
 	if uid = cache.GetUserUID(ctx); uid == "" {
-		return user, err
+		return user, fmt.Errorf("Cannot find user with token: %s", clientToken)
 	}
 
 	cache.usersLock.Lock()
@@ -142,7 +144,8 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 				Resource{Apigroup: res.Apigroup, Kind: res.Kind})
 		}
 	}
-	klog.V(7).Infof("User %s has access to these cluster scoped res: %+v \n", cache.GetUserUID(ctx), user.userData.CsResources)
+	klog.V(3).Infof("User %s has access to these cluster scoped res: %+v \n", cache.GetUserUID(ctx),
+		user.userData.CsResources)
 	user.csrUpdatedAt = time.Now()
 	return user, user.csrErr
 }
@@ -174,7 +177,8 @@ func (user *UserDataCache) userAuthorizedListCSResource(ctx context.Context, aut
 }
 
 // Equivalent to: oc auth can-i --list -n <iterate-each-namespace>
-func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Context, clientToken string) (*UserDataCache, error) {
+func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Context,
+	clientToken string) (*UserDataCache, error) {
 
 	// check if we already have user's namespaced resources in userData cache and check if time is expired
 	user.nsrLock.Lock()
@@ -251,8 +255,10 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 
 		}
 	}
-	klog.V(7).Infof("User %s has access to these namespace scoped res: %+v \n", cache.GetUserUID(ctx), user.userData.NsResources)
-	klog.V(7).Infof("User %s has access to these ManagedClusters: %+v \n", cache.GetUserUID(ctx), user.userData.ManagedClusters)
+	klog.V(3).Infof("User %s has access to these namespace scoped res: %+v \n", cache.GetUserUID(ctx),
+		user.userData.NsResources)
+	klog.V(3).Infof("User %s has access to these ManagedClusters: %+v \n", cache.GetUserUID(ctx),
+		user.userData.ManagedClusters)
 
 	user.nsrUpdatedAt = time.Now()
 	user.clustersUpdatedAt = time.Now()

@@ -3,6 +3,7 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"time"
@@ -84,10 +85,12 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		}
 		//RBAC CLAUSE
 		if s.userData != nil {
+			// klog.Info("not adding rbac clause now")
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData)) // add rbac
 		} else {
-			msg := fmt.Sprintf("RBAC clause is required! None found for searchComplete query %+v for user %s ", s.input, ctx.Value(rbac.ContextAuthTokenKey))
+			msg := fmt.Sprintf("RBAC clause is required! None found for searchComplete query %+v for user %s ",
+				s.input, ctx.Value(rbac.ContextAuthTokenKey))
 			panic(msg)
 		}
 		//Adding an arbitrarily high number 100000 as limit here in the inner query
@@ -108,9 +111,17 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		if err != nil {
 			klog.Errorf("Error building SearchComplete query: %s", err.Error())
 		}
+		f, err := os.Create("srchCompQuery.sql")
+		if err != nil {
+			fmt.Println("err creating file")
+		}
+		_, err = f.WriteString(sql)
+		if err != nil {
+			fmt.Println("err writing file")
+		}
 		s.query = sql
 		s.params = params
-		klog.V(3).Info("SearchComplete Query: ", s.query)
+		klog.V(5).Info("SearchComplete Query: ", s.query)
 	} else {
 		s.query = ""
 		s.params = nil
@@ -132,18 +143,21 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 		for rows.Next() {
 			prop := ""
 			scanErr := rows.Scan(&prop)
+			fmt.Println("prop:", prop)
 			if scanErr != nil {
 				klog.Error("Error reading searchCompleteResults", scanErr)
 			}
 			srchCompleteOut = append(srchCompleteOut, &prop)
 		}
 	}
+	klog.Info("srchCompleteOut: ", srchCompleteOut, "checking if it is a date or number")
 	if len(srchCompleteOut) > 0 {
 		//Check if results are date or number
 		isNumber := isNumber(srchCompleteOut)
 		if isNumber { //check if valid number
 			isNumberStr := "isNumber"
-			srchCompleteOutNum := []*string{&isNumberStr} //isNumber should be the first argument if the property is a number
+			//isNumber should be the first argument if the property is a number
+			srchCompleteOutNum := []*string{&isNumberStr}
 			// Sort the values in srchCompleteOut
 			sort.Slice(srchCompleteOut, func(i, j int) bool {
 				numA, _ := strconv.Atoi(*srchCompleteOut[i])
@@ -152,7 +166,8 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			})
 			if len(srchCompleteOut) > 1 {
 				// Pass only the min and max values of the numbers to show the range in the UI
-				srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut[0], srchCompleteOut[len(srchCompleteOut)-1])
+				srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut[0],
+					srchCompleteOut[len(srchCompleteOut)-1])
 			} else {
 				srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut...)
 			}
@@ -164,6 +179,8 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			srchCompleteOut = srchCompleteOutDate
 		}
 	}
+	klog.Info("srchCompleteOut: ", srchCompleteOut)
+
 	return srchCompleteOut, nil
 }
 
