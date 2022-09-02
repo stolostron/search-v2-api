@@ -35,6 +35,7 @@ type SearchResult struct {
 	level  int // The number of levels/hops for finding relationships for a particular resource
 	//  Related []SearchRelatedResult
 	userData *rbac.UserData
+	context  context.Context
 }
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
@@ -51,6 +52,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 				input:    in,
 				pool:     db.GetConnection(),
 				userData: userAccess,
+				context:  ctx,
 			}
 		}
 	}
@@ -60,7 +62,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 
 func (s *SearchResult) Count() int {
 	klog.V(2).Info("Resolving SearchResult:Count()")
-	s.buildSearchQuery(context.Background(), true, false)
+	s.buildSearchQuery(s.context, true, false)
 	count := s.resolveCount()
 
 	return count
@@ -70,7 +72,7 @@ func (s *SearchResult) Items() []map[string]interface{} {
 	s.wg.Add(1)
 	defer s.wg.Done()
 	klog.V(2).Info("Resolving SearchResult:Items()")
-	s.buildSearchQuery(context.Background(), false, false)
+	s.buildSearchQuery(s.context, false, false)
 	r, e := s.resolveItems()
 	if e != nil {
 		klog.Error("Error resolving items.", e)
@@ -112,8 +114,23 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 
 func (s *SearchResult) Uids() {
 	klog.V(2).Info("Resolving SearchResult:Uids()")
-	s.buildSearchQuery(context.Background(), false, true)
+	s.buildSearchQuery(s.context, false, true)
 	s.resolveUids()
+}
+
+func Iskubeadmin(ctx context.Context) bool {
+	_, userDetails := rbac.CacheInst.GetUserUID(ctx)
+	if userDetails.Username == "kube:admin" {
+		klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
+		return true
+	}
+	for _, group := range userDetails.Groups {
+		if group == "system:cluster-admins" {
+			klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
+			return true
+		}
+	}
+	return false
 }
 
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
@@ -160,12 +177,15 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 		whereDs = WhereClauseFilter(s.input)
 		//RBAC CLAUSE
-		if s.userData != nil {
+		if s.userData != nil && !Iskubeadmin(ctx) {
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData)) // add rbac
+
 		} else {
-			panic(fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
-				ctx.Value(rbac.ContextAuthTokenKey)))
+			if !Iskubeadmin(ctx) {
+				panic(fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
+					ctx.Value(rbac.ContextAuthTokenKey)))
+			}
 		}
 	}
 
@@ -202,7 +222,7 @@ func (s *SearchResult) resolveCount() int {
 }
 
 func (s *SearchResult) resolveUids() {
-	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
+	rows, err := s.pool.Query(s.context, s.query, s.params...)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
 		return
@@ -222,7 +242,7 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	items := []map[string]interface{}{}
 	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveItemsFunc"))
 	klog.V(5).Info("Query issued by resolver [%s] ", s.query)
-	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
+	rows, err := s.pool.Query(s.context, s.query, s.params...)
 	defer timer.ObserveDuration()
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)

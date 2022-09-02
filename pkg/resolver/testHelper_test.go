@@ -2,6 +2,7 @@
 package resolver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -42,6 +43,7 @@ func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*strin
 		uids:     uids,
 		wg:       sync.WaitGroup{},
 		userData: ud,
+		context:  context.Background(),
 	}
 
 	return mockResolver, mockPool
