@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 	klog "k8s.io/klog/v2"
 )
 
@@ -22,6 +24,7 @@ type SearchCompleteResult struct {
 	limit    *int
 	query    string
 	params   []interface{}
+	userData *rbac.UserData
 }
 
 func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, error) {
@@ -34,12 +37,17 @@ func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, err
 }
 
 func SearchComplete(ctx context.Context, property string, srchInput *model.SearchInput, limit *int) ([]*string, error) {
-
+	userAccess, userDataErr := getUserDataCache(ctx)
+	if userDataErr != nil {
+		return []*string{}, userDataErr
+	}
+	// Proceed if user's rbac data exists
 	searchCompleteResult := &SearchCompleteResult{
 		input:    srchInput,
 		pool:     db.GetConnection(),
 		property: property,
 		limit:    limit,
+		userData: userAccess,
 	}
 	return searchCompleteResult.autoComplete(ctx)
 
@@ -74,6 +82,15 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
 			whereDs = append(whereDs, goqu.L(`"data"->>?`, s.property).IsNotNull())
 		}
+		//RBAC CLAUSE
+		if s.userData != nil {
+			// klog.Info("not adding rbac clause now")
+			whereDs = append(whereDs,
+				buildRbacWhereClause(ctx, s.userData)) // add rbac
+		} else {
+			panic(fmt.Sprintf("RBAC clause is required! None found for searchComplete query %+v for user %s ",
+				s.input, ctx.Value(rbac.ContextAuthTokenKey)))
+		}
 		//Adding an arbitrarily high number 100000 as limit here in the inner query
 		// Adding a LIMIT helps to speed up the query
 		// Adding a high number so as to get almost all the distinct properties from the database
@@ -94,7 +111,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		}
 		s.query = sql
 		s.params = params
-		klog.V(3).Info("SearchComplete Query: ", s.query)
+		klog.V(5).Info("SearchComplete Query: ", s.query)
 	} else {
 		s.query = ""
 		s.params = nil
@@ -122,30 +139,34 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			srchCompleteOut = append(srchCompleteOut, &prop)
 		}
 	}
-	isNumber := isNumber(srchCompleteOut)
-	if isNumber { //check if valid number
-		isNumber := "isNumber"
-		srchCompleteOutNum := []*string{&isNumber} //isNumber should be the first argument if the property is a number
-		// Sort the values in srchCompleteOut
-		sort.Slice(srchCompleteOut, func(i, j int) bool {
-			numA, _ := strconv.Atoi(*srchCompleteOut[i])
-			numB, _ := strconv.Atoi(*srchCompleteOut[j])
-			return numA < numB
-		})
-		if len(srchCompleteOut) > 1 {
-			// Pass only the min and max values of the numbers to show the range in the UI
-			srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut[0], srchCompleteOut[len(srchCompleteOut)-1])
-		} else {
-			srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut...)
+	if len(srchCompleteOut) > 0 {
+		//Check if results are date or number
+		isNumber := isNumber(srchCompleteOut)
+		if isNumber { //check if valid number
+			isNumberStr := "isNumber"
+			//isNumber should be the first argument if the property is a number
+			srchCompleteOutNum := []*string{&isNumberStr}
+			// Sort the values in srchCompleteOut
+			sort.Slice(srchCompleteOut, func(i, j int) bool {
+				numA, _ := strconv.Atoi(*srchCompleteOut[i])
+				numB, _ := strconv.Atoi(*srchCompleteOut[j])
+				return numA < numB
+			})
+			if len(srchCompleteOut) > 1 {
+				// Pass only the min and max values of the numbers to show the range in the UI
+				srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut[0],
+					srchCompleteOut[len(srchCompleteOut)-1])
+			} else {
+				srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut...)
+			}
+
 		}
-
+		if !isNumber && isDate(srchCompleteOut) { //check if valid date
+			isDateStr := "isDate"
+			srchCompleteOutDate := []*string{&isDateStr}
+			srchCompleteOut = srchCompleteOutDate
+		}
 	}
-	if !isNumber && isDate(srchCompleteOut) { //check if valid date
-		isDate := "isDate"
-		srchCompleteOutNum := []*string{&isDate}
-		srchCompleteOut = srchCompleteOutNum
-	}
-
 	return srchCompleteOut, nil
 }
 

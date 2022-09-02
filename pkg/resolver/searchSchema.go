@@ -2,23 +2,33 @@ package resolver
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 	klog "k8s.io/klog/v2"
 )
 
 type SearchSchema struct {
-	pool   pgxpoolmock.PgxPool
-	query  string
-	params []interface{}
+	pool     pgxpoolmock.PgxPool
+	query    string
+	params   []interface{}
+	userData *rbac.UserData
 }
 
 func SearchSchemaResolver(ctx context.Context) (map[string]interface{}, error) {
+	userAccess, userDataErr := getUserDataCache(ctx)
+	if userDataErr != nil {
+		return nil, userDataErr
+	}
+	// Proceed if user's rbac data exists
 	searchSchemaResult := &SearchSchema{
-		pool: db.GetConnection(),
+		pool:     db.GetConnection(),
+		userData: userAccess,
 	}
 	searchSchemaResult.buildSearchSchemaQuery(ctx)
 	return searchSchemaResult.searchSchemaResults(ctx)
@@ -43,12 +53,23 @@ func (s *SearchSchema) buildSearchSchemaQuery(ctx context.Context) {
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 
+	//WHERE CLAUSE
+	var whereDs exp.ExpressionList
+
+	if s.userData != nil {
+		whereDs = buildRbacWhereClause(ctx, s.userData) // add rbac
+	} else {
+		panic(fmt.Sprintf("RBAC clause is required! None found for search schema query for user %s ",
+			ctx.Value(rbac.ContextAuthTokenKey)))
+	}
+
 	//SELECT CLAUSE
 	jsb := goqu.L("jsonb_object_keys(jsonb_strip_nulls(?))", goqu.C("data")).As("prop") //remove null fields
 	//Adding an arbitrarily high number 100000 as limit here in the inner query
 	// Adding a LIMIT helps to speed up the query
 	// Adding a high number so as to get almost all the distinct properties from the database
-	selectDs = ds.SelectDistinct("prop").From(ds.Select(jsb).Limit(uint(config.Cfg.QueryLimit) * 100).As("schema"))
+	selectDs = ds.SelectDistinct("prop").From(ds.Select(jsb).Where(whereDs).
+		Limit(uint(config.Cfg.QueryLimit) * 100).As("schema"))
 
 	//Get the query
 	sql, params, err := selectDs.ToSQL()

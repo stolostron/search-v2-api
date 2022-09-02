@@ -17,6 +17,7 @@ import (
 type SharedData struct {
 	// These are the data fields.
 	csResources     []Resource // Cluster-scoped resources (ie. Node, ManagedCluster)
+	csResourcesMap  map[Resource]struct{}
 	namespaces      []string
 	managedClusters []string
 
@@ -99,7 +100,8 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 	shared.csLock.Lock()
 	defer shared.csLock.Unlock()
 	//clear previous cache
-	shared.csResources = nil
+	shared.csResources = make([]Resource, 0)
+	shared.csResourcesMap = make(map[Resource]struct{})
 	shared.csErr = nil
 	klog.V(6).Info("Querying database for cluster-scoped resources.")
 
@@ -137,7 +139,7 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 					apigroup, kind)
 				continue
 			}
-
+			shared.csResourcesMap[Resource{Apigroup: apigroup, Kind: kind}] = struct{}{}
 			shared.csResources = append(shared.csResources, Resource{Apigroup: apigroup, Kind: kind})
 
 		}

@@ -20,7 +20,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func newUserResourceAccess() ([]rbac.Resource, map[string][]rbac.Resource, []string) {
+func newUserData() ([]rbac.Resource, map[string][]rbac.Resource, []string) {
 	csres := []rbac.Resource{{Apigroup: "", Kind: "nodes"}, {Apigroup: "storage.k8s.io", Kind: "csinodes"}}
 	nsres1 := []rbac.Resource{{Apigroup: "v1", Kind: "pods"}, {Apigroup: "v2", Kind: "deployments"}}
 	nsres2 := []rbac.Resource{{Apigroup: "", Kind: "configmaps"}, {Apigroup: "v4", Kind: "services"}}
@@ -46,7 +46,7 @@ func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*strin
 
 	return mockResolver, mockPool
 }
-func newMockSearchComplete(t *testing.T, input *model.SearchInput, property string) (*SearchCompleteResult, *pgxpoolmock.MockPgxPool) {
+func newMockSearchComplete(t *testing.T, input *model.SearchInput, property string, ud *rbac.UserData) (*SearchCompleteResult, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
@@ -55,6 +55,7 @@ func newMockSearchComplete(t *testing.T, input *model.SearchInput, property stri
 		input:    input,
 		pool:     mockPool,
 		property: property,
+		userData: ud,
 	}
 	return mockResolver, mockPool
 }

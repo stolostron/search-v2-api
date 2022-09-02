@@ -3,6 +3,7 @@ package rbac
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -21,7 +22,8 @@ type UserDataCache struct {
 
 	// Internal fields to manage the cache.
 	clustersErr error // Error while updating clusters data.
-	// clustersLock      sync.Mutex // Locks when clusters data is being updated. NOTE: not implmented because we use the nsrLock
+	// NOTE: not implemented because we use the nsrLock
+	// clustersLock      sync.Mutex // Locks when clusters data is being updated.
 	clustersUpdatedAt time.Time // Time clusters was last updated.
 
 	csrErr       error      // Error while updating cluster-scoped resources data.
@@ -42,17 +44,32 @@ type UserData struct {
 	ManagedClusters []string              // Managed clusters where the user has view access.
 }
 
-func (cache *Cache) GetUserData(ctx context.Context,
-	authzClient v1.AuthorizationV1Interface) (*UserDataCache, error) {
-	var user *UserDataCache
-	var uid string
+//Get user's UID
+// Note: kubeadmin gets an empty string for uid
+func (cache *Cache) GetUserUID(ctx context.Context) string {
 	clientToken := ctx.Value(ContextAuthTokenKey).(string)
 
 	//get uid from tokenreview
 	if tokenReview, err := cache.GetTokenReview(ctx, clientToken); err == nil {
-		uid = tokenReview.Status.User.UID
+		uid := tokenReview.Status.User.UID
+		klog.V(9).Info("Found uid: ", uid, " for user: ", tokenReview.Status.User.Username)
+		return uid
 	} else {
-		return user, err
+		klog.Error("Error finding uid for user: ", tokenReview.Status.User.Username, err)
+		return "noUidFound"
+	}
+}
+
+func (cache *Cache) GetUserData(ctx context.Context,
+	authzClient v1.AuthorizationV1Interface) (*UserDataCache, error) {
+	var user *UserDataCache
+	var uid string
+	var err error
+	clientToken := ctx.Value(ContextAuthTokenKey).(string)
+
+	// get uid from tokenreview
+	if uid = cache.GetUserUID(ctx); uid == "noUidFound" {
+		return user, fmt.Errorf("cannot find user with token: %s", clientToken)
 	}
 
 	cache.usersLock.Lock()
@@ -128,6 +145,8 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 				Resource{Apigroup: res.Apigroup, Kind: res.Kind})
 		}
 	}
+	klog.V(3).Infof("User %s has access to these cluster scoped res: %+v \n", cache.GetUserUID(ctx),
+		user.userData.CsResources)
 	user.csrUpdatedAt = time.Now()
 	return user, user.csrErr
 }
@@ -159,7 +178,8 @@ func (user *UserDataCache) userAuthorizedListCSResource(ctx context.Context, aut
 }
 
 // Equivalent to: oc auth can-i --list -n <iterate-each-namespace>
-func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Context, clientToken string) (*UserDataCache, error) {
+func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Context,
+	clientToken string) (*UserDataCache, error) {
 
 	// check if we already have user's namespaced resources in userData cache and check if time is expired
 	user.nsrLock.Lock()
@@ -191,7 +211,6 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	managedClusters := cache.shared.managedClusters
 
 	for _, ns := range allNamespaces {
-		//
 		rulesCheck := authz.SelfSubjectRulesReview{
 			Spec: authz.SelfSubjectRulesReviewSpec{
 				Namespace: ns,
@@ -208,8 +227,10 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 				if verb == "list" || verb == "*" { //TODO: resourceName == "*" && verb == "*" then exit loop
 					for _, res := range rules.Resources {
 						for _, api := range rules.APIGroups {
-							user.userData.NsResources[ns] = append(user.userData.NsResources[ns],
-								Resource{Apigroup: api, Kind: res})
+							if !cache.shared.isClusterScoped(res, api) { //Add the resource if it is not cluster scoped
+								user.userData.NsResources[ns] = append(user.userData.NsResources[ns],
+									Resource{Apigroup: api, Kind: res})
+							}
 						}
 					}
 				}
@@ -235,11 +256,27 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 
 		}
 	}
+	klog.V(3).Infof("User %s has access to these namespace scoped res: %+v \n", cache.GetUserUID(ctx),
+		user.userData.NsResources)
+	klog.V(3).Infof("User %s has access to these ManagedClusters: %+v \n", cache.GetUserUID(ctx),
+		user.userData.ManagedClusters)
 
 	user.nsrUpdatedAt = time.Now()
 	user.clustersUpdatedAt = time.Now()
 
 	return user, user.nsrErr
+}
+
+//SSRR has resources that are clusterscoped too
+func (shared *SharedData) isClusterScoped(kindPlural, apigroup string) bool {
+	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
+	shared.csLock.Lock()
+	defer shared.csLock.Unlock()
+	_, ok := shared.csResourcesMap[Resource{Apigroup: apigroup, Kind: kindPlural}]
+	if ok {
+		klog.V(9).Info("resource is ClusterScoped ", kindPlural, " ", apigroup, ": ", ok)
+	}
+	return ok
 }
 
 func (user *UserDataCache) getImpersonationClientSet(clientToken string, cache *Cache) (v1.AuthorizationV1Interface,
