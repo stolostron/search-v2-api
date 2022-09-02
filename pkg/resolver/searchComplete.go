@@ -3,7 +3,6 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strconv"
 	"time"
@@ -89,9 +88,8 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData)) // add rbac
 		} else {
-			msg := fmt.Sprintf("RBAC clause is required! None found for searchComplete query %+v for user %s ",
-				s.input, ctx.Value(rbac.ContextAuthTokenKey))
-			panic(msg)
+			panic(fmt.Sprintf("RBAC clause is required! None found for searchComplete query %+v for user %s ",
+				s.input, ctx.Value(rbac.ContextAuthTokenKey)))
 		}
 		//Adding an arbitrarily high number 100000 as limit here in the inner query
 		// Adding a LIMIT helps to speed up the query
@@ -110,14 +108,6 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			Limit(uint(limit)).ToSQL()
 		if err != nil {
 			klog.Errorf("Error building SearchComplete query: %s", err.Error())
-		}
-		f, err := os.Create("srchCompQuery.sql")
-		if err != nil {
-			fmt.Println("err creating file")
-		}
-		_, err = f.WriteString(sql)
-		if err != nil {
-			fmt.Println("err writing file")
 		}
 		s.query = sql
 		s.params = params
@@ -143,14 +133,12 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 		for rows.Next() {
 			prop := ""
 			scanErr := rows.Scan(&prop)
-			fmt.Println("prop:", prop)
 			if scanErr != nil {
 				klog.Error("Error reading searchCompleteResults", scanErr)
 			}
 			srchCompleteOut = append(srchCompleteOut, &prop)
 		}
 	}
-	klog.Info("srchCompleteOut: ", srchCompleteOut, "checking if it is a date or number")
 	if len(srchCompleteOut) > 0 {
 		//Check if results are date or number
 		isNumber := isNumber(srchCompleteOut)
@@ -179,8 +167,6 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			srchCompleteOut = srchCompleteOutDate
 		}
 	}
-	klog.Info("srchCompleteOut: ", srchCompleteOut)
-
 	return srchCompleteOut, nil
 }
 
