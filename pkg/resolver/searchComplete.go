@@ -84,9 +84,10 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		}
 		//RBAC CLAUSE
 		if s.userData != nil {
-			// klog.Info("not adding rbac clause now")
-			whereDs = append(whereDs,
-				buildRbacWhereClause(ctx, s.userData)) // add rbac
+			rbac := buildRbacWhereClause(ctx, s.userData)
+			if rbac != nil {
+				whereDs = append(whereDs, rbac) // add rbac
+			}
 		} else {
 			panic(fmt.Sprintf("RBAC clause is required! None found for searchComplete query %+v for user %s ",
 				s.input, ctx.Value(rbac.ContextAuthTokenKey)))

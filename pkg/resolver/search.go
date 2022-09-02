@@ -35,6 +35,7 @@ type SearchResult struct {
 	level  int // The number of levels/hops for finding relationships for a particular resource
 	//  Related []SearchRelatedResult
 	userData *rbac.UserData
+	context  context.Context
 }
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
@@ -51,6 +52,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 				input:    in,
 				pool:     db.GetConnection(),
 				userData: userAccess,
+				context:  ctx,
 			}
 		}
 	}
@@ -60,7 +62,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 
 func (s *SearchResult) Count() int {
 	klog.V(2).Info("Resolving SearchResult:Count()")
-	s.buildSearchQuery(context.Background(), true, false)
+	s.buildSearchQuery(s.context, true, false)
 	count := s.resolveCount()
 
 	return count
@@ -70,7 +72,7 @@ func (s *SearchResult) Items() []map[string]interface{} {
 	s.wg.Add(1)
 	defer s.wg.Done()
 	klog.V(2).Info("Resolving SearchResult:Items()")
-	s.buildSearchQuery(context.Background(), false, false)
+	s.buildSearchQuery(s.context, false, false)
 	r, e := s.resolveItems()
 	if e != nil {
 		klog.Error("Error resolving items.", e)
@@ -112,22 +114,37 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 
 func (s *SearchResult) Uids() {
 	klog.V(2).Info("Resolving SearchResult:Uids()")
-	s.buildSearchQuery(context.Background(), false, true)
+	s.buildSearchQuery(s.context, false, true)
 	s.resolveUids()
 }
 
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData) exp.ExpressionList {
-	return goqu.Or(
-		matchManagedCluster(userrbac.ManagedClusters), // goqu.I("cluster").In([]string{"clusterNames", ....})
-		goqu.And(
-			matchHubCluster(), // goqu.L(`data->>?`, "_hubClusterResource").Eq("true")
-			goqu.Or(
-				matchClusterScopedResources(userrbac.CsResources), // (namespace=null AND apigroup AND kind)
-				matchNamespacedResources(userrbac.NsResources),    // (namespace AND apiproup AND kind)
+	clientToken := ctx.Value(rbac.ContextAuthTokenKey).(string)
+	var turnoffRbac bool
+	userDetails, _ := rbac.CacheInst.GetUserUID(ctx, clientToken)
+	for _, group := range userDetails.Groups {
+		if group == "system:cluster-admins" {
+			turnoffRbac = true
+			break
+		}
+
+	}
+	if turnoffRbac || userDetails.Username == "kube:admin" {
+		klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
+		return nil
+	} else {
+		return goqu.Or(
+			matchManagedCluster(userrbac.ManagedClusters), // goqu.I("cluster").In([]string{"clusterNames", ....})
+			goqu.And(
+				matchHubCluster(), // goqu.L(`data->>?`, "_hubClusterResource").Eq("true")
+				goqu.Or(
+					matchClusterScopedResources(userrbac.CsResources), // (namespace=null AND apigroup AND kind)
+					matchNamespacedResources(userrbac.NsResources),    // (namespace AND apiproup AND kind)
+				),
 			),
-		),
-	)
+		)
+	}
 }
 
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) {
@@ -161,8 +178,10 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		whereDs = WhereClauseFilter(s.input)
 		//RBAC CLAUSE
 		if s.userData != nil {
-			whereDs = append(whereDs,
-				buildRbacWhereClause(ctx, s.userData)) // add rbac
+			rbac := buildRbacWhereClause(ctx, s.userData)
+			if rbac != nil {
+				whereDs = append(whereDs, rbac) // add rbac
+			}
 		} else {
 			panic(fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
 				ctx.Value(rbac.ContextAuthTokenKey)))

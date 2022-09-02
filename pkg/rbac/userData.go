@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
+	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	v1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
@@ -46,17 +48,15 @@ type UserData struct {
 
 //Get user's UID
 // Note: kubeadmin gets an empty string for uid
-func (cache *Cache) GetUserUID(ctx context.Context) string {
-	clientToken := ctx.Value(ContextAuthTokenKey).(string)
+func (cache *Cache) GetUserUID(ctx context.Context, clientToken string) (authv1.UserInfo, error) {
 
+	// clientToken := ctx.Value(ContextAuthTokenKey).(string)
 	//get uid from tokenreview
 	if tokenReview, err := cache.GetTokenReview(ctx, clientToken); err == nil {
-		uid := tokenReview.Status.User.UID
-		klog.V(9).Info("Found uid: ", uid, " for user: ", tokenReview.Status.User.Username)
-		return uid
+		return tokenReview.Status.User, nil
 	} else {
 		klog.Error("Error finding uid for user: ", tokenReview.Status.User.Username, err)
-		return "noUidFound"
+		return authv1.UserInfo{}, err
 	}
 }
 
@@ -68,8 +68,9 @@ func (cache *Cache) GetUserData(ctx context.Context,
 	clientToken := ctx.Value(ContextAuthTokenKey).(string)
 
 	// get uid from tokenreview
-	if uid = cache.GetUserUID(ctx); uid == "noUidFound" {
-		return user, fmt.Errorf("cannot find user with token: %s", clientToken)
+	_, userDetailsErr := cache.GetUserUID(ctx, clientToken)
+	if userDetailsErr != nil {
+		return user, fmt.Errorf("cannot find user with token:%s", clientToken)
 	}
 
 	cache.usersLock.Lock()
@@ -145,8 +146,11 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 				Resource{Apigroup: res.Apigroup, Kind: res.Kind})
 		}
 	}
-	klog.V(3).Infof("User %s has access to these cluster scoped res: %+v \n", cache.GetUserUID(ctx),
-		user.userData.CsResources)
+	if userDetails, userDetailsErr := cache.GetUserUID(ctx, clientToken); userDetailsErr == nil {
+		klog.V(7).Infof("User %s:%s has access to these cluster scoped res: %+v \n", userDetails.UID, userDetails.Username,
+			user.userData.CsResources)
+	}
+
 	user.csrUpdatedAt = time.Now()
 	return user, user.csrErr
 }
@@ -256,10 +260,12 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 
 		}
 	}
-	klog.V(3).Infof("User %s has access to these namespace scoped res: %+v \n", cache.GetUserUID(ctx),
-		user.userData.NsResources)
-	klog.V(3).Infof("User %s has access to these ManagedClusters: %+v \n", cache.GetUserUID(ctx),
-		user.userData.ManagedClusters)
+	if userDetails, userDetailsErr := cache.GetUserUID(ctx, clientToken); userDetailsErr == nil {
+		klog.V(7).Infof("User %s:%s  has access to these namespace scoped res: %+v \n", userDetails.UID,
+			userDetails.Username, user.userData.NsResources)
+		klog.V(7).Infof("User %s:%s has access to these ManagedClusters: %+v \n", userDetails.UID, userDetails.Username,
+			user.userData.ManagedClusters)
+	}
 
 	user.nsrUpdatedAt = time.Now()
 	user.clustersUpdatedAt = time.Now()
