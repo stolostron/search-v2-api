@@ -126,6 +126,7 @@ func Iskubeadmin(ctx context.Context) bool {
 	}
 	for _, group := range userDetails.Groups {
 		if group == "system:cluster-admins" {
+			klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
 			return true
 		}
 	}
