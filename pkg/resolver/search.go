@@ -119,18 +119,15 @@ func (s *SearchResult) Uids() {
 }
 
 func Iskubeadmin(ctx context.Context) bool {
-	var turnoffRbac bool
 	_, userDetails := rbac.CacheInst.GetUserUID(ctx)
-	for _, group := range userDetails.Groups {
-		if group == "system:cluster-admins" {
-			turnoffRbac = true
-			break
-		}
-
-	}
-	if turnoffRbac || userDetails.Username == "kube:admin" {
+	if userDetails.Username == "kube:admin" {
 		klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
 		return true
+	}
+	for _, group := range userDetails.Groups {
+		if group == "system:cluster-admins" {
+			return true
+		}
 	}
 	return false
 }
