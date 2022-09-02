@@ -137,19 +137,6 @@ func Iskubeadmin(ctx context.Context) bool {
 
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData) exp.ExpressionList {
-	// var turnoffRbac bool
-	// _, userDetails := rbac.CacheInst.GetUserUID(ctx)
-	// for _, group := range userDetails.Groups {
-	// 	if group == "system:cluster-admins" {
-	// 		turnoffRbac = true
-	// 		break
-	// 	}
-
-	// }
-	// if turnoffRbac || userDetails.Username == "kube:admin" {
-	// 	klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
-	// 	return nil
-	// } else {
 	return goqu.Or(
 		matchManagedCluster(userrbac.ManagedClusters), // goqu.I("cluster").In([]string{"clusterNames", ....})
 		goqu.And(
@@ -160,7 +147,6 @@ func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData) exp.Expr
 			),
 		),
 	)
-	// }
 }
 
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) {
