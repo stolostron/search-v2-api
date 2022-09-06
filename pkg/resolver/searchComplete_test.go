@@ -27,11 +27,11 @@ func Test_SearchComplete_Query(t *testing.T) {
 	// Mock the database query
 	// SELECT DISTINCT "prop" FROM (SELECT "data"->>'kind' AS "prop" FROM "search"."resources" WHERE ("data"->>'kind' IS NOT NULL) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->>'kind' AS "prop" FROM "search"."resources" WHERE (("data"->>'kind' IS NOT NULL) AND (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->>'kind' AS "prop" FROM "search"."resources" WHERE (("data"->>'kind' IS NOT NULL) AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
-	result, err := resolver.autoComplete(context.TODO())
+	result, err := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 	if err != nil {
 		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
 
@@ -56,11 +56,11 @@ func Test_SearchComplete_Query_WithLimit(t *testing.T) {
 	fmt.Println("mockRows:", mockRows)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->>'kind' AS "prop" FROM "search"."resources" WHERE (("data"->>'kind' IS NOT NULL) AND (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 2`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->>'kind' AS "prop" FROM "search"."resources" WHERE (("data"->>'kind' IS NOT NULL) AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 2`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
-	result, err := resolver.autoComplete(context.TODO())
+	result, err := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 	if err != nil {
 		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
 
@@ -82,7 +82,7 @@ func Test_SearchCompleteNoProp_Query(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(nil, fmt.Errorf("Error in search complete query. No property specified."))
 
 	// Execute function
-	result, err := resolver.autoComplete(context.TODO())
+	result, err := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 	// Verify response
 	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteNoProp_Query")
 	assert.NotNil(t, err, "Expected error")
@@ -114,7 +114,7 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
-	result, _ := resolver.autoComplete(context.TODO())
+	result, _ := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 
 	// Verify response
 	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteWithFilter_Query")
@@ -137,11 +137,11 @@ func Test_SearchCompleteWithCluster(t *testing.T) {
 	// Mock the database query
 	// SELECT DISTINCT "prop" FROM (SELECT DISTINCT "cluster" AS "prop" FROM "search"."resources" WHERE (("cluster" IS NOT NULL) AND ("cluster" != '')) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 10
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT DISTINCT "cluster" AS "prop" FROM "search"."resources" WHERE (("cluster" IS NOT NULL) AND ("cluster" != '') AND (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT DISTINCT "cluster" AS "prop" FROM "search"."resources" WHERE (("cluster" IS NOT NULL) AND ("cluster" != '') AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 10`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
-	result, _ := resolver.autoComplete(context.TODO())
+	result, _ := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 
 	// Verify response
 	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteWithFilter_Query")
@@ -160,11 +160,11 @@ func Test_SearchCompleteQuery_PropDate(t *testing.T) {
 	fmt.Println("mockRows:", mockRows)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->>'created' AS "prop" FROM "search"."resources" WHERE (("data"->>'created' IS NOT NULL) AND (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->>'created' AS "prop" FROM "search"."resources" WHERE (("data"->>'created' IS NOT NULL) AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
-	result, err := resolver.autoComplete(context.TODO())
+	result, err := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 	if err != nil {
 		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
 
@@ -193,7 +193,7 @@ func Test_SearchCompleteQuery_PropNum(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
-	result, err := resolver.autoComplete(context.TODO())
+	result, err := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 	if err != nil {
 		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
 

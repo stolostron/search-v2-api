@@ -8,15 +8,16 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stolostron/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 )
 
 func Test_Messages_Query(t *testing.T) {
 	// Create a SearchSchemaResolver instance with a mock connection pool.
-	resolver, _ := newMockMessage(t)
+	resolver, _ := newMockMessage(t, &rbac.UserData{})
 
-	sql := `SELECT COUNT(DISTINCT("mcInfo".data->>'name')) FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`
+	sql := `SELECT DISTINCT "mcInfo".data->>'name' AS "srchAddonDisabledCluster" FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`
 	// Execute function
-	resolver.buildSearchAddonDisabledQuery(context.TODO())
+	resolver.buildSearchAddonDisabledQuery(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 
 	// Verify response
 	if resolver.query != sql {
@@ -25,19 +26,24 @@ func Test_Messages_Query(t *testing.T) {
 }
 
 func Test_Message_Results(t *testing.T) {
+	csRes, nsRes, mc := newUserData()
+	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: mc}
+
 	// Create a SearchSchemaResolver instance with a mock connection pool.
-	resolver, mockPool := newMockMessage(t)
+	resolver, mockPool := newMockMessage(t, &ud)
 
 	// Mock the database queries.
-	mockRow := &Row{MockValue: 1}
+	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", nil, "srchAddonDisabledCluster", 0)
+	// Query before rbac
+	// SELECT COUNT(DISTINCT("mcInfo".data->>'name')) FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`),
 
 	// Mock the database query
-	mockPool.EXPECT().QueryRow(gomock.Any(),
-		gomock.Eq(`SELECT COUNT(DISTINCT("mcInfo".data->>'name')) FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`),
-	).Return(mockRow)
-	resolver.buildSearchAddonDisabledQuery(context.TODO())
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT "mcInfo".data->>'name' AS "srchAddonDisabledCluster" FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`),
+	).Return(mockRows, nil)
+	resolver.buildSearchAddonDisabledQuery(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 	//Execute the function
-	res, err := resolver.messageResults(context.TODO())
+	res, err := resolver.messageResults(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 
 	messages := make([]*model.Message, 0)
 	kind := "information"

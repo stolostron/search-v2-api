@@ -21,12 +21,14 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func newUserData() ([]rbac.Resource, map[string][]rbac.Resource, []string) {
+func newUserData() ([]rbac.Resource, map[string][]rbac.Resource, map[string]struct{}) {
 	csres := []rbac.Resource{{Apigroup: "", Kind: "nodes"}, {Apigroup: "storage.k8s.io", Kind: "csinodes"}}
 	nsres1 := []rbac.Resource{{Apigroup: "v1", Kind: "pods"}, {Apigroup: "v2", Kind: "deployments"}}
 	nsres2 := []rbac.Resource{{Apigroup: "", Kind: "configmaps"}, {Apigroup: "v4", Kind: "services"}}
 	nsScopeAccess := map[string][]rbac.Resource{}
-	managedClusters := []string{"managed1", "managed2"}
+	managedClusters := make(map[string]struct{}, 2)
+	managedClusters["managed1"] = struct{}{}
+	managedClusters["managed2"] = struct{}{}
 	nsScopeAccess["ocm"] = nsres1
 	nsScopeAccess["default"] = nsres2
 	return csres, nsScopeAccess, managedClusters
@@ -43,7 +45,7 @@ func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*strin
 		uids:     uids,
 		wg:       sync.WaitGroup{},
 		userData: ud,
-		context:  context.Background(),
+		context:  context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
 	}
 
 	return mockResolver, mockPool
@@ -72,13 +74,14 @@ func newMockSearchSchema(t *testing.T) (*SearchSchema, *pgxpoolmock.MockPgxPool)
 	return mockResolver, mockPool
 }
 
-func newMockMessage(t *testing.T) (*Message, *pgxpoolmock.MockPgxPool) {
+func newMockMessage(t *testing.T, ud *rbac.UserData) (*Message, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 
 	mockResolver := &Message{
-		pool: mockPool,
+		pool:     mockPool,
+		userData: ud,
 	}
 	return mockResolver, mockPool
 }
@@ -159,6 +162,8 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 
 			if prop == "cluster" {
 				props[cluster] = ""
+			} else if prop == "srchAddonDisabledCluster" {
+				props["managed1"] = ""
 			} else {
 				if _, ok := data[prop]; ok {
 					switch v := data[prop].(type) {

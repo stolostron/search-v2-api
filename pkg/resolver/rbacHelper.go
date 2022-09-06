@@ -2,15 +2,10 @@
 package resolver
 
 import (
-	"context"
-	"errors"
-	"sort"
-
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/lib/pq"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
-	klog "k8s.io/klog/v2"
 )
 
 // function to loop through resources and build the where clause
@@ -56,13 +51,8 @@ func matchNamespacedResources(nsResources map[string][]rbac.Resource) exp.Expres
 	var whereNsDs []exp.Expression
 	if len(nsResources) > 0 {
 		whereNsDs = make([]exp.Expression, len(nsResources))
-		namespaces := make([]string, len(nsResources))
-		i := 0
-		for namespace := range nsResources {
-			namespaces[i] = namespace
-			i++
-		}
-		sort.Strings(namespaces) //to make unit tests pass
+		namespaces := getKeys(nsResources)
+
 		for nsCount, namespace := range namespaces {
 			whereNsDs[nsCount] = goqu.And(goqu.L(`data->>?`, "namespace").Eq(namespace),
 				matchApigroupKind(nsResources[namespace]))
@@ -85,21 +75,4 @@ func matchHubCluster() exp.BooleanExpression {
 func matchManagedCluster(managedClusters []string) exp.BooleanExpression {
 	//managed clusters
 	return goqu.C("cluster").Eq(goqu.Any(pq.Array(managedClusters)))
-}
-
-func getUserDataCache(ctx context.Context) (*rbac.UserData, error) {
-	userData, userDataErr := rbac.CacheInst.GetUserData(ctx, nil)
-	if userDataErr != nil {
-		klog.Error("Error fetching UserAccessData: ", userDataErr)
-		return nil, errors.New("unable to resolve query because of error while resolving user's access")
-	}
-	// Proceed if user's rbac data exists
-	// Get a copy of the current user access if user data exists
-
-	userAccess := &rbac.UserData{
-		CsResources:     userData.GetCsResources(),
-		NsResources:     userData.GetNsResources(),
-		ManagedClusters: userData.GetManagedClusters(),
-	}
-	return userAccess, nil
 }

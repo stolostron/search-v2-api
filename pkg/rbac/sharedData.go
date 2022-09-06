@@ -16,12 +16,16 @@ import (
 // Cache data shared across all users.
 type SharedData struct {
 	// These are the data fields.
-	csResources     []Resource // Cluster-scoped resources (ie. Node, ManagedCluster)
-	csResourcesMap  map[Resource]struct{}
-	namespaces      []string
-	managedClusters []string
-
+	// csResources      []Resource // Cluster-scoped resources (ie. Node, ManagedCluster)
+	csResourcesMap   map[Resource]struct{}
+	namespaces       []string
+	managedClusters  map[string]struct{}
+	disabledClusters map[string]struct{}
 	// These are internal objects to track the state of the cache.
+	dcErr       error      // Error while updating clusters data.
+	dcLock      sync.Mutex // Locks when clusters data is being updated.
+	dcUpdatedAt time.Time  // Time clusters was last updated.
+
 	mcErr       error      // Error while updating clusters data.
 	mcLock      sync.Mutex // Locks when clusters data is being updated.
 	mcUpdatedAt time.Time  // Time clusters was last updated.
@@ -80,6 +84,9 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 	}
 
 }
+func (cache *Cache) SharedCacheDisabledClustersValid() bool {
+	return time.Now().Before(cache.shared.dcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))
+}
 
 func sharedCacheValid(shared *SharedData) bool {
 
@@ -100,7 +107,7 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 	shared.csLock.Lock()
 	defer shared.csLock.Unlock()
 	//clear previous cache
-	shared.csResources = make([]Resource, 0)
+	// shared.csResources = make([]Resource, 0)
 	shared.csResourcesMap = make(map[Resource]struct{})
 	shared.csErr = nil
 	klog.V(6).Info("Querying database for cluster-scoped resources.")
@@ -116,7 +123,8 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 	if err != nil {
 		klog.Errorf("Error creating query [%s]. Error: [%+v]", query, err)
 		shared.csErr = err
-		shared.csResources = []Resource{}
+		// shared.csResources = []Resource{}
+		shared.csResourcesMap = map[Resource]struct{}{}
 		return shared.csErr
 	}
 
@@ -124,7 +132,9 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 	if queryerr != nil {
 		klog.Errorf("Error resolving query [%s]. Error: [%+v]", query, queryerr.Error())
 		shared.csErr = queryerr
-		shared.csResources = []Resource{}
+		// shared.csResources = []Resource{}
+		shared.csResourcesMap = map[Resource]struct{}{}
+
 		return shared.csErr
 	}
 
@@ -140,7 +150,7 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 				continue
 			}
 			shared.csResourcesMap[Resource{Apigroup: apigroup, Kind: kind}] = struct{}{}
-			shared.csResources = append(shared.csResources, Resource{Apigroup: apigroup, Kind: kind})
+			// shared.csResources = append(shared.csResources, Resource{Apigroup: apigroup, Kind: kind})
 
 		}
 	}
@@ -185,7 +195,7 @@ func (shared *SharedData) GetManagedClusters(cache *Cache, ctx context.Context) 
 	shared.managedClusters = nil
 	shared.mcErr = nil
 
-	var managedClusters []string
+	managedClusters := make(map[string]struct{})
 
 	scheme := runtime.NewScheme()
 	scheme.AddKnownTypes(managedClusterResourceGvr.GroupVersion())
@@ -201,7 +211,7 @@ func (shared *SharedData) GetManagedClusters(cache *Cache, ctx context.Context) 
 
 	for _, item := range resourceObj.Items {
 		if item.GetName() != "local-cluster" {
-			managedClusters = append(managedClusters, item.GetName())
+			managedClusters[item.GetName()] = struct{}{}
 		}
 	}
 
@@ -209,4 +219,18 @@ func (shared *SharedData) GetManagedClusters(cache *Cache, ctx context.Context) 
 	shared.mcUpdatedAt = time.Now()
 	return shared.mcErr
 
+}
+
+func (cache *Cache) GetDisabledClusters() *map[string]struct{} {
+	cache.shared.dcLock.Lock()
+	defer cache.shared.dcLock.Unlock()
+	return &cache.shared.disabledClusters
+}
+
+func (cache *Cache) SetDisabledClusters(disabledClusters map[string]struct{}, err error) {
+	cache.shared.dcLock.Lock()
+	defer cache.shared.dcLock.Unlock()
+	cache.shared.disabledClusters = disabledClusters
+	cache.shared.dcUpdatedAt = time.Now()
+	cache.shared.dcErr = err
 }

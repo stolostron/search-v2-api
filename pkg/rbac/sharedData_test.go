@@ -63,9 +63,9 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 	//namespace
 
 	err := mock_cache.PopulateSharedCache(ctx)
-
-	if len(mock_cache.shared.csResources) != 1 || mock_cache.shared.csResources[0].Kind != "Nodes" ||
-		mock_cache.shared.csResources[0].Apigroup != "addon.open-cluster-management.io" {
+	res := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
+	_, csResPresent := mock_cache.shared.csResourcesMap[res]
+	if len(mock_cache.shared.csResourcesMap) != 1 || !csResPresent {
 		t.Error("Cluster Scoped Resources not in cache")
 	}
 
@@ -73,7 +73,8 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 		t.Error("Shared Namespaces not in cache")
 	}
 
-	if len(mock_cache.shared.managedClusters) != 1 || mock_cache.shared.managedClusters[0] != "test-man" {
+	_, ok := mock_cache.shared.managedClusters["test-man"]
+	if len(mock_cache.shared.managedClusters) != 1 || !ok {
 		t.Error("ManagedClusters not in cache")
 	}
 
@@ -94,31 +95,35 @@ func Test_getResouces_usingCache(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
-	var managedCluster, namespaces []string
-
+	var namespaces []string
 	namespaces = append(namespaces, "test-namespace")
-	managedCluster = append(managedCluster, "test-man")
+	managedCluster := make(map[string]struct{})
+	managedCluster["test-man"] = struct{}{}
+	res := Resource{Apigroup: "apigroup1", Kind: "kind1"}
+	csRes := map[Resource]struct{}{}
 
+	csRes[res] = struct{}{}
 	//Adding cache:
 	mock_cache.shared = SharedData{
 		namespaces:      namespaces,
 		managedClusters: managedCluster,
 		mcUpdatedAt:     time.Now(),
 		csUpdatedAt:     time.Now(),
-		csResources:     append(mock_cache.shared.csResources, Resource{Apigroup: "apigroup1", Kind: "kind1"}),
+		csResourcesMap:  csRes,
 	}
 
 	err := mock_cache.PopulateSharedCache(ctx)
+	csResource := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
+	_, csResPresent := mock_cache.shared.csResourcesMap[csResource]
 
-	if len(mock_cache.shared.csResources) != 1 || mock_cache.shared.csResources[0].Kind != "Nodes" ||
-		mock_cache.shared.csResources[0].Apigroup != "addon.open-cluster-management.io" {
+	if len(mock_cache.shared.csResourcesMap) != 1 || !csResPresent {
 		t.Error("Cluster Scoped Resources not in cache")
 	}
 	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" {
 		t.Error("Shared Namespaces not in cache")
 	}
-
-	if len(mock_cache.shared.managedClusters) != 1 || mock_cache.shared.managedClusters[0] != "test-man" {
+	_, ok := mock_cache.shared.managedClusters["test-man"]
+	if len(mock_cache.shared.managedClusters) != 1 || !ok {
 		t.Error("ManagedClusters not in cache")
 	}
 
@@ -139,34 +144,40 @@ func Test_getResources_expiredCache(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
-	var managedCluster, namespaces []string
+	var namespaces []string
 
 	namespaces = append(namespaces, "test-namespace")
-	managedCluster = append(managedCluster, "test-man")
+	managedCluster := make(map[string]struct{})
+	managedCluster["test-man"] = struct{}{}
 	//adding expired cache
 	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
+	csRes := map[Resource]struct{}{}
+	res := Resource{Apigroup: "apigroup1", Kind: "kind1"}
+
+	csRes[res] = struct{}{}
 	mock_cache.shared = SharedData{
 		namespaces:      namespaces,
 		managedClusters: managedCluster,
 		nsUpdatedAt:     last_cache_time,
 		mcUpdatedAt:     last_cache_time,
 		csUpdatedAt:     last_cache_time,
-		csResources:     append(mock_cache.shared.csResources, Resource{Apigroup: "apigroup1", Kind: "kind1"}),
+		csResourcesMap:  csRes,
 	}
 
 	err := mock_cache.PopulateSharedCache(ctx)
 
-	//
-	if len(mock_cache.shared.csResources) != 1 || mock_cache.shared.csResources[0].Kind != "Nodes" ||
-		mock_cache.shared.csResources[0].Apigroup != "addon.open-cluster-management.io" {
+	csResource := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
+	_, csResPresent := mock_cache.shared.csResourcesMap[csResource]
+
+	if len(mock_cache.shared.csResourcesMap) != 1 || !csResPresent {
 		t.Error("Cluster Scoped Resources not in cache")
 	}
 
 	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" {
 		t.Error("Shared Namespaces not in cache")
 	}
-
-	if len(mock_cache.shared.managedClusters) != 1 || mock_cache.shared.managedClusters[0] != "test-man" {
+	_, ok := mock_cache.shared.managedClusters["test-man"]
+	if len(mock_cache.shared.managedClusters) != 1 || !ok {
 		t.Error("ManagedClusters not in cache")
 	}
 	if err != nil {
@@ -177,4 +188,36 @@ func Test_getResources_expiredCache(t *testing.T) {
 		t.Error("Expected the cache.shared.updatedAt to have a later timestamp")
 	}
 
+}
+
+func Test_SharedCacheDisabledClustersInValid(t *testing.T) {
+	_, mock_cache := mockResourcesListCache(t)
+	valid := mock_cache.SharedCacheDisabledClustersValid()
+	if valid {
+		t.Errorf("Expected false from cache validity check. Got %t", valid)
+	}
+}
+
+func Test_SharedCacheDisabledClustersValid(t *testing.T) {
+	_, mock_cache := mockResourcesListCache(t)
+	mock_cache.shared.dcUpdatedAt = time.Now()
+	valid := mock_cache.SharedCacheDisabledClustersValid()
+	if !valid {
+		t.Errorf("Expected false from cache validity check. Got %t", valid)
+	}
+}
+
+func Test_GetandSetDisabledClusters(t *testing.T) {
+	_, mock_cache := mockResourcesListCache(t)
+	mock_cache.shared.dcUpdatedAt = time.Now()
+	dClusters := make(map[string]struct{})
+	dClusters["managed1"] = struct{}{}
+	dClusters["managed2"] = struct{}{}
+
+	// mock_cache.shared.disabledClusters = dClusters
+	mock_cache.SetDisabledClusters(dClusters, nil)
+	res := mock_cache.GetDisabledClusters()
+	if len(*res) != 2 {
+		t.Errorf("Expected 2 clusters to be in the disabled list %d", len(*res))
+	}
 }

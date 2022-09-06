@@ -15,7 +15,7 @@ func Test_SearchSchema_Query(t *testing.T) {
 	resolver, _ := newMockSearchSchema(t)
 
 	resolver.userData = &rbac.UserData{}
-	sql := `SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" WHERE (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND NULL)) LIMIT 100000) AS "schema"`
+	sql := `SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" WHERE (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL)) LIMIT 100000) AS "schema"`
 	// Execute function
 	resolver.buildSearchSchemaQuery(context.TODO())
 

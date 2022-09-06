@@ -32,7 +32,7 @@ type SearchRelatedResult struct {
 // 	klog.Info("TODO: Resolve SearchRelatedResult: Items() - model/related.go")
 // 	return nil
 // }
-func (s *SearchResult) buildRelationsQuery() {
+func (s *SearchResult) buildRelationsQuery(ctx context.Context) {
 	// Example query to find relations between resources - accepts an array of uids
 	// =============================================================================
 	// 	SELECT "uid", "kind", MIN("level") AS "level" FROM
@@ -134,9 +134,12 @@ func (s *SearchResult) buildRelationsQuery() {
 	// add a union to the relation query to get all resources in the clusters
 	clusterSelectTerm := s.selectIfClusterUIDPresent()
 	if clusterSelectTerm != nil {
-		relQuery = relQuery.Union(clusterSelectTerm)
+		relQuery = relQuery.Union(clusterSelectTerm).As("related")
 	}
-	sql, params, err := relQuery.ToSQL()
+	relQuery = goqu.From(relQuery.As("related")).Select("related.uid", "related.kind", "related.level") //goqu.L(`"srchAddon".uid`)
+	relQueryInnerJoin := relQuery.InnerJoin(goqu.S("search").Table("resources"), goqu.On(goqu.Ex{"related.uid": goqu.L(`"resources".uid`)}))
+	relQueryWithRbac := relQueryInnerJoin.Where(buildRbacWhereClause(ctx, s.userData))
+	sql, params, err := relQueryWithRbac.ToSQL()
 
 	if err != nil {
 		klog.Error("Error creating relation query", err)
@@ -210,7 +213,7 @@ func (s *SearchResult) buildRelatedKindsQuery() {
 	s.params = params
 }
 
-func (s *SearchResult) getRelations() []SearchRelatedResult {
+func (s *SearchResult) getRelations(ctx context.Context) []SearchRelatedResult {
 	klog.V(3).Infof("Resolving relationships for [%d] uids.\n", len(s.uids))
 	relatedSearch := []SearchRelatedResult{}
 
@@ -218,9 +221,9 @@ func (s *SearchResult) getRelations() []SearchRelatedResult {
 	relatedMap := map[string][]string{} // Map to store relations
 
 	// Build the relations query
-	s.buildRelationsQuery()
+	s.buildRelationsQuery(ctx)
 
-	relations, relQueryError := s.pool.Query(context.TODO(), s.query, s.params...) // how to deal with defaults.
+	relations, relQueryError := s.pool.Query(s.context, s.query, s.params...) // how to deal with defaults.
 	if relQueryError != nil {
 		klog.Errorf("Error while executing getRelations query. Error :%s", relQueryError.Error())
 		return relatedSearch
