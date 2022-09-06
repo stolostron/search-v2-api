@@ -2,6 +2,7 @@
 package resolver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -16,24 +17,38 @@ import (
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgproto3/v2"
 	"github.com/stolostron/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"k8s.io/klog/v2"
 )
 
-func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*string) (*SearchResult, *pgxpoolmock.MockPgxPool) {
+func newUserData() ([]rbac.Resource, map[string][]rbac.Resource, []string) {
+	csres := []rbac.Resource{{Apigroup: "", Kind: "nodes"}, {Apigroup: "storage.k8s.io", Kind: "csinodes"}}
+	nsres1 := []rbac.Resource{{Apigroup: "v1", Kind: "pods"}, {Apigroup: "v2", Kind: "deployments"}}
+	nsres2 := []rbac.Resource{{Apigroup: "", Kind: "configmaps"}, {Apigroup: "v4", Kind: "services"}}
+	nsScopeAccess := map[string][]rbac.Resource{}
+	managedClusters := []string{"managed1", "managed2"}
+	nsScopeAccess["ocm"] = nsres1
+	nsScopeAccess["default"] = nsres2
+	return csres, nsScopeAccess, managedClusters
+}
+
+func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*string, ud *rbac.UserData) (*SearchResult, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 
 	mockResolver := &SearchResult{
-		input: input,
-		pool:  mockPool,
-		uids:  uids,
-		wg:    sync.WaitGroup{},
+		input:    input,
+		pool:     mockPool,
+		uids:     uids,
+		wg:       sync.WaitGroup{},
+		userData: ud,
+		context:  context.Background(),
 	}
 
 	return mockResolver, mockPool
 }
-func newMockSearchComplete(t *testing.T, input *model.SearchInput, property string) (*SearchCompleteResult, *pgxpoolmock.MockPgxPool) {
+func newMockSearchComplete(t *testing.T, input *model.SearchInput, property string, ud *rbac.UserData) (*SearchCompleteResult, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
@@ -42,6 +57,7 @@ func newMockSearchComplete(t *testing.T, input *model.SearchInput, property stri
 		input:    input,
 		pool:     mockPool,
 		property: property,
+		userData: ud,
 	}
 	return mockResolver, mockPool
 }
@@ -86,7 +102,7 @@ func (r *Row) Scan(dest ...interface{}) error {
 // ====================================================
 
 //Prop will be the property input for searchComplete
-func newMockRows(mockDataFile string, input *model.SearchInput, prop string, limit int) *MockRows {
+func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop string, limit int) *MockRows {
 	// Read json file and build mock data
 	bytes, _ := ioutil.ReadFile(mockDataFile)
 	var data map[string]interface{}

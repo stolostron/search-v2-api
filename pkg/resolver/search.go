@@ -21,6 +21,7 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/metric"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"k8s.io/klog/v2"
 )
 
@@ -33,25 +34,35 @@ type SearchResult struct {
 	params []interface{}
 	level  int // The number of levels/hops for finding relationships for a particular resource
 	//  Related []SearchRelatedResult
+	userData *rbac.UserData
+	context  context.Context
 }
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
 	// For each input, create a SearchResult resolver.
 	srchResult := make([]*SearchResult, len(input))
+	userAccess, userDataErr := getUserDataCache(ctx)
+	if userDataErr != nil {
+		return srchResult, userDataErr
+	}
+	// Proceed if user's rbac data exists
 	if len(input) > 0 {
 		for index, in := range input {
 			srchResult[index] = &SearchResult{
-				input: in,
-				pool:  db.GetConnection(),
+				input:    in,
+				pool:     db.GetConnection(),
+				userData: userAccess,
+				context:  ctx,
 			}
 		}
 	}
 	return srchResult, nil
+
 }
 
 func (s *SearchResult) Count() int {
 	klog.V(2).Info("Resolving SearchResult:Count()")
-	s.buildSearchQuery(context.Background(), true, false)
+	s.buildSearchQuery(s.context, true, false)
 	count := s.resolveCount()
 
 	return count
@@ -61,7 +72,7 @@ func (s *SearchResult) Items() []map[string]interface{} {
 	s.wg.Add(1)
 	defer s.wg.Done()
 	klog.V(2).Info("Resolving SearchResult:Items()")
-	s.buildSearchQuery(context.Background(), false, false)
+	s.buildSearchQuery(s.context, false, false)
 	r, e := s.resolveItems()
 	if e != nil {
 		klog.Error("Error resolving items.", e)
@@ -103,8 +114,37 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 
 func (s *SearchResult) Uids() {
 	klog.V(2).Info("Resolving SearchResult:Uids()")
-	s.buildSearchQuery(context.Background(), false, true)
+	s.buildSearchQuery(s.context, false, true)
 	s.resolveUids()
+}
+
+func Iskubeadmin(ctx context.Context) bool {
+	_, userDetails := rbac.CacheInst.GetUserUID(ctx)
+	if userDetails.Username == "kube:admin" {
+		klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
+		return true
+	}
+	for _, group := range userDetails.Groups {
+		if group == "system:cluster-admins" {
+			klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
+			return true
+		}
+	}
+	return false
+}
+
+// Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
+func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData) exp.ExpressionList {
+	return goqu.Or(
+		matchManagedCluster(userrbac.ManagedClusters), // goqu.I("cluster").In([]string{"clusterNames", ....})
+		goqu.And(
+			matchHubCluster(), // goqu.L(`data->>?`, "_hubClusterResource").Eq("true")
+			goqu.Or(
+				matchClusterScopedResources(userrbac.CsResources), // (namespace=null AND apigroup AND kind)
+				matchNamespacedResources(userrbac.NsResources),    // (namespace AND apiproup AND kind)
+			),
+		),
+	)
 }
 
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) {
@@ -136,6 +176,17 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	//WHERE CLAUSE
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 		whereDs = WhereClauseFilter(s.input)
+		//RBAC CLAUSE
+		if s.userData != nil && !Iskubeadmin(ctx) {
+			whereDs = append(whereDs,
+				buildRbacWhereClause(ctx, s.userData)) // add rbac
+
+		} else {
+			if !Iskubeadmin(ctx) {
+				panic(fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
+					ctx.Value(rbac.ContextAuthTokenKey)))
+			}
+		}
 	}
 
 	//LIMIT CLAUSE
@@ -154,7 +205,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	if err != nil {
 		klog.Errorf("Error building Search query: %s", err.Error())
 	}
-	klog.V(3).Infof("Search query: %s\nargs: %s", sql, params)
+	klog.V(5).Infof("Search query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
 }
@@ -171,7 +222,7 @@ func (s *SearchResult) resolveCount() int {
 }
 
 func (s *SearchResult) resolveUids() {
-	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
+	rows, err := s.pool.Query(s.context, s.query, s.params...)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
 		return
@@ -190,8 +241,8 @@ func (s *SearchResult) resolveUids() {
 func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	items := []map[string]interface{}{}
 	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveItemsFunc"))
-	klog.V(4).Info("Query issued by resolver [%s] ", s.query)
-	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
+	klog.V(5).Info("Query issued by resolver [%s] ", s.query)
+	rows, err := s.pool.Query(s.context, s.query, s.params...)
 	defer timer.ObserveDuration()
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
@@ -297,7 +348,8 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 		} else if prop == "kind" { //ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
 			if isLower(values) {
 				exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
-				klog.Warning("Using ILIKE for lower case KIND string comparison - this behavior is needed for V1 compatibility and will be deprecated with Search V2.")
+				klog.Warning("Using ILIKE for lower case KIND string comparison.",
+					"- This behavior is needed for V1 compatibility and will be deprecated with Search V2.")
 			} else {
 				exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
 			}
@@ -509,9 +561,11 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 }
 
 func getKeys(stringArrayMap map[string][]string) []string {
-	keys := make([]string, 0, len(stringArrayMap))
+	i := 0
+	keys := make([]string, len(stringArrayMap))
 	for k := range stringArrayMap {
-		keys = append(keys, k)
+		keys[i] = k
+		i++
 	}
 	return keys
 }

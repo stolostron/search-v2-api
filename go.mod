@@ -3,7 +3,7 @@ module github.com/stolostron/search-v2-api
 go 1.18
 
 require (
-	github.com/99designs/gqlgen v0.17.13
+	github.com/99designs/gqlgen v0.17.16
 	github.com/doug-martin/goqu/v9 v9.18.0
 	github.com/driftprogramming/pgxpoolmock v1.1.0
 	github.com/golang/mock v1.6.0
@@ -11,7 +11,7 @@ require (
 	github.com/jackc/pgproto3/v2 v2.3.0
 	github.com/jackc/pgx/v4 v4.16.1
 	github.com/prometheus/client_golang v1.12.2
-	github.com/vektah/gqlparser/v2 v2.4.7
+	github.com/vektah/gqlparser/v2 v2.5.0
 	k8s.io/klog/v2 v2.70.1
 )
 

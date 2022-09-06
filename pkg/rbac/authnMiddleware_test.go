@@ -14,7 +14,7 @@ import (
 // Runs before the tests
 func TestMain(m *testing.M) {
 	// Replace the cache with a mock cache with a fake kubernetes client.
-	cacheInst = newMockCache()
+	CacheInst = newMockCache()
 	code := m.Run()
 	os.Exit(code)
 }

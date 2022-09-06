@@ -143,7 +143,7 @@ func (s *SearchResult) buildRelationsQuery() {
 	} else {
 		s.query = sql
 		s.params = params
-		klog.V(3).Info("Relations query: ", s.query)
+		klog.V(5).Info("Relations query: ", s.query)
 	}
 }
 

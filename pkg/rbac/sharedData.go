@@ -16,7 +16,8 @@ import (
 // Cache data shared across all users.
 type SharedData struct {
 	// These are the data fields.
-	csResources     []resource // Cluster-scoped resources (ie. Node, ManagedCluster)
+	csResources     []Resource // Cluster-scoped resources (ie. Node, ManagedCluster)
+	csResourcesMap  map[Resource]struct{}
 	namespaces      []string
 	managedClusters []string
 
@@ -34,9 +35,9 @@ type SharedData struct {
 	nsUpdatedAt time.Time  // Time when namespaces data was last updated.
 }
 
-type resource struct {
-	apigroup string
-	kind     string
+type Resource struct {
+	Apigroup string
+	Kind     string
 }
 
 var managedClusterResourceGvr = schema.GroupVersionResource{
@@ -99,7 +100,8 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 	shared.csLock.Lock()
 	defer shared.csLock.Unlock()
 	//clear previous cache
-	shared.csResources = nil
+	shared.csResources = make([]Resource, 0)
+	shared.csResourcesMap = make(map[Resource]struct{})
 	shared.csErr = nil
 	klog.V(6).Info("Querying database for cluster-scoped resources.")
 
@@ -114,7 +116,7 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 	if err != nil {
 		klog.Errorf("Error creating query [%s]. Error: [%+v]", query, err)
 		shared.csErr = err
-		shared.csResources = []resource{}
+		shared.csResources = []Resource{}
 		return shared.csErr
 	}
 
@@ -122,7 +124,7 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 	if queryerr != nil {
 		klog.Errorf("Error resolving query [%s]. Error: [%+v]", query, queryerr.Error())
 		shared.csErr = queryerr
-		shared.csResources = []resource{}
+		shared.csResources = []Resource{}
 		return shared.csErr
 	}
 
@@ -137,8 +139,8 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 					apigroup, kind)
 				continue
 			}
-
-			shared.csResources = append(shared.csResources, resource{apigroup: apigroup, kind: kind})
+			shared.csResourcesMap[Resource{Apigroup: apigroup, Kind: kind}] = struct{}{}
+			shared.csResources = append(shared.csResources, Resource{Apigroup: apigroup, Kind: kind})
 
 		}
 	}
@@ -198,8 +200,9 @@ func (shared *SharedData) GetManagedClusters(cache *Cache, ctx context.Context) 
 	}
 
 	for _, item := range resourceObj.Items {
-		managedClusters = append(managedClusters, item.GetName())
-
+		if item.GetName() != "local-cluster" {
+			managedClusters = append(managedClusters, item.GetName())
+		}
 	}
 
 	shared.managedClusters = managedClusters
