@@ -3,6 +3,7 @@ package rbac
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -67,7 +68,7 @@ func (cache *Cache) GetUserUID(ctx context.Context) (string, authv1.UserInfo) {
 	}
 }
 
-func (cache *Cache) GetUserData(ctx context.Context,
+func (cache *Cache) GetUserDataCache(ctx context.Context,
 	authzClient v1.AuthorizationV1Interface) (*UserDataCache, error) {
 	var user *UserDataCache
 	var uid string
@@ -109,6 +110,24 @@ func (cache *Cache) GetUserData(ctx context.Context,
 
 	return userData, err
 
+}
+
+func (cache *Cache) GetUserData(ctx context.Context) (*UserData, error) {
+	userDataCache, userDataErr := cache.GetUserDataCache(ctx, nil)
+
+	if userDataErr != nil {
+		klog.Error("Error fetching UserAccessData: ", userDataErr)
+		return nil, errors.New("unable to resolve query because of error while resolving user's access")
+	}
+	// Proceed if user's rbac data exists
+	// Get a copy of the current user access if user data exists
+
+	userAccess := &UserData{
+		CsResources:     userDataCache.GetCsResources(),
+		NsResources:     userDataCache.GetNsResources(),
+		ManagedClusters: userDataCache.GetManagedClusters(),
+	}
+	return userAccess, nil
 }
 
 /* Cache is Valid if the csrUpdatedAt and nsrUpdatedAt times are before the

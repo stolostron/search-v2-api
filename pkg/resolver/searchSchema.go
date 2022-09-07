@@ -21,14 +21,14 @@ type SearchSchema struct {
 }
 
 func SearchSchemaResolver(ctx context.Context) (map[string]interface{}, error) {
-	userAccess, userDataErr := getUserDataCache(ctx)
+	userData, userDataErr := rbac.CacheInst.GetUserData(ctx)
 	if userDataErr != nil {
 		return nil, userDataErr
 	}
 	// Proceed if user's rbac data exists
 	searchSchemaResult := &SearchSchema{
 		pool:     db.GetConnection(),
-		userData: userAccess,
+		userData: userData,
 	}
 	searchSchemaResult.buildSearchSchemaQuery(ctx)
 	return searchSchemaResult.searchSchemaResults(ctx)

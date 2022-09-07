@@ -41,7 +41,7 @@ type SearchResult struct {
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
 	// For each input, create a SearchResult resolver.
 	srchResult := make([]*SearchResult, len(input))
-	userAccess, userDataErr := getUserDataCache(ctx)
+	userData, userDataErr := rbac.CacheInst.GetUserData(ctx)
 	if userDataErr != nil {
 		return srchResult, userDataErr
 	}
@@ -51,7 +51,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 			srchResult[index] = &SearchResult{
 				input:    in,
 				pool:     db.GetConnection(),
-				userData: userAccess,
+				userData: userData,
 				context:  ctx,
 			}
 		}
@@ -99,15 +99,20 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 		klog.Warning("No uids selected for query:Related()")
 	}
 	defer func() {
-		// Log a warning if finding relationships is too slow.
-		// Note the 500ms is just an initial guess, we should adjust based on normal execution time.
-		if time.Since(start) > 500*time.Millisecond {
-			klog.Warningf("Finding relationships for %d uids and %d level(s) took %s.",
+		if len(s.uids) > 0 { // Log a warning if finding relationships is too slow.
+			// Note the 500ms is just an initial guess, we should adjust based on normal execution time.
+			if time.Since(start) > 500*time.Millisecond {
+				klog.Warningf("Finding relationships for %d uids and %d level(s) took %s.",
+					numUIDs, s.level, time.Since(start))
+				return
+			}
+			klog.V(4).Infof("Finding relationships for %d uids and %d level(s) took %s.",
 				numUIDs, s.level, time.Since(start))
-			return
+
+		} else {
+			klog.V(4).Infof("Not finding relationships as there are %d uids and %d level(s).",
+				numUIDs, s.level)
 		}
-		klog.V(4).Infof("Finding relationships for %d uids and %d level(s) took %s.",
-			numUIDs, s.level, time.Since(start))
 	}()
 	return r
 }
