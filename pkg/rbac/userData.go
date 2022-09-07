@@ -137,11 +137,7 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 	user.csrErr = nil
 	user.csrLock.Lock()
 	defer user.csrLock.Unlock()
-	// var uid string
-	// var err error
-	// if uid, err = cache.GetUserUID(ctx); err != nil {
-	// 	klog.Warning("Error getting user's uid: ", err)
-	// }
+
 	// Not present in cache, find all cluster scoped resources
 	clusterScopedResources := cache.shared.csResourcesMap
 	if len(clusterScopedResources) == 0 {
@@ -240,7 +236,7 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 		if err != nil {
 			klog.Error("Error creating SelfSubjectRulesReviews for namespace", err, ns)
 		} else {
-			klog.V(9).Infof("SelfSubjectRulesReviews Kube API result for ns:%s : %v\n", ns, (result.Status))
+			klog.V(9).Infof("SelfSubjectRulesReviews Kube API result for ns:%s : %v\n", ns, prettyPrint(result.Status))
 		}
 		for _, rules := range result.Status.ResourceRules {
 			for _, verb := range rules.Verbs {
@@ -254,10 +250,10 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 								user.userData.NsResources[ns] = append(user.userData.NsResources[ns],
 									Resource{Apigroup: api, Kind: res})
 							} else if cache.shared.isClusterScoped(res, api) {
-								klog.Info("Got clusterscoped resource", api, "/",
+								klog.V(5).Info("Got clusterscoped resource", api, "/",
 									"res from SelfSubjectRulesReviews. Excluding it from ns scoped resoures.")
 							} else if len(rules.ResourceNames) > 0 && rules.ResourceNames[0] != "*" {
-								klog.Info("Got whitelist in resourcenames. Excluding resource", api, "/", res,
+								klog.V(5).Info("Got whitelist in resourcenames. Excluding resource", api, "/", res,
 									" from ns scoped resoures.")
 
 							}

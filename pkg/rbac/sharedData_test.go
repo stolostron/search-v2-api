@@ -203,7 +203,7 @@ func Test_SharedCacheDisabledClustersValid(t *testing.T) {
 	mock_cache.shared.dcUpdatedAt = time.Now()
 	valid := mock_cache.SharedCacheDisabledClustersValid()
 	if !valid {
-		t.Errorf("Expected false from cache validity check. Got %t", valid)
+		t.Errorf("Expected true from cache validity check. Got %t", valid)
 	}
 }
 
@@ -214,7 +214,6 @@ func Test_GetandSetDisabledClusters(t *testing.T) {
 	dClusters["managed1"] = struct{}{}
 	dClusters["managed2"] = struct{}{}
 
-	// mock_cache.shared.disabledClusters = dClusters
 	mock_cache.SetDisabledClusters(dClusters, nil)
 	res := mock_cache.GetDisabledClusters()
 	if len(*res) != 2 {
