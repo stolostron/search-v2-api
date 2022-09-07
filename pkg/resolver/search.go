@@ -99,9 +99,7 @@ func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
 		klog.Warning("No uids selected for query:Related()")
 	}
 	defer func() {
-		if len(s.uids) > 0 {
-
-			// Log a warning if finding relationships is too slow.
+		if len(s.uids) > 0 { // Log a warning if finding relationships is too slow.
 			// Note the 500ms is just an initial guess, we should adjust based on normal execution time.
 			if time.Since(start) > 500*time.Millisecond {
 				klog.Warningf("Finding relationships for %d uids and %d level(s) took %s.",

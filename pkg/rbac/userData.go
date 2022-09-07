@@ -117,6 +117,25 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 
 }
 
+// Get a static copy of the current user data. It will use cached data if valid or refresh if needed.
+func (cache *Cache) GetUserData(ctx context.Context) (*UserData, error) {
+	userDataCache, userDataErr := cache.GetUserDataCache(ctx, nil)
+
+	if userDataErr != nil {
+		klog.Error("Error fetching UserAccessData: ", userDataErr)
+		return nil, errors.New("unable to resolve query because of error while resolving user's access")
+	}
+	// Proceed if user's rbac data exists
+	// Get a copy of the current user access if user data exists
+
+	userAccess := &UserData{
+		CsResources:     userDataCache.GetCsResources(),
+		NsResources:     userDataCache.GetNsResources(),
+		ManagedClusters: userDataCache.GetManagedClusters(),
+	}
+	return userAccess, nil
+}
+
 /* Cache is Valid if the csrUpdatedAt and nsrUpdatedAt times are before the
 Cache expiry time */
 func userCacheValid(user *UserDataCache) bool {
