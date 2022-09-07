@@ -187,7 +187,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	opValMap := getOperatorAndNumDateFilter(prop, []string{val8})
 	csres, nsres, mc := newUserData()
 	rbac := buildRbacWhereClause(context.TODO(), &rbac.UserData{CsResources: csres, NsResources: nsres, ManagedClusters: mc})
-	mockQueryYear, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0])).Limit(1000).ToSQL()
+	mockQueryYear, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0]), rbac).Limit(1000).ToSQL()
 
 	testOperatorYear := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: prop, Values: []*string{&val8}}}},
@@ -196,7 +196,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 
 	val9 := "hour"
 	opValMap = getOperatorAndNumDateFilter(prop, []string{val9})
-	mockQueryHour, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0])).Limit(1000).ToSQL()
+	mockQueryHour, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0]), rbac).Limit(1000).ToSQL()
 
 	testOperatorHour := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: prop, Values: []*string{&val9}}}},
