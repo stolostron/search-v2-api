@@ -112,6 +112,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 
 }
 
+// Get a static copy of the current user data. It will use cached data if valid or refresh if needed.
 func (cache *Cache) GetUserData(ctx context.Context) (*UserData, error) {
 	userDataCache, userDataErr := cache.GetUserDataCache(ctx, nil)
 
