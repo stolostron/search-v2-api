@@ -22,7 +22,7 @@ func AuthorizeUser(next http.Handler) http.Handler {
 		}
 		klog.V(6).Info("Finished getting shared resources. Now getting user data..")
 
-		_, userErr := CacheInst.GetUserData(r.Context(), nil)
+		_, userErr := CacheInst.GetUserDataCache(r.Context(), nil)
 		if userErr != nil {
 			klog.Warning("Unexpected error while obtaining user data.", userErr)
 		}
