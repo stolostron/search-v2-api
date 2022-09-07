@@ -32,7 +32,7 @@ type SearchRelatedResult struct {
 // 	klog.Info("TODO: Resolve SearchRelatedResult: Items() - model/related.go")
 // 	return nil
 // }
-func (s *SearchResult) buildRelationsQuery(ctx context.Context) {
+func (s *SearchResult) buildRelationsQuery() {
 	// Example query to find relations between resources - accepts an array of uids
 	// =============================================================================
 	// 	SELECT "uid", "kind", MIN("level") AS "level" FROM
@@ -136,9 +136,11 @@ func (s *SearchResult) buildRelationsQuery(ctx context.Context) {
 	if clusterSelectTerm != nil {
 		relQuery = relQuery.Union(clusterSelectTerm).As("related")
 	}
-	relQuery = goqu.From(relQuery.As("related")).Select("related.uid", "related.kind", "related.level") //goqu.L(`"srchAddon".uid`)
-	relQueryInnerJoin := relQuery.InnerJoin(goqu.S("search").Table("resources"), goqu.On(goqu.Ex{"related.uid": goqu.L(`"resources".uid`)}))
-	relQueryWithRbac := relQueryInnerJoin.Where(buildRbacWhereClause(ctx, s.userData))
+	relQuery = goqu.From(relQuery.As("related")).Select("related.uid", "related.kind",
+		"related.level") //goqu.L(`"srchAddon".uid`)
+	relQueryInnerJoin := relQuery.InnerJoin(goqu.S("search").Table("resources"),
+		goqu.On(goqu.Ex{"related.uid": goqu.L(`"resources".uid`)}))
+	relQueryWithRbac := relQueryInnerJoin.Where(buildRbacWhereClause(s.context, s.userData))
 	sql, params, err := relQueryWithRbac.ToSQL()
 
 	if err != nil {
@@ -219,9 +221,11 @@ func (s *SearchResult) getRelations(ctx context.Context) []SearchRelatedResult {
 
 	//defining variables
 	relatedMap := map[string][]string{} // Map to store relations
-
+	if s.context == nil {
+		s.context = ctx
+	}
 	// Build the relations query
-	s.buildRelationsQuery(ctx)
+	s.buildRelationsQuery()
 
 	relations, relQueryError := s.pool.Query(s.context, s.query, s.params...) // how to deal with defaults.
 	if relQueryError != nil {

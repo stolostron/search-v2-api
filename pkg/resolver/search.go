@@ -85,6 +85,9 @@ func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
 	if s.uids == nil {
 		s.Uids()
 	}
+	if s.context == nil {
+		s.context = ctx
+	}
 	var start time.Time
 	var numUIDs int
 
