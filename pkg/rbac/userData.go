@@ -93,9 +93,10 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	} else {
 		// User not in cache , Initialize and assign to the UID
 		user = &UserDataCache{}
-		if cache.users != nil {
-			cache.users[uid] = user
+		if cache.users == nil {
+			cache.users = map[string]*UserDataCache{}
 		}
+		cache.users[uid] = user
 
 		// We want to setup the client if passed, this is only for unit tests
 		if authzClient != nil {
@@ -349,22 +350,4 @@ func (user *UserDataCache) GetNsResources() map[string][]Resource {
 
 func (user *UserDataCache) GetManagedClusters() map[string]struct{} {
 	return user.userData.ManagedClusters
-}
-
-func (cache *Cache) GetUserData(ctx context.Context) (*UserData, error) {
-	userDataCache, userDataErr := cache.GetUserDataCache(ctx, nil)
-
-	if userDataErr != nil {
-		klog.Error("Error fetching UserAccessData: ", userDataErr)
-		return nil, errors.New("unable to resolve query because of error while resolving user's access")
-	}
-	// Proceed if user's rbac data exists
-	// Get a copy of the current user access if user data exists
-
-	userAccess := &UserData{
-		CsResources:     userDataCache.GetCsResources(),
-		NsResources:     userDataCache.GetNsResources(),
-		ManagedClusters: userDataCache.GetManagedClusters(),
-	}
-	return userAccess, nil
 }
