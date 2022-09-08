@@ -72,13 +72,14 @@ func newMockSearchSchema(t *testing.T) (*SearchSchema, *pgxpoolmock.MockPgxPool)
 	return mockResolver, mockPool
 }
 
-func newMockMessage(t *testing.T) (*Message, *pgxpoolmock.MockPgxPool) {
+func newMockMessage(t *testing.T, ud *rbac.UserData) (*Message, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 
 	mockResolver := &Message{
-		pool: mockPool,
+		pool:     mockPool,
+		userData: ud,
 	}
 	return mockResolver, mockPool
 }
@@ -159,6 +160,8 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 
 			if prop == "cluster" {
 				props[cluster] = ""
+			} else if prop == "srchAddonDisabledCluster" {
+				props["managed1"] = ""
 			} else {
 				if _, ok := data[prop]; ok {
 					switch v := data[prop].(type) {

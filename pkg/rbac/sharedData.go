@@ -16,12 +16,17 @@ import (
 // Cache data shared across all users.
 type SharedData struct {
 	// These are the data fields.
-	csResources     []Resource // Cluster-scoped resources (ie. Node, ManagedCluster)
-	csResourcesMap  map[Resource]struct{}
-	namespaces      []string
-	managedClusters []string
+	csResources      []Resource // Cluster-scoped resources (ie. Node, ManagedCluster)
+	csResourcesMap   map[Resource]struct{}
+	namespaces       []string
+	managedClusters  []string
+	disabledClusters map[string]struct{}
 
 	// These are internal objects to track the state of the cache.
+	dcErr       error      // Error while updating clusters data.
+	dcLock      sync.Mutex // Locks when clusters data is being updated.
+	dcUpdatedAt time.Time  // Time clusters was last updated.
+
 	mcErr       error      // Error while updating clusters data.
 	mcLock      sync.Mutex // Locks when clusters data is being updated.
 	mcUpdatedAt time.Time  // Time clusters was last updated.
@@ -79,6 +84,10 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 
 	}
 
+}
+
+func (cache *Cache) SharedCacheDisabledClustersValid() bool {
+	return time.Now().Before(cache.shared.dcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))
 }
 
 func sharedCacheValid(shared *SharedData) bool {
@@ -209,4 +218,18 @@ func (shared *SharedData) GetManagedClusters(cache *Cache, ctx context.Context) 
 	shared.mcUpdatedAt = time.Now()
 	return shared.mcErr
 
+}
+
+func (cache *Cache) GetDisabledClusters() *map[string]struct{} {
+	cache.shared.dcLock.Lock()
+	defer cache.shared.dcLock.Unlock()
+	return &cache.shared.disabledClusters
+}
+
+func (cache *Cache) SetDisabledClusters(disabledClusters map[string]struct{}, err error) {
+	cache.shared.dcLock.Lock()
+	defer cache.shared.dcLock.Unlock()
+	cache.shared.disabledClusters = disabledClusters
+	cache.shared.dcUpdatedAt = time.Now()
+	cache.shared.dcErr = err
 }

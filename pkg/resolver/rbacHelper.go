@@ -83,3 +83,11 @@ func matchManagedCluster(managedClusters []string) exp.BooleanExpression {
 	//managed clusters
 	return goqu.C("cluster").Eq(goqu.Any(pq.Array(managedClusters)))
 }
+
+func getKeysStructMap(structArrayMap map[string]struct{}) []string {
+	keys := make([]string, 0, len(structArrayMap))
+	for k := range structArrayMap {
+		keys = append(keys, k)
+	}
+	return keys
+}
