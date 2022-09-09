@@ -88,7 +88,8 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 }
 
 func (cache *Cache) SharedCacheDisabledClustersValid() bool {
-	return cache.shared.dcErr == nil && time.Now().Before(cache.shared.dcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond))
+	return cache.shared.dcErr == nil && time.Now().Before(
+		cache.shared.dcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond))
 }
 
 func sharedCacheValid(shared *SharedData) bool {
