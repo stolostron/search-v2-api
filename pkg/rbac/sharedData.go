@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -87,7 +88,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 }
 
 func (cache *Cache) SharedCacheDisabledClustersValid() bool {
-	return time.Now().Before(cache.shared.dcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))
+	return cache.shared.dcErr == nil && time.Now().Before(cache.shared.dcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond))
 }
 
 func sharedCacheValid(shared *SharedData) bool {
@@ -220,10 +221,17 @@ func (shared *SharedData) GetManagedClusters(cache *Cache, ctx context.Context) 
 
 }
 
-func (cache *Cache) GetDisabledClusters() *map[string]struct{} {
+func (cache *Cache) GetDisabledClusters() (*map[string]struct{}, error) {
+
+	if cache.SharedCacheDisabledClustersValid() {
+		klog.V(5).Info("Search Addon DisabledClusters Cache valid")
+	} else {
+		klog.V(5).Info("DisabledClusters Cache not valid") // - running query to get search addon disabled clusters")
+		cache.SetDisabledClusters(map[string]struct{}{}, fmt.Errorf("addon disabled clusters cache is invalid"))
+	}
 	cache.shared.dcLock.Lock()
 	defer cache.shared.dcLock.Unlock()
-	return &cache.shared.disabledClusters
+	return &cache.shared.disabledClusters, cache.shared.dcErr
 }
 
 func (cache *Cache) SetDisabledClusters(disabledClusters map[string]struct{}, err error) {
