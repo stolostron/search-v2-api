@@ -529,3 +529,96 @@ func Test_SearchResolver_Items_Labels(t *testing.T) {
 		}
 	}
 }
+
+func Test_SearchResolver_Items_Labels_RBAC_NS_CS_MC(t *testing.T) {
+	// Create a SearchResolver instance with a mock connection pool.
+	cluster := "local-cluster"
+	val1 := "Template"
+	val2 := "{samples.operator.openshift.io/managed:true}"
+	limit := 10
+	csRes, nsRes, managedClusters := newUserData()
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}, {Property: "cluster", Values: []*string{&cluster}}, {Property: "label", Values: []*string{&val2}}}, Limit: &limit}
+	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud)
+
+	// Mock the database queries.
+	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", limit)
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' IN ('Template')) AND ("cluster" IN ('local-cluster')) AND "data"->'label'@>'{samples.operator.openshift.io/managed:true}' AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))) LIMIT 10`),
+		gomock.Eq([]interface{}{}),
+	).Return(mockRows, nil)
+
+	// Execute the function
+	result := resolver.Items()
+
+	// Verify returned items.
+	if len(result) != len(mockRows.mockData) {
+		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result))
+	}
+
+	// Verify properties for each returned item.
+	for i, item := range result {
+		mockRow := mockRows.mockData[i]
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow["_uid"] = mockRow["uid"]
+		expectedRow["cluster"] = mockRow["cluster"]
+
+		if len(item) != len(expectedRow) {
+			t.Errorf("Number of properties don't match for item[%d]. Expected: %d Got: %d", i, len(expectedRow), len(item))
+		}
+
+		for key, val := range item {
+			if val != expectedRow[key] {
+				t.Errorf("Value of key [%s] does not match for item [%d].\nExpected: %s\nGot: %s", key, i, expectedRow[key], val)
+			}
+		}
+	}
+}
+
+func Test_SearchResolver_Items_Multiple_Labels_RBAC_NS_CS_MC(t *testing.T) {
+	// Create a SearchResolver instance with a mock connection pool.
+	cluster := "local-cluster"
+	kindval1 := "Template"
+	kindval2 := "ReplicaSet"
+	labelval1 := "{pod-template-hash:5f5575c669}"
+	labelval2 := "{samples.operator.openshift.io/managed:true}"
+
+	limit := 10
+	csRes, nsRes, managedClusters := newUserData()
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&kindval1, &kindval2}}, {Property: "cluster", Values: []*string{&cluster}}, {Property: "label", Values: []*string{&labelval1, &labelval2}}}, Limit: &limit}
+	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud)
+
+	// Mock the database queries.
+	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", limit)
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' IN ('Template', 'ReplicaSet')) AND ("cluster" IN ('local-cluster')) AND ("data"->'label'@>'{pod-template-hash:5f5575c669}' OR "data"->'label'@>'{samples.operator.openshift.io/managed:true}') AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))) LIMIT 10`),
+		gomock.Eq([]interface{}{}),
+	).Return(mockRows, nil)
+
+	// Execute the function
+	result := resolver.Items()
+
+	// Verify returned items.
+	if len(result) != len(mockRows.mockData) {
+		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result))
+	}
+
+	// Verify properties for each returned item.
+	for i, item := range result {
+		mockRow := mockRows.mockData[i]
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow["_uid"] = mockRow["uid"]
+		expectedRow["cluster"] = mockRow["cluster"]
+
+		if len(item) != len(expectedRow) {
+			t.Errorf("Number of properties don't match for item[%d]. Expected: %d Got: %d", i, len(expectedRow), len(item))
+		}
+
+		for key, val := range item {
+			if val != expectedRow[key] {
+				t.Errorf("Value of key [%s] does not match for item [%d].\nExpected: %s\nGot: %s", key, i, expectedRow[key], val)
+			}
+		}
+	}
+}

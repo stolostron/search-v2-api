@@ -96,11 +96,6 @@ func (r *Row) Scan(dest ...interface{}) error {
 	return nil
 }
 
-// ====================================================
-// Mock the Rows interface defined in the pgx library.
-// https://github.com/jackc/pgx/blob/master/rows.go#L24
-// ====================================================
-
 //Prop will be the property input for searchComplete
 func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop string, limit int) *MockRows {
 	// Read json file and build mock data
@@ -179,7 +174,8 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 
 		}
 
-		//
+		// get the keys from props above. ex if we have a prop of type string like "kind":"Template"
+		// then above we only save data[prop] = "Template" value as key nothing as value
 		mapKeys := []interface{}{}
 		for key := range props {
 			mapKeys = append(mapKeys, key)
@@ -223,6 +219,11 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 		columnHeaders: columnHeaders,
 	}
 }
+
+//TODO: divide the function above into two functions:
+//1. function to get the mock data (keep simple)
+//2. function to filter the mock data got in step 1.
+
 func stringInSlice(a string, list []string) bool {
 	for _, b := range list {
 		if strings.EqualFold(b, a) {
@@ -314,6 +315,13 @@ type MockRows struct {
 	columnHeaders []string
 }
 
+// ====================================================
+// Mock the Rows interface defined in the pgx library.
+// https://github.com/jackc/pgx/blob/master/rows.go#L24
+// ====================================================
+// In order to use mock pgx rows similar to regular postgres rows,
+// we need to mock all the fields associated with pgx rows.
+
 func (r *MockRows) Close() {}
 
 func (r *MockRows) Err() error { return nil }
@@ -327,6 +335,7 @@ func (r *MockRows) Next() bool {
 	return r.index <= len(r.mockData)
 }
 
+//Mocking the Scan function for rows:
 func (r *MockRows) Scan(dest ...interface{}) error {
 	if len(dest) > 1 { // For search function
 
