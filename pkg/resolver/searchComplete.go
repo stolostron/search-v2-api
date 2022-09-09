@@ -127,6 +127,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*string, error) {
 	klog.V(2).Info("Resolving searchCompleteResults()")
 	rows, err := s.pool.Query(ctx, s.query, s.params...)
+
 	srchCompleteOut := make([]*string, 0)
 
 	if err != nil {
@@ -161,12 +162,9 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 				// fmt.Println("prop type: array")
 
 				arrayProperties[s.property] = struct{}{}
-				// klog.Info("arrayProperties: ", arrayProperties)
-				// fmt.Println("prop type: map[string]interface")
-				// labelStrings := make([]string, 0, len(v))
+
 				for key, value := range v {
-					labelString := fmt.Sprintf("%v=%v", key, fmt.Sprintf("%v", value))
-					// labelStrings = append(labelStrings, labelString)
+					labelString := fmt.Sprintf("%s=%s", key, value.(string))
 					props[labelString] = struct{}{}
 
 				}

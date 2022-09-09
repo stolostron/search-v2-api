@@ -107,7 +107,7 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 	bytes, _ := ioutil.ReadFile(mockDataFile)
 	var data map[string]interface{}
 	if err := json.Unmarshal(bytes, &data); err != nil {
-		panic(err)
+		klog.Warning("Error unmarshaling data", err.Error())
 	}
 
 	columns := data["columns"].([]interface{})
@@ -161,16 +161,25 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 				props[cluster] = ""
 			} else {
 				if _, ok := data[prop]; ok {
+
 					switch v := data[prop].(type) {
 
 					case float64:
 						props[strconv.Itoa(int(v))] = ""
+					case map[string]interface{}:
+						for k, val := range v {
+							propclean := fmt.Sprintf(`{%s:%s}`, k, val.(string))
+							props[propclean] = ""
+						}
 					default:
 						props[v.(string)] = ""
 					}
 				}
 			}
+
 		}
+
+		//
 		mapKeys := []interface{}{}
 		for key := range props {
 			mapKeys = append(mapKeys, key)
@@ -355,6 +364,7 @@ func (r *MockRows) Values() ([]interface{}, error) { return nil, nil }
 func (r *MockRows) RawValues() [][]byte { return nil }
 
 func AssertStringArrayEqual(t *testing.T, result, expected []*string, message string) {
+
 	resultSorted := pointerToStringArray(result)
 	sort.Strings(resultSorted)
 	expectedSorted := pointerToStringArray(expected)
