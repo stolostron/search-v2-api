@@ -87,10 +87,6 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 
 }
 
-// func (cache *Cache) SharedCacheDisabledClustersValid() bool {
-// 	return time.Now().Before(cache.shared.dcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))
-// }
-
 func (cache *Cache) SharedCacheDisabledClustersValid() bool {
 	return cache.shared.dcErr == nil && time.Now().Before(
 		cache.shared.dcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond))
@@ -229,10 +225,6 @@ func (shared *SharedData) GetManagedClusters(cache *Cache, ctx context.Context) 
 
 }
 
-// func (cache *Cache) GetDisabledClusters() *map[string]struct{} {
-// 	cache.shared.dcLock.Lock()
-// 	defer cache.shared.dcLock.Unlock()
-// 	return &cache.shared.disabledClusters
 func (cache *Cache) GetDisabledClusters() (*map[string]struct{}, error) {
 
 	if cache.SharedCacheDisabledClustersValid() {
