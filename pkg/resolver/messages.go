@@ -72,19 +72,22 @@ func (s *Message) buildSearchAddonDisabledQuery(ctx context.Context) {
 	klog.V(3).Infof("Messages Query for managed clusters with Search addon disabled: %s\n", sql)
 }
 
-// If user has access o even one cluster, show the search disabled message
-func (s *Message) checkUserAccessToDisabledClusters(ctx context.Context, disabledClusters *map[string]struct{}) bool {
+// <<<<<<< HEAD
+// // If user has access o even one cluster, show the search disabled message
+// func (s *Message) checkUserAccessToDisabledClusters(ctx context.Context, disabledClusters *map[string]struct{}) bool {
 
-	for _, cluster := range getKeys(*disabledClusters) { //rbac.CacheInst.GetDisabledClusters()) {
-		_, userHasAccessToMC := s.userData.ManagedClusters[cluster]
-		klog.Info("checking user access to cluster: ", cluster, ": ", userHasAccessToMC)
+// 	for _, cluster := range getKeys(*disabledClusters) { //rbac.CacheInst.GetDisabledClusters()) {
+// 		_, userHasAccessToMC := s.userData.ManagedClusters[cluster]
+// 		klog.Info("checking user access to cluster: ", cluster, ": ", userHasAccessToMC)
 
-		if userHasAccessToMC {
-			return true
-		}
-	}
-	return false
-}
+// 		if userHasAccessToMC {
+// 			return true
+// 		}
+// 	}
+// 	return false
+// }
+// =======
+// >>>>>>> disabledClustersRbac
 func (s *Message) findSrchAddonDisabledClusters(ctx context.Context) (*map[string]struct{}, error) {
 	disabledClusters := make(map[string]struct{})
 
@@ -100,46 +103,72 @@ func (s *Message) findSrchAddonDisabledClusters(ctx context.Context) (*map[strin
 			var srchAddonDisabledCluster string
 			err := rows.Scan(&srchAddonDisabledCluster)
 			if err != nil {
-				klog.Errorf("Error %s resolving cluster count for query: %s", err.Error(), s.query)
+				klog.Errorf("Error %s resolving addon disabled cluster name for query: %s", err.Error(), s.query)
+				continue // skip and continue in case of scan error
 			}
 			disabledClusters[srchAddonDisabledCluster] = struct{}{}
-
-			//Since cache is not valid, update shared cache with disabled clusters result
-			rbac.CacheInst.SetDisabledClusters(disabledClusters, nil)
 		}
+		//Since cache was not valid, update shared cache with disabled clusters result
+		rbac.CacheInst.SetDisabledClusters(disabledClusters, nil)
 	}
 	return &disabledClusters, err
 }
-func (s *Message) messageResults(ctx context.Context) ([]*model.Message, error) {
-	klog.V(2).Info("Resolving Messages()")
-	var returnDisabledMessage bool
+func (s *Message) userHasAccessToDisabledClusters(disabledClusters *map[string]struct{}) bool {
 
-	if rbac.CacheInst.SharedCacheDisabledClustersValid() {
-		klog.Info("Cache valid")
-		returnDisabledMessage = s.checkUserAccessToDisabledClusters(ctx, rbac.CacheInst.GetDisabledClusters())
-	} else {
-		klog.Info("Cache not valid - runnning query")
-
-		if disabledClusters, err := s.findSrchAddonDisabledClusters(ctx); err != nil {
-			klog.Error("Error retrieving disabled clusters: ", err)
-			return []*model.Message{}, err
-		} else {
-			returnDisabledMessage = s.checkUserAccessToDisabledClusters(ctx, disabledClusters)
+	for disabledCluster := range *disabledClusters {
+		_, userHasAccessToMC := s.userData.ManagedClusters[disabledCluster]
+		if userHasAccessToMC { //user has access
+			klog.V(7).Info("user has access to search addon disabled cluster: ", disabledCluster)
+			return true
 		}
 	}
-	klog.Info("returnDisabledMessage: ", returnDisabledMessage)
-	// Show disabled clusters message only if user has access to those managed clusters
-	if returnDisabledMessage {
-		messages := make([]*model.Message, 0)
-		kind := "information"
-		desc := "Search is disabled on some of your managed clusters."
-		message := model.Message{ID: "S20",
-			Kind:        &kind,
-			Description: &desc}
-		messages = append(messages, &message)
-		return messages, nil
+	return false
+}
+
+func (s *Message) getDisabledClusters(ctx context.Context) (*map[string]struct{}, error) {
+	disabledClusters, disabledClustersErr := rbac.CacheInst.GetDisabledClusters()
+	if disabledClustersErr != nil { //Cache is invalid - rerun query
+		//run query and get disabled clusters
+		if disabledClustersFromQuery, err := s.findSrchAddonDisabledClusters(ctx); err != nil {
+			klog.Error("Error retrieving Search Addon disabled clusters: ", err)
+			rbac.CacheInst.SetDisabledClusters(map[string]struct{}{}, err)
+			return &map[string]struct{}{}, err
+		} else {
+			rbac.CacheInst.SetDisabledClusters(*disabledClustersFromQuery, nil)
+			return disabledClustersFromQuery, err
+		}
 	} else {
-		klog.Info("user doesn't have access to disabled clusters", returnDisabledMessage)
+		klog.Info("Disabled clusters cache valid. Returning results")
 	}
-	return nil, nil
+	//cache is valid
+	return disabledClusters, disabledClustersErr
+}
+func (s *Message) messageResults(ctx context.Context) ([]*model.Message, error) {
+	klog.V(2).Info("Resolving Messages()")
+	disabledClusters, disabledClustersErr := s.getDisabledClusters(ctx)
+	//Cache is invalid
+	if disabledClustersErr != nil {
+		return []*model.Message{}, disabledClustersErr
+	}
+	//Cache is valid
+	if len(*disabledClusters) <= 0 { //no clusters with addon disabled
+		return []*model.Message{}, nil
+	} else { //check if user has access to disabled clusters
+		if s.userHasAccessToDisabledClusters(disabledClusters) {
+			klog.V(5).Info("user has access to Search Addon disabled clusters ")
+			// Show disabled clusters message only if user has access to those managed clusters
+
+			messages := make([]*model.Message, 0)
+			kind := "information"
+			desc := "Search is disabled on some of your managed clusters."
+			message := model.Message{ID: "S20",
+				Kind:        &kind,
+				Description: &desc}
+			messages = append(messages, &message)
+			return messages, nil
+		} else {
+			klog.V(5).Info("user doesn't have access to Search Addon disabled clusters.")
+			return []*model.Message{}, nil
+		}
+	}
 }

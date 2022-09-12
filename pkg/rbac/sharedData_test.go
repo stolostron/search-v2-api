@@ -215,8 +215,40 @@ func Test_GetandSetDisabledClusters(t *testing.T) {
 	dClusters["managed2"] = struct{}{}
 
 	mock_cache.SetDisabledClusters(dClusters, nil)
-	res := mock_cache.GetDisabledClusters()
+	res, _ := mock_cache.GetDisabledClusters()
 	if len(*res) != 2 {
 		t.Errorf("Expected 2 clusters to be in the disabled list %d", len(*res))
+	}
+}
+func Test_setDisabledClusters(t *testing.T) {
+	disabledClusters := map[string]struct{}{}
+	disabledClusters["disabled1"] = struct{}{}
+	_, mock_cache := mockResourcesListCache(t)
+	mock_cache.SetDisabledClusters(disabledClusters, nil)
+	if len(mock_cache.shared.disabledClusters) != 1 || mock_cache.shared.dcErr != nil {
+		t.Error("Expected the cache.shared.disabledClusters to be updated with 1 cluster and no error")
+	}
+}
+
+func Test_getDisabledClustersInvalid(t *testing.T) {
+	_, mock_cache := mockResourcesListCache(t)
+	disabledClusters, err := mock_cache.GetDisabledClusters()
+
+	if len(*disabledClusters) > 0 || err == nil {
+		t.Error("Expected the cache.shared.disabledClusters to be invalid")
+	}
+}
+
+func Test_getDisabledClustersValid(t *testing.T) {
+	disabledClusters := map[string]struct{}{}
+	disabledClusters["disabled1"] = struct{}{}
+	_, mock_cache := mockResourcesListCache(t)
+	mock_cache.shared.dcErr = nil
+	mock_cache.shared.disabledClusters = disabledClusters
+	mock_cache.shared.dcUpdatedAt = time.Now()
+	disabledClustersRes, err := mock_cache.GetDisabledClusters()
+
+	if len(*disabledClustersRes) != 1 || err != nil {
+		t.Error("Expected the cache.shared.disabledClusters to be updated with 1 cluster and no error")
 	}
 }
