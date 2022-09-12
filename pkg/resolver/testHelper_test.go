@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -146,28 +147,31 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 		}
 	default: // For searchschema and searchComplete
 		// For searchComplete
-		props := map[string]string{}
+		propsString := map[string]string{}
+		propsArray := []map[string]interface{}{}
 		for _, item := range items {
 			uid := item.(map[string]interface{})["uid"]
 			cluster := strings.Split(uid.(string), "/")[0]
 			data := item.(map[string]interface{})["properties"].(map[string]interface{})
-
+			fmt.Println("PROP", data[prop])
+			fmt.Println("PROP TYPE", reflect.TypeOf(data[prop]))
 			if prop == "cluster" {
-				props[cluster] = ""
+				propsString[cluster] = ""
 			} else {
 				if _, ok := data[prop]; ok {
 
 					switch v := data[prop].(type) {
 
 					case float64:
-						props[strconv.Itoa(int(v))] = ""
+						propsString[strconv.Itoa(int(v))] = ""
 					case map[string]interface{}:
-						for k, val := range v {
-							propclean := fmt.Sprintf(`{%s:%s}`, k, val.(string))
-							props[propclean] = ""
-						}
+						propsArray = append(propsArray, v)
+						// for k, val := range v {
+						// propclean := fmt.Sprintf(`{%s:%s}`, k, val.(string))
+						// props[propclean] = ""
+						// }
 					default:
-						props[v.(string)] = ""
+						propsString[v.(string)] = ""
 					}
 				}
 			}
@@ -176,39 +180,49 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 
 		// get the keys from props above. ex if we have a prop of type string like "kind":"Template"
 		// then above we only save data[prop] = "Template" value as key nothing as value
-		mapKeys := []interface{}{}
-		for key := range props {
-			mapKeys = append(mapKeys, key)
-		}
-
-		//if limit is set, sort results and send only the assigned limit
-		if limit > 0 && len(mapKeys) >= limit {
-			switch mapKeys[0].(type) {
-			case string:
-				mapKey := make([]string, len(mapKeys))
-				for i, v := range mapKeys {
-					mapKey[i] = v.(string)
-				}
-				sort.Strings(mapKey)
-				mapKeys = []interface{}{}
-				for _, v := range mapKey {
-					mapKeys = append(mapKeys, v)
-				}
-			case int:
-				sort.Slice(mapKeys, func(i, j int) bool {
-					numA, _ := mapKeys[i].(int)
-					numB, _ := mapKeys[j].(int)
-					return numA < numB
-				})
+		if len(propsString) != 0 {
+			mapKeys := []interface{}{}
+			for key := range propsString {
+				mapKeys = append(mapKeys, key)
 			}
 
-			mapKeys = mapKeys[:limit]
-		}
-		for _, key := range mapKeys {
-			mockDatum := map[string]interface{}{
-				"prop": key,
+			//if limit is set, sort results and send only the assigned limit
+			if limit > 0 && len(mapKeys) >= limit {
+				switch mapKeys[0].(type) {
+				case string:
+					mapKey := make([]string, len(mapKeys))
+					for i, v := range mapKeys {
+						mapKey[i] = v.(string)
+					}
+					sort.Strings(mapKey)
+					mapKeys = []interface{}{}
+					for _, v := range mapKey {
+						mapKeys = append(mapKeys, v)
+					}
+				case int:
+					sort.Slice(mapKeys, func(i, j int) bool {
+						numA, _ := mapKeys[i].(int)
+						numB, _ := mapKeys[j].(int)
+						return numA < numB
+					})
+				}
+
+				mapKeys = mapKeys[:limit]
 			}
-			mockData = append(mockData, mockDatum)
+			for _, key := range mapKeys {
+				mockDatum := map[string]interface{}{
+					"prop": key,
+				}
+				mockData = append(mockData, mockDatum)
+
+			}
+		} else {
+			if len(propsArray) != 0 {
+
+				mockData = append(mockData, propsArray...)
+				fmt.Println("MockData:", mockData)
+
+			}
 
 		}
 	}
@@ -337,6 +351,7 @@ func (r *MockRows) Next() bool {
 
 //Mocking the Scan function for rows:
 func (r *MockRows) Scan(dest ...interface{}) error {
+	fmt.Println(dest...)
 	if len(dest) > 1 { // For search function
 
 		for i := range dest {
@@ -359,11 +374,16 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 		}
 	} else if len(dest) == 1 { // For searchComplete function and resolveUIDs function
 		_, ok := r.mockData[r.index-1]["prop"] //Check if prop is present in mockdata
+		fmt.Println(ok)
 		if ok {
 			*dest[0].(*interface{}) = r.mockData[r.index-1]["prop"].(string)
+			// } else if r.mockData[r.index-1] {
+
 		} else { //used by resolveUIDs function
 			*dest[0].(*string) = r.mockData[r.index-1]["uid"].(string)
+
 		}
+
 	}
 	return nil
 }
@@ -380,6 +400,30 @@ func AssertStringArrayEqual(t *testing.T, result, expected []*string, message st
 	sort.Strings(expectedSorted)
 
 	for i, exp := range expectedSorted {
+		if resultSorted[i] != exp {
+			t.Errorf("%s expected [%v] got [%v]", message, expectedSorted, resultSorted)
+			return
+		}
+	}
+}
+
+func AssertMapArrayEqual(t *testing.T, result []*string, expected []*map[string]interface{}, message string) {
+
+	resultSorted := pointerToStringArray(result)
+	sort.Strings(resultSorted)
+	expectedSorted := pointerToMapArray(expected)
+	// sort.Strings(expectedSorted)
+	var expectedCleanedArray []string
+	// for k, val := range expected {
+	// 	expectedCleaned := fmt.Sprintf(`{%s:%s}`, k, val)
+	// 	expectedCleanedArray = append(expectedCleanedArray, expectedCleaned)
+	// }
+	sort.Strings(expectedCleanedArray)
+
+	fmt.Println("Result before parse:", result)
+	fmt.Println("Expected before parse:", expectedCleanedArray)
+
+	for i, exp := range expectedCleanedArray {
 		if resultSorted[i] != exp {
 			t.Errorf("%s expected [%v] got [%v]", message, expectedSorted, resultSorted)
 			return
