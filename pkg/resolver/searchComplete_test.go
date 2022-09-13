@@ -217,32 +217,32 @@ func Test_SearchCompleteWithLabel_Query(t *testing.T) {
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
 
-	// for _, data := range mockRows.mockData {
-	// 	fmt.Println("Mockdata:", data)
-	// 	for k, val := range data {
-	// 		fmt.Println("Key:", k, "val:", val)
-	// 	}
-	// }
+	for _, data := range mockRows.mockData {
+		fmt.Println("Mockdata:", data)
+		for k, val := range data {
+			fmt.Println("Key:", k, "val:", val)
+		}
+	}
 
 	//mock searchcomplete for searchinput
 	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud)
 
-	// val1 := "{samples.operator.openshift.io/managed:true}"
-	// val2 := "{pod-template-hash:5f5575c669}"
-	// val3 := "{app.kubernetes.io/name:prometheus-operator}"
-	// expectedProps := []*string{&val1, &val2, &val3}
+	val1 := "samples.operator.openshift.io/managed=true"
+	val2 := "pod-template-hash=5f5575c669"
+	val3 := "app.kubernetes.io/name=prometheus-operator"
+	expectedProps := []*string{&val1, &val2, &val3}
 
-	valMap := []*map[string]interface{}{}
-	val1 := make(map[string]interface{}, 0)
-	val2 := make(map[string]interface{}, 0)
-	val3 := make(map[string]interface{}, 0)
+	// valMap := []*map[string]interface{}{}
+	// val1 := make(map[string]interface{}, 0)
+	// val2 := make(map[string]interface{}, 0)
+	// val3 := make(map[string]interface{}, 0)
 
-	val1["samples.operator.openshift.io/managed"] = true
-	val2["pod-template-hash"] = "5f5575c669"
-	val3["app.kubernetes.io/name"] = "prometheus-operator"
+	// val1["samples.operator.openshift.io/managed"] = true
+	// val2["pod-template-hash"] = "5f5575c669"
+	// val3["app.kubernetes.io/name"] = "prometheus-operator"
 
-	valMap = append(valMap, &val1, &val2, &val3)
-	expectedProps := valMap
+	// valMap = append(valMap, &val1, &val2, &val3)
+	// expectedProps := valMap
 
 	// Mock the database query
 	// check if cluster
@@ -256,5 +256,5 @@ func Test_SearchCompleteWithLabel_Query(t *testing.T) {
 
 	}
 	// Verify response
-	AssertMapArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteWithFilter_Query")
+	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteWithLabel_Query")
 }

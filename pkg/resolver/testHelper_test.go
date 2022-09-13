@@ -216,11 +216,20 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 				mockData = append(mockData, mockDatum)
 
 			}
-		} else {
-			if len(propsArray) != 0 {
+		} else if len(propsArray) != 0 {
+			mapKeys := []map[string]interface{}{}
 
-				mockData = append(mockData, propsArray...)
-				fmt.Println("MockData:", mockData)
+			for _, val := range propsArray {
+				mapKeys = append(mapKeys, val)
+			}
+			fmt.Println("MAPkEYS", mapKeys)
+
+			for _, key := range mapKeys {
+				mockDatum := map[string]interface{}{
+					"propArray": key,
+				}
+				mockData = append(mockData, mockDatum)
+				// mockData = append(mockData, propsArray...)
 
 			}
 
@@ -351,7 +360,7 @@ func (r *MockRows) Next() bool {
 
 //Mocking the Scan function for rows:
 func (r *MockRows) Scan(dest ...interface{}) error {
-	fmt.Println(dest...)
+
 	if len(dest) > 1 { // For search function
 
 		for i := range dest {
@@ -374,16 +383,23 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 		}
 	} else if len(dest) == 1 { // For searchComplete function and resolveUIDs function
 		_, ok := r.mockData[r.index-1]["prop"] //Check if prop is present in mockdata
-		fmt.Println(ok)
+
 		if ok {
+			fmt.Println(reflect.TypeOf(dest[0]))
 			*dest[0].(*interface{}) = r.mockData[r.index-1]["prop"].(string)
 			// } else if r.mockData[r.index-1] {
 
-		} else { //used by resolveUIDs function
-			*dest[0].(*string) = r.mockData[r.index-1]["uid"].(string)
+		} else {
+			_, ok := r.mockData[r.index-1]["propArray"]
+			if ok {
+				fmt.Println(reflect.TypeOf(dest[0]))
+				*dest[0].(*interface{}) = r.mockData[r.index-1]["propArray"].(map[string]interface{})
+			} else { //used by resolveUIDs function
+				*dest[0].(*string) = r.mockData[r.index-1]["uid"].(string)
+
+			}
 
 		}
-
 	}
 	return nil
 }
