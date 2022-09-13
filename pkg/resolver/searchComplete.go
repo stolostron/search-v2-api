@@ -149,7 +149,7 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			}
 			switch v := input.(type) {
 			case string:
-				fmt.Println("prop type: string")
+				// fmt.Println("prop type: string")
 				prop = v
 				props[v] = struct{}{}
 				// props = append(props, v)
@@ -162,7 +162,7 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 				props[prop] = struct{}{}
 
 			case map[string]interface{}:
-				fmt.Println("prop type: array")
+				// fmt.Println("prop type: array")
 
 				arrayProperties[s.property] = struct{}{}
 

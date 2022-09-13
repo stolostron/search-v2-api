@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -153,8 +152,8 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 			uid := item.(map[string]interface{})["uid"]
 			cluster := strings.Split(uid.(string), "/")[0]
 			data := item.(map[string]interface{})["properties"].(map[string]interface{})
-			fmt.Println("PROP", data[prop])
-			fmt.Println("PROP TYPE", reflect.TypeOf(data[prop]))
+			// fmt.Println("PROP", data[prop])
+			// fmt.Println("PROP TYPE", reflect.TypeOf(data[prop]))
 			if prop == "cluster" {
 				propsString[cluster] = ""
 			} else {
@@ -222,13 +221,13 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 			for _, val := range propsArray {
 				mapKeys = append(mapKeys, val)
 			}
-			fmt.Println("MAPkEYS", mapKeys)
 
 			for _, key := range mapKeys {
 				mockDatum := map[string]interface{}{
 					"propArray": key,
 				}
 				mockData = append(mockData, mockDatum)
+
 				// mockData = append(mockData, propsArray...)
 
 			}
@@ -385,14 +384,11 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 		_, ok := r.mockData[r.index-1]["prop"] //Check if prop is present in mockdata
 
 		if ok {
-			fmt.Println(reflect.TypeOf(dest[0]))
 			*dest[0].(*interface{}) = r.mockData[r.index-1]["prop"].(string)
-			// } else if r.mockData[r.index-1] {
 
 		} else {
 			_, ok := r.mockData[r.index-1]["propArray"]
 			if ok {
-				fmt.Println(reflect.TypeOf(dest[0]))
 				*dest[0].(*interface{}) = r.mockData[r.index-1]["propArray"].(map[string]interface{})
 			} else { //used by resolveUIDs function
 				*dest[0].(*string) = r.mockData[r.index-1]["uid"].(string)
@@ -423,26 +419,26 @@ func AssertStringArrayEqual(t *testing.T, result, expected []*string, message st
 	}
 }
 
-func AssertMapArrayEqual(t *testing.T, result []*string, expected []*map[string]interface{}, message string) {
+// func AssertMapArrayEqual(t *testing.T, result []*string, expected []*map[string]interface{}, message string) {
 
-	resultSorted := pointerToStringArray(result)
-	sort.Strings(resultSorted)
-	expectedSorted := pointerToMapArray(expected)
-	// sort.Strings(expectedSorted)
-	var expectedCleanedArray []string
-	// for k, val := range expected {
-	// 	expectedCleaned := fmt.Sprintf(`{%s:%s}`, k, val)
-	// 	expectedCleanedArray = append(expectedCleanedArray, expectedCleaned)
-	// }
-	sort.Strings(expectedCleanedArray)
+// 	resultSorted := pointerToStringArray(result)
+// 	sort.Strings(resultSorted)
+// 	expectedSorted := pointerToMapArray(expected)
+// 	// sort.Strings(expectedSorted)
+// 	var expectedCleanedArray []string
+// 	// for k, val := range expected {
+// 	// 	expectedCleaned := fmt.Sprintf(`{%s:%s}`, k, val)
+// 	// 	expectedCleanedArray = append(expectedCleanedArray, expectedCleaned)
+// 	// }
+// 	sort.Strings(expectedCleanedArray)
 
-	fmt.Println("Result before parse:", result)
-	fmt.Println("Expected before parse:", expectedCleanedArray)
+// 	fmt.Println("Result before parse:", result)
+// 	fmt.Println("Expected before parse:", expectedCleanedArray)
 
-	for i, exp := range expectedCleanedArray {
-		if resultSorted[i] != exp {
-			t.Errorf("%s expected [%v] got [%v]", message, expectedSorted, resultSorted)
-			return
-		}
-	}
-}
+// 	for i, exp := range expectedCleanedArray {
+// 		if resultSorted[i] != exp {
+// 			t.Errorf("%s expected [%v] got [%v]", message, expectedSorted, resultSorted)
+// 			return
+// 		}
+// 	}
+// }
