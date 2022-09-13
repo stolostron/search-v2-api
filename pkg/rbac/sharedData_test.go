@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -40,11 +41,12 @@ func mockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, Cache) {
 	}
 
 	return mockPool, Cache{
+		users:         map[string]*UserDataCache{},
 		shared:        SharedData{},
 		dynamicClient: fakedynclient.NewSimpleDynamicClient(testScheme, testmc),
 		restConfig:    &rest.Config{},
 		corev1Client:  fakekubeclient.NewSimpleClientset(testns).CoreV1(),
-		pool:          mockPool,
+		Pool:          mockPool,
 	}
 }
 
@@ -183,31 +185,167 @@ func Test_setDisabledClusters(t *testing.T) {
 	disabledClusters := map[string]struct{}{}
 	disabledClusters["disabled1"] = struct{}{}
 	_, mock_cache := mockResourcesListCache(t)
-	mock_cache.SetDisabledClusters(disabledClusters, nil)
+	mock_cache.setDisabledClusters(disabledClusters, nil)
 	if len(mock_cache.shared.disabledClusters) != 1 || mock_cache.shared.dcErr != nil {
 		t.Error("Expected the cache.shared.disabledClusters to be updated with 1 cluster and no error")
 	}
 }
 
-func Test_getDisabledClustersInvalid(t *testing.T) {
+//ContextAuthTokenKey is not set - so session info cannot be found
+func Test_getDisabledClusters_UserNotFound(t *testing.T) {
+	disabledClusters := map[string]struct{}{}
+	disabledClusters["disabled1"] = struct{}{}
 	_, mock_cache := mockResourcesListCache(t)
-	disabledClusters, err := mock_cache.GetDisabledClusters()
+	mock_cache.tokenReviews = map[string]*tokenReviewCache{}
+	userdataCache := UserDataCache{userData: UserData{ManagedClusters: []string{"disabled1"}},
+		csrUpdatedAt: time.Now(), nsrUpdatedAt: time.Now(), clustersUpdatedAt: time.Now()}
+	setupUserDataCache(&mock_cache, &userdataCache)
 
-	if len(*disabledClusters) > 0 || err == nil {
-		t.Error("Expected the cache.shared.disabledClusters to be invalid")
+	mock_cache.shared.dcErr = nil
+	mock_cache.shared.disabledClusters = disabledClusters
+	mock_cache.shared.dcUpdatedAt = time.Now()
+
+	mock_cache.users["unique-user-id"] = &userdataCache
+	// Context key is not set - so, user won't be found
+	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.TODO())
+
+	if disabledClustersRes != nil || err == nil {
+		t.Error("Expected the cache.shared.disabledClusters to be nil and to have error")
 	}
 }
 
+//diabled cluster cache is valid
 func Test_getDisabledClustersValid(t *testing.T) {
 	disabledClusters := map[string]struct{}{}
 	disabledClusters["disabled1"] = struct{}{}
 	_, mock_cache := mockResourcesListCache(t)
+	setupToken(&mock_cache)
+	userdataCache := UserDataCache{userData: UserData{ManagedClusters: []string{"disabled1"}},
+		csrUpdatedAt: time.Now(), nsrUpdatedAt: time.Now(), clustersUpdatedAt: time.Now()}
+	setupUserDataCache(&mock_cache, &userdataCache)
+
 	mock_cache.shared.dcErr = nil
 	mock_cache.shared.disabledClusters = disabledClusters
 	mock_cache.shared.dcUpdatedAt = time.Now()
-	disabledClustersRes, err := mock_cache.GetDisabledClusters()
+
+	mock_cache.users["unique-user-id"] = &userdataCache
+
+	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(),
+		ContextAuthTokenKey, "123456"))
+
+	if len(*disabledClustersRes) != 1 || err != nil {
+		t.Error("Expected the cache.shared.disabledClusters to be valid/updated with 1 cluster and to have no error")
+	}
+}
+
+//user does not have access to disabled managed clusters
+func Test_getDisabledClustersValid_User_NoAccess(t *testing.T) {
+	disabledClusters := map[string]struct{}{}
+	disabledClusters["disabled1"] = struct{}{}
+	_, mock_cache := mockResourcesListCache(t)
+	setupToken(&mock_cache)
+
+	//user only has access to "managed1" cluster, but not "disabled1" cluster
+	userdataCache := UserDataCache{userData: UserData{ManagedClusters: []string{"managed1"}},
+		csrUpdatedAt: time.Now(), nsrUpdatedAt: time.Now(), clustersUpdatedAt: time.Now()}
+	setupUserDataCache(&mock_cache, &userdataCache)
+
+	mock_cache.shared.dcErr = nil
+	mock_cache.shared.disabledClusters = disabledClusters
+	mock_cache.shared.dcUpdatedAt = time.Now()
+
+	mock_cache.users["unique-user-id"] = &userdataCache
+
+	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(),
+		ContextAuthTokenKey, "123456"))
+
+	if len(*disabledClustersRes) != 0 || err != nil {
+		t.Error("Expected the cache.shared.disabledClusters to be updated with 1 cluster and to have no error")
+	}
+}
+
+//cache is invalid. So, run the db query and get results
+func Test_getDisabledClustersCacheInValid_RunQuery(t *testing.T) {
+	disabledClusters := map[string]struct{}{}
+	disabledClusters["disabled1"] = struct{}{}
+	_, mock_cache := mockResourcesListCache(t)
+	setupToken(&mock_cache)
+	userdataCache := UserDataCache{userData: UserData{ManagedClusters: []string{"disabled1"}},
+		csrUpdatedAt: time.Now(), nsrUpdatedAt: time.Now(), clustersUpdatedAt: time.Now()}
+	setupUserDataCache(&mock_cache, &userdataCache)
+
+	mock_cache.shared.dcErr = nil
+	mock_cache.shared.disabledClusters = disabledClusters
+	mock_cache.shared.dcUpdatedAt = time.Now().Add(-24 * time.Hour) //to invalidate cache
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
+	disabledClustersRows := map[string]interface{}{}
+	disabledClustersRows["disabled1"] = ""
+
+	pgxRows := pgxpoolmock.NewRows([]string{"srchAddonDisabledCluster"}).AddRow("disabled1").ToPgxRows()
+
+	// Mock the database query
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT "mcInfo".data->>'name' AS "srchAddonDisabledCluster" FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`),
+	).Return(pgxRows, nil)
+	mock_cache.Pool = mockPool
+	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(), ContextAuthTokenKey, "123456"))
 
 	if len(*disabledClustersRes) != 1 || err != nil {
 		t.Error("Expected the cache.shared.disabledClusters to be updated with 1 cluster and no error")
+	}
+}
+
+//cache is invalid. So, run the db query - error while running the query
+func Test_getDisabledClustersCacheInValid_RunQueryError(t *testing.T) {
+	disabledClusters := map[string]struct{}{}
+	disabledClusters["disabled1"] = struct{}{}
+	_, mock_cache := mockResourcesListCache(t)
+	setupToken(&mock_cache)
+	//user has no access to disabled clusters
+	userdataCache := UserDataCache{userData: UserData{ManagedClusters: []string{"managed1"}},
+		csrUpdatedAt: time.Now(), nsrUpdatedAt: time.Now(), clustersUpdatedAt: time.Now()}
+	setupUserDataCache(&mock_cache, &userdataCache)
+
+	mock_cache.shared.dcErr = nil
+	mock_cache.shared.disabledClusters = disabledClusters
+	mock_cache.shared.dcUpdatedAt = time.Now().Add(-24 * time.Hour) // to invalidate cache
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
+	disabledClustersRows := map[string]interface{}{}
+	disabledClustersRows["disabled1"] = ""
+
+	pgxRows := pgxpoolmock.NewRows([]string{"srchAddonDisabledCluster"}).AddRow("disabled1").ToPgxRows()
+
+	// Mock the database query
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT "mcInfo".data->>'name' AS "srchAddonDisabledCluster" FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`),
+	).Return(pgxRows, fmt.Errorf("Error fetching data"))
+	mock_cache.Pool = mockPool
+	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(), ContextAuthTokenKey, "123456"))
+
+	if disabledClustersRes != nil || err == nil {
+		t.Error("Expected the cache.shared.disabledClusters to have error fetchng data")
+	}
+}
+
+func Test_Messages_Query(t *testing.T) {
+	// Create a SearchSchemaResolver instance with a mock connection pool.
+	// _, _ = resolver.newMockMessage(t, &UserData{})
+
+	sql := `SELECT DISTINCT "mcInfo".data->>'name' AS "srchAddonDisabledCluster" FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`
+	// Execute function
+	query, err := buildSearchAddonDisabledQuery(context.WithValue(context.Background(), ContextAuthTokenKey, "123456"))
+
+	// Verify response
+	if query != sql {
+		t.Errorf("Expected sql query: %s but got %s", sql, query)
+	}
+	if err != nil {
+		t.Errorf("Expected error to be nil, but got : %s", err)
 	}
 }
