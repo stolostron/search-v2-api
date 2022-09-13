@@ -216,11 +216,10 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 
 			}
 		} else if len(propsArray) != 0 {
+
 			mapKeys := []map[string]interface{}{}
 
-			for _, val := range propsArray {
-				mapKeys = append(mapKeys, val)
-			}
+			mapKeys = append(mapKeys, propsArray...)
 
 			for _, key := range mapKeys {
 				mockDatum := map[string]interface{}{

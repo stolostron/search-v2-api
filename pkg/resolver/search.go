@@ -506,17 +506,6 @@ func pointerToStringArray(pointerArray []*string) []string {
 	return values
 }
 
-// helper function to point values in map[string]interface{} array
-func pointerToMapArray(pointerArray []*map[string]interface{}) []map[string]interface{} {
-
-	values := make([]map[string]interface{}, len(pointerArray))
-
-	for i, val := range pointerArray {
-		values[i] = *val
-	}
-	return values
-}
-
 func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 	var whereDs []exp.Expression
 
