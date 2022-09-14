@@ -34,7 +34,8 @@ func setupToken(cache *Cache) *Cache {
 		cache.tokenReviews = map[string]*tokenReviewCache{}
 	}
 	cache.tokenReviews["123456"] = &tokenReviewCache{
-		updatedAt: time.Now(),
+		updatedAt:  time.Now(),
+		authClient: fake.NewSimpleClientset().AuthenticationV1(),
 		tokenReview: &authv1.TokenReview{
 			Status: authv1.TokenReviewStatus{
 				User: authv1.UserInfo{

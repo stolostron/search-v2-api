@@ -62,8 +62,6 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
-	//namespace
-
 	err := mock_cache.PopulateSharedCache(ctx)
 	res := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
 	_, csResPresent := mock_cache.shared.csResourcesMap[res]
@@ -212,11 +210,19 @@ func Test_SharedCacheDisabledClustersValid(t *testing.T) {
 func Test_GetandSetDisabledClusters(t *testing.T) {
 	_, mock_cache := mockResourcesListCache(t)
 	mock_cache.shared.dcUpdatedAt = time.Now()
+
 	dClusters := make(map[string]struct{})
 	dClusters["managed1"] = struct{}{}
 	dClusters["managed2"] = struct{}{}
-
+	setupToken(&mock_cache)
 	mock_cache.SetDisabledClusters(dClusters, nil)
+
+	//user's managedclusters
+
+	userdataCache := UserDataCache{userData: UserData{ManagedClusters: dClusters},
+		csrUpdatedAt: time.Now(), nsrUpdatedAt: time.Now(), clustersUpdatedAt: time.Now()}
+	setupUserDataCache(&mock_cache, &userdataCache)
+
 	res, _ := mock_cache.GetDisabledClusters(context.WithValue(context.Background(),
 		ContextAuthTokenKey, "123456"))
 	if len(*res) != 2 {
@@ -237,9 +243,11 @@ func Test_setDisabledClusters(t *testing.T) {
 
 func Test_getDisabledClustersInvalid(t *testing.T) {
 	_, mock_cache := mockResourcesListCache(t)
-	disabledClusters, err := mock_cache.GetDisabledClusters(context.TODO())
-
-	if len(*disabledClusters) > 0 || err == nil {
+	disabledClusters, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(),
+		ContextAuthTokenKey, "123456"))
+	fmt.Println(err)
+	fmt.Println(disabledClusters)
+	if disabledClusters != nil || err == nil {
 		t.Error("Expected the cache.shared.disabledClusters to be invalid")
 	}
 }
@@ -261,7 +269,6 @@ func Test_getDisabledClusters_UserNotFound(t *testing.T) {
 	mock_cache.shared.disabledClusters = disabledClusters
 	mock_cache.shared.dcUpdatedAt = time.Now()
 
-	mock_cache.users["unique-user-id"] = &userdataCache
 	// Context key is not set - so, user won't be found
 	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.TODO())
 
@@ -275,12 +282,7 @@ func Test_getDisabledClustersValid(t *testing.T) {
 	disabledClusters := map[string]struct{}{}
 	disabledClusters["disabled1"] = struct{}{}
 	_, mock_cache := mockResourcesListCache(t)
-	// <<<<<<< HEAD
-	// 	mock_cache.shared.dcErr = nil
-	// 	mock_cache.shared.disabledClusters = disabledClusters
-	// 	mock_cache.shared.dcUpdatedAt = time.Now()
-	// 	disabledClustersRes, err := mock_cache.GetDisabledClusters()
-	// =======
+
 	setupToken(&mock_cache)
 
 	//user's managedclusters
@@ -294,8 +296,6 @@ func Test_getDisabledClustersValid(t *testing.T) {
 	mock_cache.shared.dcErr = nil
 	mock_cache.shared.disabledClusters = disabledClusters
 	mock_cache.shared.dcUpdatedAt = time.Now()
-
-	mock_cache.users["unique-user-id"] = &userdataCache
 
 	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(),
 		ContextAuthTokenKey, "123456"))
@@ -324,8 +324,6 @@ func Test_getDisabledClustersValid_User_NoAccess(t *testing.T) {
 	mock_cache.shared.disabledClusters = disabledClusters
 	mock_cache.shared.dcUpdatedAt = time.Now()
 
-	mock_cache.users["unique-user-id"] = &userdataCache
-
 	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(),
 		ContextAuthTokenKey, "123456"))
 
@@ -343,7 +341,7 @@ func Test_getDisabledClustersCacheInValid_RunQuery(t *testing.T) {
 
 	//user's managedclusters
 	manClusters := map[string]struct{}{}
-	manClusters["managed1"] = struct{}{}
+	manClusters["disabled1"] = struct{}{}
 
 	userdataCache := UserDataCache{userData: UserData{ManagedClusters: manClusters},
 		csrUpdatedAt: time.Now(), nsrUpdatedAt: time.Now(), clustersUpdatedAt: time.Now()}
