@@ -72,16 +72,16 @@ func newMockSearchSchema(t *testing.T) (*SearchSchema, *pgxpoolmock.MockPgxPool)
 	return mockResolver, mockPool
 }
 
-func newMockMessage(t *testing.T) (*Message, *pgxpoolmock.MockPgxPool) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
+// func newMockMessage(t *testing.T, ud *rbac.UserData) (*Message, *pgxpoolmock.MockPgxPool) {
+// 	ctrl := gomock.NewController(t)
+// 	defer ctrl.Finish()
+// 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 
-	mockResolver := &Message{
-		pool: mockPool,
-	}
-	return mockResolver, mockPool
-}
+// 	mockResolver := &Message{
+// 		userData: ud,
+// 	}
+// 	return mockResolver, mockPool
+// }
 
 // ====================================================
 // Mock the Row interface defined in the pgx library.
@@ -159,6 +159,8 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 
 			if prop == "cluster" {
 				props[cluster] = ""
+			} else if prop == "srchAddonDisabledCluster" {
+				props["managed1"] = ""
 			} else {
 				if _, ok := data[prop]; ok {
 					switch v := data[prop].(type) {
