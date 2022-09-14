@@ -532,7 +532,7 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 							cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
 						} else {
 							//// If property is of array type, format it as an array for easy searching
-							cleanedVal[i] = fmt.Sprintf(`%s`, labels[0])
+							cleanedVal[i] = labels[0]
 						}
 					}
 					values = cleanedVal
