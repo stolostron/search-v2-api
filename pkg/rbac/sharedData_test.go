@@ -196,7 +196,7 @@ func Test_getDisabledClusters_UserNotFound(t *testing.T) {
 	disabledClusters := map[string]struct{}{}
 	disabledClusters["disabled1"] = struct{}{}
 	_, mock_cache := MockResourcesListCache(t)
-	mock_cache.tokenReviews = map[string]*tokenReviewCache{}
+	mock_cache.tokenReviews = map[string]*TokenReviewCache{}
 	userdataCache := UserDataCache{userData: UserData{ManagedClusters: []string{"disabled1"}},
 		csrUpdatedAt: time.Now(), nsrUpdatedAt: time.Now(), clustersUpdatedAt: time.Now()}
 	setupUserDataCache(&mock_cache, &userdataCache)

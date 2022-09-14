@@ -15,7 +15,7 @@ import (
 
 // Cache used to minimize requests to external APIs (Kubernetes and Database)
 type Cache struct {
-	tokenReviews     map[string]*tokenReviewCache //Key:ClientToken
+	tokenReviews     map[string]*TokenReviewCache //Key:ClientToken
 	tokenReviewsLock sync.Mutex
 	shared           SharedData
 	users            map[string]*UserDataCache // UID:{userdata} UID comes from tokenreview
@@ -32,7 +32,7 @@ type Cache struct {
 
 // Initialize the cache as a singleton instance.
 var CacheInst = Cache{
-	tokenReviews:     map[string]*tokenReviewCache{},
+	tokenReviews:     map[string]*TokenReviewCache{},
 	tokenReviewsLock: sync.Mutex{},
 	usersLock:        sync.Mutex{},
 	shared:           SharedData{},
@@ -41,4 +41,9 @@ var CacheInst = Cache{
 	Pool:             db.GetConnection(),
 	corev1Client:     config.GetCoreClient(),
 	dynamicClient:    config.GetDynamicClient(),
+}
+
+func (cache *Cache) SetTokenReviews(tokenReviews map[string]*TokenReviewCache) *Cache {
+	cache.tokenReviews = tokenReviews
+	return cache
 }

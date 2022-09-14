@@ -15,8 +15,8 @@ import (
 )
 
 // Encapsulates a TokenReview to store in the cache.
-type tokenReviewCache struct {
-	authClient  v1.AuthenticationV1Interface // This allows tests to replace with mock client.
+type TokenReviewCache struct {
+	AuthClient  v1.AuthenticationV1Interface // This allows tests to replace with mock client.
 	err         error
 	lock        sync.Mutex
 	updatedAt   time.Time
@@ -40,12 +40,12 @@ func (c *Cache) GetTokenReview(ctx context.Context, token string) (*authv1.Token
 	// Check if a TokenReviewCacheRequest exists in the cache or create a new one.
 	cachedTR, tokenExists := c.tokenReviews[token]
 	if !tokenExists {
-		cachedTR = &tokenReviewCache{
-			authClient: c.getAuthClient(),
+		cachedTR = &TokenReviewCache{
+			AuthClient: c.getAuthClient(),
 			token:      token,
 		}
 		if c.tokenReviews == nil {
-			c.tokenReviews = map[string]*tokenReviewCache{}
+			c.tokenReviews = map[string]*TokenReviewCache{}
 		}
 		c.tokenReviews[token] = cachedTR
 	}
@@ -53,7 +53,7 @@ func (c *Cache) GetTokenReview(ctx context.Context, token string) (*authv1.Token
 }
 
 // Get the resolved TokenReview from the cached tokenReviewCachedRequest object.
-func (trc *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
+func (trc *TokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
 	// This ensures that only 1 process is updating the TokenReview data from API request.
 	trc.lock.Lock()
 	defer trc.lock.Unlock()
@@ -68,7 +68,7 @@ func (trc *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
 			},
 		}
 
-		result, err := trc.authClient.TokenReviews().Create(context.TODO(), &tr, metav1.CreateOptions{})
+		result, err := trc.AuthClient.TokenReviews().Create(context.TODO(), &tr, metav1.CreateOptions{})
 		if err != nil {
 			klog.Warning("Error resolving TokenReview from Kube API.", err.Error())
 		}

@@ -16,7 +16,7 @@ func newMockCache() Cache {
 	return Cache{
 		// Use a fake Kubernetes authentication client.
 		authnClient:      fake.NewSimpleClientset().AuthenticationV1(),
-		tokenReviews:     map[string]*tokenReviewCache{},
+		tokenReviews:     map[string]*TokenReviewCache{},
 		tokenReviewsLock: sync.Mutex{},
 	}
 }
@@ -42,7 +42,7 @@ func Test_IsValidToken_emptyCache(t *testing.T) {
 func Test_IsValidToken_usingCache(t *testing.T) {
 	// Initialize cache and set state.
 	mock_cache := newMockCache()
-	mock_cache.tokenReviews["1234567890"] = &tokenReviewCache{
+	mock_cache.tokenReviews["1234567890"] = &TokenReviewCache{
 		updatedAt: time.Now(),
 		tokenReview: &authv1.TokenReview{
 			Status: authv1.TokenReviewStatus{
@@ -67,8 +67,8 @@ func Test_IsValidToken_usingCache(t *testing.T) {
 func Test_IsValidToken_expiredCache(t *testing.T) {
 	// Initialize cache and set state to TokenReview updated 5 minutes ago.
 	mock_cache := newMockCache()
-	mock_cache.tokenReviews["1234567890-expired"] = &tokenReviewCache{
-		authClient: fake.NewSimpleClientset().AuthenticationV1(),
+	mock_cache.tokenReviews["1234567890-expired"] = &TokenReviewCache{
+		AuthClient: fake.NewSimpleClientset().AuthenticationV1(),
 		updatedAt:  time.Now().Add(time.Duration(-5) * time.Minute),
 		token:      "1234567890-expired",
 		tokenReview: &authv1.TokenReview{
