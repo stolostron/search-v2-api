@@ -87,7 +87,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 
 }
 
-func (cache *Cache) SharedCacheDisabledClustersValid() bool {
+func (cache *Cache) sharedCacheDisabledClustersValid() bool {
 	return cache.shared.dcErr == nil && time.Now().Before(
 		cache.shared.dcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond))
 }
@@ -222,13 +222,17 @@ func (shared *SharedData) GetManagedClusters(cache *Cache, ctx context.Context) 
 
 }
 
+// Returns a map of managed clusters for which the search add-on has been disabled.
 func (cache *Cache) GetDisabledClusters(ctx context.Context) (*map[string]struct{}, error) {
 	userData, userDataErr := cache.GetUserData(ctx)
 	if userDataErr != nil {
 		return nil, userDataErr
 	}
+	// lock to prevent the query from running repeatedly
+	cache.shared.dcLock.Lock()
+	defer cache.shared.dcLock.Unlock()
 
-	if cache.SharedCacheDisabledClustersValid() {
+	if cache.sharedCacheDisabledClustersValid() {
 		klog.V(5).Info("Search Addon DisabledClusters Cache valid")
 	} else {
 		klog.V(5).Info("DisabledClusters Cache not valid") // - running query to get search addon disabled clusters")
@@ -243,11 +247,11 @@ func (cache *Cache) GetDisabledClusters(ctx context.Context) (*map[string]struct
 	}
 
 	//check if user has access to disabled clusters
-	if userHasAccessToDisabledClusters(&cache.shared.disabledClusters, userData.ManagedClusters) {
+	userHasAccess, userAccessClusters := userHasAccessToDisabledClusters(&cache.shared.disabledClusters,
+		userData.ManagedClusters)
+	if userHasAccess {
 		klog.V(5).Info("user has access to Search Addon disabled clusters ")
-		cache.shared.dcLock.Lock()
-		defer cache.shared.dcLock.Unlock()
-		return &cache.shared.disabledClusters, cache.shared.dcErr
+		return &userAccessClusters, cache.shared.dcErr
 
 	} else {
 		klog.V(5).Info("user does not have access to Search Addon disabled clusters ")
@@ -256,23 +260,23 @@ func (cache *Cache) GetDisabledClusters(ctx context.Context) (*map[string]struct
 
 }
 
-func userHasAccessToDisabledClusters(disabledClusters *map[string]struct{}, userClusters []string) bool {
-
+func userHasAccessToDisabledClusters(disabledClusters *map[string]struct{}, userClusters []string) (bool, map[string]struct{}) {
+	var hasAccess bool
+	userAccessDisabledClusters := map[string]struct{}{}
 	for disabledCluster := range *disabledClusters {
 		for _, cluster := range userClusters {
 			if disabledCluster == cluster { //user has access
 				klog.V(7).Info("user has access to search addon disabled cluster: ", cluster)
-				return true
+				userAccessDisabledClusters[cluster] = struct{}{}
+				hasAccess = true
 
 			}
 		}
 	}
-	return false
+	return hasAccess, userAccessDisabledClusters
 }
 
 func (cache *Cache) setDisabledClusters(disabledClusters map[string]struct{}, err error) {
-	cache.shared.dcLock.Lock()
-	defer cache.shared.dcLock.Unlock()
 	cache.shared.disabledClusters = disabledClusters
 	cache.shared.dcUpdatedAt = time.Now()
 	cache.shared.dcErr = err

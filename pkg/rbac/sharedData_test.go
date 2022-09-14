@@ -214,7 +214,7 @@ func Test_getDisabledClusters_UserNotFound(t *testing.T) {
 	}
 }
 
-//diabled cluster cache is valid
+//disabled cluster cache is valid
 func Test_getDisabledClustersValid(t *testing.T) {
 	disabledClusters := map[string]struct{}{}
 	disabledClusters["disabled1"] = struct{}{}
