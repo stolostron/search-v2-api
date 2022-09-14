@@ -12,7 +12,7 @@ func AuthorizeUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		//Check db connection TODO: create time based check(s)
-		CacheInst.Pool = db.GetConnection()
+		CacheInst.pool = db.GetConnection()
 
 		//Hub Cluster resources authorization:
 		err := CacheInst.PopulateSharedCache(r.Context())

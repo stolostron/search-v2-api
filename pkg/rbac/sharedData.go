@@ -131,7 +131,7 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 		return shared.csErr
 	}
 
-	rows, queryerr := cache.Pool.Query(ctx, query)
+	rows, queryerr := cache.pool.Query(ctx, query)
 	if queryerr != nil {
 		klog.Errorf("Error resolving query [%s]. Error: [%+v]", query, queryerr.Error())
 		shared.csErr = queryerr
@@ -328,7 +328,7 @@ func (cache *Cache) findSrchAddonDisabledClusters(ctx context.Context) (*map[str
 		return &disabledClusters, queryBuildErr
 	}
 	// run the query
-	rows, err := cache.Pool.Query(ctx, sql)
+	rows, err := cache.pool.Query(ctx, sql)
 	if err != nil {
 		klog.Error("Error fetching SearchAddon disabled cluster results from db ", err)
 		cache.setDisabledClusters(disabledClusters, err)
