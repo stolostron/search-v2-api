@@ -232,10 +232,9 @@ func (cache *Cache) GetDisabledClusters(ctx context.Context) (*map[string]struct
 	cache.shared.dcLock.Lock()
 	defer cache.shared.dcLock.Unlock()
 
-	if cache.sharedCacheDisabledClustersValid() {
-		klog.V(5).Info("Search Addon DisabledClusters Cache valid")
-	} else {
-		klog.V(5).Info("DisabledClusters Cache not valid") // - running query to get search addon disabled clusters")
+	if !cache.sharedCacheDisabledClustersValid() {
+		klog.V(5).Info("DisabledClusters cache empty or expired. Querying database.")
+		// - running query to get search addon disabled clusters")
 		//run query and get disabled clusters
 		if disabledClustersFromQuery, err := cache.findSrchAddonDisabledClusters(ctx); err != nil {
 			klog.Error("Error retrieving Search Addon disabled clusters: ", err)
