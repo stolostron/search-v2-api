@@ -334,8 +334,6 @@ func Test_getDisabledClustersCacheInValid_RunQueryError(t *testing.T) {
 }
 
 func Test_Messages_Query(t *testing.T) {
-	// Create a SearchSchemaResolver instance with a mock connection pool.
-	// _, _ = resolver.newMockMessage(t, &UserData{})
 
 	sql := `SELECT DISTINCT "mcInfo".data->>'name' AS "srchAddonDisabledCluster" FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`
 	// Execute function
