@@ -21,7 +21,7 @@ func mockNamespaceCache() *Cache {
 	return &Cache{
 		users:            map[string]*UserDataCache{},
 		shared:           SharedData{},
-		RestConfig:       &rest.Config{},
+		restConfig:       &rest.Config{},
 		tokenReviews:     map[string]*tokenReviewCache{},
 		tokenReviewsLock: sync.Mutex{},
 	}

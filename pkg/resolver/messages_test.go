@@ -6,47 +6,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/golang/mock/gomock"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
-	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
-
-// Initialize cache object to use tests.
-func MockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, rbac.Cache) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
-
-	testScheme := scheme.Scheme
-
-	err := clusterv1.AddToScheme(testScheme)
-	if err != nil {
-		t.Errorf("error adding managed cluster scheme: (%v)", err)
-	}
-
-	// testmc := &clusterv1.ManagedCluster{
-	// 	TypeMeta:   metav1.TypeMeta{Kind: "ManagedCluster"},
-	// 	ObjectMeta: metav1.ObjectMeta{Name: "test-man"},
-	// }
-
-	// testns := &corev1.Namespace{
-	// 	TypeMeta:   metav1.TypeMeta{Kind: "Namespace"},
-	// 	ObjectMeta: metav1.ObjectMeta{Name: "test-namespace", Namespace: "test-namespace"},
-	// }
-
-	return mockPool, rbac.Cache{
-		// users:         map[string]*rbac.UserDataCache{},
-		// shared:        SharedData{},
-		// dynamicClient: fakedynclient.NewSimpleDynamicClient(testScheme, testmc),
-		RestConfig: &rest.Config{},
-		// corev1Client: fakekubeclient.NewSimpleClientset(testns).CoreV1(),
-		Pool: mockPool,
-	}
-}
 
 func Test_Message_Results(t *testing.T) {
 	csRes, nsRes, mc := newUserData()
@@ -104,10 +67,7 @@ func Test_Messages(t *testing.T) {
 	ctx := context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456")
 	//Execute the function
 	rbac.CacheInst = rbac.Cache{Pool: mockPool}
-	MockResourcesListCache(t)
-	// dynamicClient: fakedynclient.NewSimpleDynamicClient(testScheme, testmc),
-	// restConfig:    &rest.Config{},
-	// corev1Client:  fakekubeclient.NewSimpleClientset(testns).CoreV1(),
+
 	res, err := Messages(ctx)
 
 	messages := make([]*model.Message, 0)

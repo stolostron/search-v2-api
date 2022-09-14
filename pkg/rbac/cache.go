@@ -26,7 +26,7 @@ type Cache struct {
 	authnClient   authnv1.AuthenticationV1Interface
 	corev1Client  corev1.CoreV1Interface
 	Pool          pgxpoolmock.PgxPool // Database client
-	RestConfig    *rest.Config
+	restConfig    *rest.Config
 	dynamicClient dynamic.Interface
 }
 
@@ -37,7 +37,7 @@ var CacheInst = Cache{
 	usersLock:        sync.Mutex{},
 	shared:           SharedData{},
 	users:            map[string]*UserDataCache{},
-	RestConfig:       config.GetClientConfig(),
+	restConfig:       config.GetClientConfig(),
 	Pool:             db.GetConnection(),
 	corev1Client:     config.GetCoreClient(),
 	dynamicClient:    config.GetDynamicClient(),
