@@ -10,14 +10,13 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
-	fake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 )
 
 // Initialize cache object to use tests.
-func MockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, *rbac.Cache) {
+func MockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, rbac.Cache) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
@@ -38,21 +37,15 @@ func MockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, *rbac.Cache
 	// 	TypeMeta:   metav1.TypeMeta{Kind: "Namespace"},
 	// 	ObjectMeta: metav1.ObjectMeta{Name: "test-namespace", Namespace: "test-namespace"},
 	// }
-	c := &rbac.Cache{
+
+	return mockPool, rbac.Cache{
 		// users:         map[string]*rbac.UserDataCache{},
 		// shared:        SharedData{},
 		// dynamicClient: fakedynclient.NewSimpleDynamicClient(testScheme, testmc),
 		RestConfig: &rest.Config{},
-		// tokenReviews:     map[string]*tokenReviewCache{},
 		// corev1Client: fakekubeclient.NewSimpleClientset(testns).CoreV1(),
 		Pool: mockPool,
 	}
-	trc := rbac.TokenReviewCache{AuthClient: fake.NewSimpleClientset().AuthenticationV1()}
-	tokenReviews := map[string]*rbac.TokenReviewCache{}
-	tokenReviews["123456"] = &trc
-	c.SetTokenReviews(tokenReviews)
-	return mockPool, c
-
 }
 
 func Test_Message_Results(t *testing.T) {

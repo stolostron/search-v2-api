@@ -22,16 +22,16 @@ func mockNamespaceCache() *Cache {
 		users:            map[string]*UserDataCache{},
 		shared:           SharedData{},
 		RestConfig:       &rest.Config{},
-		tokenReviews:     map[string]*TokenReviewCache{},
+		tokenReviews:     map[string]*tokenReviewCache{},
 		tokenReviewsLock: sync.Mutex{},
 	}
 }
 
 func setupToken(cache *Cache) *Cache {
 	if cache.tokenReviews == nil {
-		cache.tokenReviews = map[string]*TokenReviewCache{}
+		cache.tokenReviews = map[string]*tokenReviewCache{}
 	}
-	cache.tokenReviews["123456"] = &TokenReviewCache{
+	cache.tokenReviews["123456"] = &tokenReviewCache{
 		updatedAt: time.Now(),
 		tokenReview: &authv1.TokenReview{
 			Status: authv1.TokenReviewStatus{
