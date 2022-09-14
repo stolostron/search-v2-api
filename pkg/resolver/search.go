@@ -183,6 +183,8 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	//WHERE CLAUSE
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 		whereDs = WhereClauseFilter(s.input)
+		sql, _, err := selectDs.Where(whereDs...).ToSQL()
+		klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
 		//RBAC CLAUSE
 		if s.userData != nil && !Iskubeadmin(ctx) {
 			whereDs = append(whereDs,

@@ -2,11 +2,11 @@ package rbac
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -87,7 +87,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 
 }
 
-func (cache *Cache) SharedCacheDisabledClustersValid() bool {
+func (cache *Cache) sharedCacheDisabledClustersValid() bool {
 	return cache.shared.dcErr == nil && time.Now().Before(
 		cache.shared.dcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond))
 }
@@ -225,23 +225,129 @@ func (shared *SharedData) GetManagedClusters(cache *Cache, ctx context.Context) 
 
 }
 
-func (cache *Cache) GetDisabledClusters() (*map[string]struct{}, error) {
-
-	if cache.SharedCacheDisabledClustersValid() {
-		klog.V(5).Info("Search Addon DisabledClusters Cache valid")
-	} else {
-		klog.V(5).Info("DisabledClusters Cache not valid") // - running query to get search addon disabled clusters")
-		cache.SetDisabledClusters(map[string]struct{}{}, fmt.Errorf("addon disabled clusters cache is invalid"))
+// Returns a map of managed clusters for which the search add-on has been disabled.
+func (cache *Cache) GetDisabledClusters(ctx context.Context) (*map[string]struct{}, error) {
+	userData, userDataErr := cache.GetUserData(ctx)
+	if userDataErr != nil {
+		return nil, userDataErr
 	}
+	// lock to prevent the query from running repeatedly
 	cache.shared.dcLock.Lock()
 	defer cache.shared.dcLock.Unlock()
-	return &cache.shared.disabledClusters, cache.shared.dcErr
+
+	if !cache.sharedCacheDisabledClustersValid() {
+		klog.V(5).Info("DisabledClusters cache empty or expired. Querying database.")
+		// - running query to get search addon disabled clusters")
+		//run query and get disabled clusters
+		if disabledClustersFromQuery, err := cache.findSrchAddonDisabledClusters(ctx); err != nil {
+			klog.Error("Error retrieving Search Addon disabled clusters: ", err)
+			cache.SetDisabledClusters(map[string]struct{}{}, err)
+			return nil, err
+		} else {
+			cache.SetDisabledClusters(*disabledClustersFromQuery, nil)
+		}
+	}
+
+	//check if user has access to disabled clusters
+	userAccessClusters := disabledClustersForUser(cache.shared.disabledClusters, userData.ManagedClusters)
+	if len(userAccessClusters) > 0 {
+		klog.V(5).Info("user has access to Search Addon disabled clusters ")
+		return &userAccessClusters, cache.shared.dcErr
+
+	} else {
+		klog.V(5).Info("user does not have access to Search Addon disabled clusters ")
+		return &map[string]struct{}{}, nil
+	}
+
+}
+
+func disabledClustersForUser(disabledClusters, userClusters map[string]struct{}) map[string]struct{} {
+	userAccessDisabledClusters := map[string]struct{}{}
+	for disabledCluster := range disabledClusters {
+		if _, userHasAccess := userClusters[disabledCluster]; userHasAccess { //user has access
+			klog.V(7).Info("user has access to search addon disabled cluster: ", disabledCluster)
+			userAccessDisabledClusters[disabledCluster] = struct{}{}
+		}
+	}
+	return userAccessDisabledClusters
 }
 
 func (cache *Cache) SetDisabledClusters(disabledClusters map[string]struct{}, err error) {
-	cache.shared.dcLock.Lock()
-	defer cache.shared.dcLock.Unlock()
 	cache.shared.disabledClusters = disabledClusters
 	cache.shared.dcUpdatedAt = time.Now()
 	cache.shared.dcErr = err
+}
+
+// Build the query to find any ManagedClusters where the search addon is disabled.
+func buildSearchAddonDisabledQuery(ctx context.Context) (string, error) {
+	var selectDs *goqu.SelectDataset
+
+	//FROM CLAUSE
+	schemaTable1 := goqu.S("search").Table("resources").As("mcInfo")
+	schemaTable2 := goqu.S("search").Table("resources").As("srchAddon")
+
+	// For each ManagedClusterInfo resource in the hub,
+	// we should have a matching ManagedClusterAddOn
+	// with name=search-collector in the same namespace.
+	ds := goqu.From(schemaTable1).
+		LeftOuterJoin(schemaTable2,
+			goqu.On(goqu.L(`"mcInfo".data->>?`, "name").Eq(goqu.L(`"srchAddon".data->>?`, "namespace")),
+				goqu.L(`"srchAddon".data->>?`, "kind").Eq("ManagedClusterAddOn"),
+				goqu.L(`"srchAddon".data->>?`, "name").Eq("search-collector")))
+
+	//SELECT CLAUSE
+	selectDs = ds.SelectDistinct(goqu.L(`"mcInfo".data->>?`, "name").As("srchAddonDisabledCluster"))
+
+	// WHERE CLAUSE
+	var whereDs []exp.Expression
+
+	// select ManagedClusterInfo
+	whereDs = append(whereDs, goqu.L(`"mcInfo".data->>?`, "kind").Eq("ManagedClusterInfo"))
+	// addon uid will be null if addon is disabled
+	whereDs = append(whereDs, goqu.L(`"srchAddon".uid`).IsNull())
+	// exclude local-cluster
+	whereDs = append(whereDs, goqu.L(`"mcInfo".data->>?`, "name").Neq("local-cluster"))
+
+	//Get the query
+	sql, params, err := selectDs.Where(whereDs...).ToSQL()
+	if err != nil {
+		klog.Errorf("Error building Query for managed clusters with Search addon disabled: %s", err.Error())
+		return "", err
+	}
+	klog.V(3).Infof("Query for managed clusters with Search addon disabled: %s %s\n", sql, params)
+	return sql, nil
+}
+
+func (cache *Cache) findSrchAddonDisabledClusters(ctx context.Context) (*map[string]struct{}, error) {
+	disabledClusters := make(map[string]struct{})
+	// build the query
+	sql, queryBuildErr := buildSearchAddonDisabledQuery(ctx)
+	if queryBuildErr != nil {
+		klog.Error("Error fetching SearchAddon disabled cluster results from db ", queryBuildErr)
+		cache.SetDisabledClusters(disabledClusters, queryBuildErr)
+		return &disabledClusters, queryBuildErr
+	}
+	// run the query
+	rows, err := cache.pool.Query(ctx, sql)
+	if err != nil {
+		klog.Error("Error fetching SearchAddon disabled cluster results from db ", err)
+		cache.SetDisabledClusters(disabledClusters, err)
+		return &disabledClusters, err
+	}
+
+	if rows != nil {
+		for rows.Next() {
+			var srchAddonDisabledCluster string
+			err := rows.Scan(&srchAddonDisabledCluster)
+			if err != nil {
+				klog.Errorf("Error %s resolving addon disabled cluster name for query: %s", err.Error())
+				continue // skip and continue in case of scan error
+			}
+			disabledClusters[srchAddonDisabledCluster] = struct{}{}
+		}
+		//Since cache was not valid, update shared cache with disabled clusters result
+		cache.SetDisabledClusters(disabledClusters, nil)
+		defer rows.Close()
+	}
+	return &disabledClusters, err
 }

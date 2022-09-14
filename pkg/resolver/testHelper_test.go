@@ -80,7 +80,6 @@ func newMockMessage(t *testing.T, ud *rbac.UserData) (*Message, *pgxpoolmock.Moc
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 
 	mockResolver := &Message{
-		pool:     mockPool,
 		userData: ud,
 	}
 	return mockResolver, mockPool

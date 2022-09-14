@@ -30,6 +30,9 @@ func mockNamespaceCache() *Cache {
 }
 
 func setupToken(cache *Cache) *Cache {
+	if cache.tokenReviews == nil {
+		cache.tokenReviews = map[string]*tokenReviewCache{}
+	}
 	cache.tokenReviews["123456"] = &tokenReviewCache{
 		updatedAt: time.Now(),
 		tokenReview: &authv1.TokenReview{
@@ -42,6 +45,9 @@ func setupToken(cache *Cache) *Cache {
 	}
 
 	return cache
+}
+func setupUserDataCache(cache *Cache, ud *UserDataCache) {
+	cache.users["unique-user-id"] = ud
 }
 
 func addCSResources(cache *Cache, res []Resource) *Cache {

@@ -44,6 +44,9 @@ func (c *Cache) GetTokenReview(ctx context.Context, token string) (*authv1.Token
 			authClient: c.getAuthClient(),
 			token:      token,
 		}
+		if c.tokenReviews == nil {
+			c.tokenReviews = map[string]*tokenReviewCache{}
+		}
 		c.tokenReviews[token] = cachedTR
 	}
 	return cachedTR.getTokenReview()
