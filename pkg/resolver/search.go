@@ -377,6 +377,7 @@ func isLower(values []string) bool {
 func getOperatorAndNumDateFilter(filter string, values []string) map[string][]string {
 
 	opValueMap := getOperator(values) //If values are numbers
+
 	// Store the operator and value in a map - this is to handle multiple values
 	updateOpValueMap := func(operator string, operatorValueMap map[string][]string, operatorRemovedValue string) {
 		if vals, ok := operatorValueMap[operator]; !ok {
@@ -410,9 +411,13 @@ func getOperatorAndNumDateFilter(filter string, values []string) map[string][]st
 				then = now.AddDate(-1, 0, 0).Format(format)
 
 			default:
-				if filter == "label" {
+				//check that property value is an array:
+				array := strings.Split(string(val), ":")
+				fmt.Println(array)
+				if len(array) > 1 {
 					klog.V(7).Info("filter is label. Operator is @>.")
 					operator = "@>"
+
 				} else {
 					if _, ok := arrayProperties[filter]; ok {
 						klog.V(7).Info("filter ", filter, " is present in arrayProperties. Using operator ?|.")
