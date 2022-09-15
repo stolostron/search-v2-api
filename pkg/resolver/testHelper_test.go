@@ -148,6 +148,7 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 		// For searchComplete
 		propsString := map[string]string{}
 		propsArray := []map[string]interface{}{}
+
 		for _, item := range items {
 			uid := item.(map[string]interface{})["uid"]
 			cluster := strings.Split(uid.(string), "/")[0]
@@ -166,6 +167,11 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 						propsString[strconv.Itoa(int(v))] = ""
 					case map[string]interface{}:
 						propsArray = append(propsArray, v)
+					case []interface{}:
+						for _, val := range v {
+							propsString[val.(string)] = ""
+						}
+
 					default:
 						propsString[v.(string)] = ""
 					}
@@ -411,27 +417,3 @@ func AssertStringArrayEqual(t *testing.T, result, expected []*string, message st
 		}
 	}
 }
-
-// func AssertMapArrayEqual(t *testing.T, result []*string, expected []*map[string]interface{}, message string) {
-
-// 	resultSorted := pointerToStringArray(result)
-// 	sort.Strings(resultSorted)
-// 	expectedSorted := pointerToMapArray(expected)
-// 	// sort.Strings(expectedSorted)
-// 	var expectedCleanedArray []string
-// 	// for k, val := range expected {
-// 	// 	expectedCleaned := fmt.Sprintf(`{%s:%s}`, k, val)
-// 	// 	expectedCleanedArray = append(expectedCleanedArray, expectedCleaned)
-// 	// }
-// 	sort.Strings(expectedCleanedArray)
-
-// 	fmt.Println("Result before parse:", result)
-// 	fmt.Println("Expected before parse:", expectedCleanedArray)
-
-// 	for i, exp := range expectedCleanedArray {
-// 		if resultSorted[i] != exp {
-// 			t.Errorf("%s expected [%v] got [%v]", message, expectedSorted, resultSorted)
-// 			return
-// 		}
-// 	}
-// }
