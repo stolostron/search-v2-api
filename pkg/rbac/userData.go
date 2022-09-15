@@ -3,6 +3,7 @@ package rbac
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -67,17 +68,17 @@ func (cache *Cache) GetUserUID(ctx context.Context) (string, authv1.UserInfo) {
 	}
 }
 
-func (cache *Cache) GetUserData(ctx context.Context,
+func (cache *Cache) GetUserDataCache(ctx context.Context,
 	authzClient v1.AuthorizationV1Interface) (*UserDataCache, error) {
 	var user *UserDataCache
 	var uid string
 	var err error
-	clientToken := ctx.Value(ContextAuthTokenKey).(string)
 
 	// get uid from tokenreview
 	if uid, _ = cache.GetUserUID(ctx); uid == "noUidFound" {
-		return user, fmt.Errorf("cannot find user with token: %s", clientToken)
+		return user, fmt.Errorf("cannot find user with uid: %s", uid)
 	}
+	clientToken := ctx.Value(ContextAuthTokenKey).(string)
 
 	cache.usersLock.Lock()
 	defer cache.usersLock.Unlock()
@@ -85,9 +86,13 @@ func (cache *Cache) GetUserData(ctx context.Context,
 
 	// UserDataExists and its valid
 	if userDataExists && userCacheValid(cachedUserData) {
+
 		klog.V(5).Info("Using user data from cache.")
 		return cachedUserData, nil
 	} else {
+		if cache.users == nil {
+			cache.users = map[string]*UserDataCache{}
+		}
 		// User not in cache , Initialize and assign to the UID
 		user = &UserDataCache{}
 		cache.users[uid] = user
@@ -106,9 +111,25 @@ func (cache *Cache) GetUserData(ctx context.Context,
 			cache.tokenReviews[clientToken].tokenReview.Status.User.Username)
 		userData, err = user.getClusterScopedResources(cache, ctx, clientToken)
 	}
-
 	return userData, err
+}
 
+// Get a static copy of the current user data. It will use cached data if valid or refresh if needed.
+func (cache *Cache) GetUserData(ctx context.Context) (*UserData, error) {
+	userDataCache, userDataErr := cache.GetUserDataCache(ctx, nil)
+
+	if userDataErr != nil {
+		klog.Error("Error fetching UserAccessData: ", userDataErr)
+		return nil, errors.New("unable to resolve query because of error while resolving user's access")
+	}
+	// Proceed if user's rbac data exists
+	// Get a copy of the current user access if user data exists
+	userAccess := &UserData{
+		CsResources:     userDataCache.GetCsResources(),
+		NsResources:     userDataCache.GetNsResources(),
+		ManagedClusters: userDataCache.GetManagedClusters(),
+	}
+	return userAccess, nil
 }
 
 /* Cache is Valid if the csrUpdatedAt and nsrUpdatedAt times are before the

@@ -40,7 +40,7 @@ func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, err
 }
 
 func SearchComplete(ctx context.Context, property string, srchInput *model.SearchInput, limit *int) ([]*string, error) {
-	userAccess, userDataErr := getUserDataCache(ctx)
+	userData, userDataErr := rbac.CacheInst.GetUserData(ctx)
 	if userDataErr != nil {
 		return []*string{}, userDataErr
 	}
@@ -50,7 +50,7 @@ func SearchComplete(ctx context.Context, property string, srchInput *model.Searc
 		pool:     db.GetConnection(),
 		property: property,
 		limit:    limit,
-		userData: userAccess,
+		userData: userData,
 	}
 	return searchCompleteResult.autoComplete(ctx)
 
