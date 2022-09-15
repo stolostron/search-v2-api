@@ -399,6 +399,7 @@ func getOperatorAndNumDateFilter(filter string, values []string) map[string][]st
 		operator := ">" // For dates, always check for values '>'
 		now := time.Now()
 		for _, val := range values {
+
 			var then string
 			format := "2006-01-02T15:04:05Z"
 			switch val {
@@ -533,6 +534,7 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 		for _, filter := range input.Filters {
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
+
 				// If property is of array type like label, remove the equal sign in it and use colon
 				// - to be similar to how it is stored in the database
 				if _, ok := arrayProperties[filter.Property]; ok {

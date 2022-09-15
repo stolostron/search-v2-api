@@ -142,7 +142,6 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 		for rows.Next() {
 			prop := ""
 			var input interface{}
-
 			scanErr := rows.Scan(&input)
 			if scanErr != nil {
 				klog.Error("Error reading searchCompleteResults", scanErr)
@@ -151,19 +150,15 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			case string:
 				prop = v
 				props[v] = struct{}{}
-				// props = append(props, v)
 			case bool:
 				prop = strconv.FormatBool(v)
 				props[prop] = struct{}{}
-				// props = append(props, prop)
 			case float64:
 				prop = strconv.FormatInt(int64(v), 10)
 				props[prop] = struct{}{}
 
 			case map[string]interface{}:
-
 				arrayProperties[s.property] = struct{}{}
-
 				for key, value := range v {
 					labelString := fmt.Sprintf("%s=%s", key, value.(string))
 					props[labelString] = struct{}{}
@@ -172,13 +167,9 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			case []interface{}:
 				arrayProperties[s.property] = struct{}{}
 				for _, value := range v {
-					// labelStrings = append(labelStrings, labelString)
 					props[value.(string)] = struct{}{}
 
 				}
-				// klog.Info("Error formatting property with type: %+v\n", reflect.TypeOf(v))
-
-				// continue
 
 			default:
 				prop = v.(string)

@@ -147,6 +147,7 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 	default: // For searchschema and searchComplete
 		// For searchComplete
 		propsString := map[string]string{}
+		var propsList []interface{}
 		propsArray := []map[string]interface{}{}
 
 		for _, item := range items {
@@ -169,7 +170,7 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 						propsArray = append(propsArray, v)
 					case []interface{}:
 						for _, val := range v {
-							propsString[val.(string)] = ""
+							propsList = append(propsList, val)
 						}
 
 					default:
@@ -226,6 +227,18 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 			for _, key := range mapKeys {
 				mockDatum := map[string]interface{}{
 					"propArray": key,
+				}
+				mockData = append(mockData, mockDatum)
+
+			}
+
+		} else if len(propsList) != 0 {
+			mapKeys := []interface{}{}
+			mapKeys = append(mapKeys, propsList...)
+
+			for _, key := range mapKeys {
+				mockDatum := map[string]interface{}{
+					"propList": key,
 				}
 				mockData = append(mockData, mockDatum)
 
@@ -389,11 +402,16 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 			_, ok := r.mockData[r.index-1]["propArray"]
 			if ok {
 				*dest[0].(*interface{}) = r.mockData[r.index-1]["propArray"].(map[string]interface{})
-			} else { //used by resolveUIDs function
-				*dest[0].(*string) = r.mockData[r.index-1]["uid"].(string)
 
+			} else {
+				_, ok := r.mockData[r.index-1]["propList"]
+				if ok {
+					*dest[0].(*interface{}) = r.mockData[r.index-1]["propList"].(string)
+				} else { //used by resolveUIDs function
+					*dest[0].(*string) = r.mockData[r.index-1]["uid"].(string)
+
+				}
 			}
-
 		}
 	}
 	return nil
