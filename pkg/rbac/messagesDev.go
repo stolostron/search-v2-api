@@ -12,7 +12,7 @@ import (
 )
 
 // Initialize cache object to use tests.
-func NewMockCacheForMessages(dc, mc map[string]struct{}, mockPool *pgxpoolmock.MockPgxPool) Cache {
+func NewMockCacheForMessages(dc, mc map[string]struct{}, mockPool *pgxpoolmock.MockPgxPool) *Cache {
 	user := map[string]*UserDataCache{}
 	user["unique-user-id"] = &UserDataCache{
 		userData:          UserData{ManagedClusters: mc},
@@ -43,7 +43,7 @@ func NewMockCacheForMessages(dc, mc map[string]struct{}, mockPool *pgxpoolmock.M
 	return SetupTokenForMessages(&cache)
 }
 
-func SetupTokenForMessages(cache *Cache) Cache {
+func SetupTokenForMessages(cache *Cache) *Cache {
 	if cache.tokenReviews == nil {
 		cache.tokenReviews = map[string]*tokenReviewCache{}
 	}
@@ -58,5 +58,5 @@ func SetupTokenForMessages(cache *Cache) Cache {
 			},
 		},
 	}
-	return *cache
+	return cache
 }

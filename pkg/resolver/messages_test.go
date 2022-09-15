@@ -17,7 +17,7 @@ func Test_Messages_ValidCache(t *testing.T) {
 	disabledC := map[string]struct{}{}
 	disabledC["managed1"] = struct{}{}
 
-	rbac.CacheInst = rbac.NewMockCacheForMessages(disabledC, disabledC, nil)
+	rbac.CacheInst = *rbac.NewMockCacheForMessages(disabledC, disabledC, nil)
 
 	ctx := context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456")
 	//Execute the function
@@ -44,7 +44,7 @@ func Test_Messages_Error(t *testing.T) {
 
 	// Create a mock connection pool.
 	_, mockPool := newMockMessage(t, &rbac.UserData{})
-	rbac.CacheInst = rbac.NewMockCacheForMessages(nil, nil, mockPool)
+	rbac.CacheInst = *rbac.NewMockCacheForMessages(nil, nil, mockPool)
 
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", nil, "srchAddonDisabledCluster", 0)
@@ -74,7 +74,7 @@ func Test_Message_Results_ValidCache(t *testing.T) {
 	resolver, _ := newMockMessage(t, &ud)
 	disabledC := map[string]struct{}{}
 	disabledC["managed1"] = struct{}{}
-	rbac.CacheInst = rbac.NewMockCacheForMessages(disabledC, disabledC, nil)
+	rbac.CacheInst = *rbac.NewMockCacheForMessages(disabledC, disabledC, nil)
 
 	ctx := context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456")
 
@@ -109,7 +109,7 @@ func Test_Message_Results_NoAccessToDisabledC(t *testing.T) {
 	resolver, _ := newMockMessage(t, &ud)
 	disabledC := map[string]struct{}{}
 	disabledC["disabled1"] = struct{}{}
-	rbac.CacheInst = rbac.NewMockCacheForMessages(disabledC, mc, nil)
+	rbac.CacheInst = *rbac.NewMockCacheForMessages(disabledC, mc, nil)
 
 	ctx := context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456")
 
@@ -131,7 +131,7 @@ func Test_Message_Results_ErrRunningQuery(t *testing.T) {
 	// rbac.CacheInst.SetDisabledClusters(map[string]struct{}{}, fmt.Errorf("error"))
 	// Create a SearchSchemaResolver instance with a mock connection pool.
 	resolver, mockPool := newMockMessage(t, &ud)
-	rbac.CacheInst = rbac.NewMockCacheForMessages(nil, nil, mockPool)
+	rbac.CacheInst = *rbac.NewMockCacheForMessages(nil, nil, mockPool)
 
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", nil, "srchAddonDisabledCluster", 0)
