@@ -15,7 +15,7 @@ type Message struct {
 func Messages(ctx context.Context) ([]*model.Message, error) {
 	userAccess, userDataErr := rbac.CacheInst.GetUserData(ctx)
 	if userDataErr != nil {
-		return nil, userDataErr
+		return []*model.Message{}, userDataErr
 	}
 	message := &Message{
 		userData: userAccess,

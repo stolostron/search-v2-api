@@ -241,17 +241,6 @@ func Test_setDisabledClusters(t *testing.T) {
 	}
 }
 
-func Test_getDisabledClustersInvalid(t *testing.T) {
-	_, mock_cache := mockResourcesListCache(t)
-	disabledClusters, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(),
-		ContextAuthTokenKey, "123456"))
-	fmt.Println(err)
-	fmt.Println(disabledClusters)
-	if disabledClusters != nil || err == nil {
-		t.Error("Expected the cache.shared.disabledClusters to be invalid")
-	}
-}
-
 //ContextAuthTokenKey is not set - so session info cannot be found
 func Test_getDisabledClusters_UserNotFound(t *testing.T) {
 	disabledClusters := map[string]struct{}{}
