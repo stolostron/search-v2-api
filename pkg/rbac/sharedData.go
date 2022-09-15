@@ -235,10 +235,10 @@ func (cache *Cache) GetDisabledClusters(ctx context.Context) (*map[string]struct
 		//run query and get disabled clusters
 		if disabledClustersFromQuery, err := cache.findSrchAddonDisabledClusters(ctx); err != nil {
 			klog.Error("Error retrieving Search Addon disabled clusters: ", err)
-			cache.SetDisabledClusters(map[string]struct{}{}, err)
+			cache.setDisabledClusters(map[string]struct{}{}, err)
 			return nil, err
 		} else {
-			cache.SetDisabledClusters(*disabledClustersFromQuery, nil)
+			cache.setDisabledClusters(*disabledClustersFromQuery, nil)
 		}
 	}
 
@@ -266,7 +266,7 @@ func disabledClustersForUser(disabledClusters, userClusters map[string]struct{})
 	return userAccessDisabledClusters
 }
 
-func (cache *Cache) SetDisabledClusters(disabledClusters map[string]struct{}, err error) {
+func (cache *Cache) setDisabledClusters(disabledClusters map[string]struct{}, err error) {
 	cache.shared.disabledClusters = disabledClusters
 	cache.shared.dcUpdatedAt = time.Now()
 	cache.shared.dcErr = err
@@ -318,14 +318,14 @@ func (cache *Cache) findSrchAddonDisabledClusters(ctx context.Context) (*map[str
 	sql, queryBuildErr := buildSearchAddonDisabledQuery(ctx)
 	if queryBuildErr != nil {
 		klog.Error("Error fetching SearchAddon disabled cluster results from db ", queryBuildErr)
-		cache.SetDisabledClusters(disabledClusters, queryBuildErr)
+		cache.setDisabledClusters(disabledClusters, queryBuildErr)
 		return &disabledClusters, queryBuildErr
 	}
 	// run the query
 	rows, err := cache.pool.Query(ctx, sql)
 	if err != nil {
 		klog.Error("Error fetching SearchAddon disabled cluster results from db ", err)
-		cache.SetDisabledClusters(disabledClusters, err)
+		cache.setDisabledClusters(disabledClusters, err)
 		return &disabledClusters, err
 	}
 
@@ -340,7 +340,7 @@ func (cache *Cache) findSrchAddonDisabledClusters(ctx context.Context) (*map[str
 			disabledClusters[srchAddonDisabledCluster] = struct{}{}
 		}
 		//Since cache was not valid, update shared cache with disabled clusters result
-		cache.SetDisabledClusters(disabledClusters, nil)
+		cache.setDisabledClusters(disabledClusters, nil)
 		defer rows.Close()
 	}
 	return &disabledClusters, err

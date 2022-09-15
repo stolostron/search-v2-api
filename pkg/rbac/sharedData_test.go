@@ -215,7 +215,7 @@ func Test_GetandSetDisabledClusters(t *testing.T) {
 	dClusters["managed1"] = struct{}{}
 	dClusters["managed2"] = struct{}{}
 	setupToken(&mock_cache)
-	mock_cache.SetDisabledClusters(dClusters, nil)
+	mock_cache.setDisabledClusters(dClusters, nil)
 
 	//user's managedclusters
 
@@ -234,7 +234,7 @@ func Test_setDisabledClusters(t *testing.T) {
 	disabledClusters := map[string]struct{}{}
 	disabledClusters["disabled1"] = struct{}{}
 	_, mock_cache := mockResourcesListCache(t)
-	mock_cache.SetDisabledClusters(disabledClusters, nil)
+	mock_cache.setDisabledClusters(disabledClusters, nil)
 
 	if len(mock_cache.shared.disabledClusters) != 1 || mock_cache.shared.dcErr != nil {
 		t.Error("Expected the cache.shared.disabledClusters to be updated with 1 cluster and no error")
