@@ -81,8 +81,8 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			whereDs = append(whereDs, goqu.C(s.property).IsNotNull(),
 				goqu.C(s.property).Neq("")) // remove empty strings from results
 		} else {
-			//get data as jsoon object ->
-			//get data as string ->>
+			// "->" - get data as json object
+			// "->>" - get data as string
 			selectDs = ds.Select(goqu.L(`"data"->?`, s.property).As("prop"))
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
 			whereDs = append(whereDs, goqu.L(`"data"->?`, s.property).IsNotNull())
@@ -149,7 +149,6 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			}
 			switch v := input.(type) {
 			case string:
-				// fmt.Println("prop type: string")
 				prop = v
 				props[v] = struct{}{}
 				// props = append(props, v)
@@ -162,7 +161,6 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 				props[prop] = struct{}{}
 
 			case map[string]interface{}:
-				// fmt.Println("prop type: array")
 
 				arrayProperties[s.property] = struct{}{}
 

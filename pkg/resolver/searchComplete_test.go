@@ -204,7 +204,7 @@ func Test_SearchCompleteQuery_PropNum(t *testing.T) {
 
 func Test_SearchCompleteWithLabel_Query(t *testing.T) {
 
-	// // Create a SearchCompleteResolver instance with a mock connection pool.
+	// Create a SearchCompleteResolver instance with a mock connection pool.
 	prop1 := "label"
 	value1 := "openshift"
 	value2 := "openshift-monitoring"
@@ -217,13 +217,6 @@ func Test_SearchCompleteWithLabel_Query(t *testing.T) {
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
 
-	// for _, data := range mockRows.mockData {
-	// 	fmt.Println("Mockdata:", data)
-	// 	for k, val := range data {
-	// 		fmt.Println("Key:", k, "val:", val)
-	// 	}
-	// }
-
 	//mock searchcomplete for searchinput
 	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud)
 
@@ -232,20 +225,7 @@ func Test_SearchCompleteWithLabel_Query(t *testing.T) {
 	val3 := "app.kubernetes.io/name=prometheus-operator"
 	expectedProps := []*string{&val1, &val2, &val3}
 
-	// valMap := []*map[string]interface{}{}
-	// val1 := make(map[string]interface{}, 0)
-	// val2 := make(map[string]interface{}, 0)
-	// val3 := make(map[string]interface{}, 0)
-
-	// val1["samples.operator.openshift.io/managed"] = true
-	// val2["pod-template-hash"] = "5f5575c669"
-	// val3["app.kubernetes.io/name"] = "prometheus-operator"
-
-	// valMap = append(valMap, &val1, &val2, &val3)
-	// expectedProps := valMap
-
 	// Mock the database query
-	// check if cluster
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'label' AS "prop" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster')) AND ("data"->'label' IS NOT NULL) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)

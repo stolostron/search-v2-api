@@ -102,7 +102,7 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 	bytes, _ := ioutil.ReadFile(mockDataFile)
 	var data map[string]interface{}
 	if err := json.Unmarshal(bytes, &data); err != nil {
-		klog.Warning("Error unmarshaling data", err.Error())
+		panic(err)
 	}
 
 	columns := data["columns"].([]interface{})
@@ -152,8 +152,7 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 			uid := item.(map[string]interface{})["uid"]
 			cluster := strings.Split(uid.(string), "/")[0]
 			data := item.(map[string]interface{})["properties"].(map[string]interface{})
-			// fmt.Println("PROP", data[prop])
-			// fmt.Println("PROP TYPE", reflect.TypeOf(data[prop]))
+
 			if prop == "cluster" {
 				propsString[cluster] = ""
 			} else {
@@ -165,10 +164,6 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 						propsString[strconv.Itoa(int(v))] = ""
 					case map[string]interface{}:
 						propsArray = append(propsArray, v)
-						// for k, val := range v {
-						// propclean := fmt.Sprintf(`{%s:%s}`, k, val.(string))
-						// props[propclean] = ""
-						// }
 					default:
 						propsString[v.(string)] = ""
 					}
@@ -218,7 +213,6 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 		} else if len(propsArray) != 0 {
 
 			mapKeys := []map[string]interface{}{}
-
 			mapKeys = append(mapKeys, propsArray...)
 
 			for _, key := range mapKeys {
@@ -226,8 +220,6 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 					"propArray": key,
 				}
 				mockData = append(mockData, mockDatum)
-
-				// mockData = append(mockData, propsArray...)
 
 			}
 
@@ -243,7 +235,7 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 
 //TODO: divide the function above into two functions:
 //1. function to get the mock data (keep simple)
-//2. function to filter the mock data got in step 1.
+//2. function to filter the mock data we get from step 1.
 
 func stringInSlice(a string, list []string) bool {
 	for _, b := range list {

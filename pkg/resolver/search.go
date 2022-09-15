@@ -413,9 +413,8 @@ func getOperatorAndNumDateFilter(filter string, values []string) map[string][]st
 			default:
 				//check that property value is an array:
 				array := strings.Split(string(val), ":")
-				fmt.Println(array)
 				if len(array) > 1 {
-					klog.V(7).Info("filter is label. Operator is @>.")
+					klog.V(7).Info("filter is array. Operator is @>.")
 					operator = "@>"
 
 				} else {
@@ -533,12 +532,16 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 					cleanedVal := make([]string, len(values))
 					for i, val := range values {
 						labels := strings.Split(val, "=")
-						if len(labels) > 1 {
+						if len(labels) == 2 {
 							cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
-						} else {
+						} else if len(labels) == 1 {
 							//// If property is of array type, format it as an array for easy searching
 							cleanedVal[i] = labels[0]
+						} else {
+							klog.Error("Error while decoding label string")
+							cleanedVal[i] = val // <<<REVIEW NOTE: is this the best we can do in this situation?
 						}
+
 					}
 					values = cleanedVal
 				}
