@@ -1,4 +1,9 @@
 // Copyright Contributors to the Open Cluster Management project
+//go:build test
+// +build test
+
+// This file is excluded from compilation unless the build flag -tags test is used.
+// Use `make test` to run with the test flag.
 
 package rbac
 

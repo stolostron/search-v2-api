@@ -26,7 +26,7 @@ lint: ## Run lint and gosec tools.
 
 .PHONY: test
 test: ## Run unit tests.
-	go test ./... -v -coverprofile cover.out
+	go test ./... -tags test -v -coverprofile cover.out
 
 coverage: test ## Run unit tests and show code coverage.
 	go tool cover -html=cover.out -o=cover.html
