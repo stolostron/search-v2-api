@@ -129,7 +129,6 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*string, error) {
 	klog.V(2).Info("Resolving searchCompleteResults()")
 	rows, err := s.pool.Query(ctx, s.query, s.params...)
-
 	srchCompleteOut := make([]*string, 0)
 
 	if err != nil {
@@ -146,8 +145,11 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			if scanErr != nil {
 				klog.Error("Error reading searchCompleteResults", scanErr)
 			}
+
 			switch v := input.(type) {
+
 			case string:
+				fmt.Println("String", v)
 				prop = v
 				props[v] = struct{}{}
 			case bool:
@@ -165,6 +167,7 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 
 				}
 			case []interface{}:
+				fmt.Println("Interface", v)
 				arrayProperties[s.property] = struct{}{}
 				for _, value := range v {
 					props[value.(string)] = struct{}{}

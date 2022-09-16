@@ -525,8 +525,10 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 	}
 	if input.Filters != nil {
 		for _, filter := range input.Filters {
+			// fmt.Println("Property", filter.Property)
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
+				// fmt.Println(values)
 
 				// If property is of array type like label, remove the equal sign in it and use colon
 				// - to be similar to how it is stored in the database
