@@ -310,6 +310,7 @@ func getOperator(values []string) map[string][]string {
 
 func getWhereClauseExpression(prop, operator string, values []string) []exp.Expression {
 	exps := []exp.Expression{}
+
 	switch operator {
 	case "<=":
 		for _, val := range values {
@@ -334,6 +335,13 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 		}
 	case "=":
 		exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
+	case "@>":
+		for _, val := range values {
+			exps = append(exps, goqu.L(`"data"->? @> ?`, prop, val))
+		}
+	case "?|":
+		exps = append(exps, goqu.L(`"data"->? ? ?`, prop, "?|", values))
+
 	default:
 		if prop == "cluster" {
 			exps = append(exps, goqu.C(prop).In(values))
@@ -366,9 +374,10 @@ func isLower(values []string) bool {
 
 // Check if value is a number or date and get the operator
 // Returns a map that stores operator and values
-func getOperatorAndNumDateFilter(values []string) map[string][]string {
+func getOperatorAndNumDateFilter(filter string, values []string) map[string][]string {
 
 	opValueMap := getOperator(values) //If values are numbers
+
 	// Store the operator and value in a map - this is to handle multiple values
 	updateOpValueMap := func(operator string, operatorValueMap map[string][]string, operatorRemovedValue string) {
 		if vals, ok := operatorValueMap[operator]; !ok {
@@ -383,6 +392,7 @@ func getOperatorAndNumDateFilter(values []string) map[string][]string {
 		operator := ">" // For dates, always check for values '>'
 		now := time.Now()
 		for _, val := range values {
+
 			var then string
 			format := "2006-01-02T15:04:05Z"
 			switch val {
@@ -402,7 +412,21 @@ func getOperatorAndNumDateFilter(values []string) map[string][]string {
 				then = now.AddDate(-1, 0, 0).Format(format)
 
 			default:
-				operator = ""
+				//check that property value is an array:
+				array := strings.Split(string(val), ":")
+				if len(array) > 1 {
+					klog.V(7).Info("filter is array. Operator is @>.")
+					operator = "@>"
+
+				} else {
+					if _, ok := arrayProperties[filter]; ok {
+						klog.V(7).Info("filter ", filter, " is present in arrayProperties. Using operator ?|.")
+						operator = "?|"
+					} else {
+						klog.V(7).Info("filter is neither label nor in arrayProperties: ", filter)
+						operator = ""
+					}
+				}
 				then = val
 			}
 			// Add the value and operator to map
@@ -477,6 +501,7 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 	return item
 }
 
+// helper function to point values in string  array
 func pointerToStringArray(pointerArray []*string) []string {
 
 	values := make([]string, len(pointerArray))
@@ -502,13 +527,34 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 		for _, filter := range input.Filters {
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
+
+				// If property is of array type like label, remove the equal sign in it and use colon
+				// - to be similar to how it is stored in the database
+				if _, ok := arrayProperties[filter.Property]; ok {
+					cleanedVal := make([]string, len(values))
+					for i, val := range values {
+						labels := strings.Split(val, "=")
+						if len(labels) == 2 {
+							cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
+						} else if len(labels) == 1 {
+							//// If property is of array type, format it as an array for easy searching
+							cleanedVal[i] = labels[0]
+						} else {
+							klog.Error("Error while decoding label string")
+							cleanedVal[i] = val
+						}
+
+					}
+					values = cleanedVal
+				}
+
 				// Check if value is a number or date and get the cleaned up value
-				opDateValueMap := getOperatorAndNumDateFilter(values)
+				opDateValueMap := getOperatorAndNumDateFilter(filter.Property, values)
 
 				//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
 				keys := getKeys(opDateValueMap)
-
 				sort.Strings(keys)
+
 				var operatorWhereDs []exp.Expression //store all the clauses for this filter together
 				for _, operator := range keys {
 					operatorWhereDs = append(operatorWhereDs,

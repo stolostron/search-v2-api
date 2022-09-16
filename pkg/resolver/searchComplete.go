@@ -3,6 +3,7 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"time"
@@ -26,6 +27,8 @@ type SearchCompleteResult struct {
 	params   []interface{}
 	userData *rbac.UserData
 }
+
+var arrayProperties = make(map[string]struct{})
 
 func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, error) {
 	s.searchCompleteQuery(ctx)
@@ -78,9 +81,11 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			whereDs = append(whereDs, goqu.C(s.property).IsNotNull(),
 				goqu.C(s.property).Neq("")) // remove empty strings from results
 		} else {
-			selectDs = ds.Select(goqu.L(`"data"->>?`, s.property).As("prop"))
+			// "->" - get data as json object
+			// "->>" - get data as string
+			selectDs = ds.Select(goqu.L(`"data"->?`, s.property).As("prop"))
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
-			whereDs = append(whereDs, goqu.L(`"data"->>?`, s.property).IsNotNull())
+			whereDs = append(whereDs, goqu.L(`"data"->?`, s.property).IsNotNull())
 		}
 		//RBAC CLAUSE
 		if s.userData != nil && !Iskubeadmin(ctx) {
@@ -124,6 +129,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*string, error) {
 	klog.V(2).Info("Resolving searchCompleteResults()")
 	rows, err := s.pool.Query(ctx, s.query, s.params...)
+
 	srchCompleteOut := make([]*string, 0)
 
 	if err != nil {
@@ -132,14 +138,50 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 	}
 	defer rows.Close()
 	if rows != nil {
+		props := make(map[string]struct{})
 		for rows.Next() {
 			prop := ""
-			scanErr := rows.Scan(&prop)
+			var input interface{}
+			scanErr := rows.Scan(&input)
 			if scanErr != nil {
 				klog.Error("Error reading searchCompleteResults", scanErr)
 			}
-			srchCompleteOut = append(srchCompleteOut, &prop)
+			switch v := input.(type) {
+			case string:
+				prop = v
+				props[v] = struct{}{}
+			case bool:
+				prop = strconv.FormatBool(v)
+				props[prop] = struct{}{}
+			case float64:
+				prop = strconv.FormatInt(int64(v), 10)
+				props[prop] = struct{}{}
+
+			case map[string]interface{}:
+				arrayProperties[s.property] = struct{}{}
+				for key, value := range v {
+					labelString := fmt.Sprintf("%s=%s", key, value.(string))
+					props[labelString] = struct{}{}
+
+				}
+			case []interface{}:
+				arrayProperties[s.property] = struct{}{}
+				for _, value := range v {
+					props[value.(string)] = struct{}{}
+
+				}
+
+			default:
+				prop = v.(string)
+				props[prop] = struct{}{}
+				klog.Warningf("Error formatting property with type: %+v\n", reflect.TypeOf(v))
+			}
+
 		}
+		properties := stringArrayToPointer(getKeysStructMap(props))
+		srchCompleteOut = append(srchCompleteOut, properties...)
+	} else {
+		klog.Error("searchCompleteResults rows is nil", srchCompleteOut)
 	}
 	if len(srchCompleteOut) > 0 {
 		//Check if results are date or number
@@ -194,4 +236,12 @@ func isNumber(vals []*string) bool {
 		}
 	}
 	return true
+}
+
+func getKeysStructMap(structArrayMap map[string]struct{}) []string {
+	keys := make([]string, 0, len(structArrayMap))
+	for k := range structArrayMap {
+		keys = append(keys, k)
+	}
+	return keys
 }
