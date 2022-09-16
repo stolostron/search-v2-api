@@ -310,13 +310,13 @@ func getOperator(values []string) map[string][]string {
 
 func getWhereClauseExpression(prop, operator string, values []string) []exp.Expression {
 	exps := []exp.Expression{}
-	jsonLookup := func(col exp.Expression, field string) goqu.Expression {
-		return goqu.L("?@>?", col, field)
-		// WHERE ("data"->'label' @> '{"component":"network"}')
-	}
-	jsonAnyKeyArrayLookup := func(col exp.Expression, fields []string) goqu.Expression {
-		return goqu.L("???", col, goqu.Literal("?|"), fields)
-	}
+	// jsonLookup := func(col exp.Expression, field string) goqu.Expression {
+	// 	return goqu.L("?@>?", col, field)
+	// 	// WHERE ("data"->'label' @> '{"component":"network"}')
+	// }
+	// jsonAnyKeyArrayLookup := func(col exp.Expression, fields []string) goqu.Expression {
+	// 	return goqu.L("???", col, goqu.Literal("?|"), fields)
+	// }
 
 	switch operator {
 	case "<=":
@@ -344,10 +344,10 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 		exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
 	case "@>":
 		for _, val := range values {
-			exps = append(exps, jsonLookup(goqu.L(`"data"->?`, prop), val))
+			exps = append(exps, goqu.L(`"data"->? @> ?`, prop, val))
 		}
 	case "?|":
-		exps = append(exps, jsonAnyKeyArrayLookup(goqu.L(`"data"->?`, prop), values))
+		exps = append(exps, goqu.L(`"data"->? ? ?`, prop, "?|", values))
 
 	default:
 		if prop == "cluster" {

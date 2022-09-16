@@ -501,7 +501,7 @@ func Test_SearchResolver_Items_Labels(t *testing.T) {
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", limit)
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' IN ('Template')) AND ("cluster" IN ('local-cluster')) AND "data"->'label'@>'{"samples.operator.openshift.io/managed":"true"}' AND (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' IN ('Template')) AND ("cluster" IN ('local-cluster')) AND "data"->'label' @> '{"samples.operator.openshift.io/managed":"true"}' AND (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 10`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 
