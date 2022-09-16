@@ -310,13 +310,6 @@ func getOperator(values []string) map[string][]string {
 
 func getWhereClauseExpression(prop, operator string, values []string) []exp.Expression {
 	exps := []exp.Expression{}
-	// jsonLookup := func(col exp.Expression, field string) goqu.Expression {
-	// 	return goqu.L("?@>?", col, field)
-	// 	// WHERE ("data"->'label' @> '{"component":"network"}')
-	// }
-	// jsonAnyKeyArrayLookup := func(col exp.Expression, fields []string) goqu.Expression {
-	// 	return goqu.L("???", col, goqu.Literal("?|"), fields)
-	// }
 
 	switch operator {
 	case "<=":
@@ -548,7 +541,7 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 							cleanedVal[i] = labels[0]
 						} else {
 							klog.Error("Error while decoding label string")
-							cleanedVal[i] = val // <<<REVIEW NOTE: is this the best we can do in this situation?
+							cleanedVal[i] = val
 						}
 
 					}
