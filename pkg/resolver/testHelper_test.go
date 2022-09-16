@@ -169,9 +169,8 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 					case map[string]interface{}:
 						propsArray = append(propsArray, v)
 					case []interface{}:
-						for _, val := range v {
-							propsList = append(propsList, val)
-						}
+
+						propsList = append(propsList, v...)
 
 					default:
 						propsString[v.(string)] = ""
