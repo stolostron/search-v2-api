@@ -34,8 +34,6 @@ func NewMockCacheForMessages(dc, mc map[string]struct{}, mockPool *pgxpoolmock.M
 		shared: SharedData{
 			disabledClusters: dc,
 			managedClusters:  mc,
-			// csUpdatedAt:      time.Now(),
-			// nsUpdatedAt:      time.Now(),
 		},
 		users: user,
 	}
