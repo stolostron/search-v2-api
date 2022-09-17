@@ -413,8 +413,9 @@ func getOperatorAndNumDateFilter(filter string, values []string) map[string][]st
 
 			default:
 				//check that property value is an array:
+				fmt.Println(val)
 				array := strings.Split(string(val), ":")
-				if len(array) > 1 {
+				if len(array) > 1 || strings.Contains(string(val), "[\"") {
 					klog.V(7).Info("filter is array. Operator is @>.")
 					operator = "@>"
 
