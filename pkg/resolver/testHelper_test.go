@@ -98,11 +98,6 @@ func (r *Row) Scan(dest ...interface{}) error {
 	return nil
 }
 
-// ====================================================
-// Mock the Rows interface defined in the pgx library.
-// https://github.com/jackc/pgx/blob/master/rows.go#L24
-// ====================================================
-
 //Prop will be the property input for searchComplete
 func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop string, limit int) *MockRows {
 	// Read json file and build mock data
@@ -153,61 +148,102 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 		}
 	default: // For searchschema and searchComplete
 		// For searchComplete
-		props := map[string]string{}
+		propsString := map[string]string{}
+		var propsList []interface{}
+		propsArray := []map[string]interface{}{}
+
 		for _, item := range items {
 			uid := item.(map[string]interface{})["uid"]
 			cluster := strings.Split(uid.(string), "/")[0]
 			data := item.(map[string]interface{})["properties"].(map[string]interface{})
 
 			if prop == "cluster" {
-				props[cluster] = ""
+				propsString[cluster] = ""
 			} else if prop == "srchAddonDisabledCluster" {
-				props["managed1"] = ""
+				propsString["managed1"] = ""
 			} else {
 				if _, ok := data[prop]; ok {
+
 					switch v := data[prop].(type) {
 
 					case float64:
-						props[strconv.Itoa(int(v))] = ""
+						propsString[strconv.Itoa(int(v))] = ""
+					case map[string]interface{}:
+						propsArray = append(propsArray, v)
+					case []interface{}:
+
+						propsList = append(propsList, v...)
+
 					default:
-						props[v.(string)] = ""
+						propsString[v.(string)] = ""
 					}
 				}
 			}
-		}
-		mapKeys := []interface{}{}
-		for key := range props {
-			mapKeys = append(mapKeys, key)
+
 		}
 
-		//if limit is set, sort results and send only the assigned limit
-		if limit > 0 && len(mapKeys) >= limit {
-			switch mapKeys[0].(type) {
-			case string:
-				mapKey := make([]string, len(mapKeys))
-				for i, v := range mapKeys {
-					mapKey[i] = v.(string)
-				}
-				sort.Strings(mapKey)
-				mapKeys = []interface{}{}
-				for _, v := range mapKey {
-					mapKeys = append(mapKeys, v)
-				}
-			case int:
-				sort.Slice(mapKeys, func(i, j int) bool {
-					numA, _ := mapKeys[i].(int)
-					numB, _ := mapKeys[j].(int)
-					return numA < numB
-				})
+		// get the keys from props above. ex if we have a prop of type string like "kind":"Template"
+		// then above we only save data[prop] = "Template" value as key nothing as value
+		if len(propsString) != 0 {
+			mapKeys := []interface{}{}
+			for key := range propsString {
+				mapKeys = append(mapKeys, key)
 			}
 
-			mapKeys = mapKeys[:limit]
-		}
-		for _, key := range mapKeys {
-			mockDatum := map[string]interface{}{
-				"prop": key,
+			//if limit is set, sort results and send only the assigned limit
+			if limit > 0 && len(mapKeys) >= limit {
+				switch mapKeys[0].(type) {
+				case string:
+					mapKey := make([]string, len(mapKeys))
+					for i, v := range mapKeys {
+						mapKey[i] = v.(string)
+					}
+					sort.Strings(mapKey)
+					mapKeys = []interface{}{}
+					for _, v := range mapKey {
+						mapKeys = append(mapKeys, v)
+					}
+				case int:
+					sort.Slice(mapKeys, func(i, j int) bool {
+						numA, _ := mapKeys[i].(int)
+						numB, _ := mapKeys[j].(int)
+						return numA < numB
+					})
+				}
+
+				mapKeys = mapKeys[:limit]
 			}
-			mockData = append(mockData, mockDatum)
+			for _, key := range mapKeys {
+				mockDatum := map[string]interface{}{
+					"prop": key,
+				}
+				mockData = append(mockData, mockDatum)
+
+			}
+		} else if len(propsArray) != 0 {
+
+			mapKeys := []map[string]interface{}{}
+			mapKeys = append(mapKeys, propsArray...)
+
+			for _, key := range mapKeys {
+				mockDatum := map[string]interface{}{
+					"propArray": key,
+				}
+				mockData = append(mockData, mockDatum)
+
+			}
+
+		} else if len(propsList) != 0 {
+			mapKeys := []interface{}{}
+			mapKeys = append(mapKeys, propsList...)
+
+			for _, key := range mapKeys {
+				mockDatum := map[string]interface{}{
+					"propList": key,
+				}
+				mockData = append(mockData, mockDatum)
+
+			}
 
 		}
 	}
@@ -218,6 +254,11 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 		columnHeaders: columnHeaders,
 	}
 }
+
+//TODO: divide the function above into two functions:
+//1. function to get the mock data (keep simple)
+//2. function to filter the mock data we get from step 1.
+
 func stringInSlice(a string, list []string) bool {
 	for _, b := range list {
 		if strings.EqualFold(b, a) {
@@ -247,7 +288,7 @@ func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, ite
 		if len(filter.Values) > 0 {
 			values := pointerToStringArray(filter.Values) //get the filter values
 
-			opValueMap := getOperatorAndNumDateFilter(values) // get the filter values if property is a number or date
+			opValueMap := getOperatorAndNumDateFilter(filter.Property, values) // get the filter values if property is a number or date
 			var op string
 			for key, val := range opValueMap {
 				op = key
@@ -309,6 +350,13 @@ type MockRows struct {
 	columnHeaders []string
 }
 
+// ====================================================
+// Mock the Rows interface defined in the pgx library.
+// https://github.com/jackc/pgx/blob/master/rows.go#L24
+// ====================================================
+// In order to use mock pgx rows similar to regular postgres rows,
+// we need to mock all the fields associated with pgx rows.
+
 func (r *MockRows) Close() {}
 
 func (r *MockRows) Err() error { return nil }
@@ -322,7 +370,9 @@ func (r *MockRows) Next() bool {
 	return r.index <= len(r.mockData)
 }
 
+//Mocking the Scan function for rows:
 func (r *MockRows) Scan(dest ...interface{}) error {
+
 	if len(dest) > 1 { // For search function
 
 		for i := range dest {
@@ -345,10 +395,24 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 		}
 	} else if len(dest) == 1 { // For searchComplete function and resolveUIDs function
 		_, ok := r.mockData[r.index-1]["prop"] //Check if prop is present in mockdata
+
 		if ok {
-			*dest[0].(*string) = r.mockData[r.index-1]["prop"].(string)
-		} else { //used by resolveUIDs function
-			*dest[0].(*string) = r.mockData[r.index-1]["uid"].(string)
+			*dest[0].(*interface{}) = r.mockData[r.index-1]["prop"].(string)
+
+		} else {
+			_, ok := r.mockData[r.index-1]["propArray"]
+			if ok {
+				*dest[0].(*interface{}) = r.mockData[r.index-1]["propArray"].(map[string]interface{})
+
+			} else {
+				_, ok := r.mockData[r.index-1]["propList"]
+				if ok {
+					*dest[0].(*interface{}) = r.mockData[r.index-1]["propList"].(string)
+				} else { //used by resolveUIDs function
+					*dest[0].(*string) = r.mockData[r.index-1]["uid"].(string)
+
+				}
+			}
 		}
 	}
 	return nil
@@ -359,6 +423,7 @@ func (r *MockRows) Values() ([]interface{}, error) { return nil, nil }
 func (r *MockRows) RawValues() [][]byte { return nil }
 
 func AssertStringArrayEqual(t *testing.T, result, expected []*string, message string) {
+
 	resultSorted := pointerToStringArray(result)
 	sort.Strings(resultSorted)
 	expectedSorted := pointerToStringArray(expected)
