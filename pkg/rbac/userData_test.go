@@ -114,9 +114,8 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 	//mock cache for cluster-scoped resouces to get all namespaces:
 	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
 	//mock cache for managed clusters
-	managedclusters := make(map[string]struct{})
-	managedclusters["some-namespace"] = struct{}{}
-	managedclusters["some-nonmatching-namespace"] = struct{}{}
+	managedclusters := map[string]struct{}{"some-namespace": {}, "some-nonmatching-namespace": {}}
+
 	mock_cache.shared.managedClusters = managedclusters
 
 	//mock cache for namespaced-resources:
@@ -181,9 +180,8 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 	//mock cache for token review to get user data:
 	mock_cache = setupToken(mock_cache)
 
-	managedclusters := make(map[string]struct{})
-	managedclusters["some-namespace"] = struct{}{}
-	managedclusters["some-nonmatching-namespace"] = struct{}{}
+	managedclusters := map[string]struct{}{"some-namespace": {}, "some-nonmatching-namespace": {}}
+
 	mock_cache.shared.managedClusters = managedclusters
 
 	//mock cache for cluster-scoped resouces to get all namespaces:
@@ -256,8 +254,7 @@ func Test_clusterScoped_usingCache(t *testing.T) {
 	//mock cache for cluster-scoped resouces
 
 	allowedres := []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}}
-	managedclusters := make(map[string]struct{})
-	managedclusters["some-namespace"] = struct{}{}
+	managedclusters := map[string]struct{}{"some-namespace": {}}
 
 	mock_cache.users["unique-user-id"] = &UserDataCache{
 		userData: UserData{CsResources: allowedres,
@@ -362,9 +359,7 @@ func Test_managedClusters_emptyCache(t *testing.T) {
 	mock_cache = setupToken(mock_cache)
 
 	var namespaces []string
-	mock_cache.shared.managedClusters = make(map[string]struct{})
-	mock_cache.shared.managedClusters["some-managed-cluster"] = struct{}{}
-	mock_cache.shared.managedClusters["some-managed-cluster1"] = struct{}{}
+	mock_cache.shared.managedClusters = map[string]struct{}{"some-managed-cluster": {}, "some-managed-cluster1": {}}
 
 	mock_cache.shared.namespaces = append(namespaces, "some-managed-cluster", "some-managed-cluster1")
 
@@ -437,9 +432,7 @@ func Test_managedClusters_usingCache(t *testing.T) {
 	res := []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}}
 	mock_cache = addCSResources(mock_cache, res)
 
-	managedClusters := make(map[string]struct{})
-	managedClusters["some-managed-cluster"] = struct{}{}
-	managedClusters["some-other-managed-cluster"] = struct{}{}
+	managedClusters := map[string]struct{}{"some-managed-cluster": {}, "some-other-managed-cluster": {}}
 
 	//mock cache for cluster-scoped resouces
 	allowedres := []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}}
@@ -471,9 +464,7 @@ func Test_managedCluster_expiredCache(t *testing.T) {
 	mock_cache := mockNamespaceCache()
 	mock_cache = setupToken(mock_cache)
 
-	managedClusters := make(map[string]struct{})
-	managedClusters["some-managed-cluster"] = struct{}{}
-	managedClusters["some-other-managed-cluster"] = struct{}{}
+	managedClusters := map[string]struct{}{"some-managed-cluster": {}, "some-other-managed-cluster": {}}
 
 	// mock clusters in user cache
 	var namespaces []string
@@ -561,8 +552,8 @@ func Test_managedCluster_GetUserData(t *testing.T) {
 	mock_cache := mockNamespaceCache()
 	mock_cache = setupToken(mock_cache)
 
-	manClusters := make(map[string]struct{})
-	manClusters["managed-cluster1"] = struct{}{}
+	managedClusters := map[string]struct{}{"managed-cluster1": {}}
+
 	csRes := []Resource{{Kind: "kind1", Apigroup: ""}, {Kind: "kind2", Apigroup: "v1"}}
 	nsRes := make(map[string][]Resource)
 	nsRes["ns1"] = []Resource{{Kind: "kind1", Apigroup: ""}, {Kind: "kind2", Apigroup: "v1"}}
@@ -570,7 +561,7 @@ func Test_managedCluster_GetUserData(t *testing.T) {
 
 	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
 	mock_cache.users["unique-user-id"] = &UserDataCache{
-		userData:          UserData{ManagedClusters: manClusters, CsResources: csRes, NsResources: nsRes},
+		userData:          UserData{ManagedClusters: managedClusters, CsResources: csRes, NsResources: nsRes},
 		clustersUpdatedAt: last_cache_time,
 	}
 	csResResult := mock_cache.users["unique-user-id"].GetCsResources()
