@@ -99,13 +99,12 @@ func Test_getResouces_usingCache(t *testing.T) {
 	var namespaces []string
 
 	namespaces = append(namespaces, "test-namespace")
-	managedCluster := make(map[string]struct{})
-	managedCluster["test-man"] = struct{}{}
+	manClusters := map[string]struct{}{"test-man": {}}
 
 	//Adding cache:
 	mock_cache.shared = SharedData{
 		namespaces:      namespaces,
-		managedClusters: managedCluster,
+		managedClusters: manClusters,
 		mcUpdatedAt:     time.Now(),
 		csUpdatedAt:     time.Now(),
 		csResources:     append(mock_cache.shared.csResources, Resource{Apigroup: "apigroup1", Kind: "kind1"}),
@@ -145,13 +144,12 @@ func Test_getResources_expiredCache(t *testing.T) {
 	var namespaces []string
 
 	namespaces = append(namespaces, "test-namespace")
-	managedCluster := make(map[string]struct{})
-	managedCluster["test-man"] = struct{}{}
+	manClusters := map[string]struct{}{"test-man": {}}
 	//adding expired cache
 	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
 	mock_cache.shared = SharedData{
 		namespaces:      namespaces,
-		managedClusters: managedCluster,
+		managedClusters: manClusters,
 		nsUpdatedAt:     last_cache_time,
 		mcUpdatedAt:     last_cache_time,
 		csUpdatedAt:     last_cache_time,
