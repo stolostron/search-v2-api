@@ -104,7 +104,7 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 }
 
 func Test_getNamespaces_usingCache(t *testing.T) {
-	var namespaces, managedclusters []string
+	var namespaces []string
 	nsresources := make(map[string][]Resource)
 
 	mock_cache := mockNamespaceCache()
@@ -114,7 +114,10 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 	//mock cache for cluster-scoped resouces to get all namespaces:
 	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
 	//mock cache for managed clusters
-	mock_cache.shared.managedClusters = append(managedclusters, "some-namespace", "some-nonmatching-namespace")
+	managedclusters := make(map[string]struct{})
+	managedclusters["some-namespace"] = struct{}{}
+	managedclusters["some-nonmatching-namespace"] = struct{}{}
+	mock_cache.shared.managedClusters = managedclusters
 
 	//mock cache for namespaced-resources:
 	nsresources["some-namespace"] = append(nsresources["some-namespace"],
@@ -170,7 +173,7 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 
 func Test_getNamespaces_expiredCache(t *testing.T) {
 
-	var namespaces, managedclusters []string
+	var namespaces []string
 	nsresources := make(map[string][]Resource)
 
 	mock_cache := mockNamespaceCache()
@@ -178,9 +181,14 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 	//mock cache for token review to get user data:
 	mock_cache = setupToken(mock_cache)
 
+	managedclusters := make(map[string]struct{})
+	managedclusters["some-namespace"] = struct{}{}
+	managedclusters["some-nonmatching-namespace"] = struct{}{}
+	mock_cache.shared.managedClusters = managedclusters
+
 	//mock cache for cluster-scoped resouces to get all namespaces:
 	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
-	mock_cache.shared.managedClusters = append(managedclusters, "some-namespace", "some-nonmatching-namespace")
+	mock_cache.shared.managedClusters = managedclusters
 
 	//mock cache for namespaced-resources:
 	nsresources["some-namespace"] = append(nsresources["some-namespace"],
@@ -241,7 +249,6 @@ func Test_clusterScoped_usingCache(t *testing.T) {
 
 	mock_cache := mockNamespaceCache()
 	mock_cache = setupToken(mock_cache)
-	var managedClusters []string
 
 	res := []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}}
 	mock_cache = addCSResources(mock_cache, res)
@@ -249,11 +256,12 @@ func Test_clusterScoped_usingCache(t *testing.T) {
 	//mock cache for cluster-scoped resouces
 
 	allowedres := []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}}
-	managedClusters = append(managedClusters, "some-namespace")
+	managedclusters := make(map[string]struct{})
+	managedclusters["some-namespace"] = struct{}{}
 
 	mock_cache.users["unique-user-id"] = &UserDataCache{
 		userData: UserData{CsResources: allowedres,
-			ManagedClusters: managedClusters},
+			ManagedClusters: managedclusters},
 		clustersUpdatedAt: time.Now(),
 		// Using current time , GetUserData should have the same values as cache
 		csrUpdatedAt: time.Now(),
@@ -353,8 +361,11 @@ func Test_managedClusters_emptyCache(t *testing.T) {
 	mock_cache := mockNamespaceCache()
 	mock_cache = setupToken(mock_cache)
 
-	var sharedmanagedclusters, namespaces []string
-	mock_cache.shared.managedClusters = append(sharedmanagedclusters, "some-managed-cluster", "some-managed-cluster1")
+	var namespaces []string
+	mock_cache.shared.managedClusters = make(map[string]struct{})
+	mock_cache.shared.managedClusters["some-managed-cluster"] = struct{}{}
+	mock_cache.shared.managedClusters["some-managed-cluster1"] = struct{}{}
+
 	mock_cache.shared.namespaces = append(namespaces, "some-managed-cluster", "some-managed-cluster1")
 
 	//mock response objects for KUBEAPI call for SelfSubjectRulesReview
@@ -408,7 +419,8 @@ func Test_managedClusters_emptyCache(t *testing.T) {
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 	result, err := mock_cache.GetUserDataCache(ctx, fs.AuthorizationV1())
 
-	if len(result.userData.ManagedClusters) != 1 || result.userData.ManagedClusters[0] != "some-managed-cluster" {
+	_, ok := result.userData.ManagedClusters["some-managed-cluster"]
+	if len(result.userData.ManagedClusters) != 1 || !ok {
 		t.Errorf("Managed cluster count present in cache %d", len(result.userData.ManagedClusters))
 	}
 	if err != nil {
@@ -421,15 +433,16 @@ func Test_managedClusters_usingCache(t *testing.T) {
 
 	mock_cache := mockNamespaceCache()
 	mock_cache = setupToken(mock_cache)
-	var managedClusters []string
 
 	res := []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}}
 	mock_cache = addCSResources(mock_cache, res)
 
-	//mock cache for cluster-scoped resouces
+	managedClusters := make(map[string]struct{})
+	managedClusters["some-managed-cluster"] = struct{}{}
+	managedClusters["some-other-managed-cluster"] = struct{}{}
 
+	//mock cache for cluster-scoped resouces
 	allowedres := []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}}
-	managedClusters = append(managedClusters, "some-managed-cluster", "some-other-managed-cluster")
 
 	mock_cache.users["unique-user-id"] = &UserDataCache{
 		userData:          UserData{CsResources: allowedres, ManagedClusters: managedClusters},
@@ -442,8 +455,10 @@ func Test_managedClusters_usingCache(t *testing.T) {
 	ctx = context.WithValue(ctx, ContextAuthTokenKey, "123456")
 
 	result, err := mock_cache.GetUserDataCache(ctx, nil)
+	_, mc1Present := result.userData.ManagedClusters["some-managed-cluster"]
+	_, mc2Present := result.userData.ManagedClusters["some-other-managed-cluster"]
 	if len(result.userData.CsResources) != 1 || result.userData.CsResources[0].Kind != "nodes" || result.userData.CsResources[0].Apigroup != "storage.k8s.io" ||
-		result.userData.ManagedClusters[0] != "some-managed-cluster" || result.userData.ManagedClusters[1] != "some-other-managed-cluster" {
+		!mc1Present || !mc2Present {
 		t.Error("Cluster scoped Resources not in user cache.")
 	}
 	if err != nil {
@@ -456,11 +471,14 @@ func Test_managedCluster_expiredCache(t *testing.T) {
 	mock_cache := mockNamespaceCache()
 	mock_cache = setupToken(mock_cache)
 
+	managedClusters := make(map[string]struct{})
+	managedClusters["some-managed-cluster"] = struct{}{}
+	managedClusters["some-other-managed-cluster"] = struct{}{}
+
 	// mock clusters in user cache
 	var namespaces []string
 	//mock mc from shared cache
-	var sharedmanagedclusters []string
-	mock_cache.shared.managedClusters = append(sharedmanagedclusters, "some-managed-cluster", "some-managed-cluster1")
+	mock_cache.shared.managedClusters = managedClusters
 	mock_cache.shared.namespaces = append(namespaces, "some-managed-cluster", "some-managed-cluster1")
 
 	//mock response objects for KUBEAPI call for SelfSubjectRulesReview
@@ -512,8 +530,8 @@ func Test_managedCluster_expiredCache(t *testing.T) {
 
 	})
 
-	var pastManClusters []string
-	pastManClusters = append(pastManClusters, "past-managed-cluster")
+	pastManClusters := map[string]struct{}{}
+	pastManClusters["past-managed-cluster"] = struct{}{}
 
 	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
 	mock_cache.users["unique-user-id"] = &UserDataCache{
@@ -524,8 +542,8 @@ func Test_managedCluster_expiredCache(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 	result, err := mock_cache.GetUserDataCache(ctx, fs.AuthorizationV1())
-
-	if len(result.userData.ManagedClusters) != 1 || result.userData.ManagedClusters[0] != "some-managed-cluster" {
+	_, ok := result.userData.ManagedClusters["some-managed-cluster"]
+	if len(result.userData.ManagedClusters) != 1 || !ok {
 		t.Errorf("Managed cluster count present in cache %d", len(result.userData.ManagedClusters))
 	}
 	if err != nil {
@@ -543,7 +561,8 @@ func Test_managedCluster_GetUserData(t *testing.T) {
 	mock_cache := mockNamespaceCache()
 	mock_cache = setupToken(mock_cache)
 
-	manClusters := []string{"managed-cluster1"}
+	manClusters := make(map[string]struct{})
+	manClusters["managed-cluster1"] = struct{}{}
 	csRes := []Resource{{Kind: "kind1", Apigroup: ""}, {Kind: "kind2", Apigroup: "v1"}}
 	nsRes := make(map[string][]Resource)
 	nsRes["ns1"] = []Resource{{Kind: "kind1", Apigroup: ""}, {Kind: "kind2", Apigroup: "v1"}}

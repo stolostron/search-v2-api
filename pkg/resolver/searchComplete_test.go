@@ -27,7 +27,7 @@ func Test_SearchComplete_Query(t *testing.T) {
 	// Mock the database query
 	// SELECT DISTINCT "prop" FROM (SELECT "data"->>'kind' AS "prop" FROM "search"."resources" WHERE ("data"->>'kind' IS NOT NULL) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'kind' AS "prop" FROM "search"."resources" WHERE (("data"->'kind' IS NOT NULL) AND (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'kind' AS "prop" FROM "search"."resources" WHERE (("data"->'kind' IS NOT NULL) AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
@@ -56,7 +56,7 @@ func Test_SearchComplete_Query_WithLimit(t *testing.T) {
 	fmt.Println("mockRows:", mockRows)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'kind' AS "prop" FROM "search"."resources" WHERE (("data"->'kind' IS NOT NULL) AND (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 2`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'kind' AS "prop" FROM "search"."resources" WHERE (("data"->'kind' IS NOT NULL) AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 2`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
@@ -137,7 +137,7 @@ func Test_SearchCompleteWithCluster(t *testing.T) {
 	// Mock the database query
 	// SELECT DISTINCT "prop" FROM (SELECT DISTINCT "cluster" AS "prop" FROM "search"."resources" WHERE (("cluster" IS NOT NULL) AND ("cluster" != '')) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 10
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT DISTINCT "cluster" AS "prop" FROM "search"."resources" WHERE (("cluster" IS NOT NULL) AND ("cluster" != '') AND (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT DISTINCT "cluster" AS "prop" FROM "search"."resources" WHERE (("cluster" IS NOT NULL) AND ("cluster" != '') AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 10`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
@@ -160,7 +160,7 @@ func Test_SearchCompleteQuery_PropDate(t *testing.T) {
 	fmt.Println("mockRows:", mockRows)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'created' AS "prop" FROM "search"."resources" WHERE (("data"->'created' IS NOT NULL) AND (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'created' AS "prop" FROM "search"."resources" WHERE (("data"->'created' IS NOT NULL) AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function

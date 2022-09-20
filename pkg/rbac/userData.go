@@ -43,7 +43,7 @@ type UserDataCache struct {
 type UserData struct {
 	CsResources     []Resource            // Cluster-scoped resources on hub the user has list access.
 	NsResources     map[string][]Resource // Namespaced resources on hub the user has list access.
-	ManagedClusters []string              // Managed clusters where the user has view access.
+	ManagedClusters map[string]struct{}   // Managed clusters where the user has view access.
 }
 
 //Get user's UID
@@ -95,6 +95,9 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 		}
 		// User not in cache , Initialize and assign to the UID
 		user = &UserDataCache{}
+		if cache.users == nil {
+			cache.users = map[string]*UserDataCache{}
+		}
 		cache.users[uid] = user
 		// We want to setup the client if passed, this is only for unit tests
 		if authzClient != nil {
@@ -238,7 +241,7 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 
 	user.userData.NsResources = make(map[string][]Resource)
 	managedClusters := cache.shared.managedClusters
-
+	user.userData.ManagedClusters = make(map[string]struct{})
 	for _, ns := range allNamespaces {
 		rulesCheck := authz.SelfSubjectRulesReview{
 			Spec: authz.SelfSubjectRulesReviewSpec{
@@ -269,12 +272,9 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 				if verb == "create" || verb == "*" {
 					for _, res := range rules.Resources {
 						if res == "managedclusterviews" {
-							for i := range managedClusters {
-								if managedClusters[i] == ns {
-									user.userData.ManagedClusters =
-										append(user.userData.ManagedClusters, ns)
-
-								}
+							_, nsIsAManagedCluster := managedClusters[ns]
+							if nsIsAManagedCluster {
+								user.userData.ManagedClusters[ns] = struct{}{}
 							}
 						}
 
@@ -337,6 +337,6 @@ func (user *UserDataCache) GetNsResources() map[string][]Resource {
 	return user.userData.NsResources
 }
 
-func (user *UserDataCache) GetManagedClusters() []string {
+func (user *UserDataCache) GetManagedClusters() map[string]struct{} {
 	return user.userData.ManagedClusters
 }

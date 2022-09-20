@@ -141,7 +141,7 @@ func Iskubeadmin(ctx context.Context) bool {
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData) exp.ExpressionList {
 	return goqu.Or(
-		matchManagedCluster(userrbac.ManagedClusters), // goqu.I("cluster").In([]string{"clusterNames", ....})
+		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
 		goqu.And(
 			matchHubCluster(), // goqu.L(`data->>?`, "_hubClusterResource").Eq("true")
 			goqu.Or(
@@ -571,13 +571,19 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 	return whereDs
 }
 
-func getKeys(stringArrayMap map[string][]string) []string {
-	i := 0
-	keys := make([]string, len(stringArrayMap))
-	for k := range stringArrayMap {
-		keys[i] = k
-		i++
+func getKeys(stringKeyMap interface{}) []string {
+	v := reflect.ValueOf(stringKeyMap)
+	if v.Kind() != reflect.Map {
+		klog.Error("input in getKeys is not a map")
 	}
+	if v.Type().Key().Kind() != reflect.String {
+		klog.Error("input map in getKeys does not have string keys")
+	}
+	keys := make([]string, 0, v.Len())
+	for _, key := range v.MapKeys() {
+		keys = append(keys, key.String())
+	}
+	sort.Strings(keys)
 	return keys
 }
 
