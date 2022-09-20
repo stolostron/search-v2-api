@@ -258,7 +258,8 @@ func (cache *Cache) GetDisabledClusters(ctx context.Context) (*map[string]struct
 
 }
 
-func disabledClustersForUser(disabledClusters *map[string]struct{}, userClusters map[string]struct{}) map[string]struct{} {
+func disabledClustersForUser(disabledClusters *map[string]struct{},
+	userClusters map[string]struct{}) map[string]struct{} {
 	userAccessDisabledClusters := map[string]struct{}{}
 	for disabledCluster := range *disabledClusters {
 		if _, userHasAccess := userClusters[disabledCluster]; userHasAccess { //user has access
