@@ -21,12 +21,12 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func newUserData() ([]rbac.Resource, map[string][]rbac.Resource, []string) {
+func newUserData() ([]rbac.Resource, map[string][]rbac.Resource, map[string]struct{}) {
 	csres := []rbac.Resource{{Apigroup: "", Kind: "nodes"}, {Apigroup: "storage.k8s.io", Kind: "csinodes"}}
 	nsres1 := []rbac.Resource{{Apigroup: "v1", Kind: "pods"}, {Apigroup: "v2", Kind: "deployments"}}
 	nsres2 := []rbac.Resource{{Apigroup: "", Kind: "configmaps"}, {Apigroup: "v4", Kind: "services"}}
 	nsScopeAccess := map[string][]rbac.Resource{}
-	managedClusters := []string{"managed1", "managed2"}
+	managedClusters := map[string]struct{}{"managed1": {}, "managed2": {}}
 	nsScopeAccess["ocm"] = nsres1
 	nsScopeAccess["default"] = nsres2
 	return csres, nsScopeAccess, managedClusters
