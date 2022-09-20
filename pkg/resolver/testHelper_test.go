@@ -26,9 +26,7 @@ func newUserData() ([]rbac.Resource, map[string][]rbac.Resource, map[string]stru
 	nsres1 := []rbac.Resource{{Apigroup: "v1", Kind: "pods"}, {Apigroup: "v2", Kind: "deployments"}}
 	nsres2 := []rbac.Resource{{Apigroup: "", Kind: "configmaps"}, {Apigroup: "v4", Kind: "services"}}
 	nsScopeAccess := map[string][]rbac.Resource{}
-	managedClusters := make(map[string]struct{}, 2)
-	managedClusters["managed1"] = struct{}{}
-	managedClusters["managed2"] = struct{}{}
+	managedClusters := map[string]struct{}{"managed1": {}, "managed2": {}}
 	nsScopeAccess["ocm"] = nsres1
 	nsScopeAccess["default"] = nsres2
 	return csres, nsScopeAccess, managedClusters
