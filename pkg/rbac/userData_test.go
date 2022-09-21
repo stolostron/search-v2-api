@@ -611,8 +611,6 @@ func Test_getUserData(t *testing.T) {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, ContextAuthTokenKey, "123456")
 
-	// result, err := mock_cache.GetUserDataCache(ctx, nil)
-
 	result, err := mock_cache.GetUserData(ctx)
 
 	if err != nil {
