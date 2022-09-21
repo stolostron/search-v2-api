@@ -4,6 +4,8 @@
 
 // This file is excluded from compilation unless the build flag -tags test is used.
 // Use `make test` to run with the test flag.
+// This file is added to share mock test functions with resolver package as per solution in
+// https://stackoverflow.com/questions/44192688/how-to-share-test-interfaces-between-go-packages
 
 package rbac
 
