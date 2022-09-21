@@ -272,7 +272,7 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 									Resource{Apigroup: api, Kind: res})
 							} else if cache.shared.isClusterScoped(res, api) {
 								klog.V(5).Info("Got clusterscoped resource", api, "/",
-									"res from SelfSubjectRulesReviews. Excluding it from ns scoped resoures.")
+									res, " from SelfSubjectRulesReviews. Excluding it from ns scoped resoures.")
 							} else if len(rules.ResourceNames) > 0 && rules.ResourceNames[0] != "*" {
 								klog.V(5).Info("Got whitelist in resourcenames. Excluding resource", api, "/", res,
 									" from ns scoped resoures.")
@@ -287,8 +287,8 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 				if verb == "create" || verb == "*" {
 					for _, res := range rules.Resources {
 						if res == "managedclusterviews" {
-							_, nsIsAManagedCluster := managedClusters[ns]
-							if nsIsAManagedCluster {
+							_, managedClusterNs := managedClusters[ns]
+							if managedClusterNs {
 								user.userData.ManagedClusters[ns] = struct{}{}
 							}
 						}

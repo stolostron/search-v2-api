@@ -2,7 +2,6 @@ package rbac
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -601,8 +600,6 @@ func Test_getUserData(t *testing.T) {
 	allowedres := []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}}
 	managedClusters["some-managed-cluster"] = struct{}{}
 	managedClusters["some-other-managed-cluster"] = struct{}{}
-	fmt.Println("mock_cache.tokenReviews: ", mock_cache.tokenReviews)
-	fmt.Printf("mock_cache.tokenReviews cache: %+v", mock_cache.tokenReviews["123456"])
 
 	mock_cache.users["unique-user-id"] = &UserDataCache{
 		userData:          UserData{CsResources: allowedres, ManagedClusters: managedClusters, NsResources: nsRes},
@@ -617,8 +614,10 @@ func Test_getUserData(t *testing.T) {
 	// result, err := mock_cache.GetUserDataCache(ctx, nil)
 
 	result, err := mock_cache.GetUserData(ctx)
-	fmt.Println("res: ", result)
-	fmt.Println("err: ", err)
+
+	if err != nil {
+		t.Error("Unexpected error while getting userdata.", err)
+	}
 
 	if len(result.CsResources) != 1 {
 		t.Errorf("Expected 1 clusterScoped resources but got %d", len(result.CsResources))
