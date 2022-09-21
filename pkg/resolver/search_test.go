@@ -462,6 +462,7 @@ func Test_buildRbacWhereClauseCs(t *testing.T) {
 func Test_buildRbacWhereClauseNs(t *testing.T) {
 	_, nsScopeAccess, _ := newUserData()
 	ud := rbac.UserData{NsResources: nsScopeAccess}
+
 	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"), &ud)
 	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND (NULL OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()

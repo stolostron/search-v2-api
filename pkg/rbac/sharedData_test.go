@@ -95,10 +95,8 @@ func Test_getResouces_usingCache(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
-	var namespaces []string
-	namespaces = append(namespaces, "test-namespace")
-	managedCluster := make(map[string]struct{})
-	managedCluster["test-man"] = struct{}{}
+	namespaces := []string{"test-namespace"}
+	manClusters := map[string]struct{}{"test-man": {}}
 	res := Resource{Apigroup: "apigroup1", Kind: "kind1"}
 	csRes := map[Resource]struct{}{}
 
@@ -106,7 +104,7 @@ func Test_getResouces_usingCache(t *testing.T) {
 	//Adding cache:
 	mock_cache.shared = SharedData{
 		namespaces:      namespaces,
-		managedClusters: managedCluster,
+		managedClusters: manClusters,
 		mcUpdatedAt:     time.Now(),
 		csUpdatedAt:     time.Now(),
 		csResourcesMap:  csRes,
@@ -144,11 +142,8 @@ func Test_getResources_expiredCache(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
-	var namespaces []string
-
-	namespaces = append(namespaces, "test-namespace")
-	managedCluster := make(map[string]struct{})
-	managedCluster["test-man"] = struct{}{}
+	namespaces := []string{"test-namespace"}
+	manClusters := map[string]struct{}{"test-man": {}}
 	//adding expired cache
 	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
 	csRes := map[Resource]struct{}{}
@@ -157,7 +152,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 	csRes[res] = struct{}{}
 	mock_cache.shared = SharedData{
 		namespaces:      namespaces,
-		managedClusters: managedCluster,
+		managedClusters: manClusters,
 		nsUpdatedAt:     last_cache_time,
 		mcUpdatedAt:     last_cache_time,
 		csUpdatedAt:     last_cache_time,
@@ -273,10 +268,8 @@ func Test_getDisabledClustersValid(t *testing.T) {
 	_, mock_cache := mockResourcesListCache(t)
 
 	setupToken(&mock_cache)
-
 	//user's managedclusters
-	manClusters := map[string]struct{}{}
-	manClusters["disabled1"] = struct{}{}
+	manClusters := map[string]struct{}{"disabled1": {}}
 
 	userdataCache := UserDataCache{userData: UserData{ManagedClusters: manClusters},
 		csrUpdatedAt: time.Now(), nsrUpdatedAt: time.Now(), clustersUpdatedAt: time.Now()}
@@ -301,8 +294,7 @@ func Test_getDisabledClustersValid_User_NoAccess(t *testing.T) {
 	_, mock_cache := mockResourcesListCache(t)
 	setupToken(&mock_cache)
 	//user's managedclusters
-	manClusters := map[string]struct{}{}
-	manClusters["managed1"] = struct{}{}
+	manClusters := map[string]struct{}{"managed1": {}}
 
 	//user only has access to "managed1" cluster, but not "disabled1" cluster
 	userdataCache := UserDataCache{userData: UserData{ManagedClusters: manClusters},
@@ -329,9 +321,7 @@ func Test_getDisabledClustersCacheInValid_RunQuery(t *testing.T) {
 	setupToken(&mock_cache)
 
 	//user's managedclusters
-	manClusters := map[string]struct{}{}
-	manClusters["disabled1"] = struct{}{}
-
+	manClusters := map[string]struct{}{"disabled1": {}}
 	userdataCache := UserDataCache{userData: UserData{ManagedClusters: manClusters},
 		csrUpdatedAt: time.Now(), nsrUpdatedAt: time.Now(), clustersUpdatedAt: time.Now()}
 	setupUserDataCache(&mock_cache, &userdataCache)
@@ -367,8 +357,7 @@ func Test_getDisabledClustersCacheInValid_RunQueryError(t *testing.T) {
 	setupToken(&mock_cache)
 
 	//user's managedclusters
-	manClusters := map[string]struct{}{}
-	manClusters["managed1"] = struct{}{}
+	manClusters := map[string]struct{}{"managed1": {}}
 
 	//user has no access to disabled clusters
 	userdataCache := UserDataCache{userData: UserData{ManagedClusters: manClusters},
