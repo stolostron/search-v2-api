@@ -20,13 +20,13 @@ run: ## Run the service locally.
 lint: ## Run lint and gosec tools.
 	GOPATH=$(go env GOPATH)
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "${GOPATH}/bin" v1.47.1
-	CGO_ENABLED=0 GOGC=25 golangci-lint run --timeout=3m
+	CGO_ENABLED=0 GOGC=25 golangci-lint run --build-tags test --timeout=3m
 	go mod tidy
 	gosec ./...
 
 .PHONY: test
 test: ## Run unit tests.
-	go test ./... -v -coverprofile cover.out
+	go test ./... -tags test -v -coverprofile cover.out
 
 coverage: test ## Run unit tests and show code coverage.
 	go tool cover -html=cover.out -o=cover.html

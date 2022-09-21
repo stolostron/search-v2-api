@@ -20,3 +20,4 @@ sslcert/tls.crt
 sslcert/tls.key
 cover.html
 test/__pycache__/
+.vscode/settings.json
