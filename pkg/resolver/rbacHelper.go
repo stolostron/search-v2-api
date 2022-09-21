@@ -2,8 +2,6 @@
 package resolver
 
 import (
-	"sort"
-
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/lib/pq"
@@ -53,13 +51,8 @@ func matchNamespacedResources(nsResources map[string][]rbac.Resource) exp.Expres
 	var whereNsDs []exp.Expression
 	if len(nsResources) > 0 {
 		whereNsDs = make([]exp.Expression, len(nsResources))
-		namespaces := make([]string, len(nsResources))
-		i := 0
-		for namespace := range nsResources {
-			namespaces[i] = namespace
-			i++
-		}
-		sort.Strings(namespaces) //to make unit tests pass
+		namespaces := getKeys(nsResources)
+
 		for nsCount, namespace := range namespaces {
 			whereNsDs[nsCount] = goqu.And(goqu.L(`data->>?`, "namespace").Eq(namespace),
 				matchApigroupKind(nsResources[namespace]))
