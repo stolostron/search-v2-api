@@ -78,7 +78,8 @@ func newMockSearchSchema(t *testing.T) (*SearchSchema, *pgxpoolmock.MockPgxPool)
 // 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 
 // 	mockResolver := &Message{
-// 		userData: ud,
+// 		// userData: ud,
+// 		// cache:
 // 	}
 // 	return mockResolver, mockPool
 // }

@@ -9,23 +9,20 @@ import (
 )
 
 type Message struct {
-	userData *rbac.UserData
+	cache rbac.ICache // Tests will replace this with a mock cache.
 }
 
 func Messages(ctx context.Context) ([]*model.Message, error) {
-	userAccess, userDataErr := rbac.CacheInst.GetUserData(ctx)
-	if userDataErr != nil {
-		return nil, userDataErr
-	}
 	message := &Message{
-		userData: userAccess,
+		cache: rbac.GetCache(),
 	}
 	return message.messageResults(ctx)
 }
 
 func (s *Message) messageResults(ctx context.Context) ([]*model.Message, error) {
 	klog.V(2).Info("Resolving Messages()")
-	disabledClusters, disabledClustersErr := rbac.CacheInst.GetDisabledClusters(ctx)
+
+	disabledClusters, disabledClustersErr := s.cache.GetDisabledClusters(ctx)
 	//Cache is invalid
 	if disabledClustersErr != nil {
 		return []*model.Message{}, disabledClustersErr

@@ -2,6 +2,7 @@
 package rbac
 
 import (
+	"context"
 	"sync"
 
 	"github.com/driftprogramming/pgxpoolmock"
@@ -12,6 +13,11 @@ import (
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 )
+
+// This interface allows us to mock the cache from other packages.
+type ICache interface {
+	GetDisabledClusters(ctx context.Context) (*map[string]struct{}, error)
+}
 
 // Cache used to minimize requests to external APIs (Kubernetes and Database)
 type Cache struct {
@@ -31,7 +37,7 @@ type Cache struct {
 }
 
 // Initialize the cache as a singleton instance.
-var CacheInst = Cache{
+var cacheInst = Cache{
 	tokenReviews:     map[string]*tokenReviewCache{},
 	tokenReviewsLock: sync.Mutex{},
 	usersLock:        sync.Mutex{},
@@ -41,4 +47,9 @@ var CacheInst = Cache{
 	pool:             db.GetConnection(),
 	corev1Client:     config.GetCoreClient(),
 	dynamicClient:    config.GetDynamicClient(),
+}
+
+// Get a reference to the cache instance.
+func GetCache() *Cache {
+	return &cacheInst
 }
