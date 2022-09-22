@@ -181,7 +181,6 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 	}
 	uid, userInfo := cache.GetUserUID(ctx)
 	klog.V(7).Infof("User %s with uid: %s has access to these cluster scoped res: %+v \n", userInfo.Username, uid,
-
 		user.userData.CsResources)
 	user.csrUpdatedAt = time.Now()
 	return user, user.csrErr

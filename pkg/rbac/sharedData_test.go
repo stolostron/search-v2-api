@@ -206,9 +206,7 @@ func Test_GetandSetDisabledClusters(t *testing.T) {
 	_, mock_cache := mockResourcesListCache(t)
 	mock_cache.shared.dcUpdatedAt = time.Now()
 
-	dClusters := make(map[string]struct{})
-	dClusters["managed1"] = struct{}{}
-	dClusters["managed2"] = struct{}{}
+	dClusters := map[string]struct{}{"managed1": {}, "managed2": {}}
 	setupToken(&mock_cache)
 	mock_cache.setDisabledClusters(dClusters, nil)
 

@@ -137,7 +137,7 @@ func (s *SearchResult) buildRelationsQuery() {
 		relQuery = relQuery.Union(clusterSelectTerm).As("related")
 	}
 	relQuery = goqu.From(relQuery.As("related")).Select("related.uid", "related.kind",
-		"related.level") //goqu.L(`"srchAddon".uid`)
+		"related.level")
 	relQueryInnerJoin := relQuery.InnerJoin(goqu.S("search").Table("resources"),
 		goqu.On(goqu.Ex{"related.uid": goqu.L(`"resources".uid`)}))
 	relQueryWithRbac := relQueryInnerJoin.Where(buildRbacWhereClause(s.context, s.userData))

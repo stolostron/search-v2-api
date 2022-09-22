@@ -125,8 +125,6 @@ type TestOperatorItem struct {
 }
 
 func Test_SearchResolver_ItemsWithNumOperator(t *testing.T) {
-	// rbac := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"), &rbac.UserResourceAccess{csres, nsres, mc})
-
 	val1 := ">1"
 	testOperatorGreater := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val1}}}},
