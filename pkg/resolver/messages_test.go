@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/stolostron/search-v2-api/graph/model"
-	"github.com/stolostron/search-v2-api/pkg/rbac"
 )
 
 func Test_Messages_ValidCache(t *testing.T) {
