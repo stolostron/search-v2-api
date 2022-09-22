@@ -73,10 +73,12 @@ func (s *SearchResult) Items() []map[string]interface{} {
 	defer s.wg.Done()
 	klog.V(2).Info("Resolving SearchResult:Items()")
 	s.buildSearchQuery(s.context, false, false)
+
 	r, e := s.resolveItems()
 	if e != nil {
 		klog.Error("Error resolving items.", e)
 	}
+	fmt.Println(r)
 	return r
 }
 
@@ -180,7 +182,13 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 
 	//WHERE CLAUSE
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
-		whereDs = WhereClauseFilter(s.input)
+
+		//here we call whereclause filter and also return a boolean to check if property in ArrayProperties:
+		// whereDs, isArryProp = WhereClauseFilter(s.input)
+		//then if isArrayProp == true {append searchComplete query to search query (add the saved query in sharedCache to avoid recreating query each time
+		// and add the correct property type as param.)}
+		//searcinput := searchCompleteQueryToStore(prop string)
+		whereDs = WhereClauseFilter(s.input, &rbac.SharedData{})
 		sql, _, err := selectDs.Where(whereDs...).ToSQL()
 		klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
 		//RBAC CLAUSE
@@ -215,6 +223,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	klog.V(5).Infof("Search query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
+	fmt.Printf("(1) Search query: %s\nargs: %s", sql, params)
 }
 
 func (s *SearchResult) resolveCount() int {
@@ -250,6 +259,8 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveItemsFunc"))
 	klog.V(5).Info("Query issued by resolver [%s] ", s.query)
 	rows, err := s.pool.Query(s.context, s.query, s.params...)
+
+	fmt.Println("(2) Query to resolve items is :", s.query)
 	defer timer.ObserveDuration()
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
@@ -375,7 +386,6 @@ func isLower(values []string) bool {
 // Check if value is a number or date and get the operator
 // Returns a map that stores operator and values
 func getOperatorAndNumDateFilter(filter string, values []string) map[string][]string {
-
 	opValueMap := getOperator(values) //If values are numbers
 
 	// Store the operator and value in a map - this is to handle multiple values
@@ -413,11 +423,16 @@ func getOperatorAndNumDateFilter(filter string, values []string) map[string][]st
 
 			default:
 				//check that property value is an array:
-				fmt.Println(val)
 				array := strings.Split(string(val), ":")
 				if len(array) > 1 || strings.Contains(string(val), "[\"") {
+					fmt.Println("Using @> operator for ", val)
 					klog.V(7).Info("filter is array. Operator is @>.")
 					operator = "@>"
+					//if val exists in the arrayProperties in sharedData then append the searchComplete part of query
+					// sharedData := *&rbac.SharedData{searchCompleteForArrayProp}
+					// if _, ok := *rbac.CacheInst.shared.arrayProperties[val]; ok {
+					// 	searchCompleteForArrayProp = true
+					// }
 
 				} else {
 					if _, ok := arrayProperties[filter]; ok {
@@ -493,7 +508,9 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 		case map[string]interface{}:
 			item[key] = formatLabels(v)
 		case []interface{}:
-			item[key] = formatArray(v)
+			for _, val := range v {
+				item[key] = fmt.Sprintf("[\"%s\"]", val)
+			}
 		default:
 			klog.Warningf("Error formatting property with key: %+v  type: %+v\n", key, reflect.TypeOf(v))
 			continue
@@ -507,13 +524,16 @@ func pointerToStringArray(pointerArray []*string) []string {
 
 	values := make([]string, len(pointerArray))
 	for i, val := range pointerArray {
+
 		values[i] = *val
+
 	}
 	return values
 }
 
-func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
+func WhereClauseFilter(input *model.SearchInput, shared *rbac.SharedData) []exp.Expression {
 	var whereDs []exp.Expression
+	propertiesToCheck := []string{"label", "role", "port", "container", "category", "rules", "addon", "image"}
 
 	if input.Keywords != nil && len(input.Keywords) > 0 {
 		// Sample query: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data")
@@ -525,15 +545,26 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 		}
 	}
 	if input.Filters != nil {
+		fmt.Println("Input filters", input.Filters)
+
 		for _, filter := range input.Filters {
-			// fmt.Println("Property", filter.Property)
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
-				// fmt.Println(values)
 
 				// If property is of array type like label, remove the equal sign in it and use colon
 				// - to be similar to how it is stored in the database
 				if _, ok := arrayProperties[filter.Property]; ok {
+					for _, val := range propertiesToCheck {
+						if val == filter.Property {
+							//add this query to search input
+							shared.SearchCompleteQueryToStore(val)
+							fmt.Println(shared.SearchCompleteQueryToStore(val))
+							// 	SearchCompleteResult{
+							// 		query: shared.SearchCompleteQueryToStore(val),
+							// 	}
+						}
+					}
+					fmt.Println("inside arrayProperties", filter.Property)
 					cleanedVal := make([]string, len(values))
 					for i, val := range values {
 						labels := strings.Split(val, "=")
@@ -548,6 +579,7 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 						}
 
 					}
+
 					values = cleanedVal
 				}
 
@@ -570,6 +602,7 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 			}
 		}
 	}
+	fmt.Println("Where property is:", whereDs)
 
 	return whereDs
 }

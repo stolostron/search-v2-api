@@ -71,7 +71,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 	if s.property != "" {
 		//WHERE CLAUSE
 		if s.input != nil && len(s.input.Filters) > 0 {
-			whereDs = WhereClauseFilter(s.input)
+			whereDs = WhereClauseFilter(s.input, &rbac.SharedData{})
 		}
 
 		//SELECT CLAUSE
@@ -123,6 +123,10 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		s.query = ""
 		s.params = nil
 	}
+
+	fmt.Println("Search Complete Query", s.query)
+	// SELECT DISTINCT "prop" FROM (SELECT "data"->'?'
+	// AS "prop" FROM "search"."resources" WHERE ("data"->'?' IS NOT NULL) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000
 
 }
 

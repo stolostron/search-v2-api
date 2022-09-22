@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -39,6 +40,8 @@ type SharedData struct {
 	nsErr       error      // Capture errors retrieving namespaces.
 	nsLock      sync.Mutex // Locks the namespaces array while updating it.
 	nsUpdatedAt time.Time  // Time when namespaces data was last updated.
+
+	searchCompleteQuery string
 }
 
 type Resource struct {
@@ -50,6 +53,15 @@ var managedClusterResourceGvr = schema.GroupVersionResource{
 	Group:    "cluster.open-cluster-management.io",
 	Version:  "v1",
 	Resource: "managedclusters",
+}
+
+func (shared *SharedData) SearchCompleteQueryToStore(prop string) string {
+
+	queryCompleteProp := fmt.Sprintf(`SELECT DISTINCT "prop" FROM (SELECT "data"->'%s' AS "prop" FROM "search"."resources" 
+	WHERE ("data"->'%s' IS NOT NULL) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`, prop, prop)
+	shared.searchCompleteQuery = queryCompleteProp
+
+	return queryCompleteProp
 }
 
 func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
