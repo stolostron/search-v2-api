@@ -11,27 +11,17 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 )
 
-type MockCache struct {
-	disabled map[string]struct{}
-	err      error
-}
-
-func (mc *MockCache) GetDisabledClusters(ctx context.Context) (*map[string]struct{}, error) {
-	return &mc.disabled, mc.err
-}
-
 func Test_Messages_ValidCache(t *testing.T) {
-
+	// Build mock
 	mockMessage := Message{
 		cache: &MockCache{
 			disabled: map[string]struct{}{"managed1": {}},
 		},
 	}
-
-	ctx := context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456")
 	//Execute the function
-	res, err := mockMessage.messageResults(ctx)
+	res, err := mockMessage.messageResults(context.Background())
 
+	// Validate
 	messages := make([]*model.Message, 0)
 	kind := "information"
 	desc := "Search is disabled on some of your managed clusters."
@@ -50,16 +40,17 @@ func Test_Messages_ValidCache(t *testing.T) {
 
 //no uid set in context - returns error
 func Test_Messages_Error(t *testing.T) {
+	// Build mock
 	mockMessage := Message{
 		cache: &MockCache{
 			disabled: map[string]struct{}{"managed1": {}},
 			err:      fmt.Errorf("err running query"),
 		},
 	}
-
 	//Execute the function
-	res, errRes := mockMessage.messageResults(context.TODO()) //no uid set in context - returns error
+	res, errRes := mockMessage.messageResults(context.Background()) //no uid set in context - returns error
 
+	// Validate
 	if !reflect.DeepEqual([]*model.Message{}, res) {
 		t.Errorf("Message results doesn't match. Expected: %#v, Got: %#v", []*model.Message{}, res)
 	}
@@ -69,18 +60,17 @@ func Test_Messages_Error(t *testing.T) {
 }
 
 func Test_Message_Results_ValidCache(t *testing.T) {
-
+	// Build mock
 	mockMessage := Message{
 		cache: &MockCache{
 			disabled: map[string]struct{}{"managed1": {}},
-			// err: fmt.Errorf("err running query")
+			err:      nil,
 		},
 	}
-	ctx := context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456")
-
 	//Execute the function
-	res, err := mockMessage.messageResults(ctx)
+	res, err := mockMessage.messageResults(context.Background())
 
+	// Validate
 	messages := make([]*model.Message, 0)
 	kind := "information"
 	desc := "Search is disabled on some of your managed clusters."
@@ -97,20 +87,19 @@ func Test_Message_Results_ValidCache(t *testing.T) {
 	}
 }
 
-// user does npt have access to disabled clusters
+// user does not have access to disabled clusters
 func Test_Message_Results_NoAccessToDisabledC(t *testing.T) {
-
+	// Build mock
 	mockMessage := Message{
 		cache: &MockCache{
 			disabled: map[string]struct{}{},
-			// err: fmt.Errorf("err running query")
+			err:      nil,
 		},
 	}
-	ctx := context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456")
-
 	//Execute the function
-	res, err := mockMessage.messageResults(ctx)
+	res, err := mockMessage.messageResults(context.Background())
 
+	// Validate
 	if !reflect.DeepEqual([]*model.Message{}, res) {
 		t.Errorf("Message results doesn't match. Expected: %#v, Got: %#v", []*model.Message{}, res)
 	}

@@ -18,7 +18,7 @@ import (
 type ICache interface {
 	GetDisabledClusters(ctx context.Context) (*map[string]struct{}, error)
 	// Add other functions as needed.
-	//Note that the mock will need to implement all functions defined here.
+	// Note that the mock will need to implement all functions defined here.
 }
 
 // Cache used to minimize requests to external APIs (Kubernetes and Database)

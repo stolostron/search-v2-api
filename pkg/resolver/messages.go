@@ -9,7 +9,7 @@ import (
 )
 
 type Message struct {
-	cache rbac.ICache // Tests will replace this with a mock cache.
+	cache rbac.ICache // Tests will replace this interface with a mock cache instance.
 }
 
 func Messages(ctx context.Context) ([]*model.Message, error) {
