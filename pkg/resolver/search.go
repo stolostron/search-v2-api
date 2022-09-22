@@ -80,10 +80,13 @@ func (s *SearchResult) Items() []map[string]interface{} {
 	return r
 }
 
-func (s *SearchResult) Related() []SearchRelatedResult {
+func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
 	klog.V(2).Info("Resolving SearchResult:Related()")
 	if s.uids == nil {
 		s.Uids()
+	}
+	if s.context == nil {
+		s.context = ctx
 	}
 	var start time.Time
 	var numUIDs int
@@ -94,7 +97,7 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 	if len(s.uids) > 0 {
 		start = time.Now()
 		numUIDs = len(s.uids)
-		r = s.getRelations()
+		r = s.getRelations(ctx)
 	} else {
 		klog.Warning("No uids selected for query:Related()")
 	}
@@ -108,7 +111,6 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 			}
 			klog.V(4).Infof("Finding relationships for %d uids and %d level(s) took %s.",
 				numUIDs, s.level, time.Since(start))
-
 		} else {
 			klog.V(4).Infof("Not finding relationships as there are %d uids and %d level(s).",
 				numUIDs, s.level)
@@ -553,8 +555,6 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 
 				//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
 				keys := getKeys(opDateValueMap)
-				sort.Strings(keys)
-
 				var operatorWhereDs []exp.Expression //store all the clauses for this filter together
 				for _, operator := range keys {
 					operatorWhereDs = append(operatorWhereDs,
