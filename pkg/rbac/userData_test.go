@@ -580,26 +580,6 @@ func Test_getUserData(t *testing.T) {
 
 	mock_cache := mockNamespaceCache()
 	mock_cache = setupToken(mock_cache)
-	// managedClusters := make(map[string]struct{})
-	// nsRes := make(map[string][]Resource)
-	// nsResources := []Resource{{Apigroup: "", Kind: "pods"}}
-	// nsRes["ns1"] = nsResources
-	// csres := []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}}
-	// mock_cache = addCSResources(mock_cache, csres)
-
-	// //mock cache for cluster-scoped resouces
-
-	// allowedres := []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}}
-	// managedClusters["some-managed-cluster"] = struct{}{}
-	// managedClusters["some-other-managed-cluster"] = struct{}{}
-
-	// mock_cache.users["unique-user-id"] = &UserDataCache{
-	// 	userData:          UserData{CsResources: allowedres, ManagedClusters: managedClusters, NsResources: nsRes},
-	// 	clustersUpdatedAt: time.Now(),
-	// 	// Using current time , GetUserData should have the same values as cache
-	// 	csrUpdatedAt: time.Now(),
-	// 	nsrUpdatedAt: time.Now(),
-	// }
 	mock_cache.users["unique-user-id"] = &UserDataCache{
 		userData: UserData{
 			CsResources:     []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}},
