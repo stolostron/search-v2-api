@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
@@ -20,6 +21,7 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/metric"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"k8s.io/klog/v2"
 )
 
@@ -32,25 +34,35 @@ type SearchResult struct {
 	params []interface{}
 	level  int // The number of levels/hops for finding relationships for a particular resource
 	//  Related []SearchRelatedResult
+	userData *rbac.UserData
+	context  context.Context
 }
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
 	// For each input, create a SearchResult resolver.
 	srchResult := make([]*SearchResult, len(input))
+	userData, userDataErr := rbac.CacheInst.GetUserData(ctx)
+	if userDataErr != nil {
+		return srchResult, userDataErr
+	}
+	// Proceed if user's rbac data exists
 	if len(input) > 0 {
 		for index, in := range input {
 			srchResult[index] = &SearchResult{
-				input: in,
-				pool:  db.GetConnection(),
+				input:    in,
+				pool:     db.GetConnection(),
+				userData: userData,
+				context:  ctx,
 			}
 		}
 	}
 	return srchResult, nil
+
 }
 
 func (s *SearchResult) Count() int {
 	klog.V(2).Info("Resolving SearchResult:Count()")
-	s.buildSearchQuery(context.Background(), true, false)
+	s.buildSearchQuery(s.context, true, false)
 	count := s.resolveCount()
 
 	return count
@@ -60,7 +72,7 @@ func (s *SearchResult) Items() []map[string]interface{} {
 	s.wg.Add(1)
 	defer s.wg.Done()
 	klog.V(2).Info("Resolving SearchResult:Items()")
-	s.buildSearchQuery(context.Background(), false, false)
+	s.buildSearchQuery(s.context, false, false)
 	r, e := s.resolveItems()
 	if e != nil {
 		klog.Error("Error resolving items.", e)
@@ -68,10 +80,13 @@ func (s *SearchResult) Items() []map[string]interface{} {
 	return r
 }
 
-func (s *SearchResult) Related() []SearchRelatedResult {
+func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
 	klog.V(2).Info("Resolving SearchResult:Related()")
 	if s.uids == nil {
 		s.Uids()
+	}
+	if s.context == nil {
+		s.context = ctx
 	}
 	var start time.Time
 	var numUIDs int
@@ -82,28 +97,61 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 	if len(s.uids) > 0 {
 		start = time.Now()
 		numUIDs = len(s.uids)
-		r = s.getRelations()
+		r = s.getRelations(ctx)
 	} else {
 		klog.Warning("No uids selected for query:Related()")
 	}
 	defer func() {
-		// Log a warning if finding relationships is too slow.
-		// Note the 500ms is just an initial guess, we should adjust based on normal execution time.
-		if time.Since(start) > 500*time.Millisecond {
-			klog.Warningf("Finding relationships for %d uids and %d level(s) took %s.",
+		if len(s.uids) > 0 { // Log a warning if finding relationships is too slow.
+			// Note the 500ms is just an initial guess, we should adjust based on normal execution time.
+			if time.Since(start) > 500*time.Millisecond {
+				klog.Warningf("Finding relationships for %d uids and %d level(s) took %s.",
+					numUIDs, s.level, time.Since(start))
+				return
+			}
+			klog.V(4).Infof("Finding relationships for %d uids and %d level(s) took %s.",
 				numUIDs, s.level, time.Since(start))
-			return
+		} else {
+			klog.V(4).Infof("Not finding relationships as there are %d uids and %d level(s).",
+				numUIDs, s.level)
 		}
-		klog.V(4).Infof("Finding relationships for %d uids and %d level(s) took %s.",
-			numUIDs, s.level, time.Since(start))
 	}()
 	return r
 }
 
 func (s *SearchResult) Uids() {
 	klog.V(2).Info("Resolving SearchResult:Uids()")
-	s.buildSearchQuery(context.Background(), false, true)
+	s.buildSearchQuery(s.context, false, true)
 	s.resolveUids()
+}
+
+func Iskubeadmin(ctx context.Context) bool {
+	_, userDetails := rbac.CacheInst.GetUserUID(ctx)
+	if userDetails.Username == "kube:admin" {
+		klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
+		return true
+	}
+	for _, group := range userDetails.Groups {
+		if group == "system:cluster-admins" {
+			klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
+			return true
+		}
+	}
+	return false
+}
+
+// Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
+func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData) exp.ExpressionList {
+	return goqu.Or(
+		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
+		goqu.And(
+			matchHubCluster(), // goqu.L(`data->>?`, "_hubClusterResource").Eq("true")
+			goqu.Or(
+				matchClusterScopedResources(userrbac.CsResources), // (namespace=null AND apigroup AND kind)
+				matchNamespacedResources(userrbac.NsResources),    // (namespace AND apiproup AND kind)
+			),
+		),
+	)
 }
 
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) {
@@ -135,6 +183,19 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	//WHERE CLAUSE
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 		whereDs = WhereClauseFilter(s.input)
+		sql, _, err := selectDs.Where(whereDs...).ToSQL()
+		klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
+		//RBAC CLAUSE
+		if s.userData != nil && !Iskubeadmin(ctx) {
+			whereDs = append(whereDs,
+				buildRbacWhereClause(ctx, s.userData)) // add rbac
+
+		} else {
+			if !Iskubeadmin(ctx) {
+				panic(fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
+					ctx.Value(rbac.ContextAuthTokenKey)))
+			}
+		}
 	}
 
 	//LIMIT CLAUSE
@@ -153,7 +214,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	if err != nil {
 		klog.Errorf("Error building Search query: %s", err.Error())
 	}
-	klog.V(3).Infof("Search query: %s\nargs: %s", sql, params)
+	klog.V(5).Infof("Search query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
 }
@@ -170,7 +231,7 @@ func (s *SearchResult) resolveCount() int {
 }
 
 func (s *SearchResult) resolveUids() {
-	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
+	rows, err := s.pool.Query(s.context, s.query, s.params...)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
 		return
@@ -189,8 +250,8 @@ func (s *SearchResult) resolveUids() {
 func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	items := []map[string]interface{}{}
 	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveItemsFunc"))
-	klog.V(4).Info("Query issued by resolver [%s] ", s.query)
-	rows, err := s.pool.Query(context.Background(), s.query, s.params...)
+	klog.V(5).Info("Query issued by resolver [%s] ", s.query)
+	rows, err := s.pool.Query(s.context, s.query, s.params...)
 	defer timer.ObserveDuration()
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
@@ -251,6 +312,7 @@ func getOperator(values []string) map[string][]string {
 
 func getWhereClauseExpression(prop, operator string, values []string) []exp.Expression {
 	exps := []exp.Expression{}
+
 	switch operator {
 	case "<=":
 		for _, val := range values {
@@ -275,11 +337,24 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 		}
 	case "=":
 		exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
+	case "@>":
+		for _, val := range values {
+			exps = append(exps, goqu.L(`"data"->? @> ?`, prop, val))
+		}
+	case "?|":
+		exps = append(exps, goqu.L(`"data"->? ? ?`, prop, "?|", values))
+
 	default:
 		if prop == "cluster" {
 			exps = append(exps, goqu.C(prop).In(values))
 		} else if prop == "kind" { //ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
-			exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
+			if isLower(values) {
+				exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
+				klog.Warning("Using ILIKE for lower case KIND string comparison.",
+					"- This behavior is needed for V1 compatibility and will be deprecated with Search V2.")
+			} else {
+				exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
+			}
 		} else {
 			exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
 		}
@@ -288,11 +363,23 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 
 }
 
+//if any string values starts with lower case letters, return true
+func isLower(values []string) bool {
+	for _, str := range values {
+		firstChar := rune(str[0]) //check if first character of the string is lower case
+		if unicode.IsLower(firstChar) && unicode.IsLetter(firstChar) {
+			return true
+		}
+	}
+	return false
+}
+
 // Check if value is a number or date and get the operator
 // Returns a map that stores operator and values
-func getOperatorAndNumDateFilter(values []string) map[string][]string {
+func getOperatorAndNumDateFilter(filter string, values []string) map[string][]string {
 
 	opValueMap := getOperator(values) //If values are numbers
+
 	// Store the operator and value in a map - this is to handle multiple values
 	updateOpValueMap := func(operator string, operatorValueMap map[string][]string, operatorRemovedValue string) {
 		if vals, ok := operatorValueMap[operator]; !ok {
@@ -307,6 +394,7 @@ func getOperatorAndNumDateFilter(values []string) map[string][]string {
 		operator := ">" // For dates, always check for values '>'
 		now := time.Now()
 		for _, val := range values {
+
 			var then string
 			format := "2006-01-02T15:04:05Z"
 			switch val {
@@ -326,7 +414,21 @@ func getOperatorAndNumDateFilter(values []string) map[string][]string {
 				then = now.AddDate(-1, 0, 0).Format(format)
 
 			default:
-				operator = ""
+				//check that property value is an array:
+				array := strings.Split(string(val), ":")
+				if len(array) > 1 {
+					klog.V(7).Info("filter is array. Operator is @>.")
+					operator = "@>"
+
+				} else {
+					if _, ok := arrayProperties[filter]; ok {
+						klog.V(7).Info("filter ", filter, " is present in arrayProperties. Using operator ?|.")
+						operator = "?|"
+					} else {
+						klog.V(7).Info("filter is neither label nor in arrayProperties: ", filter)
+						operator = ""
+					}
+				}
 				then = val
 			}
 			// Add the value and operator to map
@@ -401,6 +503,7 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 	return item
 }
 
+// helper function to point values in string  array
 func pointerToStringArray(pointerArray []*string) []string {
 
 	values := make([]string, len(pointerArray))
@@ -426,13 +529,32 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 		for _, filter := range input.Filters {
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
+
+				// If property is of array type like label, remove the equal sign in it and use colon
+				// - to be similar to how it is stored in the database
+				if _, ok := arrayProperties[filter.Property]; ok {
+					cleanedVal := make([]string, len(values))
+					for i, val := range values {
+						labels := strings.Split(val, "=")
+						if len(labels) == 2 {
+							cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
+						} else if len(labels) == 1 {
+							//// If property is of array type, format it as an array for easy searching
+							cleanedVal[i] = labels[0]
+						} else {
+							klog.Error("Error while decoding label string")
+							cleanedVal[i] = val
+						}
+
+					}
+					values = cleanedVal
+				}
+
 				// Check if value is a number or date and get the cleaned up value
-				opDateValueMap := getOperatorAndNumDateFilter(values)
+				opDateValueMap := getOperatorAndNumDateFilter(filter.Property, values)
 
 				//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
 				keys := getKeys(opDateValueMap)
-
-				sort.Strings(keys)
 				var operatorWhereDs []exp.Expression //store all the clauses for this filter together
 				for _, operator := range keys {
 					operatorWhereDs = append(operatorWhereDs,
@@ -449,11 +571,19 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 	return whereDs
 }
 
-func getKeys(stringArrayMap map[string][]string) []string {
-	keys := make([]string, 0, len(stringArrayMap))
-	for k := range stringArrayMap {
-		keys = append(keys, k)
+func getKeys(stringKeyMap interface{}) []string {
+	v := reflect.ValueOf(stringKeyMap)
+	if v.Kind() != reflect.Map {
+		klog.Error("input in getKeys is not a map")
 	}
+	if v.Type().Key().Kind() != reflect.String {
+		klog.Error("input map in getKeys does not have string keys")
+	}
+	keys := make([]string, 0, v.Len())
+	for _, key := range v.MapKeys() {
+		keys = append(keys, key.String())
+	}
+	sort.Strings(keys)
 	return keys
 }
 

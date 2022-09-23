@@ -14,7 +14,7 @@ gqlgen: ## Generate graphql model. See: https://gqlgen.com/
 
 .PHONY: run
 run: ## Run the service locally.
-	PLAYGROUND_MODE=true go run main.go --v=5
+	PLAYGROUND_MODE=true go run main.go --v=4
 
 .PHONY: lint
 lint: ## Run lint and gosec tools.
@@ -36,7 +36,7 @@ docker-build: ## Build the docker image.
 	docker build -f Dockerfile . -t search-v2-api
 
 N_USERS ?=2
-HOST ?= $(shell oc get route search-api -o custom-columns=host:.spec.host --no-headers -n open-cluster-management --ignore-not-found=true)
+HOST ?= $(shell oc get route search-api -o custom-columns=host:.spec.host --no-headers -n open-cluster-management --ignore-not-found=true --request-timeout='1s')
 ifeq ($(strip $(HOST)),)
 	CONFIGURATION_MSG = @echo \\n\\tThe search-api route was not found in the target cluster.\\n\
 	\\tThis test will run against the local instance https://localhost:4010\\n\

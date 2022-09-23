@@ -11,6 +11,7 @@
             "apiversion":"v1",
             "created":"2021-07-14T10:20:37Z",
             "kind":"Template",
+            "container": ["acm-container"],
             "label":{"samples.operator.openshift.io/managed":"true"},
             "name":"eap-cd-starter-s2i",
             "namespace":"openshift"
@@ -27,16 +28,10 @@
             "apiversion":"v1",
             "created":"2021-07-14T10:15:20Z",
             "current":3,
-            "desired":3
-            ,"kind":"ReplicaSet",
-            "label":{
-                "app.kubernetes.io/component":"controller",
-                "app.kubernetes.io/managed-by":"cluster-monitoring-operator",
-                "app.kubernetes.io/name":"prometheus-operator",
-                "app.kubernetes.io/part-of":"openshift-monitoring",
-                "app.kubernetes.io/version":"0.45.0",
-                "pod-template-hash":"5f5575c669"
-            },
+            "desired":3,
+            "kind":"ReplicaSet",
+            "label":{"pod-template-hash":"5f5575c669"},
+            "container": ["acm-agent", "acm-agent-2"],
             "image": ["quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:2337b7727c84c75a8cde0ac5e9e2ac8bd70b6dbcb628ee933718ef4899f2e3ef","quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:26cde6bda32fe488c322e60b0de1580ef8321f60a7c24c6c008d8fc0437e5063"],
             "name":"prometheus-operator-5f5575c669",
             "namespace":"openshift-monitoring"
@@ -61,7 +56,8 @@
             "created":"2021-07-14T10:15:20Z",
             "kind":"ConfigMap",
             "name":"configmap-5f5575c669",
-            "namespace":"openshift-monitoring"
+            "namespace":"openshift-monitoring",
+            "label":{"app.kubernetes.io/name":"prometheus-operator"}
         },
         "EdgeType": "usedBy",
         "DestUID": "local-cluster/30c35f12-320a-417f-98d1-fbee28a4b2a6",
