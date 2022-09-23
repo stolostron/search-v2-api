@@ -76,7 +76,7 @@ func Test_Messages_MultipleDisabledClusters(t *testing.T) {
 	message := model.Message{ID: "S20",
 		Kind:        &kind,
 		Description: &desc}
-	messages := append(messages, &message)
+	messages = append(messages, &message)
 
 	if !reflect.DeepEqual(messages, res) {
 		t.Errorf("Message results doesn't match. Expected: %#v, Got: %#v", messages, res)
