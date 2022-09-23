@@ -43,7 +43,7 @@ func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*strin
 		uids:     uids,
 		wg:       sync.WaitGroup{},
 		userData: ud,
-		context:  context.Background(),
+		context:  context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
 	}
 
 	return mockResolver, mockPool

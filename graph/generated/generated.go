@@ -998,7 +998,7 @@ func (ec *executionContext) _SearchResult_related(ctx context.Context, field gra
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Related(), nil
+		return obj.Related(ctx), nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)

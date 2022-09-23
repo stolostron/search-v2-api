@@ -31,7 +31,7 @@ func Test_SearchComplete_Query(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
-	result, err := resolver.autoComplete(context.TODO())
+	result, err := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 	if err != nil {
 		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
 
@@ -60,7 +60,7 @@ func Test_SearchComplete_Query_WithLimit(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
-	result, err := resolver.autoComplete(context.TODO())
+	result, err := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 	if err != nil {
 		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
 
@@ -82,7 +82,7 @@ func Test_SearchCompleteNoProp_Query(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(nil, fmt.Errorf("Error in search complete query. No property specified."))
 
 	// Execute function
-	result, err := resolver.autoComplete(context.TODO())
+	result, err := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 	// Verify response
 	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteNoProp_Query")
 	assert.NotNil(t, err, "Expected error")
@@ -114,7 +114,7 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
-	result, _ := resolver.autoComplete(context.TODO())
+	result, _ := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 
 	// Verify response
 	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteWithFilter_Query")
@@ -141,7 +141,7 @@ func Test_SearchCompleteWithCluster(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
-	result, _ := resolver.autoComplete(context.TODO())
+	result, _ := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 
 	// Verify response
 	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteWithFilter_Query")
@@ -164,7 +164,7 @@ func Test_SearchCompleteQuery_PropDate(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
-	result, err := resolver.autoComplete(context.TODO())
+	result, err := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 	if err != nil {
 		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
 
@@ -193,7 +193,7 @@ func Test_SearchCompleteQuery_PropNum(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
-	result, err := resolver.autoComplete(context.TODO())
+	result, err := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
 	if err != nil {
 		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
 
