@@ -2,7 +2,6 @@
 package rbac
 
 import (
-	"context"
 	"sync"
 
 	"github.com/driftprogramming/pgxpoolmock"
@@ -14,14 +13,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-// This interface allows us to mock the cache from other packages.
-type ICache interface {
-	GetDisabledClusters(ctx context.Context) (*map[string]struct{}, error)
-	// Add other functions as needed.
-	// Note that the mock will need to implement all functions defined here.
-}
-
-// Cache used to minimize requests to external APIs (Kubernetes and Database)
+// Cache helps optimize requests to external APIs (Kubernetes and Database)
 type Cache struct {
 	tokenReviews     map[string]*tokenReviewCache //Key:ClientToken
 	tokenReviewsLock sync.Mutex

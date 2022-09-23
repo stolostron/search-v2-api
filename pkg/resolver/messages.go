@@ -8,8 +8,12 @@ import (
 	klog "k8s.io/klog/v2"
 )
 
+// This interface allows us to replace the cache with a mock for test.
+type ICache interface {
+	GetDisabledClusters(ctx context.Context) (*map[string]struct{}, error)
+}
 type Message struct {
-	cache rbac.ICache // Tests will replace this interface with a mock cache instance.
+	cache ICache // Tests will replace this interface with a mock cache instance.
 }
 
 func Messages(ctx context.Context) ([]*model.Message, error) {
