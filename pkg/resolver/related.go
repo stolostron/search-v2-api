@@ -144,6 +144,8 @@ func (s *SearchResult) buildRelationsQuery() {
 		goqu.On(goqu.Ex{"related.uid": goqu.L(`"resources".uid`)}))
 	//RBAC CLAUSE
 	relQueryWithRbac := relQueryInnerJoin //without RBAC
+	withoutRBACSql, _, withoutRBACSqlErr := relQueryInnerJoin.ToSQL()
+	klog.V(5).Info("Relations query before RBAC:", withoutRBACSql, withoutRBACSqlErr)
 
 	if s.userData != nil && !Iskubeadmin(s.context) {
 		// add rbac
@@ -161,7 +163,7 @@ func (s *SearchResult) buildRelationsQuery() {
 	} else {
 		s.query = sql
 		s.params = params
-		klog.V(5).Info("Relations query: ", s.query)
+		klog.V(6).Info("Relations query: ", s.query)
 	}
 }
 
@@ -239,7 +241,6 @@ func (s *SearchResult) getRelations(ctx context.Context) []SearchRelatedResult {
 	}
 	// Build the relations query
 	s.buildRelationsQuery()
-	klog.Info("Relations query: ", s.query)
 	relations, relQueryError := s.pool.Query(s.context, s.query, s.params...) // how to deal with defaults.
 	if relQueryError != nil {
 		klog.Errorf("Error while executing getRelations query. Error :%s", relQueryError.Error())
