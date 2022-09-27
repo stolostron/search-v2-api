@@ -24,6 +24,11 @@ func matchApigroupKind(resources []rbac.Resource) exp.ExpressionList {
 		if clusterRes.Kind != "*" { // if all kinds are allowed, this filter is not needed
 			whereOrDs = append(whereOrDs, goqu.L(`data->>?`, "kind_plural").Eq(clusterRes.Kind))
 		}
+		// special case: if both apigroup and kind are stars - all resources are allowed
+		if clusterRes.Apigroup == "*" && clusterRes.Kind == "*" {
+			// no clauses are needed as everything is allowed - return an empty clause
+			return goqu.Or()
+		}
 		// Using this workaround to build the AND-OR combination query in goqu.
 		// Otherwise, by default goqu will AND everything
 		// (apigroup='' AND kind='') OR (apigroup='' AND kind='')
