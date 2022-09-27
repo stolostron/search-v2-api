@@ -10,7 +10,7 @@ import (
 	"github.com/stolostron/search-v2-api/graph/model"
 )
 
-func Test_Messages_ValidCache(t *testing.T) {
+func Test_Messages_DisabledCluster(t *testing.T) {
 	// Build mock
 	mockMessage := Message{
 		cache: &MockCache{
@@ -37,7 +37,6 @@ func Test_Messages_ValidCache(t *testing.T) {
 	}
 }
 
-//no uid set in context - returns error
 func Test_Messages_Error(t *testing.T) {
 	// Build mock
 	mockMessage := Message{
@@ -46,8 +45,8 @@ func Test_Messages_Error(t *testing.T) {
 			err:      fmt.Errorf("err running query"),
 		},
 	}
-	//Execute the function
-	res, errRes := mockMessage.messageResults(context.Background()) //no uid set in context - returns error
+	// Execute the function
+	res, errRes := mockMessage.messageResults(context.Background())
 
 	// Validate
 	if !reflect.DeepEqual([]*model.Message{}, res) {
@@ -66,7 +65,7 @@ func Test_Messages_MultipleDisabledClusters(t *testing.T) {
 			err:      nil,
 		},
 	}
-	//Execute the function
+	// Execute the function
 	res, err := mockMessage.messageResults(context.Background())
 
 	// Validate
@@ -86,7 +85,6 @@ func Test_Messages_MultipleDisabledClusters(t *testing.T) {
 	}
 }
 
-// user does not have access to any disabled clusters
 func Test_Message_NoDisabledClusters(t *testing.T) {
 	// Build mock
 	mockMessage := Message{
@@ -95,7 +93,7 @@ func Test_Message_NoDisabledClusters(t *testing.T) {
 			err:      nil,
 		},
 	}
-	//Execute the function
+	// Execute the function
 	res, err := mockMessage.messageResults(context.Background())
 
 	// Validate
