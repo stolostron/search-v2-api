@@ -532,3 +532,14 @@ func Test_SearchResolver_Items_Labels(t *testing.T) {
 		}
 	}
 }
+
+func Test_buildRbacWhereClauseHandleStars(t *testing.T) {
+	ud := rbac.UserData{
+		CsResources:     []rbac.Resource{{Apigroup: "", Kind: "nodes"}, {Apigroup: "*", Kind: "csinodes"}},
+		NsResources:     map[string][]rbac.Resource{"ocm": {{Apigroup: "*", Kind: "pods"}, {Apigroup: "*", Kind: "deployments"}}},
+		ManagedClusters: map[string]struct{}{"managed1": {}, "managed2": {}}}
+	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"), &ud)
+	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR (data->>'kind_plural' = 'csinodes'))) OR ((data->>'namespace' = 'ocm') AND ((data->>'kind_plural' = 'pods') OR (data->>'kind_plural' = 'deployments'))))))`
+	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
+	assert.Equal(t, expectedSql, gotSql)
+}
