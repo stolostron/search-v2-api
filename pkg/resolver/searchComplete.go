@@ -71,7 +71,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 	if s.property != "" {
 		//WHERE CLAUSE
 		if s.input != nil && len(s.input.Filters) > 0 {
-			whereDs = WhereClauseFilter(s.input, &rbac.SharedData{})
+			whereDs, _ = WhereClauseFilter(s.input, &rbac.SharedData{})
 		}
 
 		//SELECT CLAUSE

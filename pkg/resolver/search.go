@@ -158,6 +158,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	var limit int
 	var selectDs *goqu.SelectDataset
 	var whereDs []exp.Expression
+	var typeFilter string
 
 	// Example query: SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN
 	// (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 1000
@@ -183,24 +184,24 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	//WHERE CLAUSE
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 
-		//here we call whereclause filter and also return a boolean to check if property in ArrayProperties:
-		// whereDs, isArryProp = WhereClauseFilter(s.input)
-		//then if isArrayProp == true {append searchComplete query to search query (add the saved query in sharedCache to avoid recreating query each time
-		// and add the correct property type as param.)}
-		//searcinput := searchCompleteQueryToStore(prop string)
-		whereDs = WhereClauseFilter(s.input, &rbac.SharedData{})
-		sql, _, err := selectDs.Where(whereDs...).ToSQL()
-		klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
-		//RBAC CLAUSE
-		if s.userData != nil && !Iskubeadmin(ctx) {
-			whereDs = append(whereDs,
-				buildRbacWhereClause(ctx, s.userData)) // add rbac
+		whereDs, typeFilter = WhereClauseFilter(s.input, &rbac.SharedData{})
+		fmt.Println(typeFilter)
 
-		} else {
-			if !Iskubeadmin(ctx) {
-				panic(fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
-					ctx.Value(rbac.ContextAuthTokenKey)))
-			}
+	} else {
+		sql, _, err := selectDs.Where(whereDs...).ToSQL() //use original query
+		fmt.Println("Search query before adding RBAC clause:", sql, " error:", err)
+		klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
+	}
+
+	//RBAC CLAUSE
+	if s.userData != nil && !Iskubeadmin(ctx) {
+		whereDs = append(whereDs,
+			buildRbacWhereClause(ctx, s.userData)) // add rbac
+
+	} else {
+		if !Iskubeadmin(ctx) {
+			panic(fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
+				ctx.Value(rbac.ContextAuthTokenKey)))
 		}
 	}
 
@@ -422,7 +423,7 @@ func getOperatorAndNumDateFilter(filter string, values []string) map[string][]st
 				then = now.AddDate(-1, 0, 0).Format(format)
 
 			default:
-				//check that property value is an array:
+				//check that property value is an array: TODO this is not best approach we will need to change.
 				array := strings.Split(string(val), ":")
 				if len(array) > 1 || strings.Contains(string(val), "[\"") {
 					fmt.Println("Using @> operator for ", val)
@@ -531,9 +532,19 @@ func pointerToStringArray(pointerArray []*string) []string {
 	return values
 }
 
-func WhereClauseFilter(input *model.SearchInput, shared *rbac.SharedData) []exp.Expression {
+func WhereClauseFilter(input *model.SearchInput, shared *rbac.SharedData) ([]exp.Expression, string) {
 	var whereDs []exp.Expression
-	propertiesToCheck := []string{"label", "role", "port", "container", "category", "rules", "addon", "image"}
+	var dataTypeMap map[string]string
+	var dataType string
+
+	//check that shared cache has resource datatypes:
+
+	typemap, err := shared.SearchCompleteQueryIfPropArray()
+	if err != nil {
+		klog.Warningf("Error creating datatype map with err: [%s] ", err)
+	} else {
+		dataTypeMap = typemap
+	}
 
 	if input.Keywords != nil && len(input.Keywords) > 0 {
 		// Sample query: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data")
@@ -551,36 +562,29 @@ func WhereClauseFilter(input *model.SearchInput, shared *rbac.SharedData) []exp.
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
 
-				// If property is of array type like label, remove the equal sign in it and use colon
-				// - to be similar to how it is stored in the database
-				if _, ok := arrayProperties[filter.Property]; ok {
-					for _, val := range propertiesToCheck {
-						if val == filter.Property {
-							//add this query to search input
-							shared.SearchCompleteQueryToStore(val)
-							fmt.Println(shared.SearchCompleteQueryToStore(val))
-							// 	SearchCompleteResult{
-							// 		query: shared.SearchCompleteQueryToStore(val),
-							// 	}
+				for key, val := range dataTypeMap {
+					if key == filter.Property { //check if property exists in dataTypeMap to get datatype
+						fmt.Printf("Property (key) in map:%s, filter.Property is: %s, and Datatype (val) of property in map:%s", key, filter.Property, val)
+						dataType = val
+
+						cleanedVal := make([]string, len(values))
+						for i, val := range values {
+							labels := strings.Split(val, "=")
+							if len(labels) == 2 {
+								cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
+							} else if len(labels) == 1 {
+								//// If property is of array type, format it as an array for easy searching
+								cleanedVal[i] = labels[0]
+							} else {
+								klog.Error("Error while decoding label string")
+								cleanedVal[i] = val
+							}
+
+							// }
+
+							values = cleanedVal
 						}
 					}
-					fmt.Println("inside arrayProperties", filter.Property)
-					cleanedVal := make([]string, len(values))
-					for i, val := range values {
-						labels := strings.Split(val, "=")
-						if len(labels) == 2 {
-							cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
-						} else if len(labels) == 1 {
-							//// If property is of array type, format it as an array for easy searching
-							cleanedVal[i] = labels[0]
-						} else {
-							klog.Error("Error while decoding label string")
-							cleanedVal[i] = val
-						}
-
-					}
-
-					values = cleanedVal
 				}
 
 				// Check if value is a number or date and get the cleaned up value
@@ -602,9 +606,8 @@ func WhereClauseFilter(input *model.SearchInput, shared *rbac.SharedData) []exp.
 			}
 		}
 	}
-	fmt.Println("Where property is:", whereDs)
 
-	return whereDs
+	return whereDs, dataType
 }
 
 func getKeys(stringArrayMap map[string][]string) []string {

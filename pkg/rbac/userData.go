@@ -256,10 +256,15 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 				if verb == "list" || verb == "*" { //TODO: resourceName == "*" && verb == "*" then exit loop
 					for _, res := range rules.Resources {
 						for _, api := range rules.APIGroups {
+
+							// if api == "*"{
+
+							// }
 							if !cache.shared.isClusterScoped(res, api) { //Add the resource if it is not cluster scoped
 								user.userData.NsResources[ns] = append(user.userData.NsResources[ns],
 									Resource{Apigroup: api, Kind: res})
-							}
+								// fmt.Printf("API:%s, Kind:%s\n", api, res)
+							} //if cache has "*" for apigroup need to look for it
 						}
 					}
 				}

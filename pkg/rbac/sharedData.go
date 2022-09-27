@@ -2,7 +2,6 @@ package rbac
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -41,7 +40,8 @@ type SharedData struct {
 	nsLock      sync.Mutex // Locks the namespaces array while updating it.
 	nsUpdatedAt time.Time  // Time when namespaces data was last updated.
 
-	searchCompleteQuery string
+	searchCompleteQuery    map[string]string
+	searchCompleteQueryErr error
 }
 
 type Resource struct {
@@ -55,13 +55,53 @@ var managedClusterResourceGvr = schema.GroupVersionResource{
 	Resource: "managedclusters",
 }
 
-func (shared *SharedData) SearchCompleteQueryToStore(prop string) string {
+// Query to get the data types for all properties:
+// select distinct key, jsonb_typeof(value) as datatype
+// FROM search.resources,jsonb_each(data)
+// order by datatype;
 
-	queryCompleteProp := fmt.Sprintf(`SELECT DISTINCT "prop" FROM (SELECT "data"->'%s' AS "prop" FROM "search"."resources" 
-	WHERE ("data"->'%s' IS NOT NULL) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`, prop, prop)
-	shared.searchCompleteQuery = queryCompleteProp
+func (shared *SharedData) SearchCompleteQueryIfPropArray() (map[string]string, error) {
 
-	return queryCompleteProp
+	var selectDs *goqu.SelectDataset
+
+	//define schema:
+	schemaTable := goqu.S("search").Table("resources")
+	//data expression to get value and key
+	jsb := goqu.L("jsonb_each(?)", goqu.C("data"))
+	//select from these datasets
+	ds := goqu.From(schemaTable, jsb)
+	//select statement with orderby and distinct clause
+	selectDs = ds.Select(goqu.L("key"), goqu.L("jsonb_typeof(?)",
+		goqu.C("data")).As("datatype")).Distinct().Order(goqu.L("datatype").Asc())
+
+	query, params, err := selectDs.ToSQL()
+
+	klog.V(5).Info("Query for property datatypes: [%s] ", query)
+	rows, err := CacheInst.pool.Query(context.Background(), query, params...)
+	if err != nil {
+		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var key string
+	var value string
+	resourceTypeMap := make(map[string]string)
+	for rows.Next() {
+		err = rows.Scan(&key, &value)
+
+		if err != nil {
+			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), query)
+		}
+		resourceTypeMap[key] = value
+
+	}
+	//cache query:
+	shared.searchCompleteQuery = resourceTypeMap
+	shared.searchCompleteQueryErr = err
+	// shared.searchCompleteQueryUpdateTime
+
+	return resourceTypeMap, err
 }
 
 func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
