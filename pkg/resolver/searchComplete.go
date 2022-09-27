@@ -185,7 +185,7 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			}
 
 		}
-		properties := stringArrayToPointer(getKeysStructMap(props))
+		properties := stringArrayToPointer(getKeys(props))
 		srchCompleteOut = append(srchCompleteOut, properties...)
 	} else {
 		klog.Error("searchCompleteResults rows is nil", srchCompleteOut)
@@ -243,12 +243,4 @@ func isNumber(vals []*string) bool {
 		}
 	}
 	return true
-}
-
-func getKeysStructMap(structArrayMap map[string]struct{}) []string {
-	keys := make([]string, 0, len(structArrayMap))
-	for k := range structArrayMap {
-		keys = append(keys, k)
-	}
-	return keys
 }

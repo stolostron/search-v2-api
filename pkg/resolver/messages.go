@@ -15,7 +15,7 @@ type Message struct {
 func Messages(ctx context.Context) ([]*model.Message, error) {
 	userAccess, userDataErr := rbac.CacheInst.GetUserData(ctx)
 	if userDataErr != nil {
-		return nil, userDataErr
+		return []*model.Message{}, userDataErr
 	}
 	message := &Message{
 		userData: userAccess,
@@ -25,6 +25,7 @@ func Messages(ctx context.Context) ([]*model.Message, error) {
 
 func (s *Message) messageResults(ctx context.Context) ([]*model.Message, error) {
 	klog.V(2).Info("Resolving Messages()")
+
 	disabledClusters, disabledClustersErr := rbac.CacheInst.GetDisabledClusters(ctx)
 	//Cache is invalid
 	if disabledClustersErr != nil {

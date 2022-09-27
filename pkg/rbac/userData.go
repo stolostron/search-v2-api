@@ -43,7 +43,7 @@ type UserDataCache struct {
 type UserData struct {
 	CsResources     []Resource            // Cluster-scoped resources on hub the user has list access.
 	NsResources     map[string][]Resource // Namespaced resources on hub the user has list access.
-	ManagedClusters []string              // Managed clusters where the user has view access.
+	ManagedClusters map[string]struct{}   // Managed clusters where the user has view access.
 }
 
 //Get user's UID
@@ -70,6 +70,7 @@ func (cache *Cache) GetUserUID(ctx context.Context) (string, authv1.UserInfo) {
 
 func (cache *Cache) GetUserDataCache(ctx context.Context,
 	authzClient v1.AuthorizationV1Interface) (*UserDataCache, error) {
+
 	var user *UserDataCache
 	var uid string
 	var err error
@@ -88,6 +89,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	if userDataExists && userCacheValid(cachedUserData) {
 
 		klog.V(5).Info("Using user data from cache.")
+
 		return cachedUserData, nil
 	} else {
 		if cache.users == nil {
@@ -95,23 +97,27 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 		}
 		// User not in cache , Initialize and assign to the UID
 		user = &UserDataCache{}
+		if cache.users == nil {
+			cache.users = map[string]*UserDataCache{}
+		}
 		cache.users[uid] = user
+
 		// We want to setup the client if passed, this is only for unit tests
 		if authzClient != nil {
 			user.authzClient = authzClient
 		}
 	}
 
-	userData, err := user.getNamespacedResources(cache, ctx, clientToken)
+	userDataCache, err := user.getNamespacedResources(cache, ctx, clientToken)
 
 	// Get cluster scoped resources for the user
 	// TO DO : Make this parallel operation
 	if err == nil {
 		klog.V(5).Info("No errors on namespacedresources present for: ",
 			cache.tokenReviews[clientToken].tokenReview.Status.User.Username)
-		userData, err = user.getClusterScopedResources(cache, ctx, clientToken)
+		userDataCache, err = user.getClusterScopedResources(cache, ctx, clientToken)
 	}
-	return userData, err
+	return userDataCache, err
 }
 
 // Get a static copy of the current user data. It will use cached data if valid or refresh if needed.
@@ -154,7 +160,7 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 	defer user.csrLock.Unlock()
 
 	// Not present in cache, find all cluster scoped resources
-	clusterScopedResources := cache.shared.csResources
+	clusterScopedResources := cache.shared.csResourcesMap
 	if len(clusterScopedResources) == 0 {
 		klog.Warning("Cluster scoped resources from shared cache empty.", user.csrErr)
 		return user, user.csrErr
@@ -167,14 +173,14 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 	}
 	//If we have a new set of authorized list for the user reset the previous one
 	user.userData.CsResources = nil
-	for _, res := range clusterScopedResources {
+	for res := range clusterScopedResources {
 		if user.userAuthorizedListCSResource(ctx, impersClientset, res.Apigroup, res.Kind) {
 			user.userData.CsResources = append(user.userData.CsResources,
 				Resource{Apigroup: res.Apigroup, Kind: res.Kind})
 		}
 	}
-	uid, _ := cache.GetUserUID(ctx)
-	klog.V(7).Infof("User %s has access to these cluster scoped res: %+v \n", uid,
+	uid, userInfo := cache.GetUserUID(ctx)
+	klog.V(7).Infof("User %s with uid: %s has access to these cluster scoped res: %+v \n", userInfo.Username, uid,
 		user.userData.CsResources)
 	user.csrUpdatedAt = time.Now()
 	return user, user.csrErr
@@ -238,6 +244,7 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 
 	user.userData.NsResources = make(map[string][]Resource)
 	managedClusters := cache.shared.managedClusters
+	user.userData.ManagedClusters = make(map[string]struct{})
 
 	for _, ns := range allNamespaces {
 		rulesCheck := authz.SelfSubjectRulesReview{
@@ -249,22 +256,27 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 		if err != nil {
 			klog.Error("Error creating SelfSubjectRulesReviews for namespace", err, ns)
 		} else {
-			klog.V(9).Infof("SelfSubjectRulesReviews Kube API result: %v\n", prettyPrint(result.Status))
+			klog.V(9).Infof("SelfSubjectRulesReviews Kube API result for ns:%s : %v\n", ns, prettyPrint(result.Status))
 		}
 		for _, rules := range result.Status.ResourceRules {
 			for _, verb := range rules.Verbs {
 				if verb == "list" || verb == "*" { //TODO: resourceName == "*" && verb == "*" then exit loop
 					for _, res := range rules.Resources {
 						for _, api := range rules.APIGroups {
-
-							// if api == "*"{
-
-							// }
-							if !cache.shared.isClusterScoped(res, api) { //Add the resource if it is not cluster scoped
+							//Add the resource if it is not cluster scoped
+							//fail-safe mechanism to avoid whitelist - TODO: incorporate whitelist
+							if !cache.shared.isClusterScoped(res, api) && (len(rules.ResourceNames) == 0 ||
+								(len(rules.ResourceNames) > 0 && rules.ResourceNames[0] == "*")) {
 								user.userData.NsResources[ns] = append(user.userData.NsResources[ns],
 									Resource{Apigroup: api, Kind: res})
-								// fmt.Printf("API:%s, Kind:%s\n", api, res)
-							} //if cache has "*" for apigroup need to look for it
+							} else if cache.shared.isClusterScoped(res, api) {
+								klog.V(5).Info("Got clusterscoped resource", api, "/",
+									res, " from SelfSubjectRulesReviews. Excluding it from ns scoped resoures.")
+							} else if len(rules.ResourceNames) > 0 && rules.ResourceNames[0] != "*" {
+								klog.V(5).Info("Got whitelist in resourcenames. Excluding resource", api, "/", res,
+									" from ns scoped resoures.")
+
+							}
 						}
 					}
 				}
@@ -274,26 +286,20 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 				if verb == "create" || verb == "*" {
 					for _, res := range rules.Resources {
 						if res == "managedclusterviews" {
-							for i := range managedClusters {
-								if managedClusters[i] == ns {
-									user.userData.ManagedClusters =
-										append(user.userData.ManagedClusters, ns)
-
-								}
+							_, managedClusterNs := managedClusters[ns]
+							if managedClusterNs {
+								user.userData.ManagedClusters[ns] = struct{}{}
 							}
 						}
-
 					}
 				}
-
 			}
-
 		}
 	}
-	uid, _ := cache.GetUserUID(ctx)
-	klog.V(7).Infof("User %s has access to these namespace scoped res: %+v \n", uid,
+	uid, userInfo := cache.GetUserUID(ctx)
+	klog.V(7).Infof("User %s with uid: %s has access to these namespace scoped res: %+v \n", userInfo.Username, uid,
 		user.userData.NsResources)
-	klog.V(7).Infof("User %s has access to these ManagedClusters: %+v \n", uid,
+	klog.V(7).Infof("User %s with uid: %s has access to these ManagedClusters: %+v \n", userInfo.Username, uid,
 		user.userData.ManagedClusters)
 
 	user.nsrUpdatedAt = time.Now()
@@ -342,6 +348,6 @@ func (user *UserDataCache) GetNsResources() map[string][]Resource {
 	return user.userData.NsResources
 }
 
-func (user *UserDataCache) GetManagedClusters() []string {
+func (user *UserDataCache) GetManagedClusters() map[string]struct{} {
 	return user.userData.ManagedClusters
 }

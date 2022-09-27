@@ -2,8 +2,6 @@
 package resolver
 
 import (
-	"sort"
-
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/lib/pq"
@@ -17,9 +15,20 @@ func matchApigroupKind(resources []rbac.Resource) exp.ExpressionList {
 	var whereCsDs exp.ExpressionList // Stores the where clause for cluster scoped resources
 
 	for i, clusterRes := range resources {
-		whereOrDs := []exp.Expression{goqu.COALESCE(goqu.L(`data->>?`, "apigroup"), "").Eq(clusterRes.Apigroup),
-			goqu.L(`data->>?`, "kind_plural").Eq(clusterRes.Kind)}
-
+		whereOrDs := []exp.Expression{}
+		//add apigroup filter
+		if clusterRes.Apigroup != "*" { // if all apigroups are allowed, this filter is not needed
+			whereOrDs = append(whereOrDs, goqu.COALESCE(goqu.L(`data->>?`, "apigroup"), "").Eq(clusterRes.Apigroup))
+		}
+		//add kind filter
+		if clusterRes.Kind != "*" { // if all kinds are allowed, this filter is not needed
+			whereOrDs = append(whereOrDs, goqu.L(`data->>?`, "kind_plural").Eq(clusterRes.Kind))
+		}
+		// special case: if both apigroup and kind are stars - all resources are allowed
+		if clusterRes.Apigroup == "*" && clusterRes.Kind == "*" {
+			// no clauses are needed as everything is allowed - return an empty clause
+			return goqu.Or()
+		}
 		// Using this workaround to build the AND-OR combination query in goqu.
 		// Otherwise, by default goqu will AND everything
 		// (apigroup='' AND kind='') OR (apigroup='' AND kind='')
@@ -53,13 +62,8 @@ func matchNamespacedResources(nsResources map[string][]rbac.Resource) exp.Expres
 	var whereNsDs []exp.Expression
 	if len(nsResources) > 0 {
 		whereNsDs = make([]exp.Expression, len(nsResources))
-		namespaces := make([]string, len(nsResources))
-		i := 0
-		for namespace := range nsResources {
-			namespaces[i] = namespace
-			i++
-		}
-		sort.Strings(namespaces) //to make unit tests pass
+		namespaces := getKeys(nsResources)
+
 		for nsCount, namespace := range namespaces {
 			whereNsDs[nsCount] = goqu.And(goqu.L(`data->>?`, "namespace").Eq(namespace),
 				matchApigroupKind(nsResources[namespace]))

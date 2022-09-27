@@ -82,10 +82,13 @@ func (s *SearchResult) Items() []map[string]interface{} {
 	return r
 }
 
-func (s *SearchResult) Related() []SearchRelatedResult {
+func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
 	klog.V(2).Info("Resolving SearchResult:Related()")
 	if s.uids == nil {
 		s.Uids()
+	}
+	if s.context == nil {
+		s.context = ctx
 	}
 	var start time.Time
 	var numUIDs int
@@ -96,7 +99,7 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 	if len(s.uids) > 0 {
 		start = time.Now()
 		numUIDs = len(s.uids)
-		r = s.getRelations()
+		r = s.getRelations(ctx)
 	} else {
 		klog.Warning("No uids selected for query:Related()")
 	}
@@ -110,7 +113,6 @@ func (s *SearchResult) Related() []SearchRelatedResult {
 			}
 			klog.V(4).Infof("Finding relationships for %d uids and %d level(s) took %s.",
 				numUIDs, s.level, time.Since(start))
-
 		} else {
 			klog.V(4).Infof("Not finding relationships as there are %d uids and %d level(s).",
 				numUIDs, s.level)
@@ -143,7 +145,7 @@ func Iskubeadmin(ctx context.Context) bool {
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData) exp.ExpressionList {
 	return goqu.Or(
-		matchManagedCluster(userrbac.ManagedClusters), // goqu.I("cluster").In([]string{"clusterNames", ....})
+		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
 		goqu.And(
 			matchHubCluster(), // goqu.L(`data->>?`, "_hubClusterResource").Eq("true")
 			goqu.Or(
@@ -592,8 +594,6 @@ func WhereClauseFilter(input *model.SearchInput, shared *rbac.SharedData) ([]exp
 
 				//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
 				keys := getKeys(opDateValueMap)
-				sort.Strings(keys)
-
 				var operatorWhereDs []exp.Expression //store all the clauses for this filter together
 				for _, operator := range keys {
 					operatorWhereDs = append(operatorWhereDs,
@@ -610,13 +610,19 @@ func WhereClauseFilter(input *model.SearchInput, shared *rbac.SharedData) ([]exp
 	return whereDs, dataType
 }
 
-func getKeys(stringArrayMap map[string][]string) []string {
-	i := 0
-	keys := make([]string, len(stringArrayMap))
-	for k := range stringArrayMap {
-		keys[i] = k
-		i++
+func getKeys(stringKeyMap interface{}) []string {
+	v := reflect.ValueOf(stringKeyMap)
+	if v.Kind() != reflect.Map {
+		klog.Error("input in getKeys is not a map")
 	}
+	if v.Type().Key().Kind() != reflect.String {
+		klog.Error("input map in getKeys does not have string keys")
+	}
+	keys := make([]string, 0, v.Len())
+	for _, key := range v.MapKeys() {
+		keys = append(keys, key.String())
+	}
+	sort.Strings(keys)
 	return keys
 }
 
