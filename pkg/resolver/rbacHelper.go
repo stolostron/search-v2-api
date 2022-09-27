@@ -15,9 +15,15 @@ func matchApigroupKind(resources []rbac.Resource) exp.ExpressionList {
 	var whereCsDs exp.ExpressionList // Stores the where clause for cluster scoped resources
 
 	for i, clusterRes := range resources {
-		whereOrDs := []exp.Expression{goqu.COALESCE(goqu.L(`data->>?`, "apigroup"), "").Eq(clusterRes.Apigroup),
-			goqu.L(`data->>?`, "kind_plural").Eq(clusterRes.Kind)}
-
+		whereOrDs := []exp.Expression{}
+		//add apigroup filter
+		if clusterRes.Apigroup != "*" { // if all apigroups are allowed, this filter is not needed
+			whereOrDs = append(whereOrDs, goqu.COALESCE(goqu.L(`data->>?`, "apigroup"), "").Eq(clusterRes.Apigroup))
+		}
+		//add kind filter
+		if clusterRes.Kind != "*" { // if all kinds are allowed, this filter is not needed
+			whereOrDs = append(whereOrDs, goqu.L(`data->>?`, "kind_plural").Eq(clusterRes.Kind))
+		}
 		// Using this workaround to build the AND-OR combination query in goqu.
 		// Otherwise, by default goqu will AND everything
 		// (apigroup='' AND kind='') OR (apigroup='' AND kind='')
