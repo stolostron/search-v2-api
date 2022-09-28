@@ -186,12 +186,12 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	//WHERE CLAUSE
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 
+		//we get properties here as well as their datatypes:
 		whereDs, typeFilter = WhereClauseFilter(s.input, &rbac.SharedData{})
 		fmt.Println(typeFilter)
 
 	} else {
 		sql, _, err := selectDs.Where(whereDs...).ToSQL() //use original query
-		fmt.Println("Search query before adding RBAC clause:", sql, " error:", err)
 		klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
 	}
 
@@ -226,7 +226,8 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	klog.V(5).Infof("Search query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
-	fmt.Printf("(1) Search query: %s\nargs: %s", sql, params)
+	fmt.Println("Search query: %s\nargs: %s", sql, params)
+	// SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE "data"->'container' '?|' ('acm-agent') LIMIT 1000
 }
 
 func (s *SearchResult) resolveCount() int {
@@ -263,7 +264,6 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	klog.V(5).Info("Query issued by resolver [%s] ", s.query)
 	rows, err := s.pool.Query(s.context, s.query, s.params...)
 
-	fmt.Println("(2) Query to resolve items is :", s.query)
 	defer timer.ObserveDuration()
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
@@ -388,7 +388,7 @@ func isLower(values []string) bool {
 
 // Check if value is a number or date and get the operator
 // Returns a map that stores operator and values
-func getOperatorAndNumDateFilter(filter string, values []string) map[string][]string {
+func getOperatorAndNumDateFilter(filter string, values []string, dataType interface{}) map[string][]string {
 	opValueMap := getOperator(values) //If values are numbers
 
 	// Store the operator and value in a map - this is to handle multiple values
@@ -400,6 +400,7 @@ func getOperatorAndNumDateFilter(filter string, values []string) map[string][]st
 			operatorValueMap[operator] = vals
 		}
 	}
+
 	if len(opValueMap) < 1 { //If not a number (no operator), check if values are dates
 		// Expected values: {"hour", "day", "week", "month", "year"}
 		operator := ">" // For dates, always check for values '>'
@@ -425,33 +426,37 @@ func getOperatorAndNumDateFilter(filter string, values []string) map[string][]st
 				then = now.AddDate(-1, 0, 0).Format(format)
 
 			default:
-				//check that property value is an array: TODO this is not best approach we will need to change.
-				array := strings.Split(string(val), ":")
-				if len(array) > 1 || strings.Contains(string(val), "[\"") {
-					fmt.Println("Using @> operator for ", val)
+				//check that property value is an array:
+				if dataType == "object" {
 					klog.V(7).Info("filter is array. Operator is @>.")
 					operator = "@>"
-					//if val exists in the arrayProperties in sharedData then append the searchComplete part of query
-					// sharedData := *&rbac.SharedData{searchCompleteForArrayProp}
-					// if _, ok := *rbac.CacheInst.shared.arrayProperties[val]; ok {
-					// 	searchCompleteForArrayProp = true
-					// }
 
+				} else if dataType == "array" {
+					klog.V(7).Info("filter is array. Operator is ?|.")
+					operator = "?|"
 				} else {
-					if _, ok := arrayProperties[filter]; ok {
-						klog.V(7).Info("filter ", filter, " is present in arrayProperties. Using operator ?|.")
-						operator = "?|"
-					} else {
-						klog.V(7).Info("filter is neither label nor in arrayProperties: ", filter)
-						operator = ""
-					}
+					klog.V(7).Info("filter is neither label nor in arrayProperties: ", filter)
+					operator = ""
 				}
+				// }
+				// } else if {
+				// 	if _, ok := arrayProperties[filter]; ok {
+				// 		fmt.Println(ok)
+				// 		klog.V(7).Info("filter ", filter, " is present in arrayProperties. Using operator ?|.")
+				// 		operator = "?|"
+				// 	} else {
+				// 		klog.V(7).Info("filter is neither label nor in arrayProperties: ", filter)
+				// 		operator = ""
+				// 	}
+				// }
 				then = val
 			}
+			fmt.Println("", operator)
 			// Add the value and operator to map
 			updateOpValueMap(operator, opValueMap, then)
 		}
 	}
+	fmt.Println(opValueMap)
 	return opValueMap
 }
 
@@ -536,16 +541,15 @@ func pointerToStringArray(pointerArray []*string) []string {
 
 func WhereClauseFilter(input *model.SearchInput, shared *rbac.SharedData) ([]exp.Expression, string) {
 	var whereDs []exp.Expression
-	var dataTypeMap map[string]string
+	var propTypeMap map[string]string
 	var dataType string
 
 	//check that shared cache has resource datatypes:
-
-	typemap, err := shared.SearchCompleteQueryIfPropArray()
+	sharedData, err := rbac.CacheInst.GetSharedData(context.Background())
 	if err != nil {
 		klog.Warningf("Error creating datatype map with err: [%s] ", err)
 	} else {
-		dataTypeMap = typemap
+		propTypeMap = sharedData.GetPropertyTypeCache()
 	}
 
 	if input.Keywords != nil && len(input.Keywords) > 0 {
@@ -563,13 +567,15 @@ func WhereClauseFilter(input *model.SearchInput, shared *rbac.SharedData) ([]exp
 		for _, filter := range input.Filters {
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
+				fmt.Println(values)
 
-				for key, val := range dataTypeMap {
+				for key, val := range propTypeMap {
 					if key == filter.Property { //check if property exists in dataTypeMap to get datatype
-						fmt.Printf("Property (key) in map:%s, filter.Property is: %s, and Datatype (val) of property in map:%s", key, filter.Property, val)
+						fmt.Printf("Property (key) in map:%s, filter.Property is: %s, and Datatype (val) of property in map:%s\n", key, filter.Property, val)
 						dataType = val
 
 						cleanedVal := make([]string, len(values))
+
 						for i, val := range values {
 							labels := strings.Split(val, "=")
 							if len(labels) == 2 {
@@ -585,12 +591,13 @@ func WhereClauseFilter(input *model.SearchInput, shared *rbac.SharedData) ([]exp
 							// }
 
 							values = cleanedVal
+							fmt.Println(values)
 						}
 					}
 				}
 
 				// Check if value is a number or date and get the cleaned up value
-				opDateValueMap := getOperatorAndNumDateFilter(filter.Property, values)
+				opDateValueMap := getOperatorAndNumDateFilter(filter.Property, values, dataType)
 
 				//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
 				keys := getKeys(opDateValueMap)

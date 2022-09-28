@@ -16,20 +16,21 @@ var Cfg = new()
 
 // Define a Config type to hold our config properties.
 type Config struct {
-	API_SERVER_URL string // address for Kubernetes API Server
-	AuthCacheTTL   int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
-	SharedCacheTTL int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
-	UserCacheTTL   int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
-	ContextPath    string
-	DBHost         string
-	DBName         string
-	DBPass         string
-	DBPort         int
-	DBUser         string
-	HttpPort       int
-	PlaygroundMode bool // Enable the GraphQL Playground client.
-	QueryLimit     int  // The default LIMIT to use on queries. Client can override.
-	RelationLevel  int  // The number of levels/hops for finding relationships for a particular resource
+	API_SERVER_URL    string // address for Kubernetes API Server
+	AuthCacheTTL      int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
+	SharedCacheTTL    int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
+	UserCacheTTL      int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
+	PropTypesCacheTTL int    // Time-to-live (milliseconds) of property datatypes cache in shared cache.
+	ContextPath       string
+	DBHost            string
+	DBName            string
+	DBPass            string
+	DBPort            int
+	DBUser            string
+	HttpPort          int
+	PlaygroundMode    bool // Enable the GraphQL Playground client.
+	QueryLimit        int  // The default LIMIT to use on queries. Client can override.
+	RelationLevel     int  // The number of levels/hops for finding relationships for a particular resource
 	// Placeholder for future use.
 	// QueryLoopLimit          int // number of queries handled at a time
 	// RBAC_INACTIVITY_TIMEOUT int
@@ -39,19 +40,20 @@ func new() *Config {
 	// If environment variables are set, use default values
 	// Simply put, the order of preference is env -> default values (from left to right)
 	conf := &Config{
-		API_SERVER_URL: getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
-		AuthCacheTTL:   getEnvAsInt("AUTH_CACHE_TTL", int(60000)),    // 1 minute
-		SharedCacheTTL: getEnvAsInt("SHARED_CACHE_TTL", int(120000)), // 2 min (increase to 10min after implementation)
-		UserCacheTTL:   getEnvAsInt("USER_CACHE_TTL", int(120000)),   // 2 min (increase to 10min after implementation)
-		ContextPath:    getEnv("CONTEXT_PATH", "/searchapi"),
-		DBHost:         getEnv("DB_HOST", "localhost"),
-		DBName:         getEnv("DB_NAME", ""),
-		DBPass:         getEnv("DB_PASS", ""),
-		DBPort:         getEnvAsInt("DB_PORT", int(5432)),
-		DBUser:         getEnv("DB_USER", ""),
-		HttpPort:       getEnvAsInt("HTTP_PORT", 4010),
-		PlaygroundMode: getEnvAsBool("PLAYGROUND_MODE", false),
-		QueryLimit:     getEnvAsInt("QUERY_LIMIT", 1000),
+		API_SERVER_URL:    getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
+		AuthCacheTTL:      getEnvAsInt("AUTH_CACHE_TTL", int(60000)),       // 1 minute
+		SharedCacheTTL:    getEnvAsInt("SHARED_CACHE_TTL", int(120000)),    // 2 min (increase to 10min after implementation)
+		UserCacheTTL:      getEnvAsInt("USER_CACHE_TTL", int(120000)),      // 2 min (increase to 10min after implementation)
+		PropTypesCacheTTL: getEnvAsInt("PROPTYPES_CACHE_TTL", int(600000)), // 10 min
+		ContextPath:       getEnv("CONTEXT_PATH", "/searchapi"),
+		DBHost:            getEnv("DB_HOST", "localhost"),
+		DBName:            getEnv("DB_NAME", ""),
+		DBPass:            getEnv("DB_PASS", ""),
+		DBPort:            getEnvAsInt("DB_PORT", int(5432)),
+		DBUser:            getEnv("DB_USER", ""),
+		HttpPort:          getEnvAsInt("HTTP_PORT", 4010),
+		PlaygroundMode:    getEnvAsBool("PLAYGROUND_MODE", false),
+		QueryLimit:        getEnvAsInt("QUERY_LIMIT", 1000),
 		//Setting default level to 0 to check if user has explicitly set this variable
 		// This will be updated to 1 for default searches and 3 for applications - unless set by the user
 		RelationLevel: getEnvAsInt("RELATION_LEVEL", 0),

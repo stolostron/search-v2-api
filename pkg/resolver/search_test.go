@@ -183,7 +183,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	prop := "created"
 
 	val8 := "year"
-	opValMap := getOperatorAndNumDateFilter(prop, []string{val8})
+	opValMap := getOperatorAndNumDateFilter(prop, []string{val8}, nil)
 	csres, nsres, mc := newUserData()
 
 	rbac := buildRbacWhereClause(context.TODO(), &rbac.UserData{CsResources: csres, NsResources: nsres, ManagedClusters: mc})
@@ -195,7 +195,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val9 := "hour"
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val9})
+	opValMap = getOperatorAndNumDateFilter(prop, []string{val9}, nil)
 	mockQueryHour, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0]), rbac).Limit(1000).ToSQL()
 
 	testOperatorHour := TestOperatorItem{
@@ -204,7 +204,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val10 := "day"
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val10})
+	opValMap = getOperatorAndNumDateFilter(prop, []string{val10}, nil)
 	mockQueryDay, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0])), rbac).Limit(1000).ToSQL()
 
 	testOperatorDay := TestOperatorItem{
@@ -213,7 +213,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val11 := "week"
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val11})
+	opValMap = getOperatorAndNumDateFilter(prop, []string{val11}, nil)
 	mockQueryWeek, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0])), rbac).Limit(1000).ToSQL()
 
 	testOperatorWeek := TestOperatorItem{
@@ -222,7 +222,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val12 := "month"
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val12})
+	opValMap = getOperatorAndNumDateFilter(prop, []string{val12}, nil)
 	mockQueryMonth, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0])), rbac).Limit(1000).ToSQL()
 
 	testOperatorMonth := TestOperatorItem{
@@ -230,7 +230,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 		mockQuery:   mockQueryMonth, // `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'created' > ('2021-05-16T13:11:12Z')) LIMIT 1000`,
 	}
 
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val8, val9})
+	opValMap = getOperatorAndNumDateFilter(prop, []string{val8, val9}, nil)
 	mockQueryMultiple, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.Or(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0]),
 		goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][1])), rbac).Limit(1000).ToSQL()
 

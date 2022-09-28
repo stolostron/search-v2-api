@@ -21,6 +21,7 @@ type SharedData struct {
 	namespaces       []string
 	managedClusters  map[string]struct{}
 	disabledClusters map[string]struct{}
+	propType         map[string]string
 
 	// These are internal objects to track the state of the cache.
 	dcErr       error      // Error while updating clusters data.
@@ -39,8 +40,8 @@ type SharedData struct {
 	nsLock      sync.Mutex // Locks the namespaces array while updating it.
 	nsUpdatedAt time.Time  // Time when namespaces data was last updated.
 
-	searchCompleteQuery    map[string]string
-	searchCompleteQueryErr error
+	propTypeErr  error
+	propTypeTime time.Time
 }
 
 type Resource struct {
@@ -54,15 +55,14 @@ var managedClusterResourceGvr = schema.GroupVersionResource{
 	Resource: "managedclusters",
 }
 
-// Query to get the data types for all properties:
-// select distinct key, jsonb_typeof(value) as datatype
-// FROM search.resources,jsonb_each(data)
-// order by datatype;
+func (shared *SharedData) GetPropertyTypes() (map[string]string, error) {
 
-func (shared *SharedData) SearchCompleteQueryIfPropArray() (map[string]string, error) {
+	// original query:
+	// select distinct key, jsonb_typeof(value) as datatype
+	// FROM search.resources,jsonb_each(data)
+	// order by datatype;
 
 	var selectDs *goqu.SelectDataset
-
 	//define schema:
 	schemaTable := goqu.S("search").Table("resources")
 	//data expression to get value and key
@@ -71,7 +71,7 @@ func (shared *SharedData) SearchCompleteQueryIfPropArray() (map[string]string, e
 	ds := goqu.From(schemaTable, jsb)
 	//select statement with orderby and distinct clause
 	selectDs = ds.Select(goqu.L("key"), goqu.L("jsonb_typeof(?)",
-		goqu.C("data")).As("datatype")).Distinct().Order(goqu.L("datatype").Asc())
+		goqu.C("value")).As("datatype")).Distinct().Order(goqu.L("datatype").Asc())
 
 	query, params, err := selectDs.ToSQL()
 
@@ -96,23 +96,45 @@ func (shared *SharedData) SearchCompleteQueryIfPropArray() (map[string]string, e
 
 	}
 	//cache query:
-	shared.searchCompleteQuery = resourceTypeMap
-	shared.searchCompleteQueryErr = err
-	// shared.searchCompleteQueryUpdateTime
+	shared.propType = resourceTypeMap
+	shared.propTypeErr = err
+	shared.propTypeTime = time.Now()
 
 	return resourceTypeMap, err
 }
 
-func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
+func (cache *Cache) GetSharedData(ctx context.Context) (*SharedData, error) {
+	sharedData, err := cache.PopulateSharedCache(ctx)
+	if err != nil {
+		klog.Error("Error populating shared data cache: ", err)
+		return nil, err
+	}
+	SharedDataAccess := &SharedData{
+		propType: sharedData.GetPropertyTypeCache(),
+	}
+	return SharedDataAccess, nil
+}
+
+func (shared *SharedData) GetPropertyTypeCache() map[string]string {
+	return shared.propType
+}
+
+func (cache *Cache) PopulateSharedCache(ctx context.Context) (*SharedData, error) {
 
 	if sharedCacheValid(&cache.shared) { //if all cache is valid we use cache data
 		klog.V(5).Info("Using shared data from cache.")
-		return nil
+		return &cache.shared, nil
 	} else { //get data and cache
 
 		var error error
+		_, err := cache.shared.GetPropertyTypes()
+		if err == nil {
+			klog.V(6).Info("Successfully retrieved cluster scoped resources!")
+		} else {
+			error = err
+		}
 		// get all cluster-scoped resources and cache in shared.csResources
-		err := cache.shared.GetClusterScopedResources(cache, ctx)
+		err = cache.shared.GetClusterScopedResources(cache, ctx)
 		if err == nil {
 			klog.V(6).Info("Successfully retrieved cluster scoped resources!")
 		} else {
@@ -132,7 +154,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 		} else {
 			error = err
 		}
-		return error
+		return &cache.shared, error
 
 	}
 
@@ -147,7 +169,8 @@ func sharedCacheValid(shared *SharedData) bool {
 
 	if (time.Now().Before(shared.csUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) &&
 		(time.Now().Before(shared.nsUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) &&
-		(time.Now().Before(shared.mcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) {
+		(time.Now().Before(shared.mcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) &&
+		(time.Now().Before(shared.propTypeTime.Add(time.Duration(config.Cfg.PropTypesCacheTTL) * time.Millisecond))) {
 
 		return true
 	}

@@ -62,7 +62,7 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
-	err := mock_cache.PopulateSharedCache(ctx)
+	_, err := mock_cache.PopulateSharedCache(ctx)
 	res := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
 	_, csResPresent := mock_cache.shared.csResourcesMap[res]
 	if len(mock_cache.shared.csResourcesMap) != 1 || !csResPresent {
@@ -110,7 +110,7 @@ func Test_getResouces_usingCache(t *testing.T) {
 		csResourcesMap:  csRes,
 	}
 
-	err := mock_cache.PopulateSharedCache(ctx)
+	_, err := mock_cache.PopulateSharedCache(ctx)
 	csResource := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
 	_, csResPresent := mock_cache.shared.csResourcesMap[csResource]
 
@@ -159,7 +159,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 		csResourcesMap:  csRes,
 	}
 
-	err := mock_cache.PopulateSharedCache(ctx)
+	_, err := mock_cache.PopulateSharedCache(ctx)
 
 	csResource := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
 	_, csResPresent := mock_cache.shared.csResourcesMap[csResource]
