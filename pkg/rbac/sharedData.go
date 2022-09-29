@@ -55,7 +55,7 @@ var managedClusterResourceGvr = schema.GroupVersionResource{
 	Resource: "managedclusters",
 }
 
-func (shared *SharedData) GetPropertyTypes() (map[string]string, error) {
+func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]string, error) {
 
 	// original query:
 	// select distinct key, jsonb_typeof(value) as datatype
@@ -75,8 +75,8 @@ func (shared *SharedData) GetPropertyTypes() (map[string]string, error) {
 
 	query, params, err := selectDs.ToSQL()
 
-	klog.V(5).Info("Query for property datatypes: [%s] ", query)
-	rows, err := CacheInst.pool.Query(context.Background(), query, params...)
+	klog.V(5).Infof("Query for property datatypes: [%s] ", query)
+	rows, err := CacheInst.pool.Query(ctx, query, params...)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, err)
 		return nil, err
@@ -91,6 +91,7 @@ func (shared *SharedData) GetPropertyTypes() (map[string]string, error) {
 
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), query)
+			continue
 		}
 		resourceTypeMap[key] = value
 
@@ -127,7 +128,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) (*SharedData, error
 	} else { //get data and cache
 
 		var error error
-		_, err := cache.shared.GetPropertyTypes()
+		_, err := cache.shared.getPropertyTypes(ctx)
 		if err == nil {
 			klog.V(6).Info("Successfully retrieved cluster scoped resources!")
 		} else {
