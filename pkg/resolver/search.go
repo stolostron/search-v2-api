@@ -78,7 +78,6 @@ func (s *SearchResult) Items() []map[string]interface{} {
 	if e != nil {
 		klog.Error("Error resolving items.", e)
 	}
-	fmt.Println(r)
 	return r
 }
 
@@ -188,7 +187,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 
 		//we get properties here as well as their datatypes:
 		whereDs, typeFilter = WhereClauseFilter(s.input, &rbac.SharedData{})
-		fmt.Println(typeFilter)
+		klog.V(7).Info("Property Datatype", typeFilter)
 
 	} else {
 		sql, _, err := selectDs.Where(whereDs...).ToSQL() //use original query
@@ -226,8 +225,6 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	klog.V(5).Infof("Search query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
-	fmt.Println("Search query: %s\nargs: %s", sql, params)
-	// SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE "data"->'container' '?|' ('acm-agent') LIMIT 1000
 }
 
 func (s *SearchResult) resolveCount() int {
@@ -271,12 +268,12 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	}
 	defer rows.Close()
 
-	var cluster string
-	var data map[string]interface{}
 	s.uids = make([]*string, len(items))
 
 	for rows.Next() {
 		var uid string
+		var cluster string
+		var data map[string]interface{}
 		err = rows.Scan(&uid, &cluster, &data)
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), s.query)
@@ -322,7 +319,7 @@ func getOperator(values []string) map[string][]string {
 	return operatorValue
 }
 
-func getWhereClauseExpression(prop, operator string, values []string) []exp.Expression {
+func getWhereClauseExpression(prop, operator string, values []string, propType string) []exp.Expression { //need to add the type as parameter
 	exps := []exp.Expression{}
 
 	switch operator {
@@ -348,7 +345,11 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 			exps = append(exps, goqu.L(`"data"->>?`, prop).Gt(val))
 		}
 	case "=":
-		exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
+		if propType == "array" {
+			exps = append(exps, goqu.L(`"data"->?`, prop).In(values))
+		} else {
+			exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
+		}
 	case "@>":
 		for _, val := range values {
 			exps = append(exps, goqu.L(`"data"->? @> ?`, prop, val))
@@ -432,31 +433,19 @@ func getOperatorAndNumDateFilter(filter string, values []string, dataType interf
 					operator = "@>"
 
 				} else if dataType == "array" {
-					klog.V(7).Info("filter is array. Operator is ?|.")
-					operator = "?|"
+					klog.V(7).Info("filter is array. Operator is =")
+					operator = "="
 				} else {
 					klog.V(7).Info("filter is neither label nor in arrayProperties: ", filter)
 					operator = ""
 				}
-				// }
-				// } else if {
-				// 	if _, ok := arrayProperties[filter]; ok {
-				// 		fmt.Println(ok)
-				// 		klog.V(7).Info("filter ", filter, " is present in arrayProperties. Using operator ?|.")
-				// 		operator = "?|"
-				// 	} else {
-				// 		klog.V(7).Info("filter is neither label nor in arrayProperties: ", filter)
-				// 		operator = ""
-				// 	}
-				// }
+
 				then = val
 			}
-			fmt.Println("", operator)
 			// Add the value and operator to map
 			updateOpValueMap(operator, opValueMap, then)
 		}
 	}
-	fmt.Println(opValueMap)
 	return opValueMap
 }
 
@@ -516,9 +505,7 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 		case map[string]interface{}:
 			item[key] = formatLabels(v)
 		case []interface{}:
-			for _, val := range v {
-				item[key] = fmt.Sprintf("[\"%s\"]", val)
-			}
+			item[key] = fmt.Sprintf("[\"%s\"]", v)
 		default:
 			klog.Warningf("Error formatting property with key: %+v  type: %+v\n", key, reflect.TypeOf(v))
 			continue
@@ -562,7 +549,6 @@ func WhereClauseFilter(input *model.SearchInput, shared *rbac.SharedData) ([]exp
 		}
 	}
 	if input.Filters != nil {
-		fmt.Println("Input filters", input.Filters)
 
 		for _, filter := range input.Filters {
 			if len(filter.Values) > 0 {
@@ -571,27 +557,24 @@ func WhereClauseFilter(input *model.SearchInput, shared *rbac.SharedData) ([]exp
 
 				for key, val := range propTypeMap {
 					if key == filter.Property { //check if property exists in dataTypeMap to get datatype
-						fmt.Printf("Property (key) in map:%s, filter.Property is: %s, and Datatype (val) of property in map:%s\n", key, filter.Property, val)
+						klog.V(5).Info("Property (key) in map:%s, filter.Property is: %s, and Datatype (val) of property in map:%s\n", key, filter.Property, val)
 						dataType = val
 
 						cleanedVal := make([]string, len(values))
 
 						for i, val := range values {
-							labels := strings.Split(val, "=")
-							if len(labels) == 2 {
+							if dataType == "object" { //map[string]interface{}
+								labels := strings.Split(val, "=")
 								cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
-							} else if len(labels) == 1 {
-								//// If property is of array type, format it as an array for easy searching
-								cleanedVal[i] = labels[0]
+							} else if dataType == "array" { //[]string
+								cleanedVal[i] = fmt.Sprintf(`["%s"]`, val)
+
 							} else {
 								klog.Error("Error while decoding label string")
 								cleanedVal[i] = val
 							}
 
-							// }
-
 							values = cleanedVal
-							fmt.Println(values)
 						}
 					}
 				}
@@ -604,7 +587,7 @@ func WhereClauseFilter(input *model.SearchInput, shared *rbac.SharedData) ([]exp
 				var operatorWhereDs []exp.Expression //store all the clauses for this filter together
 				for _, operator := range keys {
 					operatorWhereDs = append(operatorWhereDs,
-						getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator])...)
+						getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator], dataType)...)
 				}
 				whereDs = append(whereDs, goqu.Or(operatorWhereDs...)) //Join all the clauses with OR
 

@@ -170,7 +170,7 @@ func sharedCacheValid(shared *SharedData) bool {
 	if (time.Now().Before(shared.csUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) &&
 		(time.Now().Before(shared.nsUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) &&
 		(time.Now().Before(shared.mcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) &&
-		(time.Now().Before(shared.propTypeTime.Add(time.Duration(config.Cfg.PropTypesCacheTTL) * time.Millisecond))) {
+		(time.Now().Before(shared.propTypeTime.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) {
 
 		return true
 	}
