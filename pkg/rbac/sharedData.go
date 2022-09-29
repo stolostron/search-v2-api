@@ -55,7 +55,7 @@ var managedClusterResourceGvr = schema.GroupVersionResource{
 	Resource: "managedclusters",
 }
 
-func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]string, error) {
+func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (map[string]string, error) {
 
 	// original query:
 	// select distinct key, jsonb_typeof(value) as datatype
@@ -71,12 +71,12 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 	ds := goqu.From(schemaTable, jsb)
 	//select statement with orderby and distinct clause
 	selectDs = ds.Select(goqu.L("key"), goqu.L("jsonb_typeof(?)",
-		goqu.C("value")).As("datatype")).Distinct().Order(goqu.L("datatype").Asc())
+		goqu.C("value")).As("datatype")).Distinct()
 
 	query, params, err := selectDs.ToSQL()
 
 	klog.V(5).Infof("Query for property datatypes: [%s] ", query)
-	rows, err := CacheInst.pool.Query(ctx, query, params...)
+	rows, err := cache.pool.Query(ctx, query, params...)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, err)
 		return nil, err
@@ -96,6 +96,7 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 		resourceTypeMap[key] = value
 
 	}
+	defer rows.Close()
 	//cache query:
 	shared.propType = resourceTypeMap
 	shared.propTypeErr = err
@@ -128,33 +129,35 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) (*SharedData, error
 	} else { //get data and cache
 
 		var error error
-		_, err := cache.shared.getPropertyTypes(ctx)
-		if err == nil {
+		_, err := cache.shared.getPropertyTypes(cache, ctx)
+		if cache.shared.propTypeErr == nil {
 			klog.V(6).Info("Successfully retrieved cluster scoped resources!")
 		} else {
 			error = err
 		}
+
 		// get all cluster-scoped resources and cache in shared.csResources
 		err = cache.shared.GetClusterScopedResources(cache, ctx)
-		if err == nil {
+		if cache.shared.csErr == nil {
 			klog.V(6).Info("Successfully retrieved cluster scoped resources!")
 		} else {
 			error = err
 		}
 		// get all namespaces in cluster and cache in shared.namespaces.
 		err = cache.shared.GetSharedNamespaces(cache, ctx)
-		if err == nil {
+		if cache.shared.nsErr == nil {
 			klog.V(6).Info("Successfully retrieved shared namespaces!")
 		} else {
 			error = err
 		}
 		// get all managed clustsers in cache
 		err = cache.shared.GetManagedClusters(cache, ctx)
-		if err == nil {
+		if cache.shared.mcErr == nil {
 			klog.V(6).Info("Successfully retrieved managed clusters!")
 		} else {
 			error = err
 		}
+
 		return &cache.shared, error
 
 	}
@@ -205,10 +208,11 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 		return shared.csErr
 	}
 
-	rows, queryerr := cache.pool.Query(ctx, query)
-	if queryerr != nil {
-		klog.Errorf("Error resolving query [%s]. Error: [%+v]", query, queryerr.Error())
-		shared.csErr = queryerr
+	// var queryerr error
+	rows, err := cache.pool.Query(ctx, query)
+	if err != nil {
+		klog.Errorf("Error resolving query [%s]. Error: [%+v]", query, err.Error())
+		shared.csErr = err
 		shared.csResourcesMap = map[Resource]struct{}{}
 
 		return shared.csErr

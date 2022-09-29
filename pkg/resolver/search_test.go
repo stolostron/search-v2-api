@@ -3,6 +3,7 @@ package resolver
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/doug-martin/goqu/v9"
@@ -16,6 +17,8 @@ func Test_SearchResolver_Count(t *testing.T) {
 
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "Pod"
+	propType := "string"
+	fmt.Println(propType)
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserData{})
 
@@ -547,7 +550,7 @@ func Test_SearchResolver_Items_Container(t *testing.T) {
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", limit)
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' IN ('Template')) AND ("cluster" IN ('local-cluster')) AND "data"->'container' @> '["acm-agent"]' AND (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' IN ('Template')) AND ("cluster" IN ('local-cluster')) AND "data"->'container' in ('["acm-agent"]') AND (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 10`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 

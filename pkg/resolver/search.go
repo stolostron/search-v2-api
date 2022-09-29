@@ -505,7 +505,7 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 		case map[string]interface{}:
 			item[key] = formatLabels(v)
 		case []interface{}:
-			item[key] = fmt.Sprintf("[\"%s\"]", v)
+			item[key] = formatArray(v)
 		default:
 			klog.Warningf("Error formatting property with key: %+v  type: %+v\n", key, reflect.TypeOf(v))
 			continue

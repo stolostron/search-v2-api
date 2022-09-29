@@ -57,8 +57,15 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 	columns := []string{"kind", "apigroup"}
 	pgxRows := pgxpoolmock.NewRows(columns).AddRow("addon.open-cluster-management.io", "Nodes").ToPgxRows()
 
+	fmt.Println(pgxRows)
+
 	mockpool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"->>'_hubClusterResource'='true' AND ("data"->>'namespace' IS NULL))`),
+		gomock.Eq([]interface{}{}),
+	).Return(pgxRows, nil)
+
+	mockpool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
@@ -92,6 +99,11 @@ func Test_getResouces_usingCache(t *testing.T) {
 
 	mockpool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"->>'_hubClusterResource'='true' AND ("data"->>'namespace' IS NULL))`),
+		gomock.Eq([]interface{}{}),
+	).Return(pgxRows, nil)
+
+	mockpool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
@@ -139,6 +151,11 @@ func Test_getResources_expiredCache(t *testing.T) {
 
 	mockpool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"->>'_hubClusterResource'='true' AND ("data"->>'namespace' IS NULL))`),
+		gomock.Eq([]interface{}{}),
+	).Return(pgxRows, nil)
+
+	mockpool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
@@ -340,6 +357,7 @@ func Test_getDisabledClustersCacheInValid_RunQuery(t *testing.T) {
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "mcInfo".data->>'name' AS "srchAddonDisabledCluster" FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`),
 	).Return(pgxRows, nil)
+
 	mock_cache.pool = mockPool
 	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(), ContextAuthTokenKey, "123456"))
 	if len(*disabledClustersRes) != 1 || err != nil {
