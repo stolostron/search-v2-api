@@ -3,11 +3,13 @@ package resolver
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/stolostron/search-v2-api/pkg/config"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 	klog "k8s.io/klog/v2"
 )
 
@@ -140,7 +142,20 @@ func (s *SearchResult) buildRelationsQuery() {
 		"related.level")
 	relQueryInnerJoin := relQuery.InnerJoin(goqu.S("search").Table("resources"),
 		goqu.On(goqu.Ex{"related.uid": goqu.L(`"resources".uid`)}))
-	relQueryWithRbac := relQueryInnerJoin.Where(buildRbacWhereClause(s.context, s.userData))
+	//RBAC CLAUSE
+	relQueryWithRbac := relQueryInnerJoin //without RBAC
+	withoutRBACSql, _, withoutRBACSqlErr := relQueryInnerJoin.ToSQL()
+	klog.V(5).Info("Relations query before RBAC:", withoutRBACSql, withoutRBACSqlErr)
+
+	if s.userData != nil && !Iskubeadmin(s.context) {
+		// add rbac
+		relQueryWithRbac = relQueryInnerJoin.Where(buildRbacWhereClause(s.context, s.userData))
+	} else {
+		if !Iskubeadmin(s.context) {
+			panic(fmt.Sprintf("RBAC clause is required! None found for search relations query %+v for user %s ", s.input,
+				s.context.Value(rbac.ContextAuthTokenKey)))
+		}
+	}
 	sql, params, err := relQueryWithRbac.ToSQL()
 
 	if err != nil {
@@ -148,7 +163,7 @@ func (s *SearchResult) buildRelationsQuery() {
 	} else {
 		s.query = sql
 		s.params = params
-		klog.V(5).Info("Relations query: ", s.query)
+		klog.V(6).Info("Relations query: ", s.query)
 	}
 }
 
@@ -226,7 +241,6 @@ func (s *SearchResult) getRelations(ctx context.Context) []SearchRelatedResult {
 	}
 	// Build the relations query
 	s.buildRelationsQuery()
-
 	relations, relQueryError := s.pool.Query(s.context, s.query, s.params...) // how to deal with defaults.
 	if relQueryError != nil {
 		klog.Errorf("Error while executing getRelations query. Error :%s", relQueryError.Error())
