@@ -13,7 +13,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-// Cache used to minimize requests to external APIs (Kubernetes and Database)
+// Cache helps optimize requests to external APIs (Kubernetes and Database)
 type Cache struct {
 	tokenReviews     map[string]*tokenReviewCache //Key:ClientToken
 	tokenReviewsLock sync.Mutex
@@ -31,7 +31,7 @@ type Cache struct {
 }
 
 // Initialize the cache as a singleton instance.
-var CacheInst = Cache{
+var cacheInst = Cache{
 	tokenReviews:     map[string]*tokenReviewCache{},
 	tokenReviewsLock: sync.Mutex{},
 	usersLock:        sync.Mutex{},
@@ -41,4 +41,9 @@ var CacheInst = Cache{
 	pool:             db.GetConnection(),
 	corev1Client:     config.GetCoreClient(),
 	dynamicClient:    config.GetDynamicClient(),
+}
+
+// Get a reference to the cache instance.
+func GetCache() *Cache {
+	return &cacheInst
 }
