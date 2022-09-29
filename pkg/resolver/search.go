@@ -259,12 +259,12 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	}
 	defer rows.Close()
 
-	var cluster string
-	var data map[string]interface{}
 	s.uids = make([]*string, len(items))
 
 	for rows.Next() {
 		var uid string
+		var cluster string
+		var data map[string]interface{}
 		err = rows.Scan(&uid, &cluster, &data)
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), s.query)
