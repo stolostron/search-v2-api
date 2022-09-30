@@ -26,16 +26,16 @@ import (
 )
 
 type SearchResult struct {
-	input  *model.SearchInput
-	pool   pgxpoolmock.PgxPool
-	uids   []*string      // List of uids from search result to be used to get relatioinships.
-	wg     sync.WaitGroup // WORKAROUND: Used to serialize search query and relatioinships query.
-	query  string
-	params []interface{}
-	level  int // The number of levels/hops for finding relationships for a particular resource
-	//  Related []SearchRelatedResult
-	userData *rbac.UserData
-	context  context.Context
+	input     *model.SearchInput
+	pool      pgxpoolmock.PgxPool
+	uids      []*string      // List of uids from search result to be used to get relatioinships.
+	wg        sync.WaitGroup // WORKAROUND: Used to serialize search query and relatioinships query.
+	query     string
+	params    []interface{}
+	level     int // The number of levels/hops for finding relationships for a particular resource
+	propTypes map[string]string
+	userData  *rbac.UserData
+	context   context.Context
 }
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
@@ -45,14 +45,22 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 	if userDataErr != nil {
 		return srchResult, userDataErr
 	}
+
+	//check that shared cache has resource datatypes:
+	propTypesCache, err := rbac.CacheInst.GetSharedData(ctx)
+	if err != nil {
+		klog.Warningf("Error creating datatype map with err: [%s] ", err)
+	}
+
 	// Proceed if user's rbac data exists
 	if len(input) > 0 {
 		for index, in := range input {
 			srchResult[index] = &SearchResult{
-				input:    in,
-				pool:     db.GetConnection(),
-				userData: userData,
-				context:  ctx,
+				input:     in,
+				pool:      db.GetConnection(),
+				userData:  userData,
+				context:   ctx,
+				propTypes: propTypesCache,
 			}
 		}
 	}
@@ -186,7 +194,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 
 		//we get properties here as well as their datatypes:
-		whereDs, typeFilter = WhereClauseFilter(s.input, &rbac.SharedData{})
+		whereDs, typeFilter = WhereClauseFilter(s.input, s.propTypes)
 		klog.V(7).Info("Property Datatype", typeFilter)
 
 	} else {
@@ -526,18 +534,9 @@ func pointerToStringArray(pointerArray []*string) []string {
 	return values
 }
 
-func WhereClauseFilter(input *model.SearchInput, shared *rbac.SharedData) ([]exp.Expression, string) {
+func WhereClauseFilter(input *model.SearchInput, propTypeMap map[string]string) ([]exp.Expression, string) {
 	var whereDs []exp.Expression
-	var propTypeMap map[string]string
 	var dataType string
-
-	//check that shared cache has resource datatypes:
-	sharedData, err := rbac.CacheInst.GetSharedData(context.Background())
-	if err != nil {
-		klog.Warningf("Error creating datatype map with err: [%s] ", err)
-	} else {
-		propTypeMap = sharedData.GetPropertyTypeCache()
-	}
 
 	if input.Keywords != nil && len(input.Keywords) > 0 {
 		// Sample query: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data")
@@ -553,11 +552,10 @@ func WhereClauseFilter(input *model.SearchInput, shared *rbac.SharedData) ([]exp
 		for _, filter := range input.Filters {
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
-				fmt.Println(values)
 
 				for key, val := range propTypeMap {
 					if key == filter.Property { //check if property exists in dataTypeMap to get datatype
-						klog.V(5).Info("Property (key) in map:%s, filter.Property is: %s, and Datatype (val) of property in map:%s\n", key, filter.Property, val)
+						klog.V(5).Infof("Property (key) in map:%s, filter.Property is: %s, and Datatype (val) of property in map:%s\n", key, filter.Property, val)
 						dataType = val
 
 						cleanedVal := make([]string, len(values))

@@ -19,13 +19,14 @@ import (
 )
 
 type SearchCompleteResult struct {
-	input    *model.SearchInput
-	pool     pgxpoolmock.PgxPool
-	property string
-	limit    *int
-	query    string
-	params   []interface{}
-	userData *rbac.UserData
+	input     *model.SearchInput
+	pool      pgxpoolmock.PgxPool
+	property  string
+	limit     *int
+	query     string
+	params    []interface{}
+	propTypes map[string]string
+	userData  *rbac.UserData
 }
 
 var arrayProperties = make(map[string]struct{})
@@ -44,13 +45,21 @@ func SearchComplete(ctx context.Context, property string, srchInput *model.Searc
 	if userDataErr != nil {
 		return []*string{}, userDataErr
 	}
+
+	//check that shared cache has resource datatypes:
+	propTypesCache, err := rbac.CacheInst.GetSharedData(ctx)
+	if err != nil {
+		klog.Warningf("Error creating datatype map with err: [%s] ", err)
+	}
+
 	// Proceed if user's rbac data exists
 	searchCompleteResult := &SearchCompleteResult{
-		input:    srchInput,
-		pool:     db.GetConnection(),
-		property: property,
-		limit:    limit,
-		userData: userData,
+		input:     srchInput,
+		pool:      db.GetConnection(),
+		property:  property,
+		limit:     limit,
+		userData:  userData,
+		propTypes: propTypesCache,
 	}
 	return searchCompleteResult.autoComplete(ctx)
 
@@ -71,7 +80,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 	if s.property != "" {
 		//WHERE CLAUSE
 		if s.input != nil && len(s.input.Filters) > 0 {
-			whereDs, _ = WhereClauseFilter(s.input, &rbac.SharedData{})
+			whereDs, _ = WhereClauseFilter(s.input, s.propTypes)
 		}
 
 		//SELECT CLAUSE

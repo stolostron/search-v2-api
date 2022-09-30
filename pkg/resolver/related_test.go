@@ -15,6 +15,7 @@ import (
 func Test_SearchResolver_Relationships(t *testing.T) {
 	config.Cfg.RelationLevel = 3
 	var resultList []*string
+	PropTypes := make(map[string]string)
 
 	uid1 := "local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd"
 	uid2 := "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b"
@@ -24,8 +25,9 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	// //take the uids from above as input
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "uid", Values: resultList}}}
 	ud := rbac.UserData{}
+	PropTypes["uid"] = "string"
 
-	resolver, mockPool2 := newMockSearchResolver(t, searchInput, resultList, &ud)
+	resolver, mockPool2 := newMockSearchResolver(t, searchInput, resultList, &ud, PropTypes)
 
 	relQuery := strings.TrimSpace(`SELECT "related"."uid", "related"."kind", "related"."level" FROM (SELECT "uid", "kind", MIN("level") AS "level" FROM (SELECT "level", unnest(array[sourceid, destid, concat('cluster__',cluster)]) AS "uid", unnest(array[sourcekind, destkind, 'Cluster']) AS "kind" FROM (WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster) AS (SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search"."edges" AS "e" WHERE (("destid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b')) OR ("sourceid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b'))) UNION (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster" FROM "search"."edges" AS "e" INNER JOIN "search_graph" AS "sg" ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))) WHERE (("e"."destkind" NOT IN ('Node', 'Channel')) AND ("e"."sourcekind" NOT IN ('Node', 'Channel')) AND ("sg"."level" <= 3)))) SELECT DISTINCT "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search_graph") AS "search_graph") AS "combineIds" WHERE (("level" <= 3) AND ("uid" NOT IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b'))) GROUP BY "uid", "kind") AS "related" INNER JOIN "search"."resources" ON ("related"."uid" = "resources".uid) WHERE (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))`)
 
@@ -60,6 +62,7 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 func Test_SearchResolver_RelationshipsWithCluster(t *testing.T) {
 	config.Cfg.RelationLevel = 3
 	var resultList []*string
+	PropTypes := make(map[string]string)
 
 	uid1 := "cluster__local-cluster"
 	csRes, nsRes, mc := newUserData()
@@ -68,7 +71,8 @@ func Test_SearchResolver_RelationshipsWithCluster(t *testing.T) {
 
 	// take the uids from above as input
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: resultList}}}
-	resolver, mockPool2 := newMockSearchResolver(t, searchInput, resultList, &ud)
+	PropTypes["kind"] = "string"
+	resolver, mockPool2 := newMockSearchResolver(t, searchInput, resultList, &ud, PropTypes)
 
 	relQuery := strings.TrimSpace(`SELECT "related"."uid", "related"."kind", "related"."level" FROM (SELECT "uid", "kind", MIN("level") AS "level" FROM (SELECT "level", unnest(array[sourceid, destid, concat('cluster__',cluster)]) AS "uid", unnest(array[sourcekind, destkind, 'Cluster']) AS "kind" FROM (WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster) AS (SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search"."edges" AS "e" WHERE (("destid" IN ('cluster__local-cluster')) OR ("sourceid" IN ('cluster__local-cluster'))) UNION (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster" FROM "search"."edges" AS "e" INNER JOIN "search_graph" AS "sg" ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))) WHERE (("e"."destkind" NOT IN ('Node', 'Channel')) AND ("e"."sourcekind" NOT IN ('Node', 'Channel')) AND ("sg"."level" <= 3)))) SELECT DISTINCT "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search_graph") AS "search_graph") AS "combineIds" WHERE (("level" <= 3) AND ("uid" NOT IN ('cluster__local-cluster'))) GROUP BY "uid", "kind" UNION (SELECT "uid" AS "uid", data->>'kind' AS "kind", 1 AS "level" FROM "search"."resources" WHERE ("cluster" IN ('local-cluster')))) AS "related" INNER JOIN "search"."resources" ON ("related"."uid" = "resources".uid) WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))`)
 
@@ -104,7 +108,7 @@ func Test_SearchResolver_RelatedKindsRelationships(t *testing.T) {
 	config.Cfg.RelationLevel = 3
 
 	var resultList []*string
-
+	PropTypes := make(map[string]string)
 	uid1 := "local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd"
 	uid2 := "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b"
 
@@ -114,7 +118,8 @@ func Test_SearchResolver_RelatedKindsRelationships(t *testing.T) {
 	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: mc}
 	// take the uids from above as input
 	searchInput2 := &model.SearchInput{RelatedKinds: []*string{&relatedKind1}, Filters: []*model.SearchFilter{{Property: "uid", Values: resultList}}}
-	resolver, mockPool2 := newMockSearchResolver(t, searchInput2, resultList, &ud)
+	PropTypes["uid"] = "string"
+	resolver, mockPool2 := newMockSearchResolver(t, searchInput2, resultList, &ud, PropTypes)
 
 	relQuery := strings.TrimSpace(`SELECT "related"."uid", "related"."kind", "related"."level" FROM (SELECT "uid", "kind", MIN("level") AS "level" FROM (SELECT "level", unnest(array[sourceid, destid, concat('cluster__',cluster)]) AS "uid", unnest(array[sourcekind, destkind, 'Cluster']) AS "kind" FROM (WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster) AS (SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search"."edges" AS "e" WHERE (("destid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b')) OR ("sourceid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b'))) UNION (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster" FROM "search"."edges" AS "e" INNER JOIN "search_graph" AS "sg" ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))) WHERE (("e"."destkind" NOT IN ('Node', 'Channel')) AND ("e"."sourcekind" NOT IN ('Node', 'Channel')) AND ("sg"."level" <= 3)))) SELECT DISTINCT "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search_graph") AS "search_graph") AS "combineIds" WHERE (("level" <= 3) AND ("uid" NOT IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b'))) GROUP BY "uid", "kind") AS "related" INNER JOIN "search"."resources" ON ("related"."uid" = "resources".uid) WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))`)
 
@@ -147,6 +152,7 @@ func Test_SearchResolver_RelatedKindsRelationships(t *testing.T) {
 func Test_SearchResolver_RelatedKindsRelationships_NegativeLimit(t *testing.T) {
 	config.Cfg.RelationLevel = 3
 	var resultList []*string
+	PropTypes := make(map[string]string)
 
 	uid1 := "local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd"
 	uid2 := "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b"
@@ -157,7 +163,8 @@ func Test_SearchResolver_RelatedKindsRelationships_NegativeLimit(t *testing.T) {
 	// //take the uids from above as input
 	searchInput2 := &model.SearchInput{Limit: &limit, RelatedKinds: []*string{&relatedKind1}, Filters: []*model.SearchFilter{{Property: "uid", Values: resultList}}}
 	ud := rbac.UserData{}
-	resolver, mockPool2 := newMockSearchResolver(t, searchInput2, resultList, &ud)
+	PropTypes["uid"] = "string"
+	resolver, mockPool2 := newMockSearchResolver(t, searchInput2, resultList, &ud, PropTypes)
 
 	relQuery := strings.TrimSpace(`SELECT "related"."uid", "related"."kind", "related"."level" FROM (SELECT "uid", "kind", MIN("level") AS "level" FROM (SELECT "level", unnest(array[sourceid, destid, concat('cluster__',cluster)]) AS "uid", unnest(array[sourcekind, destkind, 'Cluster']) AS "kind" FROM (WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster) AS (SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search"."edges" AS "e" WHERE (("destid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b')) OR ("sourceid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b'))) UNION (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster" FROM "search"."edges" AS "e" INNER JOIN "search_graph" AS "sg" ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))) WHERE (("e"."destkind" NOT IN ('Node', 'Channel')) AND ("e"."sourcekind" NOT IN ('Node', 'Channel')) AND ("sg"."level" <= 3)))) SELECT DISTINCT "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search_graph") AS "search_graph") AS "combineIds" WHERE (("level" <= 3) AND ("uid" NOT IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b'))) GROUP BY "uid", "kind") AS "related" INNER JOIN "search"."resources" ON ("related"."uid" = "resources".uid) WHERE (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))`)
 
@@ -190,7 +197,7 @@ func Test_SearchResolver_RelatedKindsRelationships_NegativeLimit(t *testing.T) {
 func Test_SearchResolver_Level1Related(t *testing.T) {
 	config.Cfg.RelationLevel = 0
 	var resultList []*string
-
+	PropTypes := make(map[string]string)
 	uid1 := "local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd"
 	uid2 := "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b"
 
@@ -201,7 +208,8 @@ func Test_SearchResolver_Level1Related(t *testing.T) {
 	searchInput2 := &model.SearchInput{Limit: &limit, RelatedKinds: []*string{&relatedKind1}, Filters: []*model.SearchFilter{{Property: "uid", Values: resultList}}}
 	csRes, nsRes, mc := newUserData()
 	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: mc}
-	resolver, mockPool2 := newMockSearchResolver(t, searchInput2, resultList, &ud)
+	PropTypes["uid"] = "string"
+	resolver, mockPool2 := newMockSearchResolver(t, searchInput2, resultList, &ud, PropTypes)
 
 	relQuery := strings.TrimSpace(`SELECT "related"."uid", "related"."kind", "related"."level" FROM (SELECT "uid", "kind", MIN("level") AS "level" FROM (SELECT "level", unnest(array[sourceid, destid, concat('cluster__',cluster)]) AS "uid", unnest(array[sourcekind, destkind, 'Cluster']) AS "kind" FROM (SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search"."edges" AS "e" WHERE (("destid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b')) OR ("sourceid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b')))) AS "search_graph") AS "combineIds" WHERE (("level" <= 1) AND ("uid" NOT IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b'))) GROUP BY "uid", "kind") AS "related" INNER JOIN "search"."resources" ON ("related"."uid" = "resources".uid) WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))`)
 

@@ -3,7 +3,6 @@ package resolver
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/doug-martin/goqu/v9"
@@ -13,14 +12,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_SearchResolver_Count(t *testing.T) {
+var PropTypes map[string]string
 
+func Test_SearchResolver_Count(t *testing.T) {
+	PropTypes := make(map[string]string)
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "Pod"
-	propType := "string"
-	fmt.Println(propType)
+
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserData{})
+	PropTypes["kind"] = "string"
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserData{}, PropTypes)
 
 	// Mock the database query
 	mockRow := &Row{MockValue: 10}
@@ -43,7 +44,9 @@ func Test_SearchResolver_Count_WithRBAC(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "Pod"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud)
+	PropTypes := make(map[string]string)
+	PropTypes["kind"] = "string"
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database query
 	mockRow := &Row{MockValue: 10}
@@ -65,7 +68,9 @@ func Test_SearchResolver_CountWithOperator(t *testing.T) {
 	val1 := ">=1"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val1}}}}
 	ud := rbac.UserData{}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud)
+	PropTypes := make(map[string]string)
+	PropTypes["current"] = "number"
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database query
 	mockRow := &Row{MockValue: 1}
@@ -85,8 +90,12 @@ func Test_SearchResolver_Items(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "template"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
+	PropTypes := make(map[string]string)
+	PropTypes["kind"] = "string"
+
 	ud := rbac.UserData{}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud)
+
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", 0)
 
@@ -254,7 +263,7 @@ func testAllOperators(t *testing.T, testOperators []TestOperatorItem) {
 		csRes, nsRes, mc := newUserData()
 		ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: mc}
 		// Create a SearchResolver instance with a mock connection pool.
-		resolver, mockPool := newMockSearchResolver(t, currTest.searchInput, nil, &ud)
+		resolver, mockPool := newMockSearchResolver(t, currTest.searchInput, nil, &ud, PropTypes)
 		// Mock the database queries.
 		mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", currTest.searchInput, "", 0)
 
@@ -297,7 +306,10 @@ func Test_SearchResolver_Items_Multiple_Filter(t *testing.T) {
 	limit := 10
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&val1, &val2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
 	ud := rbac.UserData{}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud)
+	PropTypes := make(map[string]string)
+	PropTypes["namespace"] = "string"
+	PropTypes["cluster"] = "string"
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", 0)
@@ -342,7 +354,10 @@ func Test_SearchWithMultipleClusterFilter_NegativeLimit_Query(t *testing.T) {
 	limit := -1
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1}}, {Property: "cluster", Values: []*string{&cluster1, &cluster2}}}, Limit: &limit}
 	ud := rbac.UserData{}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud)
+	PropTypes := make(map[string]string)
+	PropTypes["namespace"] = "string"
+	PropTypes["cluster"] = "string"
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, "", 0)
@@ -385,7 +400,9 @@ func Test_SearchResolver_Keywords(t *testing.T) {
 	limit := 10
 	searchInput := &model.SearchInput{Keywords: []*string{&val1}, Limit: &limit}
 	ud := rbac.UserData{}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud)
+	PropTypes := make(map[string]string)
+	PropTypes["kind"] = "string"
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", 0)
@@ -421,7 +438,9 @@ func Test_SearchResolver_Uids(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "template"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserData{})
+	PropTypes := make(map[string]string)
+	PropTypes["kind"] = "string"
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserData{}, PropTypes)
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", 0)
 
@@ -495,11 +514,15 @@ func Test_SearchResolver_Items_Labels(t *testing.T) {
 	cluster := "local-cluster"
 	val1 := "Template"
 
-	val2 := "{\"samples.operator.openshift.io/managed\":\"true\"}"
+	val2 := "samples.operator.openshift.io/managed=true"
 	limit := 10
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}, {Property: "cluster", Values: []*string{&cluster}}, {Property: "label", Values: []*string{&val2}}}, Limit: &limit}
 	ud := rbac.UserData{}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud)
+	PropTypes := make(map[string]string)
+	PropTypes["cluster"] = "string"
+	PropTypes["kind"] = "string"
+	PropTypes["label"] = "object"
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", limit)
@@ -540,17 +563,21 @@ func Test_SearchResolver_Items_Container(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	cluster := "local-cluster"
 	val1 := "Template"
-	val2 := "[\"acm-agent\"]"
+	val2 := "acm-agent"
 	limit := 10
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}, {Property: "cluster", Values: []*string{&cluster}}, {Property: "container", Values: []*string{&val2}}}, Limit: &limit}
 	ud := rbac.UserData{}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud)
+	PropTypes := make(map[string]string)
+	PropTypes["cluster"] = "string"
+	PropTypes["kind"] = "string"
+	PropTypes["container"] = "array"
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", limit)
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' IN ('Template')) AND ("cluster" IN ('local-cluster')) AND "data"->'container' in ('["acm-agent"]') AND (("cluster" = ANY (NULL)) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' IN ('Template')) AND ("cluster" IN ('local-cluster')) AND ("data"->'container' IN ('["acm-agent"]')) AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 10`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 

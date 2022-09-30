@@ -32,18 +32,19 @@ func newUserData() ([]rbac.Resource, map[string][]rbac.Resource, map[string]stru
 	return csres, nsScopeAccess, managedClusters
 }
 
-func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*string, ud *rbac.UserData) (*SearchResult, *pgxpoolmock.MockPgxPool) {
+func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*string, ud *rbac.UserData, propTypes map[string]string) (*SearchResult, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 
 	mockResolver := &SearchResult{
-		input:    input,
-		pool:     mockPool,
-		uids:     uids,
-		wg:       sync.WaitGroup{},
-		userData: ud,
-		context:  context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
+		input:     input,
+		pool:      mockPool,
+		uids:      uids,
+		wg:        sync.WaitGroup{},
+		userData:  ud,
+		propTypes: propTypes,
+		context:   context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
 	}
 
 	return mockResolver, mockPool
@@ -276,7 +277,7 @@ func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, ite
 	for _, filter := range input.Filters {
 		if len(filter.Values) > 0 {
 			values := pointerToStringArray(filter.Values) //get the filter values
-			_, datatype := WhereClauseFilter(input, &rbac.SharedData{})
+			_, datatype := WhereClauseFilter(input, PropTypes)
 
 			opValueMap := getOperatorAndNumDateFilter(filter.Property, values, datatype) // get the filter values if property is a number or date
 			var op string

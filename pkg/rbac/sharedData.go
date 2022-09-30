@@ -21,7 +21,7 @@ type SharedData struct {
 	namespaces       []string
 	managedClusters  map[string]struct{}
 	disabledClusters map[string]struct{}
-	propType         map[string]string
+	propTypes        PropTypesCache
 
 	// These are internal objects to track the state of the cache.
 	dcErr       error      // Error while updating clusters data.
@@ -44,6 +44,10 @@ type SharedData struct {
 	propTypeTime time.Time
 }
 
+type PropTypesCache struct {
+	propType map[string]string //list of all properties and thier relative data types among all users.
+}
+
 type Resource struct {
 	Apigroup string
 	Kind     string
@@ -58,10 +62,7 @@ var managedClusterResourceGvr = schema.GroupVersionResource{
 func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (map[string]string, error) {
 
 	// original query:
-	// select distinct key, jsonb_typeof(value) as datatype
-	// FROM search.resources,jsonb_each(data)
-	// order by datatype;
-
+	// select distinct key, jsonb_typeof(value) as datatype FROM search.resources,jsonb_each(data);
 	var selectDs *goqu.SelectDataset
 	//define schema:
 	schemaTable := goqu.S("search").Table("resources")
@@ -98,27 +99,29 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 	}
 	defer rows.Close()
 	//cache query:
-	shared.propType = resourceTypeMap
+	shared.propTypes = PropTypesCache{resourceTypeMap}
 	shared.propTypeErr = err
 	shared.propTypeTime = time.Now()
 
 	return resourceTypeMap, err
 }
 
-func (cache *Cache) GetSharedData(ctx context.Context) (*SharedData, error) {
+func (cache *Cache) GetSharedData(ctx context.Context) (map[string]string, error) {
 	sharedData, err := cache.PopulateSharedCache(ctx)
 	if err != nil {
 		klog.Error("Error populating shared data cache: ", err)
 		return nil, err
 	}
-	SharedDataAccess := &SharedData{
+	//store only the PropTypeCache to use in outside of rbac module
+	SharedDataAccess := &PropTypesCache{
 		propType: sharedData.GetPropertyTypeCache(),
 	}
-	return SharedDataAccess, nil
+	propTypesMap := SharedDataAccess.propType
+	return propTypesMap, nil
 }
 
 func (shared *SharedData) GetPropertyTypeCache() map[string]string {
-	return shared.propType
+	return shared.propTypes.propType
 }
 
 func (cache *Cache) PopulateSharedCache(ctx context.Context) (*SharedData, error) {
