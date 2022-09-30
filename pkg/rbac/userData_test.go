@@ -628,3 +628,17 @@ func Test_setImpersonationUserInfo(t *testing.T) {
 	assert.Equal(t, ui.Groups, impConf.Groups)
 	assert.Equal(t, len(ui.Extra), len(impConf.Extra))
 }
+
+func Test_getImpersonationClientSet(t *testing.T) {
+	mock_cache := mockNamespaceCache()
+	mock_cache = setupToken(mock_cache)
+
+	udc := &UserDataCache{
+		userData:     UserData{},
+		nsrUpdatedAt: time.Now(),
+	}
+	_, err := udc.getImpersonationClientSet("123456", mock_cache)
+	// Ensure that there is no error
+	assert.Nil(t, err)
+
+}
