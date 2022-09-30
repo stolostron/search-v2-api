@@ -39,7 +39,7 @@ func AuthenticateUser(next http.Handler) http.Handler {
 			return
 		}
 
-		authenticated, err := CacheInst.IsValidToken(r.Context(), clientToken)
+		authenticated, err := GetCache().IsValidToken(r.Context(), clientToken)
 		if err != nil {
 			klog.Warning("Unexpected error while authenticating the request token.", err)
 			http.Error(w, "{\"message\":\"Unexpected error while authenticating the request token.\"}",

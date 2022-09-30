@@ -21,7 +21,7 @@ type SearchSchema struct {
 }
 
 func SearchSchemaResolver(ctx context.Context) (map[string]interface{}, error) {
-	userData, userDataErr := rbac.CacheInst.GetUserData(ctx)
+	userData, userDataErr := rbac.GetCache().GetUserData(ctx)
 	if userDataErr != nil {
 		return nil, userDataErr
 	}

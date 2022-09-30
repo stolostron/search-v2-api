@@ -41,13 +41,13 @@ type SearchResult struct {
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
 	// For each input, create a SearchResult resolver.
 	srchResult := make([]*SearchResult, len(input))
-	userData, userDataErr := rbac.CacheInst.GetUserData(ctx)
+	userData, userDataErr := rbac.GetCache().GetUserData(ctx)
 	if userDataErr != nil {
 		return srchResult, userDataErr
 	}
 
 	//check that shared cache has resource datatypes:
-	propTypesCache, err := rbac.CacheInst.GetSharedData(ctx)
+	propTypesCache, err := rbac.GetCache().GetSharedData(ctx)
 	if err != nil {
 		klog.Warningf("Error creating datatype map with err: [%s] ", err)
 	}
@@ -135,7 +135,7 @@ func (s *SearchResult) Uids() {
 }
 
 func Iskubeadmin(ctx context.Context) bool {
-	_, userDetails := rbac.CacheInst.GetUserUID(ctx)
+	_, userDetails := rbac.GetCache().GetUserUID(ctx)
 	if userDetails.Username == "kube:admin" {
 		klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
 		return true

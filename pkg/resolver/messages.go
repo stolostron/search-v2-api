@@ -8,17 +8,17 @@ import (
 	klog "k8s.io/klog/v2"
 )
 
+// This interface allows us to replace the cache with a mock for test.
+type ICache interface {
+	GetDisabledClusters(ctx context.Context) (*map[string]struct{}, error)
+}
 type Message struct {
-	userData *rbac.UserData
+	cache ICache // Tests will replace this interface with a mock cache instance.
 }
 
 func Messages(ctx context.Context) ([]*model.Message, error) {
-	userAccess, userDataErr := rbac.CacheInst.GetUserData(ctx)
-	if userDataErr != nil {
-		return []*model.Message{}, userDataErr
-	}
 	message := &Message{
-		userData: userAccess,
+		cache: rbac.GetCache(),
 	}
 	return message.messageResults(ctx)
 }
@@ -26,7 +26,7 @@ func Messages(ctx context.Context) ([]*model.Message, error) {
 func (s *Message) messageResults(ctx context.Context) ([]*model.Message, error) {
 	klog.V(2).Info("Resolving Messages()")
 
-	disabledClusters, disabledClustersErr := rbac.CacheInst.GetDisabledClusters(ctx)
+	disabledClusters, disabledClustersErr := s.cache.GetDisabledClusters(ctx)
 	//Cache is invalid
 	if disabledClustersErr != nil {
 		return []*model.Message{}, disabledClustersErr

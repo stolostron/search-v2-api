@@ -12,17 +12,17 @@ func AuthorizeUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		//Check db connection TODO: create time based check(s)
-		CacheInst.pool = db.GetConnection()
+		GetCache().pool = db.GetConnection()
 
 		//Hub Cluster resources authorization:
-		_, err := CacheInst.PopulateSharedCache(r.Context())
+		_, err := GetCache().PopulateSharedCache(r.Context())
 		if err != nil {
 			klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
 			metric.AuthzFailed.WithLabelValues("UnexpectedAuthzError").Inc()
 		}
 		klog.V(6).Info("Finished getting shared resources. Now getting user data..")
 
-		_, userErr := CacheInst.GetUserDataCache(r.Context(), nil)
+		_, userErr := GetCache().GetUserDataCache(r.Context(), nil)
 		if userErr != nil {
 			klog.Warning("Unexpected error while obtaining user data.", userErr)
 		}
