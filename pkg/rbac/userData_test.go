@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -609,4 +610,21 @@ func Test_getUserData(t *testing.T) {
 	if len(result.ManagedClusters) != 2 {
 		t.Errorf("Expected 2 managed clusters but got %d", len(result.ManagedClusters))
 	}
+}
+
+func Test_setImpersonationUserInfo(t *testing.T) {
+
+	ui := authv1.UserInfo{
+		Username: "test-user",
+		UID:      "12345",
+		Groups:   []string{"group1"},
+		Extra: map[string]authv1.ExtraValue{
+			"extraKey": []string{"extraValue"}},
+	}
+
+	impConf := setImpersonationUserInfo(ui)
+	assert.Equal(t, ui.UID, impConf.UID)
+	assert.Equal(t, ui.Username, impConf.UserName)
+	assert.Equal(t, ui.Groups, impConf.Groups)
+	assert.Equal(t, len(ui.Extra), len(impConf.Extra))
 }

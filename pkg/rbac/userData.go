@@ -320,30 +320,30 @@ func (shared *SharedData) isClusterScoped(kindPlural, apigroup string) bool {
 	return ok
 }
 
-func setImpersonationUserInfo(user authv1.UserInfo) *rest.ImpersonationConfig {
+func setImpersonationUserInfo(userInfo authv1.UserInfo) *rest.ImpersonationConfig {
 	impersonConfig := &rest.ImpersonationConfig{}
 	// All fields in user info, if set, should be added to ImpersonationConfig. Otherwise SSRR won't work.
 	// All fields in UserInfo is optional. Set only if there is a value
 	//set username
-	if user.Username != "" {
-		impersonConfig.UserName = user.Username
+	if userInfo.Username != "" {
+		impersonConfig.UserName = userInfo.Username
 	}
 	//set uid
-	if user.UID != "" {
-		impersonConfig.UID = user.UID
+	if userInfo.UID != "" {
+		impersonConfig.UID = userInfo.UID
 	}
 	//set groups
-	if len(user.Groups) > 0 {
-		impersonConfig.Groups = user.Groups
+	if len(userInfo.Groups) > 0 {
+		impersonConfig.Groups = userInfo.Groups
 	}
-	if len(user.Extra) > 0 {
+	if len(userInfo.Extra) > 0 {
 		extraUpdated := map[string][]string{}
-		for key, val := range user.Extra {
+		for key, val := range userInfo.Extra {
 			extraUpdated[key] = val
 		}
 		impersonConfig.Extra = extraUpdated //set additional information
 	}
-	klog.V(9).Info("UserInfo available for impersonation is %+v:", user)
+	klog.V(9).Info("UserInfo available for impersonation is %+v:", userInfo)
 	return impersonConfig
 }
 
