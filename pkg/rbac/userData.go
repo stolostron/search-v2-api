@@ -320,16 +320,43 @@ func (shared *SharedData) isClusterScoped(kindPlural, apigroup string) bool {
 	return ok
 }
 
+func setImpersonationUserInfo(user authv1.UserInfo) *rest.ImpersonationConfig {
+	impersonConfig := &rest.ImpersonationConfig{}
+	// All fields in user info, if set, should be added to ImpersonationConfig. Otherwise SSRR won't work.
+	// All fields in UserInfo is optional. Set only if there is a value
+	//set username
+	if user.Username != "" {
+		impersonConfig.UserName = user.Username
+	}
+	//set uid
+	if user.UID != "" {
+		impersonConfig.UID = user.UID
+	}
+	//set groups
+	if len(user.Groups) > 0 {
+		impersonConfig.Groups = user.Groups
+	}
+	if len(user.Extra) > 0 {
+		extraUpdated := map[string][]string{}
+		for key, val := range user.Extra {
+			extraUpdated[key] = val
+		}
+		impersonConfig.Extra = extraUpdated //set additional information
+	}
+	klog.V(9).Info("UserInfo available for impersonation is %+v:", user)
+	return impersonConfig
+}
+
 func (user *UserDataCache) getImpersonationClientSet(clientToken string, cache *Cache) (v1.AuthorizationV1Interface,
 	error) {
 
 	if user.authzClient == nil {
 		klog.V(5).Info("Creating New ImpersonationClientSet. ")
 		restConfig := config.GetClientConfig()
-		restConfig.Impersonate = rest.ImpersonationConfig{
-			UserName: cache.tokenReviews[clientToken].tokenReview.Status.User.Username,
-			UID:      cache.tokenReviews[clientToken].tokenReview.Status.User.UID,
-		}
+		trUser := cache.tokenReviews[clientToken].tokenReview.Status.User
+		// set Impersonation user info
+		restConfig.Impersonate = *setImpersonationUserInfo(trUser)
+
 		clientset, err := kubernetes.NewForConfig(restConfig)
 		if err != nil {
 			klog.Error("Error with creating a new clientset with impersonation config.", err.Error())

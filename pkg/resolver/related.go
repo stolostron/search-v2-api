@@ -147,14 +147,12 @@ func (s *SearchResult) buildRelationsQuery() {
 	withoutRBACSql, _, withoutRBACSqlErr := relQueryInnerJoin.ToSQL()
 	klog.V(5).Info("Relations query before RBAC:", withoutRBACSql, withoutRBACSqlErr)
 
-	if s.userData != nil && !Iskubeadmin(s.context) {
+	if s.userData != nil {
 		// add rbac
 		relQueryWithRbac = relQueryInnerJoin.Where(buildRbacWhereClause(s.context, s.userData))
 	} else {
-		if !Iskubeadmin(s.context) {
-			panic(fmt.Sprintf("RBAC clause is required! None found for search relations query %+v for user %s ", s.input,
-				s.context.Value(rbac.ContextAuthTokenKey)))
-		}
+		panic(fmt.Sprintf("RBAC clause is required! None found for search relations query %+v for user %s ", s.input,
+			s.context.Value(rbac.ContextAuthTokenKey)))
 	}
 	sql, params, err := relQueryWithRbac.ToSQL()
 
