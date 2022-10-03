@@ -642,3 +642,50 @@ func Test_getImpersonationClientSet(t *testing.T) {
 	assert.Nil(t, err)
 
 }
+
+func Test_getNamespaces_kubeAdmin(t *testing.T) {
+	mock_cache := mockNamespaceCache()
+	mock_cache = setupToken(mock_cache)
+
+	var namespaces []string
+
+	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
+
+	rulesCheck := &authz.SelfSubjectRulesReview{
+		Spec: authz.SelfSubjectRulesReviewSpec{
+			Namespace: "some-namespace",
+		},
+		Status: authz.SubjectRulesReviewStatus{
+			ResourceRules: []authz.ResourceRule{
+				{
+					Verbs:     []string{"list"},
+					APIGroups: []string{"v1", "*"},
+					Resources: []string{"pods", "*"},
+				},
+			},
+		},
+	}
+	fs := fake.NewSimpleClientset()
+	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		ret = action.(testingk8s.CreateAction).GetObject()
+		_, ok := ret.(metav1.Object)
+		if !ok {
+			t.Error("Unexpected Error - expecting MetaObject with type *v1.SelfSubjectRulesReview")
+			return
+		}
+		return true, rulesCheck, nil
+	})
+	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
+	result, err := mock_cache.GetUserDataCache(ctx, fs.AuthorizationV1())
+
+	if len(result.userData.NsResources) != 1 ||
+		result.userData.NsResources["some-namespace"][0].Apigroup != "*" ||
+		result.userData.NsResources["some-namespace"][0].Kind != "*" {
+		t.Errorf("Cache does not have expected namespace resources ")
+
+	}
+	if err != nil {
+		t.Error("Unexpected error while obtaining namespaces.", err)
+	}
+
+}
