@@ -102,21 +102,16 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 	return resourceTypeMap, err
 }
 
-func (cache *Cache) GetSharedData(ctx context.Context) (map[string]string, error) {
+func (cache *Cache) GetPropertyTypes(ctx context.Context) (map[string]string, error) {
 	sharedData, err := cache.PopulateSharedCache(ctx)
 	if err != nil {
 		klog.Error("Error populating shared data cache: ", err)
 		return nil, err
 	}
 	//store only the PropTypeCache to use in outside of rbac module
-	SharedDataAccess := sharedData.GetPropertyTypeCache()
+	propTypesMap := sharedData.propTypes
 
-	propTypesMap := SharedDataAccess
 	return propTypesMap, nil
-}
-
-func (shared *SharedData) GetPropertyTypeCache() map[string]string {
-	return shared.propTypes
 }
 
 func (cache *Cache) PopulateSharedCache(ctx context.Context) (*SharedData, error) {
