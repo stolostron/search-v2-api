@@ -259,7 +259,7 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 			klog.V(9).Infof("SelfSubjectRulesReviews Kube API result for ns:%s : %v\n", ns, prettyPrint(result.Status))
 		}
 
-		// Name the loop - to break out of the loop if user is kubeadmin (have access to everything)
+		// Name the loop - to break out of the loop if user has access to everything (*)
 	resourceRulesLoop:
 		for _, rules := range result.Status.ResourceRules {
 			for _, verb := range rules.Verbs {
