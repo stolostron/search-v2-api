@@ -522,7 +522,7 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 		keywords := pointerToStringArray(input.Keywords)
 		for _, key := range keywords {
 			key = "%" + key + "%"
-			whereDs = append(whereDs, goqu.L(`"value"`).Like(key).Expression())
+			whereDs = append(whereDs, goqu.L(`"value"`).ILike(key).Expression())
 		}
 	}
 	if input.Filters != nil {
