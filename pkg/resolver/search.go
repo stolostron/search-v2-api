@@ -327,7 +327,7 @@ func getOperator(values []string) map[string][]string {
 	return operatorValue
 }
 
-func getWhereClauseExpression(prop, operator string, values []string, propType string) []exp.Expression { //need to add the type as parameter
+func getWhereClauseExpression(prop, operator string, values []string, propType string) []exp.Expression {
 	exps := []exp.Expression{}
 
 	switch operator {
@@ -555,7 +555,7 @@ func WhereClauseFilter(input *model.SearchInput, propTypeMap map[string]string) 
 
 				for key, val := range propTypeMap {
 					if key == filter.Property { //check if property exists in dataTypeMap to get datatype
-						klog.V(5).Infof("Property (key) in map:%s, filter.Property is: %s, and Datatype (val) of property in map:%s\n", key, filter.Property, val)
+						klog.V(5).Infof("Prop in map:%s, filter prop is: %s, datatype :%s\n", key, filter.Property, val)
 						dataType = val
 
 						cleanedVal := make([]string, len(values))

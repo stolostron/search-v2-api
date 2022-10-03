@@ -132,10 +132,9 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		s.query = ""
 		s.params = nil
 	}
-
-	fmt.Println("Search Complete Query", s.query)
 	// SELECT DISTINCT "prop" FROM (SELECT "data"->'?'
-	// AS "prop" FROM "search"."resources" WHERE ("data"->'?' IS NOT NULL) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000
+	// AS "prop" FROM "search"."resources" WHERE ("data"->'?' IS NOT NULL) LIMIT 100000)
+	// AS "searchComplete" ORDER BY prop ASC LIMIT 1000
 
 }
 
@@ -162,7 +161,6 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			switch v := input.(type) {
 
 			case string:
-				fmt.Println("String", v)
 				prop = v
 				props[v] = struct{}{}
 			case bool:
@@ -180,7 +178,6 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 
 				}
 			case []interface{}:
-				fmt.Println("Interface", v)
 				arrayProperties[s.property] = struct{}{}
 				for _, value := range v {
 					props[value.(string)] = struct{}{}
