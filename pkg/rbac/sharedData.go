@@ -74,7 +74,10 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 	selectDs = ds.Select(goqu.L("key"), goqu.L("jsonb_typeof(?)",
 		goqu.C("value")).As("datatype")).Distinct()
 
-	query, params, err := selectDs.ToSQL()
+	query, params, sqlerr := selectDs.ToSQL()
+	if sqlerr != nil {
+		klog.Errorf("Error building Search query: %s", sqlerr.Error())
+	}
 
 	klog.V(5).Infof("Query for property datatypes: [%s] ", query)
 	rows, err := cache.pool.Query(ctx, query, params...)
