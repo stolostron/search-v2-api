@@ -53,7 +53,6 @@ func Test_SearchComplete_Query_WithLimit(t *testing.T) {
 
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
-	fmt.Println("mockRows:", mockRows)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'kind' AS "prop" FROM "search"."resources" WHERE (("data"->'kind' IS NOT NULL) AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 2`),
@@ -157,7 +156,6 @@ func Test_SearchCompleteQuery_PropDate(t *testing.T) {
 
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, 0)
-	fmt.Println("mockRows:", mockRows)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'created' AS "prop" FROM "search"."resources" WHERE (("data"->'created' IS NOT NULL) AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),

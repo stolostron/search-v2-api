@@ -57,7 +57,8 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 	columns := []string{"kind", "apigroup"}
 	pgxRows := pgxpoolmock.NewRows(columns).AddRow("addon.open-cluster-management.io", "Nodes").ToPgxRows()
 
-	fmt.Println(pgxRows)
+	columns1 := []string{"key", "datatype"}
+	pgxRows1 := pgxpoolmock.NewRows(columns1).AddRow("kind", "string").AddRow("apigroup", "string").ToPgxRows()
 
 	mockpool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"->>'_hubClusterResource'='true' AND ("data"->>'namespace' IS NULL))`),
@@ -67,10 +68,11 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 	mockpool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
 		gomock.Eq([]interface{}{}),
-	).Return(pgxRows, nil)
+	).Return(pgxRows1, nil)
 
 	_, err := mock_cache.PopulateSharedCache(ctx)
 	res := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
+
 	_, csResPresent := mock_cache.shared.csResourcesMap[res]
 	if len(mock_cache.shared.csResourcesMap) != 1 || !csResPresent {
 		t.Error("Cluster Scoped Resources not in cache")
@@ -97,6 +99,9 @@ func Test_getResouces_usingCache(t *testing.T) {
 	columns := []string{"apigroup", "kind"}
 	pgxRows := pgxpoolmock.NewRows(columns).AddRow("addon.open-cluster-management.io", "Nodes").ToPgxRows()
 
+	columns1 := []string{"key", "datatype"}
+	pgxRows1 := pgxpoolmock.NewRows(columns1).AddRow("kind", "string").AddRow("apigroup", "string").ToPgxRows()
+
 	mockpool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"->>'_hubClusterResource'='true' AND ("data"->>'namespace' IS NULL))`),
 		gomock.Eq([]interface{}{}),
@@ -105,7 +110,7 @@ func Test_getResouces_usingCache(t *testing.T) {
 	mockpool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
 		gomock.Eq([]interface{}{}),
-	).Return(pgxRows, nil)
+	).Return(pgxRows1, nil)
 
 	namespaces := []string{"test-namespace"}
 	manClusters := map[string]struct{}{"test-man": {}}
@@ -149,6 +154,9 @@ func Test_getResources_expiredCache(t *testing.T) {
 	columns := []string{"apigroup", "kind"}
 	pgxRows := pgxpoolmock.NewRows(columns).AddRow("addon.open-cluster-management.io", "Nodes").ToPgxRows()
 
+	columns1 := []string{"key", "datatype"}
+	pgxRows1 := pgxpoolmock.NewRows(columns1).AddRow("kind", "string").AddRow("apigroup", "string").ToPgxRows()
+
 	mockpool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"->>'_hubClusterResource'='true' AND ("data"->>'namespace' IS NULL))`),
 		gomock.Eq([]interface{}{}),
@@ -157,7 +165,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 	mockpool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
 		gomock.Eq([]interface{}{}),
-	).Return(pgxRows, nil)
+	).Return(pgxRows1, nil)
 
 	namespaces := []string{"test-namespace"}
 	manClusters := map[string]struct{}{"test-man": {}}
