@@ -212,6 +212,17 @@ func (user *UserDataCache) userAuthorizedListCSResource(ctx context.Context, aut
 
 }
 
+func (user *UserDataCache) updateUserManagedClusterList(cache *Cache, ns string) {
+	_, managedClusterNs := cache.shared.managedClusters[ns]
+	if managedClusterNs {
+		if user.userData.ManagedClusters == nil {
+			user.userData.ManagedClusters = map[string]struct{}{}
+		}
+		user.userData.ManagedClusters[ns] = struct{}{}
+
+	}
+}
+
 // Equivalent to: oc auth can-i --list -n <iterate-each-namespace>
 func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Context,
 	clientToken string) (*UserDataCache, error) {
@@ -243,8 +254,8 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	}
 
 	user.userData.NsResources = make(map[string][]Resource)
-	managedClusters := cache.shared.managedClusters
 	user.userData.ManagedClusters = make(map[string]struct{})
+	uid, userInfo := cache.GetUserUID(ctx)
 
 	for _, ns := range allNamespaces {
 		rulesCheck := authz.SelfSubjectRulesReview{
@@ -275,6 +286,12 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 								// exit the resourceRulesLoop
 								if res == "*" && api == "*" {
 									user.userData.NsResources[ns] = []Resource{{Apigroup: api, Kind: res}}
+									klog.V(5).Infof("User %s with uid: %s has access to everything in the namespace %s",
+										userInfo.Username, userInfo.UID, ns)
+
+									// Update user's managedcluster list too as the user has access to everything
+									user.updateUserManagedClusterList(cache, ns)
+
 									break resourceRulesLoop
 								}
 								user.userData.NsResources[ns] = append(user.userData.NsResources[ns],
@@ -296,17 +313,13 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 				if verb == "create" || verb == "*" {
 					for _, res := range rules.Resources {
 						if res == "managedclusterviews" {
-							_, managedClusterNs := managedClusters[ns]
-							if managedClusterNs {
-								user.userData.ManagedClusters[ns] = struct{}{}
-							}
+							user.updateUserManagedClusterList(cache, ns)
 						}
 					}
 				}
 			}
 		}
 	}
-	uid, userInfo := cache.GetUserUID(ctx)
 	klog.V(7).Infof("User %s with uid: %s has access to these namespace scoped res: %+v \n", userInfo.Username, uid,
 		user.userData.NsResources)
 	klog.V(7).Infof("User %s with uid: %s has access to these ManagedClusters: %+v \n", userInfo.Username, uid,

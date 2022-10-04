@@ -689,3 +689,24 @@ func Test_hasAccessToAllResourcesInNamespace(t *testing.T) {
 	}
 
 }
+
+//User should have access to ManagedClusters
+func Test_updateUserManagedClusterList(t *testing.T) {
+	mock_cache := mockNamespaceCache()
+	mock_cache = setupToken(mock_cache)
+
+	udc := &UserDataCache{
+		userData:     UserData{ManagedClusters: make(map[string]struct{})},
+		nsrUpdatedAt: time.Now(),
+	}
+	// All namespaces list
+	namespaces := map[string]struct{}{"some-namespace": {}, "some-nonmatching-namespace": {}, "invalid-namespace": {}}
+	managedclusters := map[string]struct{}{"some-namespace": {}, "some-nonmatching-namespace": {}}
+	//mock cache for managed clusters
+	mock_cache.shared.managedClusters = managedclusters
+
+	for ns := range namespaces {
+		udc.updateUserManagedClusterList(mock_cache, ns)
+	}
+	assert.Equal(t, len(managedclusters), len(udc.userData.ManagedClusters))
+}

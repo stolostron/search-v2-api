@@ -115,8 +115,8 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 	klog.V(6).Info("Querying database for cluster-scoped resources.")
 
 	// Building query to get cluster scoped resources
-	// Original query: "SELECT DISTINCT(data->>apigroup, data->>kind) FROM search.resources WHERE
-	// cluster='local-cluster' AND namespace=NULL"
+	// Original query: "SELECT DISTINCT data->>'apigroup', data->>'kind_plural' FROM search.resources WHERE
+	// data->>'_hubClusterResource'='true' AND data->>'namespace' is NULL"
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 	query, _, err := ds.SelectDistinct(goqu.COALESCE(goqu.L(`"data"->>'apigroup'`), "").As("apigroup"),
@@ -145,7 +145,7 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 			var kind, apigroup string
 			err := rows.Scan(&apigroup, &kind)
 			if err != nil {
-				klog.Warning("Error %s retrieving rows for query:%s for apigroup %s and kind %s", err.Error(), query,
+				klog.Warningf("Error %s retrieving rows for query:%s for apigroup %s and kind %s", err.Error(), query,
 					apigroup, kind)
 				continue
 			}
@@ -213,6 +213,7 @@ func (shared *SharedData) GetManagedClusters(cache *Cache, ctx context.Context) 
 		}
 	}
 
+	klog.V(3).Info("List of managed clusters in shared data: ", managedClusters)
 	shared.managedClusters = managedClusters
 	shared.mcUpdatedAt = time.Now()
 	return shared.mcErr
