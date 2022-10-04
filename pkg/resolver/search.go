@@ -125,21 +125,6 @@ func (s *SearchResult) Uids() {
 	s.resolveUids()
 }
 
-func Iskubeadmin(ctx context.Context) bool {
-	_, userDetails := rbac.GetCache().GetUserUID(ctx)
-	if userDetails.Username == "kube:admin" {
-		klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
-		return true
-	}
-	for _, group := range userDetails.Groups {
-		if group == "system:cluster-admins" {
-			klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
-			return true
-		}
-	}
-	return false
-}
-
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData) exp.ExpressionList {
 	return goqu.Or(
@@ -186,15 +171,12 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		sql, _, err := selectDs.Where(whereDs...).ToSQL()
 		klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
 		//RBAC CLAUSE
-		if s.userData != nil && !Iskubeadmin(ctx) {
+		if s.userData != nil {
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData)) // add rbac
-
 		} else {
-			if !Iskubeadmin(ctx) {
-				panic(fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
-					ctx.Value(rbac.ContextAuthTokenKey)))
-			}
+			panic(fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
+				ctx.Value(rbac.ContextAuthTokenKey)))
 		}
 	}
 
