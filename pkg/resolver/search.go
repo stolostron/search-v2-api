@@ -134,21 +134,6 @@ func (s *SearchResult) Uids() {
 	s.resolveUids()
 }
 
-func Iskubeadmin(ctx context.Context) bool {
-	_, userDetails := rbac.GetCache().GetUserUID(ctx)
-	if userDetails.Username == "kube:admin" {
-		klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
-		return true
-	}
-	for _, group := range userDetails.Groups {
-		if group == "system:cluster-admins" {
-			klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
-			return true
-		}
-	}
-	return false
-}
-
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData) exp.ExpressionList {
 	return goqu.Or(
@@ -200,15 +185,11 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	} else {
 		sql, _, err := selectDs.Where(whereDs...).ToSQL() //use original query
 		klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
-	}
-
-	//RBAC CLAUSE
-	if s.userData != nil && !Iskubeadmin(ctx) {
-		whereDs = append(whereDs,
-			buildRbacWhereClause(ctx, s.userData)) // add rbac
-
-	} else {
-		if !Iskubeadmin(ctx) {
+		//RBAC CLAUSE
+		if s.userData != nil {
+			whereDs = append(whereDs,
+				buildRbacWhereClause(ctx, s.userData)) // add rbac
+		} else {
 			panic(fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
 				ctx.Value(rbac.ContextAuthTokenKey)))
 		}
@@ -266,7 +247,7 @@ func (s *SearchResult) resolveUids() {
 func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	items := []map[string]interface{}{}
 	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveItemsFunc"))
-	klog.V(5).Info("Query issued by resolver [%s] ", s.query)
+	klog.V(5).Infof("Query issued by resolver [%s] ", s.query)
 	rows, err := s.pool.Query(s.context, s.query, s.params...)
 
 	defer timer.ObserveDuration()
@@ -544,7 +525,7 @@ func WhereClauseFilter(input *model.SearchInput, propTypeMap map[string]string) 
 		keywords := pointerToStringArray(input.Keywords)
 		for _, key := range keywords {
 			key = "%" + key + "%"
-			whereDs = append(whereDs, goqu.L(`"value"`).Like(key).Expression())
+			whereDs = append(whereDs, goqu.L(`"value"`).ILike(key).Expression())
 		}
 	}
 	if input.Filters != nil {

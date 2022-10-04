@@ -97,15 +97,12 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			whereDs = append(whereDs, goqu.L(`"data"->?`, s.property).IsNotNull())
 		}
 		//RBAC CLAUSE
-		if s.userData != nil && !Iskubeadmin(ctx) {
-			// klog.Info("not adding rbac clause now")
+		if s.userData != nil {
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData)) // add rbac
 		} else {
-			if !Iskubeadmin(ctx) {
-				panic(fmt.Sprintf("RBAC clause is required! None found for searchComplete query %+v for user %s ",
-					s.input, ctx.Value(rbac.ContextAuthTokenKey)))
-			}
+			panic(fmt.Sprintf("RBAC clause is required! None found for searchComplete query %+v for user %s ",
+				s.input, ctx.Value(rbac.ContextAuthTokenKey)))
 		}
 		//Adding an arbitrarily high number 100000 as limit here in the inner query
 		// Adding a LIMIT helps to speed up the query
