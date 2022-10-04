@@ -232,7 +232,7 @@ func (s *SearchResult) resolveUids() {
 func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	items := []map[string]interface{}{}
 	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveItemsFunc"))
-	klog.V(5).Info("Query issued by resolver [%s] ", s.query)
+	klog.V(5).Infof("Query issued by resolver [%s] ", s.query)
 	rows, err := s.pool.Query(s.context, s.query, s.params...)
 	defer timer.ObserveDuration()
 	if err != nil {
