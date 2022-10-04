@@ -643,7 +643,7 @@ func Test_getImpersonationClientSet(t *testing.T) {
 
 }
 
-func Test_getNamespaces_kubeAdmin(t *testing.T) {
+func Test_hasAccessToAllResourcesInNamespace(t *testing.T) {
 	mock_cache := mockNamespaceCache()
 	mock_cache = setupToken(mock_cache)
 
