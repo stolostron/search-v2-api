@@ -18,6 +18,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
+impersonationConfigCreationerror := "Error creating clientset with impersonation config"
 // Contains data about the resources the user is allowed to access.
 type UserDataCache struct {
 	userData UserData
@@ -136,7 +137,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 func (user *UserDataCache) userHasAllAccess(cache *Cache, ctx context.Context, clientToken string) (bool, error) {
 	impersClientset, err := user.getImpersonationClientSet(clientToken, cache)
 	if err != nil {
-		klog.Warning("Error creating clientset with impersonation config.", err.Error())
+		klog.Warning(impersonationConfigCreationerror, err.Error())
 		return false, err
 	}
 	//If we have a new set of authorized list for the user reset the previous one
@@ -207,7 +208,7 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 	impersClientset, err := user.getImpersonationClientSet(clientToken, cache)
 	if err != nil {
 		user.csrErr = err
-		klog.Warning("Error creating clientset with impersonation config.", err.Error())
+		klog.Warning(impersonationConfigCreationerror, err.Error())
 		return user, user.csrErr
 	}
 	//If we have a new set of authorized list for the user reset the previous one
@@ -289,7 +290,7 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 
 	impersClientset, err := user.getImpersonationClientSet(clientToken, cache)
 	if err != nil {
-		klog.Warning("Error creating clientset with impersonation config.", err.Error())
+		klog.Warning(impersonationConfigCreationerror, err.Error())
 		return user, err
 	}
 
