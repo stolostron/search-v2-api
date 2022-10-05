@@ -562,3 +562,41 @@ func Test_buildRbacWhereClauseHandleAllStars(t *testing.T) {
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
 }
+
+func Test_SearchResolver_UidsAllAccess(t *testing.T) {
+	// Create a SearchResolver instance with a mock connection pool.
+	val1 := "template"
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserData{
+		CsResources:     []rbac.Resource{{Apigroup: "*", Kind: "*"}},
+		NsResources:     map[string][]rbac.Resource{"*": {{Apigroup: "*", Kind: "*"}}},
+		ManagedClusters: map[string]struct{}{"managed-cluster1": {}},
+	},
+	)
+	// Mock the database queries.
+	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", 0)
+
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT "uid" FROM "search"."resources" WHERE (("data"->>'kind' ILIKE ANY ('{"template"}')) AND (("cluster" = ANY ('{"managed-cluster1"}')) OR (data->>'_hubClusterResource' = 'true'))) LIMIT 1000`),
+		gomock.Eq([]interface{}{}),
+	).Return(mockRows, nil)
+
+	// Execute the function
+	resolver.Uids()
+
+	// Verify returned items.
+	if len(resolver.uids) != len(mockRows.mockData) {
+		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(resolver.uids))
+	}
+
+	// Verify properties for each returned item.
+	for i, item := range resolver.uids {
+		mockRow := mockRows.mockData[i]
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow["_uid"] = mockRow["uid"]
+
+		if *item != mockRow["uid"].(string) {
+			t.Errorf("Value of key [uid] does not match for item [%d].\nExpected: %s\nGot: %s", i, expectedRow["_uid"], *item)
+		}
+	}
+}
