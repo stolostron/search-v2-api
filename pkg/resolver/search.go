@@ -182,9 +182,9 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		whereDs, typeFilter = WhereClauseFilter(s.input, s.propTypes)
 		klog.V(7).Info("Property Datatype", typeFilter)
 
-	} else {
 		sql, _, err := selectDs.Where(whereDs...).ToSQL() //use original query
 		klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
+		fmt.Println(sql)
 		//RBAC CLAUSE
 		if s.userData != nil {
 			whereDs = append(whereDs,
@@ -214,7 +214,6 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	klog.V(5).Infof("Search query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
-
 }
 
 func (s *SearchResult) resolveCount() int {
@@ -547,7 +546,6 @@ func WhereClauseFilter(input *model.SearchInput, propTypeMap map[string]string) 
 							if dataType == "object" {
 								labels := strings.Split(val, "=")
 								cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
-								fmt.Println(cleanedVal[i])
 							} else if dataType == "array" {
 								cleanedVal[i] = fmt.Sprintf(`["%s"]`, val)
 
