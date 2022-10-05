@@ -59,12 +59,16 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 
 	// original query: select distinct key, jsonb_typeof(value) as datatype FROM search.resources,jsonb_each(data);
 	var selectDs *goqu.SelectDataset
+
 	//define schema:
 	schemaTable := goqu.S("search").Table("resources")
+
 	//data expression to get value and key
 	jsb := goqu.L("jsonb_each(?)", goqu.C("data"))
+
 	//select from these datasets
 	ds := goqu.From(schemaTable, jsb)
+
 	//select statement with orderby and distinct clause
 	selectDs = ds.Select(goqu.L("key"), goqu.L("jsonb_typeof(?)",
 		goqu.C("value")).As("datatype")).Distinct()

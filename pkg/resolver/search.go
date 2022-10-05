@@ -214,6 +214,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	klog.V(5).Infof("Search query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
+
 }
 
 func (s *SearchResult) resolveCount() int {
@@ -534,30 +535,32 @@ func WhereClauseFilter(input *model.SearchInput, propTypeMap map[string]string) 
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
 
-				for key, val := range propTypeMap {
-					if key == filter.Property { //check if property exists in dataTypeMap to get datatype
-						klog.V(5).Infof("Prop in map:%s, filter prop is: %s, datatype :%s\n", key, filter.Property, val)
-						dataType = val
+				if len(propTypeMap) > 0 {
+					dataTypeFromMap, ok := propTypeMap[filter.Property]
+					if ok {
+						dataType = dataTypeFromMap
+						klog.V(5).Infof("Prop in map:%s, filter prop is: %s, datatype :%s\n", dataTypeFromMap, filter.Property)
 
 						cleanedVal := make([]string, len(values))
 
 						for i, val := range values {
-							if dataType == "object" { //map[string]interface{}
+							if dataType == "object" {
 								labels := strings.Split(val, "=")
 								cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
-							} else if dataType == "array" { //[]string
+								fmt.Println(cleanedVal[i])
+							} else if dataType == "array" {
 								cleanedVal[i] = fmt.Sprintf(`["%s"]`, val)
 
 							} else {
-								klog.Error("Error while decoding label string")
+								klog.Errorf("Error while decoding label string with dataType %s", dataType)
 								cleanedVal[i] = val
 							}
 
 							values = cleanedVal
 						}
+
 					}
 				}
-
 				// Check if value is a number or date and get the cleaned up value
 				opDateValueMap := getOperatorAndNumDateFilter(filter.Property, values, dataType)
 
