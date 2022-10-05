@@ -102,7 +102,8 @@ func sharedCacheValid(shared *SharedData) bool {
 	return false
 }
 
-// Obtain all the cluster-scoped resources in the hub cluster that support list and watch.
+// Obtain all the cluster-scoped resources in the hub cluster that support list and watch
+// Get the list of resources in the database where namespace field is null.
 // Equivalent to: `oc api-resources -o wide | grep false | grep watch | grep list`
 func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Context) error {
 
@@ -185,6 +186,8 @@ func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context)
 	return shared.nsErr
 }
 
+// Obtain all the managedclusters.
+// Equivalent to `oc get managedclusters`
 func (shared *SharedData) GetManagedClusters(cache *Cache, ctx context.Context) error {
 
 	shared.mcLock.Lock()
@@ -208,6 +211,7 @@ func (shared *SharedData) GetManagedClusters(cache *Cache, ctx context.Context) 
 	}
 
 	for _, item := range resourceObj.Items {
+		// Add to list if it is not local-cluster
 		if item.GetName() != "local-cluster" {
 			managedClusters[item.GetName()] = struct{}{}
 		}

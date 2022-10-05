@@ -6,6 +6,8 @@ import (
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/lib/pq"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
+	v1 "k8s.io/api/authentication/v1"
+	"k8s.io/klog/v2"
 )
 
 // function to loop through resources and build the where clause
@@ -45,8 +47,16 @@ func matchApigroupKind(resources []rbac.Resource) exp.ExpressionList {
 // Match cluster-scoped resources, which are identified by not having the namespace property.
 // Resolves to something like:
 //   (AND data->>'namespace' = '')
-func matchClusterScopedResources(csRes []rbac.Resource) exp.ExpressionList {
+func matchClusterScopedResources(csRes []rbac.Resource, userInfo v1.UserInfo) exp.ExpressionList {
 	if len(csRes) > 0 {
+		// user has access to all cluster scoped resources
+		if len(csRes) == 1 && csRes[0].Apigroup == "*" && csRes[0].Kind == "*" {
+
+			klog.V(5).Infof(
+				"User %s with UID %s has access to all clusterscoped resources. Excluding cluster scoped filters",
+				userInfo.Username, userInfo.UID)
+			return goqu.And()
+		}
 		return goqu.And(goqu.COALESCE(goqu.L(`data->>?`, "namespace"), "").Eq(""),
 			matchApigroupKind(csRes))
 
@@ -58,11 +68,18 @@ func matchClusterScopedResources(csRes []rbac.Resource) exp.ExpressionList {
 // Resolves to some similar to:
 //    (namespace = 'a' AND ((apigroup='' AND kind='') OR (apigroup='' AND kind='') OR ... ) OR
 //    (namespace = 'b' AND ( ... ) OR (namespace = 'c' AND ( ... ) OR ...
-func matchNamespacedResources(nsResources map[string][]rbac.Resource) exp.ExpressionList {
+func matchNamespacedResources(nsResources map[string][]rbac.Resource, userInfo v1.UserInfo) exp.ExpressionList {
 	var whereNsDs []exp.Expression
 	if len(nsResources) > 0 {
 		whereNsDs = make([]exp.Expression, len(nsResources))
 		namespaces := getKeys(nsResources)
+
+		// user has access to all namespaces
+		if len(namespaces) == 1 && namespaces[0] == "*" {
+			klog.V(5).Infof("User %s with UID %s has access to all namespaces. Excluding individual namespace filters",
+				userInfo.Username, userInfo.UID)
+			return goqu.Or()
+		}
 
 		for nsCount, namespace := range namespaces {
 			whereNsDs[nsCount] = goqu.And(goqu.L(`data->>?`, "namespace").Eq(namespace),

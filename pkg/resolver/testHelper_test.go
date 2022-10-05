@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgproto3/v2"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
+	authv1 "k8s.io/api/authentication/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -32,6 +33,12 @@ func newUserData() ([]rbac.Resource, map[string][]rbac.Resource, map[string]stru
 	return csres, nsScopeAccess, managedClusters
 }
 
+func getUserInfo() authv1.UserInfo {
+	return authv1.UserInfo{
+		UID:      "unique-user-id",
+		Username: "unique-username",
+	}
+}
 func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*string, ud *rbac.UserData) (*SearchResult, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

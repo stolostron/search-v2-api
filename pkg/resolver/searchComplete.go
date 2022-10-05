@@ -87,10 +87,14 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
 			whereDs = append(whereDs, goqu.L(`"data"->?`, s.property).IsNotNull())
 		}
+
+		//get user info for logging
+		_, userInfo := rbac.GetCache().GetUserUID(ctx)
+
 		//RBAC CLAUSE
 		if s.userData != nil {
 			whereDs = append(whereDs,
-				buildRbacWhereClause(ctx, s.userData)) // add rbac
+				buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
 		} else {
 			panic(fmt.Sprintf("RBAC clause is required! None found for searchComplete query %+v for user %s ",
 				s.input, ctx.Value(rbac.ContextAuthTokenKey)))

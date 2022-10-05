@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -83,8 +84,11 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 			},
 		},
 	}
-	fs := fake.NewSimpleClientset()
-	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+	fs := fake.Clientset{}
+	fs.AddReactor("create", "selfsubjectaccessreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, fmt.Errorf("Error creating ssar")
+	})
+	fs.AddReactor("create", "selfsubjectrulesreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
 		ret = action.(testingk8s.CreateAction).GetObject()
 		_, ok := ret.(metav1.Object)
 		if !ok {
@@ -213,8 +217,11 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 			},
 		},
 	}
-	fs := fake.NewSimpleClientset()
-	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+	fs := fake.Clientset{}
+	fs.AddReactor("create", "selfsubjectaccessreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, fmt.Errorf("Error creating ssar")
+	})
+	fs.AddReactor("create", "selfsubjectrulesreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
 		ret = action.(testingk8s.CreateAction).GetObject()
 		_, ok := ret.(metav1.Object)
 		if !ok {
@@ -392,8 +399,11 @@ func Test_managedClusters_emptyCache(t *testing.T) {
 		},
 	}
 
-	fs := fake.NewSimpleClientset()
-	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+	fs := fake.Clientset{}
+	fs.AddReactor("create", "selfsubjectaccessreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, fmt.Errorf("Error creating ssar")
+	})
+	fs.AddReactor("create", "selfsubjectrulesreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
 		ret = action.(testingk8s.CreateAction).GetObject()
 		meta, ok := ret.(metav1.Object)
 		if !ok {
@@ -500,8 +510,11 @@ func Test_managedCluster_expiredCache(t *testing.T) {
 		},
 	}
 
-	fs := fake.NewSimpleClientset()
-	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+	fs := fake.Clientset{}
+	fs.AddReactor("create", "selfsubjectaccessreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, fmt.Errorf("Error creating ssar")
+	})
+	fs.AddReactor("create", "selfsubjectrulesreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
 		ret = action.(testingk8s.CreateAction).GetObject()
 		meta, ok := ret.(metav1.Object)
 		if !ok {
@@ -665,8 +678,11 @@ func Test_hasAccessToAllResourcesInNamespace(t *testing.T) {
 			},
 		},
 	}
-	fs := fake.NewSimpleClientset()
-	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+	fs := fake.Clientset{}
+	fs.AddReactor("create", "selfsubjectaccessreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, fmt.Errorf("Error creating ssar")
+	})
+	fs.AddReactor("create", "selfsubjectrulesreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
 		ret = action.(testingk8s.CreateAction).GetObject()
 		_, ok := ret.(metav1.Object)
 		if !ok {
