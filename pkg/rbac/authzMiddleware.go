@@ -15,7 +15,7 @@ func AuthorizeUser(next http.Handler) http.Handler {
 		GetCache().pool = db.GetConnection()
 
 		//Hub Cluster resources authorization:
-		_, err := GetCache().PopulateSharedCache(r.Context())
+		err := GetCache().PopulateSharedCache(r.Context())
 		if err != nil {
 			klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
 			metric.AuthzFailed.WithLabelValues("UnexpectedAuthzError").Inc()

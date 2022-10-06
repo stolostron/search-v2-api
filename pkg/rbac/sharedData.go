@@ -107,22 +107,22 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 }
 
 func (cache *Cache) GetPropertyTypes(ctx context.Context) (map[string]string, error) {
-	sharedData, err := cache.PopulateSharedCache(ctx)
+	err := cache.PopulateSharedCache(ctx)
 	if err != nil {
 		klog.Error("Error populating shared data cache: ", err)
 		return nil, err
 	}
 	//store only the PropTypeCache to use in outside of rbac module
-	propTypesMap := sharedData.propTypes
+	propTypesMap := cache.shared.propTypes
 
 	return propTypesMap, nil
 }
 
-func (cache *Cache) PopulateSharedCache(ctx context.Context) (*SharedData, error) {
+func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 
 	if sharedCacheValid(&cache.shared) { //if all cache is valid we use cache data
 		klog.V(5).Info("Using shared data from cache.")
-		return &cache.shared, nil
+		return nil
 	} else { //get data and cache
 
 		var error error
@@ -155,7 +155,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) (*SharedData, error
 			klog.V(6).Info("Successfully retrieved managed clusters!")
 		}
 
-		return &cache.shared, error
+		return error
 
 	}
 
