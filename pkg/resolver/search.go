@@ -41,7 +41,7 @@ type SearchResult struct {
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
 	// For each input, create a SearchResult resolver.
 	srchResult := make([]*SearchResult, len(input))
-	userData, userDataErr := rbac.CacheInst.GetUserData(ctx)
+	userData, userDataErr := rbac.GetCache().GetUserData(ctx)
 	if userDataErr != nil {
 		return srchResult, userDataErr
 	}
@@ -125,21 +125,6 @@ func (s *SearchResult) Uids() {
 	s.resolveUids()
 }
 
-func Iskubeadmin(ctx context.Context) bool {
-	_, userDetails := rbac.CacheInst.GetUserUID(ctx)
-	if userDetails.Username == "kube:admin" {
-		klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
-		return true
-	}
-	for _, group := range userDetails.Groups {
-		if group == "system:cluster-admins" {
-			klog.Warning("TEMPORARY WORKAROUND for Kubeadmin: Turning off RBAC")
-			return true
-		}
-	}
-	return false
-}
-
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData) exp.ExpressionList {
 	return goqu.Or(
@@ -186,15 +171,12 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		sql, _, err := selectDs.Where(whereDs...).ToSQL()
 		klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
 		//RBAC CLAUSE
-		if s.userData != nil && !Iskubeadmin(ctx) {
+		if s.userData != nil {
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData)) // add rbac
-
 		} else {
-			if !Iskubeadmin(ctx) {
-				panic(fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
-					ctx.Value(rbac.ContextAuthTokenKey)))
-			}
+			panic(fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
+				ctx.Value(rbac.ContextAuthTokenKey)))
 		}
 	}
 
@@ -250,7 +232,7 @@ func (s *SearchResult) resolveUids() {
 func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	items := []map[string]interface{}{}
 	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveItemsFunc"))
-	klog.V(5).Info("Query issued by resolver [%s] ", s.query)
+	klog.V(5).Infof("Query issued by resolver [%s] ", s.query)
 	rows, err := s.pool.Query(s.context, s.query, s.params...)
 	defer timer.ObserveDuration()
 	if err != nil {
@@ -259,12 +241,12 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	}
 	defer rows.Close()
 
-	var cluster string
-	var data map[string]interface{}
 	s.uids = make([]*string, len(items))
 
 	for rows.Next() {
 		var uid string
+		var cluster string
+		var data map[string]interface{}
 		err = rows.Scan(&uid, &cluster, &data)
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), s.query)
@@ -522,7 +504,7 @@ func WhereClauseFilter(input *model.SearchInput) []exp.Expression {
 		keywords := pointerToStringArray(input.Keywords)
 		for _, key := range keywords {
 			key = "%" + key + "%"
-			whereDs = append(whereDs, goqu.L(`"value"`).Like(key).Expression())
+			whereDs = append(whereDs, goqu.L(`"value"`).ILike(key).Expression())
 		}
 	}
 	if input.Filters != nil {

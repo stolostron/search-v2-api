@@ -388,7 +388,7 @@ func Test_SearchResolver_Keywords(t *testing.T) {
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", 0)
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources", jsonb_each_text("data") WHERE (("value" LIKE '%Template%') AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources", jsonb_each_text("data") WHERE (("value" ILIKE '%Template%') AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 10`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 
@@ -531,4 +531,26 @@ func Test_SearchResolver_Items_Labels(t *testing.T) {
 			}
 		}
 	}
+}
+
+func Test_buildRbacWhereClauseHandleStars(t *testing.T) {
+	ud := rbac.UserData{
+		CsResources:     []rbac.Resource{{Apigroup: "", Kind: "nodes"}, {Apigroup: "*", Kind: "csinodes"}},
+		NsResources:     map[string][]rbac.Resource{"ocm": {{Apigroup: "*", Kind: "pods"}, {Apigroup: "*", Kind: "deployments"}}},
+		ManagedClusters: map[string]struct{}{"managed1": {}, "managed2": {}}}
+	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"), &ud)
+	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR (data->>'kind_plural' = 'csinodes'))) OR ((data->>'namespace' = 'ocm') AND ((data->>'kind_plural' = 'pods') OR (data->>'kind_plural' = 'deployments'))))))`
+	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
+	assert.Equal(t, expectedSql, gotSql)
+}
+
+func Test_buildRbacWhereClauseHandleAllStars(t *testing.T) {
+	ud := rbac.UserData{
+		CsResources:     []rbac.Resource{{Apigroup: "", Kind: "nodes"}, {Apigroup: "*", Kind: "*"}},
+		NsResources:     map[string][]rbac.Resource{"ocm": {{Apigroup: "*", Kind: "pods"}, {Apigroup: "*", Kind: "*"}}},
+		ManagedClusters: map[string]struct{}{"managed1": {}, "managed2": {}}}
+	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"), &ud)
+	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND ((COALESCE(data->>'namespace', '') = '') OR (data->>'namespace' = 'ocm'))))`
+	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
+	assert.Equal(t, expectedSql, gotSql)
 }

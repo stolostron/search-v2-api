@@ -212,6 +212,17 @@ func (user *UserDataCache) userAuthorizedListCSResource(ctx context.Context, aut
 
 }
 
+func (user *UserDataCache) updateUserManagedClusterList(cache *Cache, ns string) {
+	_, managedClusterNs := cache.shared.managedClusters[ns]
+	if managedClusterNs {
+		if user.userData.ManagedClusters == nil {
+			user.userData.ManagedClusters = map[string]struct{}{}
+		}
+		user.userData.ManagedClusters[ns] = struct{}{}
+
+	}
+}
+
 // Equivalent to: oc auth can-i --list -n <iterate-each-namespace>
 func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Context,
 	clientToken string) (*UserDataCache, error) {
@@ -243,8 +254,8 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	}
 
 	user.userData.NsResources = make(map[string][]Resource)
-	managedClusters := cache.shared.managedClusters
 	user.userData.ManagedClusters = make(map[string]struct{})
+	uid, userInfo := cache.GetUserUID(ctx)
 
 	for _, ns := range allNamespaces {
 		rulesCheck := authz.SelfSubjectRulesReview{
@@ -258,6 +269,9 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 		} else {
 			klog.V(9).Infof("SelfSubjectRulesReviews Kube API result for ns:%s : %v\n", ns, prettyPrint(result.Status))
 		}
+
+		// Name the loop - to break out of the loop if user has access to everything (*)
+	resourceRulesLoop:
 		for _, rules := range result.Status.ResourceRules {
 			for _, verb := range rules.Verbs {
 				if verb == "list" || verb == "*" { //TODO: resourceName == "*" && verb == "*" then exit loop
@@ -267,6 +281,19 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 							//fail-safe mechanism to avoid whitelist - TODO: incorporate whitelist
 							if !cache.shared.isClusterScoped(res, api) && (len(rules.ResourceNames) == 0 ||
 								(len(rules.ResourceNames) > 0 && rules.ResourceNames[0] == "*")) {
+								// if the user has access to all resources, reset userData.NsResources for the namespace
+								// No need to loop through all resources. Save the wildcard *
+								// exit the resourceRulesLoop
+								if res == "*" && api == "*" {
+									user.userData.NsResources[ns] = []Resource{{Apigroup: api, Kind: res}}
+									klog.V(5).Infof("User %s with uid: %s has access to everything in the namespace %s",
+										userInfo.Username, userInfo.UID, ns)
+
+									// Update user's managedcluster list too as the user has access to everything
+									user.updateUserManagedClusterList(cache, ns)
+
+									break resourceRulesLoop
+								}
 								user.userData.NsResources[ns] = append(user.userData.NsResources[ns],
 									Resource{Apigroup: api, Kind: res})
 							} else if cache.shared.isClusterScoped(res, api) {
@@ -286,17 +313,13 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 				if verb == "create" || verb == "*" {
 					for _, res := range rules.Resources {
 						if res == "managedclusterviews" {
-							_, managedClusterNs := managedClusters[ns]
-							if managedClusterNs {
-								user.userData.ManagedClusters[ns] = struct{}{}
-							}
+							user.updateUserManagedClusterList(cache, ns)
 						}
 					}
 				}
 			}
 		}
 	}
-	uid, userInfo := cache.GetUserUID(ctx)
 	klog.V(7).Infof("User %s with uid: %s has access to these namespace scoped res: %+v \n", userInfo.Username, uid,
 		user.userData.NsResources)
 	klog.V(7).Infof("User %s with uid: %s has access to these ManagedClusters: %+v \n", userInfo.Username, uid,
@@ -320,16 +343,43 @@ func (shared *SharedData) isClusterScoped(kindPlural, apigroup string) bool {
 	return ok
 }
 
+func setImpersonationUserInfo(userInfo authv1.UserInfo) *rest.ImpersonationConfig {
+	impersonConfig := &rest.ImpersonationConfig{}
+	// All fields in user info, if set, should be added to ImpersonationConfig. Otherwise SSRR won't work.
+	// All fields in UserInfo is optional. Set only if there is a value
+	//set username
+	if userInfo.Username != "" {
+		impersonConfig.UserName = userInfo.Username
+	}
+	//set uid
+	if userInfo.UID != "" {
+		impersonConfig.UID = userInfo.UID
+	}
+	//set groups
+	if len(userInfo.Groups) > 0 {
+		impersonConfig.Groups = userInfo.Groups
+	}
+	if len(userInfo.Extra) > 0 {
+		extraUpdated := map[string][]string{}
+		for key, val := range userInfo.Extra {
+			extraUpdated[key] = val
+		}
+		impersonConfig.Extra = extraUpdated //set additional information
+	}
+	klog.V(9).Info("UserInfo available for impersonation is %+v:", userInfo)
+	return impersonConfig
+}
+
 func (user *UserDataCache) getImpersonationClientSet(clientToken string, cache *Cache) (v1.AuthorizationV1Interface,
 	error) {
 
 	if user.authzClient == nil {
 		klog.V(5).Info("Creating New ImpersonationClientSet. ")
 		restConfig := config.GetClientConfig()
-		restConfig.Impersonate = rest.ImpersonationConfig{
-			UserName: cache.tokenReviews[clientToken].tokenReview.Status.User.Username,
-			UID:      cache.tokenReviews[clientToken].tokenReview.Status.User.UID,
-		}
+		trUser := cache.tokenReviews[clientToken].tokenReview.Status.User
+		// set Impersonation user info
+		restConfig.Impersonate = *setImpersonationUserInfo(trUser)
+
 		clientset, err := kubernetes.NewForConfig(restConfig)
 		if err != nil {
 			klog.Error("Error with creating a new clientset with impersonation config.", err.Error())

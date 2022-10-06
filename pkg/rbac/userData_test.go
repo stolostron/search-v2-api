@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -609,4 +610,103 @@ func Test_getUserData(t *testing.T) {
 	if len(result.ManagedClusters) != 2 {
 		t.Errorf("Expected 2 managed clusters but got %d", len(result.ManagedClusters))
 	}
+}
+
+func Test_setImpersonationUserInfo(t *testing.T) {
+
+	ui := authv1.UserInfo{
+		Username: "test-user",
+		UID:      "12345",
+		Groups:   []string{"group1"},
+		Extra: map[string]authv1.ExtraValue{
+			"extraKey": []string{"extraValue"}},
+	}
+
+	impConf := setImpersonationUserInfo(ui)
+	assert.Equal(t, ui.UID, impConf.UID)
+	assert.Equal(t, ui.Username, impConf.UserName)
+	assert.Equal(t, ui.Groups, impConf.Groups)
+	assert.Equal(t, len(ui.Extra), len(impConf.Extra))
+}
+
+func Test_getImpersonationClientSet(t *testing.T) {
+	mock_cache := mockNamespaceCache()
+	mock_cache = setupToken(mock_cache)
+
+	udc := &UserDataCache{
+		userData:     UserData{},
+		nsrUpdatedAt: time.Now(),
+	}
+	_, err := udc.getImpersonationClientSet("123456", mock_cache)
+	// Ensure that there is no error
+	assert.Nil(t, err)
+
+}
+
+func Test_hasAccessToAllResourcesInNamespace(t *testing.T) {
+	mock_cache := mockNamespaceCache()
+	mock_cache = setupToken(mock_cache)
+
+	var namespaces []string
+
+	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
+
+	rulesCheck := &authz.SelfSubjectRulesReview{
+		Spec: authz.SelfSubjectRulesReviewSpec{
+			Namespace: "some-namespace",
+		},
+		Status: authz.SubjectRulesReviewStatus{
+			ResourceRules: []authz.ResourceRule{
+				{
+					Verbs:     []string{"list"},
+					APIGroups: []string{"v1", "*"},
+					Resources: []string{"pods", "*"},
+				},
+			},
+		},
+	}
+	fs := fake.NewSimpleClientset()
+	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		ret = action.(testingk8s.CreateAction).GetObject()
+		_, ok := ret.(metav1.Object)
+		if !ok {
+			t.Error("Unexpected Error - expecting MetaObject with type *v1.SelfSubjectRulesReview")
+			return
+		}
+		return true, rulesCheck, nil
+	})
+	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
+	result, err := mock_cache.GetUserDataCache(ctx, fs.AuthorizationV1())
+
+	if len(result.userData.NsResources) != 1 ||
+		result.userData.NsResources["some-namespace"][0].Apigroup != "*" ||
+		result.userData.NsResources["some-namespace"][0].Kind != "*" {
+		t.Errorf("Cache does not have expected namespace resources ")
+
+	}
+	if err != nil {
+		t.Error("Unexpected error while obtaining namespaces.", err)
+	}
+
+}
+
+//User should have access to ManagedClusters
+func Test_updateUserManagedClusterList(t *testing.T) {
+	mock_cache := mockNamespaceCache()
+	mock_cache = setupToken(mock_cache)
+
+	udc := &UserDataCache{
+		userData:     UserData{ManagedClusters: make(map[string]struct{})},
+		nsrUpdatedAt: time.Now(),
+	}
+	// All namespaces list
+	namespaces := map[string]struct{}{"some-namespace": {}, "some-nonmatching-namespace": {}, "invalid-namespace": {}}
+	managedclusters := map[string]struct{}{"some-namespace": {}, "some-nonmatching-namespace": {}}
+	//mock cache for managed clusters
+	mock_cache.shared.managedClusters = managedclusters
+
+	for ns := range namespaces {
+		udc.updateUserManagedClusterList(mock_cache, ns)
+	}
+	assert.Equal(t, len(managedclusters), len(udc.userData.ManagedClusters))
 }
