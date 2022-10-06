@@ -232,10 +232,9 @@ func (user *UserDataCache) userAuthorizedListSSAR(ctx context.Context, authzClie
 	accessCheck := &authz.SelfSubjectAccessReview{
 		Spec: authz.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authz.ResourceAttributes{
-				Namespace: "*",
-				Verb:      "list",
-				Group:     apigroup,
-				Resource:  kind_plural,
+				Verb:     "list",
+				Group:    apigroup,
+				Resource: kind_plural,
 			},
 		},
 	}
