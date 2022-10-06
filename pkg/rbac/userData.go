@@ -116,10 +116,10 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 		klog.Warning("Encountered error while checking if user has access to everything ", err)
 	} else {
 		if userHasAllAccess {
-			klog.Infof("User %s with uid %s has access to all resources.", userInfo.Username, userInfo.UID)
+			klog.V(4).Infof("User %s with uid %s has access to all resources.", userInfo.Username, userInfo.UID)
 			return user, nil
 		}
-		klog.Infof("User %s with uid %s doesn't have access to all resources. Checking individually",
+		klog.V(5).Infof("User %s with uid %s doesn't have access to all resources. Checking individually",
 			userInfo.Username, userInfo.UID)
 	}
 
