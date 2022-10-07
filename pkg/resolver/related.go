@@ -67,7 +67,6 @@ func (s *SearchResult) buildRelationsQuery() {
 	// GROUP BY "uid", "kind"
 	// -- union -- This is added if `kind:Cluster` is present in search term
 	//-- select uid as uid, data->>'kind' as kind, 1 AS "level" FROM search.resources where cluster IN ('local-cluster')
-
 	s.setDepth()
 	whereDs := []exp.Expression{
 		goqu.C("level").Lte(s.level), // Add filter to select up to level (default 3) relationships
@@ -147,9 +146,12 @@ func (s *SearchResult) buildRelationsQuery() {
 	withoutRBACSql, _, withoutRBACSqlErr := relQueryInnerJoin.ToSQL()
 	klog.V(5).Info("Relations query before RBAC:", withoutRBACSql, withoutRBACSqlErr)
 
+	//get user info for logging
+	_, userInfo := rbac.GetCache().GetUserUID(s.context)
+
 	if s.userData != nil {
 		// add rbac
-		relQueryWithRbac = relQueryInnerJoin.Where(buildRbacWhereClause(s.context, s.userData))
+		relQueryWithRbac = relQueryInnerJoin.Where(buildRbacWhereClause(s.context, s.userData, userInfo))
 	} else {
 		panic(fmt.Sprintf("RBAC clause is required! None found for search relations query %+v for user %s ", s.input,
 			s.context.Value(rbac.ContextAuthTokenKey)))

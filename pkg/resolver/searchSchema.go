@@ -56,8 +56,11 @@ func (s *SearchSchema) buildSearchSchemaQuery(ctx context.Context) {
 	//WHERE CLAUSE
 	var whereDs exp.ExpressionList
 
+	//get user info for logging
+	_, userInfo := rbac.GetCache().GetUserUID(ctx)
+
 	if s.userData != nil {
-		whereDs = buildRbacWhereClause(ctx, s.userData) // add rbac
+		whereDs = buildRbacWhereClause(ctx, s.userData, userInfo) // add rbac
 	} else {
 		panic(fmt.Sprintf("RBAC clause is required! None found for search schema query for user %s ",
 			ctx.Value(rbac.ContextAuthTokenKey)))
