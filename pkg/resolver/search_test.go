@@ -198,7 +198,9 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	opValMap := getOperatorAndNumDateFilter(prop, []string{val8}, nil)
 	csres, nsres, mc := newUserData()
 
-	rbac := buildRbacWhereClause(context.TODO(), &rbac.UserData{CsResources: csres, NsResources: nsres, ManagedClusters: mc})
+	rbac := buildRbacWhereClause(context.TODO(),
+		&rbac.UserData{CsResources: csres, NsResources: nsres, ManagedClusters: mc},
+		getUserInfo())
 	mockQueryYear, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0]), rbac).Limit(1000).ToSQL()
 
 	testOperatorYear := TestOperatorItem{
@@ -476,7 +478,8 @@ func Test_buildRbacWhereClauseCs(t *testing.T) {
 	csres, _, _ := newUserData()
 	ud := rbac.UserData{CsResources: csres}
 
-	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"), &ud)
+	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
+		&ud, getUserInfo())
 	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND ((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes'))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
@@ -486,7 +489,8 @@ func Test_buildRbacWhereClauseNs(t *testing.T) {
 	_, nsScopeAccess, _ := newUserData()
 	ud := rbac.UserData{NsResources: nsScopeAccess}
 
-	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"), &ud)
+	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
+		&ud, getUserInfo())
 	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND (NULL OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
@@ -496,7 +500,8 @@ func Test_buildRbacWhereClauseNs(t *testing.T) {
 func Test_buildRbacWhereClauseCsAndNs(t *testing.T) {
 	res, nsScopeAccess, _ := newUserData()
 	ud := rbac.UserData{CsResources: res, NsResources: nsScopeAccess}
-	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"), &ud)
+	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
+		&ud, getUserInfo())
 	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
@@ -506,7 +511,8 @@ func Test_buildRbacWhereClauseCsAndNs(t *testing.T) {
 func Test_buildRbacWhereClauseCsNsAndMc(t *testing.T) {
 	csres, nsScopeAccess, managedClusters := newUserData()
 	ud := rbac.UserData{CsResources: csres, NsResources: nsScopeAccess, ManagedClusters: managedClusters}
-	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"), &ud)
+	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
+		&ud, getUserInfo())
 	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
@@ -614,7 +620,8 @@ func Test_buildRbacWhereClauseHandleStars(t *testing.T) {
 		CsResources:     []rbac.Resource{{Apigroup: "", Kind: "nodes"}, {Apigroup: "*", Kind: "csinodes"}},
 		NsResources:     map[string][]rbac.Resource{"ocm": {{Apigroup: "*", Kind: "pods"}, {Apigroup: "*", Kind: "deployments"}}},
 		ManagedClusters: map[string]struct{}{"managed1": {}, "managed2": {}}}
-	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"), &ud)
+	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
+		&ud, getUserInfo())
 	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR (data->>'kind_plural' = 'csinodes'))) OR ((data->>'namespace' = 'ocm') AND ((data->>'kind_plural' = 'pods') OR (data->>'kind_plural' = 'deployments'))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
@@ -625,8 +632,49 @@ func Test_buildRbacWhereClauseHandleAllStars(t *testing.T) {
 		CsResources:     []rbac.Resource{{Apigroup: "", Kind: "nodes"}, {Apigroup: "*", Kind: "*"}},
 		NsResources:     map[string][]rbac.Resource{"ocm": {{Apigroup: "*", Kind: "pods"}, {Apigroup: "*", Kind: "*"}}},
 		ManagedClusters: map[string]struct{}{"managed1": {}, "managed2": {}}}
-	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"), &ud)
+	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
+		&ud, getUserInfo())
 	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND ((COALESCE(data->>'namespace', '') = '') OR (data->>'namespace' = 'ocm'))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
+}
+
+func Test_SearchResolver_UidsAllAccess(t *testing.T) {
+	// Create a SearchResolver instance with a mock connection pool.
+	val1 := "template"
+	PropTypes := make(map[string]string)
+	PropTypes["kind"] = "string"
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserData{
+		CsResources:     []rbac.Resource{{Apigroup: "*", Kind: "*"}},
+		NsResources:     map[string][]rbac.Resource{"*": {{Apigroup: "*", Kind: "*"}}},
+		ManagedClusters: map[string]struct{}{"managed-cluster1": {}},
+	},
+		PropTypes)
+	// Mock the database queries.
+	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", 0)
+
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT "uid" FROM "search"."resources" WHERE (("data"->>'kind' ILIKE ANY ('{"template"}')) AND (("cluster" = ANY ('{"managed-cluster1"}')) OR (data->>'_hubClusterResource' = 'true'))) LIMIT 1000`),
+		gomock.Eq([]interface{}{}),
+	).Return(mockRows, nil)
+
+	// Execute the function
+	resolver.Uids()
+
+	// Verify returned items.
+	if len(resolver.uids) != len(mockRows.mockData) {
+		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(resolver.uids))
+	}
+
+	// Verify properties for each returned item.
+	for i, item := range resolver.uids {
+		mockRow := mockRows.mockData[i]
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow["_uid"] = mockRow["uid"]
+
+		if *item != mockRow["uid"].(string) {
+			t.Errorf("Value of key [uid] does not match for item [%d].\nExpected: %s\nGot: %s", i, expectedRow["_uid"], *item)
+		}
+	}
 }

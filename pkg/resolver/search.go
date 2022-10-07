@@ -22,6 +22,7 @@ import (
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/metric"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
+	v1 "k8s.io/api/authentication/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -142,14 +143,14 @@ func (s *SearchResult) Uids() {
 }
 
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
-func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData) exp.ExpressionList {
+func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
 	return goqu.Or(
 		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
 		goqu.And(
 			matchHubCluster(), // goqu.L(`data->>?`, "_hubClusterResource").Eq("true")
 			goqu.Or(
-				matchClusterScopedResources(userrbac.CsResources), // (namespace=null AND apigroup AND kind)
-				matchNamespacedResources(userrbac.NsResources),    // (namespace AND apiproup AND kind)
+				matchClusterScopedResources(userrbac.CsResources, userInfo), // (namespace=null AND apigroup AND kind)
+				matchNamespacedResources(userrbac.NsResources, userInfo),    // (namespace AND apiproup AND kind)
 			),
 		),
 	)
@@ -186,16 +187,17 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 
 		//we get properties here as well as their datatypes:
-		whereDs, typeFilter = WhereClauseFilter(s.context, s.input, s.propTypes)
+		whereDs, s.propTypes = WhereClauseFilter(s.context, s.input, s.propTypes)
 		klog.V(7).Info("Property Datatype", typeFilter)
 
 		sql, _, err := selectDs.Where(whereDs...).ToSQL() //use original query
 		klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
-		fmt.Println(sql)
+
 		//RBAC CLAUSE
 		if s.userData != nil {
+			_, userInfo := rbac.GetCache().GetUserUID(ctx)
 			whereDs = append(whereDs,
-				buildRbacWhereClause(ctx, s.userData)) // add rbac
+				buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
 		} else {
 			panic(fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
 				ctx.Value(rbac.ContextAuthTokenKey)))
@@ -516,7 +518,7 @@ func pointerToStringArray(pointerArray []*string) []string {
 	return values
 }
 
-func WhereClauseFilter(ctx context.Context, input *model.SearchInput, propTypeMap map[string]string) ([]exp.Expression, string) {
+func WhereClauseFilter(ctx context.Context, input *model.SearchInput, propTypeMap map[string]string) ([]exp.Expression, map[string]string) {
 
 	var whereDs []exp.Expression
 	propTypeMapFromCache := make(map[string]string)
@@ -540,7 +542,10 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput, propTypeMa
 
 				if dataTypeInMap, ok := propTypeMapFromCache[filter.Property]; !ok { //check if value exists/if value doesn't exist
 					klog.Warningf("Property type for [%s] doesn't exist property type map. Refreshing property type cache", filter.Property)
-					propTypeMap, _ := getPropertyTypeCache(ctx) //call database cache again
+					propTypeMap, err := getPropertyTypeCache(ctx) //call database cache again
+					if err != nil {
+						//DO SOMETHING
+					}
 					propTypeMapFromCache = propTypeMap
 					break
 
@@ -564,17 +569,16 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput, propTypeMa
 				}
 			} else {
 				klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
-				// }
+
 			}
 		}
 	}
 
-	return whereDs, dataTypeFromMap
+	return whereDs, propTypeMapFromCache
 }
 
 func decodePropertyTypes(values []string, dataTypeFromMap string) ([]string, string) {
-	var dataType string
-	dataType = dataTypeFromMap
+	dataType := dataTypeFromMap
 	cleanedVal := make([]string, len(values))
 
 	for i, val := range values {
@@ -585,7 +589,6 @@ func decodePropertyTypes(values []string, dataTypeFromMap string) ([]string, str
 			cleanedVal[i] = fmt.Sprintf(`["%s"]`, val)
 
 		} else {
-			klog.Errorf("Error while decoding label string with dataType %s", dataType)
 			cleanedVal[i] = val
 		}
 

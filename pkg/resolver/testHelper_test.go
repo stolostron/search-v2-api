@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgproto3/v2"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
+	authv1 "k8s.io/api/authentication/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -32,6 +33,12 @@ func newUserData() ([]rbac.Resource, map[string][]rbac.Resource, map[string]stru
 	return csres, nsScopeAccess, managedClusters
 }
 
+func getUserInfo() authv1.UserInfo {
+	return authv1.UserInfo{
+		UID:      "unique-user-id",
+		Username: "unique-username",
+	}
+}
 func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*string, ud *rbac.UserData, propTypes map[string]string) (*SearchResult, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -414,21 +421,6 @@ func (r *MockRows) Values() ([]interface{}, error) { return nil, nil }
 func (r *MockRows) RawValues() [][]byte { return nil }
 
 func AssertStringArrayEqual(t *testing.T, result, expected []*string, message string) {
-
-	resultSorted := pointerToStringArray(result)
-	sort.Strings(resultSorted)
-	expectedSorted := pointerToStringArray(expected)
-	sort.Strings(expectedSorted)
-
-	for i, exp := range expectedSorted {
-		if resultSorted[i] != exp {
-			t.Errorf("%s expected [%v] got [%v]", message, expectedSorted, resultSorted)
-			return
-		}
-	}
-}
-
-func AssertStringArrayListEqual(t *testing.T, result []*string, expected []*string, message string) {
 
 	resultSorted := pointerToStringArray(result)
 	sort.Strings(resultSorted)
