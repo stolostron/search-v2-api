@@ -47,7 +47,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 	}
 
 	//check that shared cache has resource datatypes:
-	propTypesCache, err := rbac.GetCache().GetPropertyTypes(ctx)
+	propTypesCache, err := getPropertyTypeCache(ctx)
 	if err != nil {
 		klog.Warningf("Error creating datatype map with err: [%s] ", err)
 	}
@@ -66,6 +66,13 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 	}
 	return srchResult, nil
 
+}
+
+func getPropertyTypeCache(ctx context.Context) (map[string]string, error) {
+
+	propTypesCache, err := rbac.GetCache().GetPropertyTypes(ctx)
+
+	return propTypesCache, err
 }
 
 func (s *SearchResult) Count() int {
@@ -179,7 +186,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 
 		//we get properties here as well as their datatypes:
-		whereDs, typeFilter = WhereClauseFilter(s.input, s.propTypes)
+		whereDs, typeFilter = WhereClauseFilter(s.context, s.input, s.propTypes)
 		klog.V(7).Info("Property Datatype", typeFilter)
 
 		sql, _, err := selectDs.Where(whereDs...).ToSQL() //use original query
@@ -334,11 +341,8 @@ func getWhereClauseExpression(prop, operator string, values []string, propType s
 			exps = append(exps, goqu.L(`"data"->>?`, prop).Gt(val))
 		}
 	case "=":
-		if propType == "array" {
-			exps = append(exps, goqu.L(`"data"->?`, prop).In(values))
-		} else {
-			exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
-		}
+		exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
+
 	case "@>":
 		for _, val := range values {
 			exps = append(exps, goqu.L(`"data"->? @> ?`, prop, val))
@@ -417,13 +421,10 @@ func getOperatorAndNumDateFilter(filter string, values []string, dataType interf
 
 			default:
 				//check that property value is an array:
-				if dataType == "object" {
-					klog.V(7).Info("filter is array. Operator is @>.")
+				if dataType == "object" || dataType == "array" {
+					klog.V(7).Info("filter is object or array type. Operator is @>.")
 					operator = "@>"
 
-				} else if dataType == "array" {
-					klog.V(7).Info("filter is array. Operator is =")
-					operator = "="
 				} else {
 					klog.V(7).Info("filter is neither label nor in arrayProperties: ", filter)
 					operator = ""
@@ -515,9 +516,12 @@ func pointerToStringArray(pointerArray []*string) []string {
 	return values
 }
 
-func WhereClauseFilter(input *model.SearchInput, propTypeMap map[string]string) ([]exp.Expression, string) {
+func WhereClauseFilter(ctx context.Context, input *model.SearchInput, propTypeMap map[string]string) ([]exp.Expression, string) {
+
 	var whereDs []exp.Expression
-	var dataType string
+	propTypeMapFromCache := make(map[string]string)
+	propTypeMapFromCache = propTypeMap
+	var dataTypeFromMap string
 
 	if input.Keywords != nil && len(input.Keywords) > 0 {
 		// Sample query: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data")
@@ -534,50 +538,61 @@ func WhereClauseFilter(input *model.SearchInput, propTypeMap map[string]string) 
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
 
-				if len(propTypeMap) > 0 {
-					dataTypeFromMap, ok := propTypeMap[filter.Property]
-					if ok {
-						dataType = dataTypeFromMap
-						klog.V(5).Infof("Prop in map:%s, filter prop is: %s, datatype :%s\n", dataTypeFromMap, filter.Property)
+				if dataTypeInMap, ok := propTypeMapFromCache[filter.Property]; !ok { //check if value exists/if value doesn't exist
+					klog.Warningf("Property type for [%s] doesn't exist property type map. Refreshing property type cache", filter.Property)
+					propTypeMap, _ := getPropertyTypeCache(ctx) //call database cache again
+					propTypeMapFromCache = propTypeMap
+					break
 
-						cleanedVal := make([]string, len(values))
+				} else {
 
-						for i, val := range values {
-							if dataType == "object" {
-								labels := strings.Split(val, "=")
-								cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
-							} else if dataType == "array" {
-								cleanedVal[i] = fmt.Sprintf(`["%s"]`, val)
+					klog.V(5).Infof("Prop in map:%s, filter prop is: %s, datatype :%s\n", dataTypeInMap, filter.Property)
+					//if property mactches then call decode function:
+					values, dataTypeFromMap = decodePropertyTypes(values, dataTypeInMap)
 
-							} else {
-								klog.Errorf("Error while decoding label string with dataType %s", dataType)
-								cleanedVal[i] = val
-							}
-
-							values = cleanedVal
-						}
-
+					// Check if value is a number or date and get the cleaned up value
+					opDateValueMap := getOperatorAndNumDateFilter(filter.Property, values, dataTypeFromMap)
+					//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
+					keys := getKeys(opDateValueMap)
+					var operatorWhereDs []exp.Expression //store all the clauses for this filter together
+					for _, operator := range keys {
+						operatorWhereDs = append(operatorWhereDs,
+							getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator], dataTypeFromMap)...)
 					}
-				}
-				// Check if value is a number or date and get the cleaned up value
-				opDateValueMap := getOperatorAndNumDateFilter(filter.Property, values, dataType)
 
-				//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
-				keys := getKeys(opDateValueMap)
-				var operatorWhereDs []exp.Expression //store all the clauses for this filter together
-				for _, operator := range keys {
-					operatorWhereDs = append(operatorWhereDs,
-						getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator], dataType)...)
+					whereDs = append(whereDs, goqu.Or(operatorWhereDs...)) //Join all the clauses with OR
 				}
-				whereDs = append(whereDs, goqu.Or(operatorWhereDs...)) //Join all the clauses with OR
-
 			} else {
 				klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
+				// }
 			}
 		}
 	}
 
-	return whereDs, dataType
+	return whereDs, dataTypeFromMap
+}
+
+func decodePropertyTypes(values []string, dataTypeFromMap string) ([]string, string) {
+	var dataType string
+	dataType = dataTypeFromMap
+	cleanedVal := make([]string, len(values))
+
+	for i, val := range values {
+		if dataType == "object" {
+			labels := strings.Split(val, "=")
+			cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
+		} else if dataType == "array" {
+			cleanedVal[i] = fmt.Sprintf(`["%s"]`, val)
+
+		} else {
+			klog.Errorf("Error while decoding label string with dataType %s", dataType)
+			cleanedVal[i] = val
+		}
+
+		values = cleanedVal
+	}
+	return values, dataType
+
 }
 
 func getKeys(stringKeyMap interface{}) []string {

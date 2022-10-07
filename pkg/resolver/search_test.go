@@ -97,7 +97,7 @@ func Test_SearchResolver_Items(t *testing.T) {
 
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 	// Mock the database queries.
-	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", 0)
+	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", 0)
 
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' ILIKE ANY ('{"template"}')) AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 1000`),
@@ -262,10 +262,13 @@ func testAllOperators(t *testing.T, testOperators []TestOperatorItem) {
 	for _, currTest := range testOperators {
 		csRes, nsRes, mc := newUserData()
 		ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: mc}
+		PropTypes := make(map[string]string)
+		PropTypes["current"] = "number"
+		PropTypes["created"] = "string"
 		// Create a SearchResolver instance with a mock connection pool.
 		resolver, mockPool := newMockSearchResolver(t, currTest.searchInput, nil, &ud, PropTypes)
 		// Mock the database queries.
-		mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", currTest.searchInput, "", 0)
+		mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", currTest.searchInput, "number", 0)
 
 		mockPool.EXPECT().Query(gomock.Any(),
 			gomock.Eq(currTest.mockQuery),
@@ -312,7 +315,7 @@ func Test_SearchResolver_Items_Multiple_Filter(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database queries.
-	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", 0)
+	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", 0)
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster')) AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 10`),
 		// gomock.Eq("SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'namespace')=any($1) AND cluster=$2 LIMIT 10"),
@@ -360,7 +363,7 @@ func Test_SearchWithMultipleClusterFilter_NegativeLimit_Query(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database queries.
-	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, "", 0)
+	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, "string", 0)
 
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
@@ -405,7 +408,7 @@ func Test_SearchResolver_Keywords(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database queries.
-	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", 0)
+	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", 0)
 
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources", jsonb_each_text("data") WHERE (("value" ILIKE '%Template%') AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 10`),
@@ -442,7 +445,7 @@ func Test_SearchResolver_Uids(t *testing.T) {
 	PropTypes["kind"] = "string"
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserData{}, PropTypes)
 	// Mock the database queries.
-	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", 0)
+	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", 0)
 
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT "uid" FROM "search"."resources" WHERE (("data"->>'kind' ILIKE ANY ('{"template"}')) AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 1000`),
@@ -525,7 +528,7 @@ func Test_SearchResolver_Items_Labels(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database queries.
-	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", limit)
+	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", limit)
 
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' IN ('Template')) AND ("cluster" IN ('local-cluster')) AND "data"->'label' @> '{"samples.operator.openshift.io/managed":"true"}' AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 10`),
@@ -574,10 +577,10 @@ func Test_SearchResolver_Items_Container(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database queries.
-	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "", limit)
+	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "array", limit)
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' IN ('Template')) AND ("cluster" IN ('local-cluster')) AND ("data"->'container' IN ('["acm-agent"]')) AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' IN ('Template')) AND ("cluster" IN ('local-cluster')) AND "data"->'container' @> '["acm-agent"]' AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 10`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 

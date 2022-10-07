@@ -49,16 +49,16 @@ func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*strin
 
 	return mockResolver, mockPool
 }
-func newMockSearchComplete(t *testing.T, input *model.SearchInput, property string, ud *rbac.UserData) (*SearchCompleteResult, *pgxpoolmock.MockPgxPool) {
+func newMockSearchComplete(t *testing.T, input *model.SearchInput, property string, ud *rbac.UserData, PropTypes map[string]string) (*SearchCompleteResult, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
-	fmt.Println(property)
 	mockResolver := &SearchCompleteResult{
-		input:    input,
-		pool:     mockPool,
-		property: property,
-		userData: ud,
+		input:     input,
+		pool:      mockPool,
+		property:  property,
+		userData:  ud,
+		propTypes: PropTypes,
 	}
 	return mockResolver, mockPool
 }
@@ -277,7 +277,7 @@ func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, ite
 	for _, filter := range input.Filters {
 		if len(filter.Values) > 0 {
 			values := pointerToStringArray(filter.Values) //get the filter values
-			_, datatype := WhereClauseFilter(input, PropTypes)
+			_, datatype := WhereClauseFilter(context.Background(), input, PropTypes)
 
 			opValueMap := getOperatorAndNumDateFilter(filter.Property, values, datatype) // get the filter values if property is a number or date
 			var op string

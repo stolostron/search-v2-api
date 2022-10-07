@@ -78,9 +78,10 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 	if s.property != "" {
+
 		//WHERE CLAUSE
 		if s.input != nil && len(s.input.Filters) > 0 {
-			whereDs, _ = WhereClauseFilter(s.input, s.propTypes)
+			whereDs, _ = WhereClauseFilter(ctx, s.input, s.propTypes)
 		}
 
 		//SELECT CLAUSE

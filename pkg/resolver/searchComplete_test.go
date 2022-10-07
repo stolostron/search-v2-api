@@ -16,7 +16,7 @@ func Test_SearchComplete_Query(t *testing.T) {
 	// Create a SearchCompleteResolver instance with a mock connection pool.
 	prop1 := "kind"
 	searchInput := &model.SearchInput{}
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{})
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{}, nil)
 	val1 := "Template"
 	val2 := "ReplicaSet"
 	val3 := "ConfigMap"
@@ -45,7 +45,7 @@ func Test_SearchComplete_Query_WithLimit(t *testing.T) {
 	prop1 := "kind"
 	limit := 2
 	searchInput := &model.SearchInput{}
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{})
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{}, nil)
 	resolver.limit = &limit //Add limit
 	val1 := "ConfigMap"
 	val2 := "ReplicaSet"
@@ -72,7 +72,7 @@ func Test_SearchCompleteNoProp_Query(t *testing.T) {
 	// Create a SearchCompleteResolver instance with a mock connection pool.
 	prop1 := ""
 	searchInput := &model.SearchInput{}
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{})
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{}, nil)
 	expectedProps := []*string{}
 
 	// Mock the database query
@@ -97,7 +97,12 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 	csRes, nsRes, managedClusters := newUserData()
 	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1, &value2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud)
+	PropTypes := make(map[string]string)
+	PropTypes["kind"] = "string"
+	PropTypes["namespace"] = "string"
+	PropTypes["cluster"] = "string"
+
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud, PropTypes)
 	val1 := "Template"
 	val2 := "ReplicaSet"
 	val3 := "ConfigMap"
@@ -106,6 +111,7 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
+
 	// Mock the database query
 	// check if cluster
 	mockPool.EXPECT().Query(gomock.Any(),
@@ -127,7 +133,7 @@ func Test_SearchCompleteWithCluster(t *testing.T) {
 	limit := 10
 	searchInput := &model.SearchInput{}
 
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{})
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{}, nil)
 	resolver.limit = &limit
 	expectedProps := []*string{&cluster}
 
@@ -150,7 +156,7 @@ func Test_SearchCompleteQuery_PropDate(t *testing.T) {
 	// Create a SearchCompleteResolver instance with a mock connection pool.
 	prop1 := "created"
 	searchInput := &model.SearchInput{}
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{})
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{}, nil)
 	val1 := "isDate"
 	expectedProps := []*string{&val1} //, &val2, &val3}
 
@@ -176,7 +182,7 @@ func Test_SearchCompleteQuery_PropNum(t *testing.T) {
 	prop1 := "current"
 	searchInput := &model.SearchInput{}
 	_, _, mc := newUserData()
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{ManagedClusters: mc})
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{ManagedClusters: mc}, nil)
 	val1 := "isNumber"
 	val2 := "3"
 	expectedProps := []*string{&val1, &val2} //, &val3}
@@ -212,11 +218,16 @@ func Test_SearchCompleteWithLabel_Query(t *testing.T) {
 	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1, &value2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
 
+	PropTypes := make(map[string]string)
+	PropTypes["label"] = "object"
+	PropTypes["namespace"] = "string"
+	PropTypes["cluster"] = "string"
+
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
 
 	//mock searchcomplete for searchinput
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud)
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud, PropTypes)
 
 	val1 := "samples.operator.openshift.io/managed=true"
 	val2 := "pod-template-hash=5f5575c669"
@@ -249,11 +260,15 @@ func Test_SearchCompleteWithContainer_Query(t *testing.T) {
 	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1, &value2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
 
+	PropTypes := make(map[string]string)
+	PropTypes["container"] = "array"
+	PropTypes["namespace"] = "string"
+	PropTypes["cluster"] = "string"
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
 
 	//mock searchcomplete for searchinput
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud)
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud, PropTypes)
 
 	strs := []string{"acm-agent"}
 	expectedProps := make([]interface{}, len(strs))

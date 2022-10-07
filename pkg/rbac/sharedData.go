@@ -85,7 +85,6 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 		return nil, err
 	}
 	defer rows.Close()
-
 	resourceTypeMap := make(map[string]string)
 	for rows.Next() {
 		var key, value string
