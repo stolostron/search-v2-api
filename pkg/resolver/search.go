@@ -521,8 +521,6 @@ func pointerToStringArray(pointerArray []*string) []string {
 func WhereClauseFilter(ctx context.Context, input *model.SearchInput, propTypeMap map[string]string) ([]exp.Expression, map[string]string) {
 
 	var whereDs []exp.Expression
-	propTypeMapFromCache := make(map[string]string)
-	propTypeMapFromCache = propTypeMap
 	var dataTypeFromMap string
 
 	if input.Keywords != nil && len(input.Keywords) > 0 {
@@ -540,32 +538,38 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput, propTypeMa
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
 
-				if dataTypeInMap, ok := propTypeMapFromCache[filter.Property]; !ok { //check if value exists/if value doesn't exist
-					klog.Warningf("Property type for [%s] doesn't exist property type map. Refreshing property type cache", filter.Property)
-					propTypeMap, err := getPropertyTypeCache(ctx) //call database cache again
-					if err != nil {
-						//DO SOMETHING
-					}
-					propTypeMapFromCache = propTypeMap
-					break
+				if len(propTypeMap) > 0 {
+					if dataTypeInMap, ok := propTypeMap[filter.Property]; !ok { //check if value exists/if value doesn't exist
+						klog.Warningf("Property type for [%s] doesn't exist property type map. Refreshing property type cache", filter.Property)
+						propTypeMapNew, err := getPropertyTypeCache(ctx) //call database cache again
+						if err != nil {
+							klog.Warningf("Error creating datatype map with err: [%s] ", err)
+						}
+						propTypeMap = propTypeMapNew
+						break
 
+					} else {
+
+						klog.V(5).Infof("Prop in map:%s, filter prop is: %s, datatype :%s\n", dataTypeInMap, filter.Property)
+						//if property mactches then call decode function:
+						values, dataTypeFromMap = decodePropertyTypes(values, dataTypeInMap)
+
+						// Check if value is a number or date and get the cleaned up value
+						opDateValueMap := getOperatorAndNumDateFilter(filter.Property, values, dataTypeFromMap)
+						//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
+						keys := getKeys(opDateValueMap)
+						var operatorWhereDs []exp.Expression //store all the clauses for this filter together
+						for _, operator := range keys {
+							operatorWhereDs = append(operatorWhereDs,
+								getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator], dataTypeFromMap)...)
+						}
+
+						whereDs = append(whereDs, goqu.Or(operatorWhereDs...)) //Join all the clauses with OR
+					}
 				} else {
-
-					klog.V(5).Infof("Prop in map:%s, filter prop is: %s, datatype :%s\n", dataTypeInMap, filter.Property)
-					//if property mactches then call decode function:
-					values, dataTypeFromMap = decodePropertyTypes(values, dataTypeInMap)
-
-					// Check if value is a number or date and get the cleaned up value
-					opDateValueMap := getOperatorAndNumDateFilter(filter.Property, values, dataTypeFromMap)
-					//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
-					keys := getKeys(opDateValueMap)
-					var operatorWhereDs []exp.Expression //store all the clauses for this filter together
-					for _, operator := range keys {
-						operatorWhereDs = append(operatorWhereDs,
-							getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator], dataTypeFromMap)...)
-					}
-
-					whereDs = append(whereDs, goqu.Or(operatorWhereDs...)) //Join all the clauses with OR
+					//TODO: map is empty don't return anything
+					klog.Error("Property type map is empty. Where clause query cannot be fulfilled")
+					return nil, nil
 				}
 			} else {
 				klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
@@ -574,7 +578,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput, propTypeMa
 		}
 	}
 
-	return whereDs, propTypeMapFromCache
+	return whereDs, propTypeMap
 }
 
 func decodePropertyTypes(values []string, dataTypeFromMap string) ([]string, string) {
