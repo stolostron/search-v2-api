@@ -161,8 +161,6 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		jsb := goqu.L("jsonb_each_text(?)", goqu.C("data"))
 		ds = goqu.From(schemaTable, jsb)
 	}
-	//WHERE CLAUSE
-	whereDs, s.propTypes, err = WhereClauseFilter(s.context, s.input, s.propTypes)
 
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
 		//WHERE CLAUSE
