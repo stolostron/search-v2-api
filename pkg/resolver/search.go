@@ -156,14 +156,16 @@ func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData, userInfo
 	)
 }
 
+// Example query: SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN
+// (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 1000
+
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) {
 	var limit int
 	var selectDs *goqu.SelectDataset
 	var whereDs []exp.Expression
-	var typeFilter string
-
-	// Example query: SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN
-	// (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 1000
+	var params []interface{}
+	var sql string
+	var err error
 
 	//define schema table:
 	schemaTable := goqu.S("search").Table("resources")
@@ -173,24 +175,21 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		jsb := goqu.L("jsonb_each_text(?)", goqu.C("data"))
 		ds = goqu.From(schemaTable, jsb)
 	}
-
-	//SELECT CLAUSE
-	if count {
-		selectDs = ds.Select(goqu.COUNT("uid"))
-	} else if uid {
-		selectDs = ds.Select("uid")
-	} else {
-		selectDs = ds.SelectDistinct("uid", "cluster", "data")
-	}
-
 	//WHERE CLAUSE
-	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
+	whereDs, s.propTypes, err = WhereClauseFilter(s.context, s.input, s.propTypes)
 
-		//we get properties here as well as their datatypes:
-		whereDs, s.propTypes = WhereClauseFilter(s.context, s.input, s.propTypes)
-		klog.V(7).Info("Property Datatype", typeFilter)
+	if s.input != nil && whereDs != nil {
 
-		sql, _, err := selectDs.Where(whereDs...).ToSQL() //use original query
+		//SELECT CLAUSE
+		if count {
+			selectDs = ds.Select(goqu.COUNT("uid"))
+		} else if uid {
+			selectDs = ds.Select("uid")
+		} else {
+			selectDs = ds.SelectDistinct("uid", "cluster", "data")
+		}
+
+		sql, params, err = selectDs.Where(whereDs...).ToSQL() //use original query
 		klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
 
 		//RBAC CLAUSE
@@ -202,27 +201,28 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 			panic(fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
 				ctx.Value(rbac.ContextAuthTokenKey)))
 		}
-	}
 
-	//LIMIT CLAUSE
-	if !count {
-		limit = s.setLimit()
-	}
-	var params []interface{}
-	var sql string
-	var err error
-	//Get the query
-	if limit != 0 {
-		sql, params, err = selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
-	} else {
-		sql, params, err = selectDs.Where(whereDs...).ToSQL()
-	}
-	if err != nil {
+		//LIMIT CLAUSE
+		if !count {
+			limit = s.setLimit()
+		}
+
+		//Get the query
+		if limit != 0 {
+			sql, params, err = selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
+		} else {
+			sql, params, err = selectDs.Where(whereDs...).ToSQL()
+		}
+		if err != nil {
+			klog.Errorf("Error building Search query: %s", err.Error())
+		}
+		klog.V(5).Infof("Search query: %s\nargs: %s", sql, params)
+		s.query = sql
+		s.params = params
+	} else if err != nil {
 		klog.Errorf("Error building Search query: %s", err.Error())
+
 	}
-	klog.V(5).Infof("Search query: %s\nargs: %s", sql, params)
-	s.query = sql
-	s.params = params
 }
 
 func (s *SearchResult) resolveCount() int {
@@ -518,10 +518,11 @@ func pointerToStringArray(pointerArray []*string) []string {
 	return values
 }
 
-func WhereClauseFilter(ctx context.Context, input *model.SearchInput, propTypeMap map[string]string) ([]exp.Expression, map[string]string) {
+func WhereClauseFilter(ctx context.Context, input *model.SearchInput, propTypeMap map[string]string) ([]exp.Expression, map[string]string, error) {
 
 	var whereDs []exp.Expression
 	var dataTypeFromMap string
+	var err error
 
 	if input.Keywords != nil && len(input.Keywords) > 0 {
 		// Sample query: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data")
@@ -543,7 +544,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput, propTypeMa
 						klog.Warningf("Property type for [%s] doesn't exist property type map. Refreshing property type cache", filter.Property)
 						propTypeMapNew, err := getPropertyTypeCache(ctx) //call database cache again
 						if err != nil {
-							klog.Warningf("Error creating datatype map with err: [%s] ", err)
+							klog.Warningf("Error creating property type map with err: [%s] ", err)
 						}
 						propTypeMap = propTypeMapNew
 						break
@@ -565,11 +566,12 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput, propTypeMa
 						}
 
 						whereDs = append(whereDs, goqu.Or(operatorWhereDs...)) //Join all the clauses with OR
+						fmt.Println(whereDs)
 					}
 				} else {
-					//TODO: map is empty don't return anything
-					klog.Error("Property type map is empty. Where clause query cannot be fulfilled")
-					return nil, nil
+					//if map is empty don't return anything
+					klog.Error("Error with property type list is empty.")
+					return nil, nil, err
 				}
 			} else {
 				klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
@@ -578,7 +580,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput, propTypeMa
 		}
 	}
 
-	return whereDs, propTypeMap
+	return whereDs, propTypeMap, err
 }
 
 func decodePropertyTypes(values []string, dataTypeFromMap string) ([]string, string) {

@@ -81,7 +81,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 
 		//WHERE CLAUSE
 		if s.input != nil && len(s.input.Filters) > 0 {
-			whereDs, s.propTypes = WhereClauseFilter(ctx, s.input, s.propTypes)
+			whereDs, s.propTypes, _ = WhereClauseFilter(ctx, s.input, s.propTypes)
 		}
 
 		//SELECT CLAUSE

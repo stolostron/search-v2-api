@@ -120,6 +120,9 @@ func Test_getResouces_usingCache(t *testing.T) {
 	manClusters := map[string]struct{}{"test-man": {}}
 	res := Resource{Apigroup: "apigroup1", Kind: "kind1"}
 	csRes := map[Resource]struct{}{}
+	propTypes := make(map[string]string)
+	propTypes["kind"] = "string"
+	propTypes["label"] = "object"
 
 	csRes[res] = struct{}{}
 	//Adding cache:
@@ -129,11 +132,9 @@ func Test_getResouces_usingCache(t *testing.T) {
 		mcUpdatedAt:     time.Now(),
 		csUpdatedAt:     time.Now(),
 		csResourcesMap:  csRes,
+		propTypes:       propTypes,
+		propTypeTime:    time.Now(),
 	}
-
-	propTypes, _ := mock_cache.GetPropertyTypes(ctx)
-	propTypes["kind"] = "string"
-	propTypes["apigroup"] = "string"
 
 	err := mock_cache.PopulateSharedCache(ctx)
 	csResource := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
