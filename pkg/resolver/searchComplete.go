@@ -193,7 +193,7 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			}
 
 		}
-		properties := stringArrayToPointer(getKeys(props))
+		properties := stringArrayToPointer(GetKeys(props))
 		srchCompleteOut = append(srchCompleteOut, properties...)
 	} else {
 		klog.Error("searchCompleteResults rows is nil", srchCompleteOut)

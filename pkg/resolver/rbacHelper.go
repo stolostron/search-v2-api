@@ -70,7 +70,7 @@ func matchClusterScopedResources(csRes []rbac.Resource, userInfo v1.UserInfo) ex
 //    (namespace = 'b' AND ( ... ) OR (namespace = 'c' AND ( ... ) OR ...
 func matchNamespacedResources(nsResources map[string][]rbac.Resource, userInfo v1.UserInfo) exp.ExpressionList {
 	var whereNsDs []exp.Expression
-	namespaces := getKeys(nsResources)
+	namespaces := GetKeys(nsResources)
 	if len(nsResources) < 1 { // no namespace scoped resources for user
 		klog.V(5).Infof("User %s with UID %s has no access to namespace scoped resources.",
 			userInfo.Username, userInfo.UID)

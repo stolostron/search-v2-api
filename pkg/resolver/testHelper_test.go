@@ -271,7 +271,7 @@ func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, ite
 	var relatedValues []string
 
 	if len(input.RelatedKinds) > 0 {
-		relatedValues = pointerToStringArray(input.RelatedKinds)
+		relatedValues = PointerToStringArray(input.RelatedKinds)
 		data := item.(map[string]interface{})["properties"].(map[string]interface{})
 		destkind := data["kind"].(string)
 		if stringInSlice(destkind, relatedValues) {
@@ -283,10 +283,10 @@ func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, ite
 
 	for _, filter := range input.Filters {
 		if len(filter.Values) > 0 {
-			values := pointerToStringArray(filter.Values) //get the filter values
+			values := PointerToStringArray(filter.Values) //get the filter values
 			_, datatype, _ := WhereClauseFilter(context.Background(), input, PropTypes)
 
-			opValueMap := getOperatorAndNumDateFilter(filter.Property, values, datatype) // get the filter values if property is a number or date
+			opValueMap := GetOperatorAndNumDateFilter(filter.Property, values, datatype) // get the filter values if property is a number or date
 			var op string
 			for key, val := range opValueMap {
 				op = key
@@ -422,9 +422,9 @@ func (r *MockRows) RawValues() [][]byte { return nil }
 
 func AssertStringArrayEqual(t *testing.T, result, expected []*string, message string) {
 
-	resultSorted := pointerToStringArray(result)
+	resultSorted := PointerToStringArray(result)
 	sort.Strings(resultSorted)
-	expectedSorted := pointerToStringArray(expected)
+	expectedSorted := PointerToStringArray(expected)
 	sort.Strings(expectedSorted)
 
 	for i, exp := range expectedSorted {

@@ -4,21 +4,14 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"sort"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
-	"unicode"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
-	"github.com/lib/pq"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stolostron/search-v2-api/graph/model"
-	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/metric"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
@@ -48,7 +41,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 	}
 
 	//check that shared cache has resource datatypes:
-	propTypesCache, err := getPropertyTypeCache(ctx)
+	propTypesCache, err := GetPropertyTypeCache(ctx)
 	if err != nil {
 		klog.Warningf("Error creating datatype map with err: [%s] ", err)
 	}
@@ -67,13 +60,6 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 	}
 	return srchResult, nil
 
-}
-
-func getPropertyTypeCache(ctx context.Context) (map[string]string, error) {
-
-	propTypesCache, err := rbac.GetCache().GetPropertyTypes(ctx)
-
-	return propTypesCache, err
 }
 
 func (s *SearchResult) Count() int {
@@ -145,7 +131,7 @@ func (s *SearchResult) Uids() {
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
 	return goqu.Or(
-		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
+		matchManagedCluster(GetKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
 		goqu.And(
 			matchHubCluster(), // goqu.L(`data->>?`, "_hubClusterResource").Eq("true")
 			goqu.Or(
@@ -211,7 +197,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 
 	//LIMIT CLAUSE
 	if !count {
-		limit = s.setLimit()
+		limit = s.SetLimit()
 	}
 
 	//Get the query
@@ -280,7 +266,7 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), s.query)
 		}
-		currItem := formatDataMap(data)
+		currItem := FormatDataMap(data)
 		currItem["_uid"] = uid
 		currItem["cluster"] = cluster
 
@@ -290,236 +276,6 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	}
 
 	return items, nil
-}
-
-// Remove operator (<=, >=, !=, !, <, >, =) if any from values
-func getOperator(values []string) map[string][]string {
-	// Get the operator (/^<=|^>=|^!=|^!|^<|^>|^=/)
-	var operator string
-	// Replace any of these symbols with ""
-	replacer := strings.NewReplacer("<=", "",
-		">=", "",
-		"!=", "",
-		"!", "",
-		"<", "",
-		">", "",
-		"=", "")
-	operatorValue := map[string][]string{}
-
-	for _, value := range values {
-		operatorRemovedValue := replacer.Replace(value)
-		operator = strings.Replace(value, operatorRemovedValue, "", 1) // find operator
-		if vals, ok := operatorValue[operator]; !ok {
-			if operator != "" { // Add to map only if operator is present
-				operatorValue[operator] = []string{operatorRemovedValue} // Add an entry to map with key as operator
-			}
-		} else {
-			vals = append(vals, operatorRemovedValue)
-			operatorValue[operator] = vals
-		}
-	}
-	return operatorValue
-}
-
-func getWhereClauseExpression(prop, operator string, values []string, propType string) []exp.Expression {
-	exps := []exp.Expression{}
-
-	switch operator {
-	case "<=":
-		for _, val := range values {
-			exps = append(exps, goqu.L(`"data"->>?`, prop).Lte(val))
-		}
-	case ">=":
-		for _, val := range values {
-			exps = append(exps, goqu.L(`"data"->>?`, prop).Gte(val))
-		}
-	case "!=":
-		exps = append(exps, goqu.L(`"data"->>?`, prop).Neq(values))
-
-	case "!":
-		exps = append(exps, goqu.L(`"data"->>?`, prop).NotIn(values))
-	case "<":
-		for _, val := range values {
-			exps = append(exps, goqu.L(`"data"->>?`, prop).Lt(val))
-		}
-	case ">":
-		for _, val := range values {
-			exps = append(exps, goqu.L(`"data"->>?`, prop).Gt(val))
-		}
-	case "=":
-		exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
-
-	case "@>":
-		for _, val := range values {
-			exps = append(exps, goqu.L(`"data"->? @> ?`, prop, val))
-		}
-	case "?|":
-		exps = append(exps, goqu.L(`"data"->? ? ?`, prop, "?|", values))
-
-	default:
-		if prop == "cluster" {
-			exps = append(exps, goqu.C(prop).In(values))
-		} else if prop == "kind" { //ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
-			if isLower(values) {
-				exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
-				klog.Warning("Using ILIKE for lower case KIND string comparison.",
-					"- This behavior is needed for V1 compatibility and will be deprecated with Search V2.")
-			} else {
-				exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
-			}
-		} else {
-			exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
-		}
-	}
-	return exps
-
-}
-
-//if any string values starts with lower case letters, return true
-func isLower(values []string) bool {
-	for _, str := range values {
-		firstChar := rune(str[0]) //check if first character of the string is lower case
-		if unicode.IsLower(firstChar) && unicode.IsLetter(firstChar) {
-			return true
-		}
-	}
-	return false
-}
-
-// Check if value is a number or date and get the operator
-// Returns a map that stores operator and values
-func getOperatorAndNumDateFilter(filter string, values []string, dataType interface{}) map[string][]string {
-	opValueMap := getOperator(values) //If values are numbers
-
-	// Store the operator and value in a map - this is to handle multiple values
-	updateOpValueMap := func(operator string, operatorValueMap map[string][]string, operatorRemovedValue string) {
-		if vals, ok := operatorValueMap[operator]; !ok {
-			operatorValueMap[operator] = []string{operatorRemovedValue}
-		} else {
-			vals = append(vals, operatorRemovedValue)
-			operatorValueMap[operator] = vals
-		}
-	}
-
-	if len(opValueMap) < 1 { //If not a number (no operator), check if values are dates
-		// Expected values: {"hour", "day", "week", "month", "year"}
-		operator := ">" // For dates, always check for values '>'
-		now := time.Now()
-		for _, val := range values {
-
-			var then string
-			format := "2006-01-02T15:04:05Z"
-			switch val {
-			case "hour":
-				then = now.Add(time.Duration(-1) * time.Hour).Format(format)
-
-			case "day":
-				then = now.AddDate(0, 0, -1).Format(format)
-
-			case "week":
-				then = now.AddDate(0, 0, -7).Format(format)
-
-			case "month":
-				then = now.AddDate(0, -1, 0).Format(format)
-
-			case "year":
-				then = now.AddDate(-1, 0, 0).Format(format)
-
-			default:
-				//check that property value is an array:
-				if dataType == "object" || dataType == "array" {
-					klog.V(7).Info("filter is object or array type. Operator is @>.")
-					operator = "@>"
-
-				} else {
-					klog.V(7).Info("filter is neither label nor in arrayProperties: ", filter)
-					operator = ""
-				}
-
-				then = val
-			}
-			// Add the value and operator to map
-			updateOpValueMap(operator, opValueMap, then)
-		}
-	}
-	return opValueMap
-}
-
-// Labels are sorted alphabetically to ensure consistency, then encoded in a
-// string with the following format.
-// key1:value1; key2:value2; ...
-func formatLabels(labels map[string]interface{}) string {
-	keys := make([]string, 0)
-	labelStrings := make([]string, 0)
-	for k := range labels {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		labelStrings = append(labelStrings, fmt.Sprintf("%s=%s", k, labels[k]))
-	}
-	return strings.Join(labelStrings, "; ")
-}
-
-// Encode array into a single string with the format.
-//  value1; value2; ...
-func formatArray(itemlist []interface{}) string {
-	keys := make([]string, len(itemlist))
-	for i, k := range itemlist {
-		keys[i] = convertToString(k)
-	}
-	sort.Strings(keys)
-	return strings.Join(keys, "; ")
-}
-
-// Convert interface to string format
-func convertToString(data interface{}) string {
-	var item string
-	switch v := data.(type) {
-	case string:
-		item = strings.ToLower(v)
-	case bool:
-		item = strconv.FormatBool(v)
-	case float64:
-		item = strconv.FormatInt(int64(v), 10)
-	default:
-		klog.Warningf("Error formatting property with type: %+v\n", reflect.TypeOf(v))
-	}
-	return item
-}
-
-func formatDataMap(data map[string]interface{}) map[string]interface{} {
-	item := make(map[string]interface{})
-	for key, value := range data {
-		switch v := value.(type) {
-		case string:
-			item[key] = v //strings.ToLower(v)
-		case bool:
-			item[key] = strconv.FormatBool(v)
-		case float64:
-			item[key] = strconv.FormatInt(int64(v), 10)
-		case map[string]interface{}:
-			item[key] = formatLabels(v)
-		case []interface{}:
-			item[key] = formatArray(v)
-		default:
-			klog.Warningf("Error formatting property with key: %+v  type: %+v\n", key, reflect.TypeOf(v))
-			continue
-		}
-	}
-	return item
-}
-
-// helper function to point values in string  array
-func pointerToStringArray(pointerArray []*string) []string {
-
-	values := make([]string, len(pointerArray))
-	for i, val := range pointerArray {
-
-		values[i] = *val
-
-	}
-	return values
 }
 
 func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
@@ -532,7 +288,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 	if input.Keywords != nil && len(input.Keywords) > 0 {
 		// Sample query: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data")
 		// WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' ILIKE ANY ('{"pod","deployment"}')))
-		keywords := pointerToStringArray(input.Keywords)
+		keywords := PointerToStringArray(input.Keywords)
 		for _, key := range keywords {
 			key = "%" + key + "%"
 			whereDs = append(whereDs, goqu.L(`"value"`).ILike(key).Expression())
@@ -542,13 +298,13 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 
 		for _, filter := range input.Filters {
 			if len(filter.Values) > 0 {
-				values := pointerToStringArray(filter.Values)
+				values := PointerToStringArray(filter.Values)
 
 				if len(propTypeMap) > 0 {
 					if dataTypeInMap, ok := propTypeMap[filter.Property]; !ok { //check if value exists/if value doesn't exist
 						klog.Warningf("Property type for [%s] doesn't exist in cache. Refreshing property type cache",
 							filter.Property)
-						propTypeMapNew, err := getPropertyTypeCache(ctx) //call database cache again
+						propTypeMapNew, err := GetPropertyTypeCache(ctx) //call database cache again
 						if err != nil {
 							klog.Warningf("Error creating property type map with err: [%s] ", err)
 						}
@@ -559,16 +315,16 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 
 						klog.V(5).Infof("Prop in map:%s, filter prop is: %s, datatype :%s\n", dataTypeInMap, filter.Property)
 						//if property mactches then call decode function:
-						values, dataTypeFromMap = decodePropertyTypes(values, dataTypeInMap)
+						values, dataTypeFromMap = DecodePropertyTypes(values, dataTypeInMap)
 
 						// Check if value is a number or date and get the cleaned up value
-						opDateValueMap := getOperatorAndNumDateFilter(filter.Property, values, dataTypeFromMap)
+						opDateValueMap := GetOperatorAndNumDateFilter(filter.Property, values, dataTypeFromMap)
 						//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
-						keys := getKeys(opDateValueMap)
+						keys := GetKeys(opDateValueMap)
 						var operatorWhereDs []exp.Expression //store all the clauses for this filter together
 						for _, operator := range keys {
 							operatorWhereDs = append(operatorWhereDs,
-								getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator], dataTypeFromMap)...)
+								GetWhereClauseExpression(filter.Property, operator, opDateValueMap[operator], dataTypeFromMap)...)
 						}
 
 						whereDs = append(whereDs, goqu.Or(operatorWhereDs...)) //Join all the clauses with OR
@@ -587,54 +343,4 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 	}
 
 	return whereDs, propTypeMap, err
-}
-
-func decodePropertyTypes(values []string, dataTypeFromMap string) ([]string, string) {
-	dataType := dataTypeFromMap
-	cleanedVal := make([]string, len(values))
-
-	for i, val := range values {
-		if dataType == "object" {
-			labels := strings.Split(val, "=")
-			cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
-		} else if dataType == "array" {
-			cleanedVal[i] = fmt.Sprintf(`["%s"]`, val)
-
-		} else {
-			cleanedVal[i] = val
-		}
-
-		values = cleanedVal
-	}
-	return values, dataType
-
-}
-
-func getKeys(stringKeyMap interface{}) []string {
-	v := reflect.ValueOf(stringKeyMap)
-	if v.Kind() != reflect.Map {
-		klog.Error("input in getKeys is not a map")
-	}
-	if v.Type().Key().Kind() != reflect.String {
-		klog.Error("input map in getKeys does not have string keys")
-	}
-	keys := make([]string, 0, v.Len())
-	for _, key := range v.MapKeys() {
-		keys = append(keys, key.String())
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-// Set limit for queries
-func (s *SearchResult) setLimit() int {
-	var limit int
-	if s.input != nil && s.input.Limit != nil && *s.input.Limit > 0 {
-		limit = *s.input.Limit
-	} else if s.input != nil && s.input.Limit != nil && *s.input.Limit == -1 {
-		klog.Warning("No limit set. Fetching all results.")
-	} else {
-		limit = config.Cfg.QueryLimit
-	}
-	return limit
 }
