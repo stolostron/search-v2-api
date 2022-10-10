@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"time"
 
 	klog "k8s.io/klog/v2"
 
@@ -31,15 +32,6 @@ func StartAndListen() {
 		},
 	}
 
-	srv := &http.Server{
-		Addr: config.Cfg.API_SERVER_URL,
-		Handler: handler.NewDefaultServer(generated.NewExecutableSchema(
-			generated.Config{Resolvers: &graph.Resolver{}})),
-		TLSConfig:         cfg,
-		TLSNextProto:      make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
-		ReadHeaderTimeout: 0,
-	}
-
 	// Initiate router
 	router := mux.NewRouter()
 	router.HandleFunc("/liveness", livenessProbe).Methods("GET")
@@ -59,8 +51,20 @@ func StartAndListen() {
 	apiSubrouter.Use(rbac.AuthenticateUser)
 	apiSubrouter.Use(rbac.AuthorizeUser)
 
-	apiSubrouter.Handle("/graphql", srv.Handler)
+	apiSubrouter.Handle("/graphql", handler.NewDefaultServer(generated.NewExecutableSchema(
+		generated.Config{Resolvers: &graph.Resolver{}})))
+
+	srv := &http.Server{
+		Addr:              fmt.Sprintf(":%d", port),
+		Handler:           router,
+		TLSConfig:         cfg,
+		TLSNextProto:      make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
 
 	klog.Infof(`Search API is now running on https://localhost:%d%s/graphql`, port, config.Cfg.ContextPath)
-	klog.Fatal(http.ListenAndServeTLS(":"+fmt.Sprint(port), "./sslcert/tls.crt", "./sslcert/tls.key", router))
+	serverErr := srv.ListenAndServeTLS("./sslcert/tls.crt", "./sslcert/tls.key")
+	if serverErr != nil {
+		klog.Fatal("Server process ended with error. ", serverErr)
+	}
 }

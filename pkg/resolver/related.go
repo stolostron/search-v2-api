@@ -3,11 +3,13 @@ package resolver
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/stolostron/search-v2-api/pkg/config"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 	klog "k8s.io/klog/v2"
 )
 
@@ -42,13 +44,13 @@ func (s *SearchResult) buildRelationsQuery() {
 	// 	FROM (
 	// 		WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster) AS
 	// 		(SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster"
-	// 		 FROM "search"."all_edges" AS "e"
+	// 		 FROM "search"."edges" AS "e"
 	// 		 WHERE (("destid" IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc' )) OR
 	// 					("sourceid" IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc'))
 	// 			   )
 	// 				   UNION
 	// 		 (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster"
-	// 		  FROM "search"."all_edges" AS "e"
+	// 		  FROM "search"."edges" AS "e"
 	// 		  INNER JOIN "search_graph" AS "sg"
 	// 		  ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR
 	// 			  ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))
@@ -65,7 +67,6 @@ func (s *SearchResult) buildRelationsQuery() {
 	// GROUP BY "uid", "kind"
 	// -- union -- This is added if `kind:Cluster` is present in search term
 	//-- select uid as uid, data->>'kind' as kind, 1 AS "level" FROM search.resources where cluster IN ('local-cluster')
-
 	s.setDepth()
 	whereDs := []exp.Expression{
 		goqu.C("level").Lte(s.level), // Add filter to select up to level (default 3) relationships
@@ -94,12 +95,12 @@ func (s *SearchResult) buildRelationsQuery() {
 	excludeResources := []interface{}{"Node", "Channel"}
 
 	// Non-recursive term
-	baseTerm := goqu.From(schema.Table("all_edges").As("e")).
+	baseTerm := goqu.From(schema.Table("edges").As("e")).
 		Select(selectBase...).
 		Where(goqu.ExOr{"sourceid": (s.uids), "destid": (s.uids)})
 
 	// Recursive term
-	recursiveTerm := goqu.From(schema.Table("all_edges").As("e")).
+	recursiveTerm := goqu.From(schema.Table("edges").As("e")).
 		InnerJoin(goqu.T("search_graph").As("sg"),
 			goqu.On(goqu.ExOr{"sg.destid": srcDestIds, "sg.sourceid": srcDestIds})).
 		Select(selectNext...).
@@ -134,16 +135,35 @@ func (s *SearchResult) buildRelationsQuery() {
 	// add a union to the relation query to get all resources in the clusters
 	clusterSelectTerm := s.selectIfClusterUIDPresent()
 	if clusterSelectTerm != nil {
-		relQuery = relQuery.Union(clusterSelectTerm)
+		relQuery = relQuery.Union(clusterSelectTerm).As("related")
 	}
-	sql, params, err := relQuery.ToSQL()
+	relQuery = goqu.From(relQuery.As("related")).Select("related.uid", "related.kind",
+		"related.level")
+	relQueryInnerJoin := relQuery.InnerJoin(goqu.S("search").Table("resources"),
+		goqu.On(goqu.Ex{"related.uid": goqu.L(`"resources".uid`)}))
+	//RBAC CLAUSE
+	relQueryWithRbac := relQueryInnerJoin //without RBAC
+	withoutRBACSql, _, withoutRBACSqlErr := relQueryInnerJoin.ToSQL()
+	klog.V(5).Info("Relations query before RBAC:", withoutRBACSql, withoutRBACSqlErr)
+
+	//get user info for logging
+	_, userInfo := rbac.GetCache().GetUserUID(s.context)
+
+	if s.userData != nil {
+		// add rbac
+		relQueryWithRbac = relQueryInnerJoin.Where(buildRbacWhereClause(s.context, s.userData, userInfo))
+	} else {
+		panic(fmt.Sprintf("RBAC clause is required! None found for search relations query %+v for user %s ", s.input,
+			s.context.Value(rbac.ContextAuthTokenKey)))
+	}
+	sql, params, err := relQueryWithRbac.ToSQL()
 
 	if err != nil {
 		klog.Error("Error creating relation query", err)
 	} else {
 		s.query = sql
 		s.params = params
-		klog.V(3).Info("Relations query: ", s.query)
+		klog.V(6).Info("Relations query: ", s.query)
 	}
 }
 
@@ -210,17 +230,18 @@ func (s *SearchResult) buildRelatedKindsQuery() {
 	s.params = params
 }
 
-func (s *SearchResult) getRelations() []SearchRelatedResult {
+func (s *SearchResult) getRelations(ctx context.Context) []SearchRelatedResult {
 	klog.V(3).Infof("Resolving relationships for [%d] uids.\n", len(s.uids))
 	relatedSearch := []SearchRelatedResult{}
 
 	//defining variables
 	relatedMap := map[string][]string{} // Map to store relations
-
+	if s.context == nil {
+		s.context = ctx
+	}
 	// Build the relations query
 	s.buildRelationsQuery()
-
-	relations, relQueryError := s.pool.Query(context.TODO(), s.query, s.params...) // how to deal with defaults.
+	relations, relQueryError := s.pool.Query(s.context, s.query, s.params...) // how to deal with defaults.
 	if relQueryError != nil {
 		klog.Errorf("Error while executing getRelations query. Error :%s", relQueryError.Error())
 		return relatedSearch
