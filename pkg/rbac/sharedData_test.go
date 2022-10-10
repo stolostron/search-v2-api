@@ -70,6 +70,10 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows1, nil)
 
+	propTypes, _ := mock_cache.GetPropertyTypes(ctx)
+	propTypes["kind"] = "string"
+	propTypes["apigroup"] = "string"
+
 	err := mock_cache.PopulateSharedCache(ctx)
 	res := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
 
@@ -78,7 +82,7 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 		t.Error("Cluster Scoped Resources not in cache")
 	}
 
-	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" {
+	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" || mock_cache.shared.propTypes["kind"] != "string" {
 		t.Error("Shared Namespaces not in cache")
 	}
 
@@ -127,6 +131,10 @@ func Test_getResouces_usingCache(t *testing.T) {
 		csResourcesMap:  csRes,
 	}
 
+	propTypes, _ := mock_cache.GetPropertyTypes(ctx)
+	propTypes["kind"] = "string"
+	propTypes["apigroup"] = "string"
+
 	err := mock_cache.PopulateSharedCache(ctx)
 	csResource := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
 	_, csResPresent := mock_cache.shared.csResourcesMap[csResource]
@@ -134,7 +142,7 @@ func Test_getResouces_usingCache(t *testing.T) {
 	if len(mock_cache.shared.csResourcesMap) != 1 || !csResPresent {
 		t.Error("Cluster Scoped Resources not in cache")
 	}
-	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" {
+	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" || mock_cache.shared.propTypes["kind"] != "string" {
 		t.Error("Shared Namespaces not in cache")
 	}
 	_, ok := mock_cache.shared.managedClusters["test-man"]
@@ -186,6 +194,10 @@ func Test_getResources_expiredCache(t *testing.T) {
 
 	err := mock_cache.PopulateSharedCache(ctx)
 
+	propTypes, _ := mock_cache.GetPropertyTypes(ctx)
+	propTypes["kind"] = "string"
+	propTypes["apigroup"] = "string"
+
 	csResource := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
 	_, csResPresent := mock_cache.shared.csResourcesMap[csResource]
 
@@ -193,7 +205,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 		t.Error("Cluster Scoped Resources not in cache")
 	}
 
-	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" {
+	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" || mock_cache.shared.propTypes["kind"] != "string" {
 		t.Error("Shared Namespaces not in cache")
 	}
 	_, ok := mock_cache.shared.managedClusters["test-man"]
