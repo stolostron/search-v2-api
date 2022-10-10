@@ -178,51 +178,55 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	//WHERE CLAUSE
 	whereDs, s.propTypes, err = WhereClauseFilter(s.context, s.input, s.propTypes)
 
-	if s.input != nil && whereDs != nil {
+	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
+		//WHERE CLAUSE
+		whereDs, s.propTypes, err = WhereClauseFilter(s.context, s.input, s.propTypes)
+		if whereDs != nil {
 
-		//SELECT CLAUSE
-		if count {
-			selectDs = ds.Select(goqu.COUNT("uid"))
-		} else if uid {
-			selectDs = ds.Select("uid")
-		} else {
-			selectDs = ds.SelectDistinct("uid", "cluster", "data")
-		}
+			//SELECT CLAUSE
+			if count {
+				selectDs = ds.Select(goqu.COUNT("uid"))
+			} else if uid {
+				selectDs = ds.Select("uid")
+			} else {
+				selectDs = ds.SelectDistinct("uid", "cluster", "data")
+			}
 
-		sql, params, err = selectDs.Where(whereDs...).ToSQL() //use original query
-		klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
+			sql, _, err = selectDs.Where(whereDs...).ToSQL() //use original query
+			klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
 
-		//RBAC CLAUSE
-		if s.userData != nil {
-			_, userInfo := rbac.GetCache().GetUserUID(ctx)
-			whereDs = append(whereDs,
-				buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
-		} else {
-			panic(fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
-				ctx.Value(rbac.ContextAuthTokenKey)))
-		}
-
-		//LIMIT CLAUSE
-		if !count {
-			limit = s.setLimit()
-		}
-
-		//Get the query
-		if limit != 0 {
-			sql, params, err = selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
-		} else {
-			sql, params, err = selectDs.Where(whereDs...).ToSQL()
-		}
-		if err != nil {
+			//RBAC CLAUSE
+			if s.userData != nil {
+				_, userInfo := rbac.GetCache().GetUserUID(ctx)
+				whereDs = append(whereDs,
+					buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
+			} else {
+				panic(fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s ", s.input,
+					ctx.Value(rbac.ContextAuthTokenKey)))
+			}
+		} else if err != nil {
 			klog.Errorf("Error building Search query: %s", err.Error())
 		}
-		klog.V(5).Infof("Search query: %s\nargs: %s", sql, params)
-		s.query = sql
-		s.params = params
-	} else if err != nil {
-		klog.Errorf("Error building Search query: %s", err.Error())
-
 	}
+
+	//LIMIT CLAUSE
+	if !count {
+		limit = s.setLimit()
+	}
+
+	//Get the query
+	if limit != 0 {
+		sql, params, err = selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
+	} else {
+		sql, params, err = selectDs.Where(whereDs...).ToSQL()
+	}
+	if err != nil {
+		klog.Errorf("Error building Search query: %s", err.Error())
+	}
+	klog.V(5).Infof("Search query: %s\nargs: %s", sql, params)
+	s.query = sql
+	s.params = params
+
 }
 
 func (s *SearchResult) resolveCount() int {
@@ -518,7 +522,8 @@ func pointerToStringArray(pointerArray []*string) []string {
 	return values
 }
 
-func WhereClauseFilter(ctx context.Context, input *model.SearchInput, propTypeMap map[string]string) ([]exp.Expression, map[string]string, error) {
+func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
+	propTypeMap map[string]string) ([]exp.Expression, map[string]string, error) {
 
 	var whereDs []exp.Expression
 	var dataTypeFromMap string
@@ -541,7 +546,8 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput, propTypeMa
 
 				if len(propTypeMap) > 0 {
 					if dataTypeInMap, ok := propTypeMap[filter.Property]; !ok { //check if value exists/if value doesn't exist
-						klog.Warningf("Property type for [%s] doesn't exist property type map. Refreshing property type cache", filter.Property)
+						klog.Warningf("Property type for [%s] doesn't exist in cache. Refreshing property type cache",
+							filter.Property)
 						propTypeMapNew, err := getPropertyTypeCache(ctx) //call database cache again
 						if err != nil {
 							klog.Warningf("Error creating property type map with err: [%s] ", err)

@@ -31,7 +31,7 @@
             "desired":3,
             "kind":"ReplicaSet",
             "label":{"pod-template-hash":"5f5575c669"},
-            "container":["acm-agent", "acm-agent-2"],
+            "container":["acm-agent-1", "acm-agent-2"],
             "image": ["quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:2337b7727c84c75a8cde0ac5e9e2ac8bd70b6dbcb628ee933718ef4899f2e3ef","quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:26cde6bda32fe488c322e60b0de1580ef8321f60a7c24c6c008d8fc0437e5063"],
             "name":"prometheus-operator-5f5575c669",
             "namespace":"openshift-monitoring"

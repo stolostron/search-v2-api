@@ -206,7 +206,7 @@ func Test_SearchCompleteQuery_PropNum(t *testing.T) {
 	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteQuery_PropNum")
 }
 
-func Test_SearchCompleteWithLabel_Query(t *testing.T) {
+func Test_SearchCompleteWithObject_Query(t *testing.T) {
 
 	// Create a SearchCompleteResolver instance with a mock connection pool.
 	prop1 := "label"
@@ -270,34 +270,22 @@ func Test_SearchCompleteWithContainer_Query(t *testing.T) {
 	//mock searchcomplete for searchinput
 	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud, PropTypes)
 
-	strs := []string{"acm-agent"}
-	expectedProps := make([]interface{}, len(strs))
-	for i, s := range strs {
-		expectedProps[i] = s
-	}
+	val1 := "acm-agent"
+	val2 := "acm-agent-1"
+	val3 := "acm-agent-2"
 
-	// val := "acm-agent"
-	// valist := []*string{&val}
-
-	// expectedProps := make([]interface{}, len(valist))
-	// for i, s := range valist {
-	// 	expectedProps[i] = s
-	// }
-
-	// var finalexpectedProps  []*interface{}
-	// finalexpectedProps = append(finalexpectedProps, &expectedProps)
-
+	expectedProps := []*string{&val1, &val2, &val3}
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'container' AS "prop" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster')) AND ("data"->'container' IS NOT NULL) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 	// Execute function
-	_, err := resolver.autoComplete(context.TODO())
+	result, err := resolver.autoComplete(context.TODO())
 	if err != nil {
 		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
 
 	}
 
 	// Verify response
-	// AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteWithLabel_Query")
+	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteWithLabel_Query")
 }

@@ -158,6 +158,7 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			scanErr := rows.Scan(&input)
 			if scanErr != nil {
 				klog.Error("Error reading searchCompleteResults", scanErr)
+
 			}
 
 			switch v := input.(type) {
@@ -177,13 +178,12 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 				for key, value := range v {
 					labelString := fmt.Sprintf("%s=%s", key, value.(string))
 					props[labelString] = struct{}{}
-
 				}
+
 			case []interface{}:
 				arrayProperties[s.property] = struct{}{}
 				for _, value := range v {
 					props[value.(string)] = struct{}{}
-
 				}
 
 			default:
