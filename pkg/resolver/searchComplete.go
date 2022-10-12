@@ -47,7 +47,7 @@ func SearchComplete(ctx context.Context, property string, srchInput *model.Searc
 	}
 
 	//check that shared cache has resource datatypes:
-	propTypesCache, err := rbac.GetCache().GetPropertyTypes(ctx)
+	propTypesCache, err := rbac.GetCache().GetPropertyTypes(ctx, false)
 	if err != nil {
 		klog.Warningf("Error creating datatype map with err: [%s] ", err)
 	}

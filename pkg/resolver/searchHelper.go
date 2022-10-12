@@ -13,13 +13,14 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/lib/pq"
+	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"k8s.io/klog/v2"
 )
 
-func GetPropertyTypeCache(ctx context.Context) (map[string]string, error) {
-	propTypesCache, err := rbac.GetCache().GetPropertyTypes(ctx)
+func GetPropertyTypeCache(ctx context.Context, refresh bool) (map[string]string, error) {
+	propTypesCache, err := rbac.GetCache().GetPropertyTypes(ctx, refresh)
 	return propTypesCache, err
 }
 
@@ -272,6 +273,31 @@ func DecodePropertyTypes(values []string, dataTypeFromMap string) ([]string, str
 	}
 	return values, dataType
 
+}
+
+// if func above fails because proptypes map is empty/doesn't contain value we default to old implementation:
+func DecodePropertyTypesNoPropMap(values []string, filter *model.SearchFilter) []string {
+	// If property is of array type like label, remove the equal sign in it and use colon
+	// - to be similar to how it is stored in the database
+	if _, ok := arrayProperties[filter.Property]; ok {
+		cleanedVal := make([]string, len(values))
+		for i, val := range values {
+			labels := strings.Split(val, "=")
+			if len(labels) == 2 {
+				cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
+			} else if len(labels) == 1 {
+				//// If property is of array type, format it as an array for easy searching
+				cleanedVal[i] = labels[0]
+			} else {
+				klog.Error("Error while decoding label string")
+				cleanedVal[i] = val
+			}
+		}
+
+		values = cleanedVal
+	}
+
+	return values
 }
 
 func GetKeys(stringKeyMap interface{}) []string {

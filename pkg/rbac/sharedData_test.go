@@ -70,9 +70,12 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows1, nil)
 
-	propTypes, _ := mock_cache.GetPropertyTypes(ctx)
+	propTypes := make(map[string]string)
 	propTypes["kind"] = "string"
 	propTypes["apigroup"] = "string"
+	propTypes, _ = mock_cache.GetPropertyTypes(ctx, true) //query map
+
+	fmt.Println(propTypes)
 
 	err := mock_cache.PopulateSharedCache(ctx)
 	res := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
@@ -195,7 +198,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 
 	err := mock_cache.PopulateSharedCache(ctx)
 
-	propTypes, _ := mock_cache.GetPropertyTypes(ctx)
+	propTypes, _ := mock_cache.GetPropertyTypes(ctx, false)
 	propTypes["kind"] = "string"
 	propTypes["apigroup"] = "string"
 

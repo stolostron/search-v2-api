@@ -56,7 +56,7 @@ var managedClusterResourceGvr = schema.GroupVersionResource{
 }
 
 func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (map[string]string, error) {
-	resourceTypeMap := make(map[string]string)
+	propTypeMap := make(map[string]string)
 
 	// original query: select distinct key, jsonb_typeof(value) as datatype FROM search.resources,jsonb_each(data);
 	var selectDs *goqu.SelectDataset
@@ -77,14 +77,14 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 	query, params, err := selectDs.ToSQL()
 	if err != nil {
 		klog.Errorf("Error building Search query: %s", err.Error())
-		return resourceTypeMap, err
+		return propTypeMap, err
 	}
 
 	klog.V(5).Infof("Query for property datatypes: [%s] ", query)
 	rows, err := cache.pool.Query(ctx, query, params...)
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, err)
-		return resourceTypeMap, err
+		return propTypeMap, err
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -95,30 +95,39 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 			klog.Errorf("Error %s scanning value for getPropertyTypes:%s", err.Error(), query)
 			continue
 		}
-		resourceTypeMap[key] = value
+		propTypeMap[key] = value
 
 	}
 	//cache query:
-	shared.propTypes = resourceTypeMap
+	shared.propTypes = propTypeMap
 	shared.propTypeErr = err
 	shared.propTypeTime = time.Now()
 
-	return resourceTypeMap, err
+	return propTypeMap, err
 }
 
-func (cache *Cache) GetPropertyTypes(ctx context.Context) (map[string]string, error) {
-	//
-	_, err := cache.shared.getPropertyTypes(cache, ctx)
-	if err != nil {
-		klog.Errorf("Error retrieving property resources. Error: [%+v]", err)
-		return map[string]string{}, err
-	} else {
-		klog.V(6).Info("Successfully retrieved property resources!")
-	}
-	//store only the PropTypeCache to use in outside of rbac module
-	propTypesMap := cache.shared.propTypes
+func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[string]string, error) {
 
-	return propTypesMap, nil
+	propTypesMap := make(map[string]string)
+	//check if propTypes data in cache and not nil and return
+	if len(cache.shared.propTypes) > 0 && cache.shared.propTypeErr == nil && refresh != true {
+		klog.V(6).Info("Using property types from cache.")
+		propTypesMap = cache.shared.propTypes
+		return propTypesMap, nil
+
+	} else {
+		//run query to refresh data
+		propTypes, err := cache.shared.getPropertyTypes(cache, ctx)
+		if err != nil {
+			klog.Errorf("Error retrieving property resources. Error: [%+v]", err)
+			return map[string]string{}, err
+		} else {
+			klog.V(6).Info("Successfully retrieved property types!")
+			propTypesMap = propTypes
+
+			return propTypesMap, nil
+		}
+	}
 }
 
 func (cache *Cache) PopulateSharedCache(ctx context.Context) error {

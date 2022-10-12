@@ -218,16 +218,16 @@ func Test_SearchCompleteWithObject_Query(t *testing.T) {
 	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1, &value2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
 
-	PropTypes := make(map[string]string)
-	PropTypes["label"] = "object"
-	PropTypes["namespace"] = "string"
-	PropTypes["cluster"] = "string"
+	// PropTypes := make(map[string]string)
+	// PropTypes["label"] = "object"
+	// PropTypes["namespace"] = "string"
+	// PropTypes["cluster"] = "string"
 
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
 
 	//mock searchcomplete for searchinput
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud, PropTypes)
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud, nil)
 
 	val1 := "samples.operator.openshift.io/managed=true"
 	val2 := "pod-template-hash=5f5575c669"
