@@ -108,11 +108,12 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 
 func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[string]string, error) {
 
-	propTypesMap := make(map[string]string)
+	// propTypesMap := make(map[string]string)
 	//check if propTypes data in cache and not nil and return
-	if len(cache.shared.propTypes) > 0 && cache.shared.propTypeErr == nil && refresh != true {
+	if len(cache.shared.propTypes) > 0 && cache.shared.propTypeErr == nil && !refresh {
 		klog.V(6).Info("Using property types from cache.")
-		propTypesMap = cache.shared.propTypes
+
+		propTypesMap := cache.shared.propTypes
 		return propTypesMap, nil
 
 	} else {
@@ -123,9 +124,9 @@ func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[str
 			return map[string]string{}, err
 		} else {
 			klog.V(6).Info("Successfully retrieved property types!")
-			propTypesMap = propTypes
+			// propTypesMap = propTypes
 
-			return propTypesMap, nil
+			return propTypes, nil
 		}
 	}
 }
