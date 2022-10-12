@@ -97,10 +97,7 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 	csRes, nsRes, managedClusters := newUserData()
 	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1, &value2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
-	PropTypes := make(map[string]string)
-	PropTypes["kind"] = "string"
-	PropTypes["namespace"] = "string"
-	PropTypes["cluster"] = "string"
+	PropTypes := map[string]string{"kind": "string", "namespace": "string", "cluster": "string"}
 
 	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud, PropTypes)
 	val1 := "Template"
@@ -218,11 +215,6 @@ func Test_SearchCompleteWithObject_Query(t *testing.T) {
 	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1, &value2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
 
-	// PropTypes := make(map[string]string)
-	// PropTypes["label"] = "object"
-	// PropTypes["namespace"] = "string"
-	// PropTypes["cluster"] = "string"
-
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
 
@@ -260,10 +252,8 @@ func Test_SearchCompleteWithContainer_Query(t *testing.T) {
 	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1, &value2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
 
-	PropTypes := make(map[string]string)
-	PropTypes["container"] = "array"
-	PropTypes["namespace"] = "string"
-	PropTypes["cluster"] = "string"
+	PropTypes := map[string]string{"container": "array", "namespace": "string", "cluster": "string"}
+
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
 

@@ -151,8 +151,7 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 			uid := item.(map[string]interface{})["uid"]
 			cluster := strings.Split(uid.(string), "/")[0]
 			data := item.(map[string]interface{})["properties"].(map[string]interface{})
-			// fmt.Println("Property ", data[prop])
-			// fmt.Println("Property Type", reflect.TypeOf(data[prop]))
+
 			if prop == "cluster" {
 				propsString[cluster] = ""
 			} else if prop == "srchAddonDisabledCluster" {
@@ -167,8 +166,6 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 					case map[string]interface{}:
 						propsArray = append(propsArray, v)
 					case []interface{}:
-						// fmt.Println("Reaches interface{} type", v)
-
 						propsList = append(propsList, v...)
 
 					default:
@@ -267,11 +264,10 @@ func stringInSlice(a string, list []string) bool {
 
 // Only load mock data items if the input filters conditions are satisfied
 func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, item interface{}) bool {
-	// var destkind string
 	var relatedValues []string
 
 	if len(input.RelatedKinds) > 0 {
-		relatedValues = PointerToStringArray(input.RelatedKinds)
+		relatedValues = pointerToStringArray(input.RelatedKinds)
 		data := item.(map[string]interface{})["properties"].(map[string]interface{})
 		destkind := data["kind"].(string)
 		if stringInSlice(destkind, relatedValues) {
@@ -283,10 +279,10 @@ func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, ite
 
 	for _, filter := range input.Filters {
 		if len(filter.Values) > 0 {
-			values := PointerToStringArray(filter.Values) //get the filter values
+			values := pointerToStringArray(filter.Values) //get the filter values
 			_, datatype, _ := WhereClauseFilter(context.Background(), input, PropTypes)
 
-			opValueMap := GetOperatorAndNumDateFilter(filter.Property, values, datatype) // get the filter values if property is a number or date
+			opValueMap := getOperatorAndNumDateFilter(filter.Property, values, datatype) // get the filter values if property is a number or date
 			var op string
 			for key, val := range opValueMap {
 				op = key
@@ -422,9 +418,9 @@ func (r *MockRows) RawValues() [][]byte { return nil }
 
 func AssertStringArrayEqual(t *testing.T, result, expected []*string, message string) {
 
-	resultSorted := PointerToStringArray(result)
+	resultSorted := pointerToStringArray(result)
 	sort.Strings(resultSorted)
-	expectedSorted := PointerToStringArray(expected)
+	expectedSorted := pointerToStringArray(expected)
 	sort.Strings(expectedSorted)
 
 	for i, exp := range expectedSorted {

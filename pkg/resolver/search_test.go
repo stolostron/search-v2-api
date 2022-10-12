@@ -15,12 +15,11 @@ import (
 var PropTypes map[string]string
 
 func Test_SearchResolver_Count(t *testing.T) {
-	PropTypes := make(map[string]string)
+	PropTypes := map[string]string{"kind": "string"}
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "Pod"
 
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
-	PropTypes["kind"] = "string"
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserData{}, PropTypes)
 
 	// Mock the database query
@@ -44,8 +43,7 @@ func Test_SearchResolver_Count_WithRBAC(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "Pod"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
-	PropTypes := make(map[string]string)
-	PropTypes["kind"] = "string"
+	PropTypes := map[string]string{"kind": "string"}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database query
@@ -68,8 +66,7 @@ func Test_SearchResolver_CountWithOperator(t *testing.T) {
 	val1 := ">=1"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val1}}}}
 	ud := rbac.UserData{}
-	PropTypes := make(map[string]string)
-	PropTypes["current"] = "number"
+	PropTypes := map[string]string{"current": "number"}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database query
@@ -90,8 +87,7 @@ func Test_SearchResolver_Items(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "template"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
-	PropTypes := make(map[string]string)
-	PropTypes["kind"] = "string"
+	PropTypes := map[string]string{"kind": "string"}
 
 	ud := rbac.UserData{}
 
@@ -115,7 +111,7 @@ func Test_SearchResolver_Items(t *testing.T) {
 	// Verify properties for each returned item.
 	for i, item := range result {
 		mockRow := mockRows.mockData[i]
-		expectedRow := FormatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
 		expectedRow["_uid"] = mockRow["uid"]
 		expectedRow["cluster"] = mockRow["cluster"]
 
@@ -195,7 +191,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	prop := "created"
 
 	val8 := "year"
-	opValMap := GetOperatorAndNumDateFilter(prop, []string{val8}, nil)
+	opValMap := getOperatorAndNumDateFilter(prop, []string{val8}, nil)
 	csres, nsres, mc := newUserData()
 
 	rbac := buildRbacWhereClause(context.TODO(),
@@ -209,7 +205,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val9 := "hour"
-	opValMap = GetOperatorAndNumDateFilter(prop, []string{val9}, nil)
+	opValMap = getOperatorAndNumDateFilter(prop, []string{val9}, nil)
 	mockQueryHour, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0]), rbac).Limit(1000).ToSQL()
 
 	testOperatorHour := TestOperatorItem{
@@ -218,7 +214,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val10 := "day"
-	opValMap = GetOperatorAndNumDateFilter(prop, []string{val10}, nil)
+	opValMap = getOperatorAndNumDateFilter(prop, []string{val10}, nil)
 	mockQueryDay, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0])), rbac).Limit(1000).ToSQL()
 
 	testOperatorDay := TestOperatorItem{
@@ -227,7 +223,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val11 := "week"
-	opValMap = GetOperatorAndNumDateFilter(prop, []string{val11}, nil)
+	opValMap = getOperatorAndNumDateFilter(prop, []string{val11}, nil)
 	mockQueryWeek, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0])), rbac).Limit(1000).ToSQL()
 
 	testOperatorWeek := TestOperatorItem{
@@ -236,7 +232,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val12 := "month"
-	opValMap = GetOperatorAndNumDateFilter(prop, []string{val12}, nil)
+	opValMap = getOperatorAndNumDateFilter(prop, []string{val12}, nil)
 	mockQueryMonth, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0])), rbac).Limit(1000).ToSQL()
 
 	testOperatorMonth := TestOperatorItem{
@@ -244,7 +240,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 		mockQuery:   mockQueryMonth, // `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'created' > ('2021-05-16T13:11:12Z')) LIMIT 1000`,
 	}
 
-	opValMap = GetOperatorAndNumDateFilter(prop, []string{val8, val9}, nil)
+	opValMap = getOperatorAndNumDateFilter(prop, []string{val8, val9}, nil)
 	mockQueryMultiple, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.Or(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0]),
 		goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][1])), rbac).Limit(1000).ToSQL()
 
@@ -264,9 +260,7 @@ func testAllOperators(t *testing.T, testOperators []TestOperatorItem) {
 	for _, currTest := range testOperators {
 		csRes, nsRes, mc := newUserData()
 		ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: mc}
-		PropTypes := make(map[string]string)
-		PropTypes["current"] = "number"
-		PropTypes["created"] = "string"
+		PropTypes := map[string]string{"current": "number", "created": "string"}
 		// Create a SearchResolver instance with a mock connection pool.
 		resolver, mockPool := newMockSearchResolver(t, currTest.searchInput, nil, &ud, PropTypes)
 		// Mock the database queries.
@@ -287,7 +281,7 @@ func testAllOperators(t *testing.T, testOperators []TestOperatorItem) {
 		// // Verify properties for each returned item.
 		for i, item := range result {
 			mockRow := mockRows.mockData[i]
-			expectedRow := FormatDataMap(mockRow["data"].(map[string]interface{}))
+			expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
 			expectedRow["_uid"] = mockRow["uid"]
 			expectedRow["cluster"] = mockRow["cluster"]
 
@@ -311,9 +305,8 @@ func Test_SearchResolver_Items_Multiple_Filter(t *testing.T) {
 	limit := 10
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&val1, &val2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
 	ud := rbac.UserData{}
-	PropTypes := make(map[string]string)
-	PropTypes["namespace"] = "string"
-	PropTypes["cluster"] = "string"
+	PropTypes := map[string]string{"cluster": "string", "namespace": "string"}
+
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database queries.
@@ -335,7 +328,7 @@ func Test_SearchResolver_Items_Multiple_Filter(t *testing.T) {
 	// Verify properties for each returned item.
 	for i, item := range result {
 		mockRow := mockRows.mockData[i]
-		expectedRow := FormatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
 		expectedRow["_uid"] = mockRow["uid"]
 		expectedRow["cluster"] = mockRow["cluster"]
 
@@ -359,9 +352,8 @@ func Test_SearchWithMultipleClusterFilter_NegativeLimit_Query(t *testing.T) {
 	limit := -1
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1}}, {Property: "cluster", Values: []*string{&cluster1, &cluster2}}}, Limit: &limit}
 	ud := rbac.UserData{}
-	PropTypes := make(map[string]string)
-	PropTypes["namespace"] = "string"
-	PropTypes["cluster"] = "string"
+	PropTypes := map[string]string{"namespace": "string", "cluster": "string"}
+
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database queries.
@@ -383,7 +375,7 @@ func Test_SearchWithMultipleClusterFilter_NegativeLimit_Query(t *testing.T) {
 	// Verify properties for each returned item.
 	for i, item := range result {
 		mockRow := mockRows.mockData[i]
-		expectedRow := FormatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
 		expectedRow["_uid"] = mockRow["uid"]
 		expectedRow["cluster"] = mockRow["cluster"]
 
@@ -405,8 +397,8 @@ func Test_SearchResolver_Keywords(t *testing.T) {
 	limit := 10
 	searchInput := &model.SearchInput{Keywords: []*string{&val1}, Limit: &limit}
 	ud := rbac.UserData{}
-	PropTypes := make(map[string]string)
-	PropTypes["kind"] = "string"
+	PropTypes := map[string]string{"kind": "string"}
+
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database queries.
@@ -423,7 +415,7 @@ func Test_SearchResolver_Keywords(t *testing.T) {
 	// Verify properties for each returned item.
 	for i, item := range result {
 		mockRow := mockRows.mockData[i]
-		expectedRow := FormatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
 		expectedRow["_uid"] = mockRow["uid"]
 		expectedRow["cluster"] = mockRow["cluster"]
 
@@ -443,8 +435,8 @@ func Test_SearchResolver_Uids(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "template"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
-	PropTypes := make(map[string]string)
-	PropTypes["kind"] = "string"
+	PropTypes := map[string]string{"kind": "string"}
+
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserData{}, PropTypes)
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", 0)
@@ -465,7 +457,7 @@ func Test_SearchResolver_Uids(t *testing.T) {
 	// Verify properties for each returned item.
 	for i, item := range resolver.uids {
 		mockRow := mockRows.mockData[i]
-		expectedRow := FormatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
 		expectedRow["_uid"] = mockRow["uid"]
 
 		if *item != mockRow["uid"].(string) {
@@ -527,10 +519,8 @@ func Test_SearchResolver_Items_Labels(t *testing.T) {
 	limit := 10
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}, {Property: "cluster", Values: []*string{&cluster}}, {Property: "label", Values: []*string{&val2}}}, Limit: &limit}
 	ud := rbac.UserData{}
-	PropTypes := make(map[string]string)
-	PropTypes["cluster"] = "string"
-	PropTypes["kind"] = "string"
-	PropTypes["label"] = "object"
+	PropTypes := map[string]string{"cluster": "string", "kind": "string", "label": "object"}
+
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database queries.
@@ -552,7 +542,7 @@ func Test_SearchResolver_Items_Labels(t *testing.T) {
 	// Verify properties for each returned item.
 	for i, item := range result {
 		mockRow := mockRows.mockData[i]
-		expectedRow := FormatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
 		expectedRow["_uid"] = mockRow["uid"]
 		expectedRow["cluster"] = mockRow["cluster"]
 
@@ -576,10 +566,8 @@ func Test_SearchResolver_Items_Container(t *testing.T) {
 	limit := 10
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}, {Property: "cluster", Values: []*string{&cluster}}, {Property: "container", Values: []*string{&val2}}}, Limit: &limit}
 	ud := rbac.UserData{}
-	PropTypes := make(map[string]string)
-	PropTypes["cluster"] = "string"
-	PropTypes["kind"] = "string"
-	PropTypes["container"] = "array"
+	PropTypes := map[string]string{"cluster": "string", "kind": "string", "container": "array"}
+
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &ud, PropTypes)
 
 	// Mock the database queries.
@@ -600,7 +588,7 @@ func Test_SearchResolver_Items_Container(t *testing.T) {
 	// Verify properties for each returned item.
 	for i, item := range result {
 		mockRow := mockRows.mockData[i]
-		expectedRow := FormatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
 		expectedRow["_uid"] = mockRow["uid"]
 		expectedRow["cluster"] = mockRow["cluster"]
 
@@ -642,8 +630,7 @@ func Test_buildRbacWhereClauseHandleAllStars(t *testing.T) {
 func Test_SearchResolver_UidsAllAccess(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "template"
-	PropTypes := make(map[string]string)
-	PropTypes["kind"] = "string"
+	PropTypes := map[string]string{"kind": "string"}
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserData{
 		CsResources:     []rbac.Resource{{Apigroup: "*", Kind: "*"}},
@@ -670,7 +657,7 @@ func Test_SearchResolver_UidsAllAccess(t *testing.T) {
 	// Verify properties for each returned item.
 	for i, item := range resolver.uids {
 		mockRow := mockRows.mockData[i]
-		expectedRow := FormatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
 		expectedRow["_uid"] = mockRow["uid"]
 
 		if *item != mockRow["uid"].(string) {

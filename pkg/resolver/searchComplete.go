@@ -46,8 +46,8 @@ func SearchComplete(ctx context.Context, property string, srchInput *model.Searc
 		return []*string{}, userDataErr
 	}
 
-	//check that shared cache has resource datatypes:
-	propTypesCache, err := rbac.GetCache().GetPropertyTypes(ctx, false)
+	//check that shared cache has property types:
+	propTypes, err := rbac.GetCache().GetPropertyTypes(ctx, false)
 	if err != nil {
 		klog.Warningf("Error creating datatype map with err: [%s] ", err)
 	}
@@ -59,7 +59,7 @@ func SearchComplete(ctx context.Context, property string, srchInput *model.Searc
 		property:  property,
 		limit:     limit,
 		userData:  userData,
-		propTypes: propTypesCache,
+		propTypes: propTypes,
 	}
 	return searchCompleteResult.autoComplete(ctx)
 
@@ -193,7 +193,7 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			}
 
 		}
-		properties := stringArrayToPointer(GetKeys(props))
+		properties := stringArrayToPointer(getKeys(props))
 		srchCompleteOut = append(srchCompleteOut, properties...)
 	} else {
 		klog.Error("searchCompleteResults rows is nil", srchCompleteOut)

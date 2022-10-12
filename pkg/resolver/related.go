@@ -213,7 +213,7 @@ func (s *SearchResult) buildRelatedKindsQuery() {
 	whereDs := []exp.Expression{goqu.C("uid").In(s.uids)} // Add filter to avoid selecting the search object itself
 
 	//LIMIT CLAUSE
-	limit := s.SetLimit()
+	limit := s.setLimit()
 
 	//Get the query
 	if limit != 0 {
@@ -283,9 +283,9 @@ func (s *SearchResult) getRelations(ctx context.Context) []SearchRelatedResult {
 func (s *SearchResult) relatedKindUIDs(levelsMap map[string][]string) {
 	klog.V(6).Info("levelsMap in relatedKindUIDs: ", levelsMap)
 
-	relatedKinds := PointerToStringArray(s.input.RelatedKinds)
+	relatedKinds := pointerToStringArray(s.input.RelatedKinds)
 	s.uids = []*string{}
-	keys := GetKeys(levelsMap)
+	keys := getKeys(levelsMap)
 	for _, kind := range relatedKinds {
 		// Convert kind to right case even if incoming query in RelatedKinds is all lowercase
 		// Needed for V1 compatibility.
@@ -298,7 +298,7 @@ func (s *SearchResult) relatedKindUIDs(levelsMap map[string][]string) {
 	}
 	klog.V(6).Info("Number of relatedKind UIDs: ", len(s.uids))
 	if len(s.uids) == 0 && len(s.input.RelatedKinds) > 0 {
-		klog.Warning("No UIDs matched for relatedKinds: ", PointerToStringArray(s.input.RelatedKinds))
+		klog.Warning("No UIDs matched for relatedKinds: ", pointerToStringArray(s.input.RelatedKinds))
 	}
 }
 
@@ -320,7 +320,7 @@ func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface
 
 	relatedSearch := make([]SearchRelatedResult, 0)
 	relatedItems := map[string][]map[string]interface{}{}
-	relatedKinds := PointerToStringArray(s.input.RelatedKinds)
+	relatedKinds := pointerToStringArray(s.input.RelatedKinds)
 
 	//iterating and sending values to relatedSearch
 	for _, currItem := range items {

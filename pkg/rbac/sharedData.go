@@ -98,7 +98,7 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 		propTypeMap[key] = value
 
 	}
-	//cache query:
+	//cache results:
 	shared.propTypes = propTypeMap
 	shared.propTypeErr = err
 	shared.propTypeTime = time.Now()
@@ -107,16 +107,13 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 }
 
 func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[string]string, error) {
-
-	// propTypesMap := make(map[string]string)
 	//check if propTypes data in cache and not nil and return
 	if len(cache.shared.propTypes) > 0 && cache.shared.propTypeErr == nil && !refresh {
-		klog.V(6).Info("Using property types from cache.")
-
 		propTypesMap := cache.shared.propTypes
 		return propTypesMap, nil
 
 	} else {
+		klog.V(6).Info("Getting property types from database.")
 		//run query to refresh data
 		propTypes, err := cache.shared.getPropertyTypes(cache, ctx)
 		if err != nil {
@@ -124,7 +121,6 @@ func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[str
 			return map[string]string{}, err
 		} else {
 			klog.V(6).Info("Successfully retrieved property types!")
-			// propTypesMap = propTypes
 
 			return propTypes, nil
 		}
@@ -214,10 +210,9 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 		return shared.csErr
 	}
 
-	// var queryerr error
 	rows, err := cache.pool.Query(ctx, query)
 	if err != nil {
-		klog.Errorf("Error resolving query [%s]. Error: [%+v]", query, err.Error())
+		klog.Errorf("Error resolving cluster scoped resources. Query [%s]. Error: [%+v]", query, err.Error())
 		shared.csErr = err
 		shared.csResourcesMap = map[Resource]struct{}{}
 

@@ -41,7 +41,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 	}
 
 	//check that shared cache has resource datatypes:
-	propTypesCache, err := GetPropertyTypeCache(ctx, false)
+	propTypesCache, err := getPropertyType(ctx, false)
 	if err != nil {
 		klog.Warningf("Error creating datatype map with err: [%s] ", err)
 	}
@@ -131,7 +131,7 @@ func (s *SearchResult) Uids() {
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
 	return goqu.Or(
-		matchManagedCluster(GetKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
+		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
 		goqu.And(
 			matchHubCluster(), // goqu.L(`data->>?`, "_hubClusterResource").Eq("true")
 			goqu.Or(
@@ -197,7 +197,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 
 	//LIMIT CLAUSE
 	if !count {
-		limit = s.SetLimit()
+		limit = s.setLimit()
 	}
 
 	//Get the query
@@ -266,7 +266,7 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), s.query)
 		}
-		currItem := FormatDataMap(data)
+		currItem := formatDataMap(data)
 		currItem["_uid"] = uid
 		currItem["cluster"] = cluster
 
@@ -289,7 +289,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 	if input.Keywords != nil && len(input.Keywords) > 0 {
 		// Sample query: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data")
 		// WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' ILIKE ANY ('{"pod","deployment"}')))
-		keywords := PointerToStringArray(input.Keywords)
+		keywords := pointerToStringArray(input.Keywords)
 		for _, key := range keywords {
 			key = "%" + key + "%"
 			whereDs = append(whereDs, goqu.L(`"value"`).ILike(key).Expression())
@@ -299,14 +299,13 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 
 		for _, filter := range input.Filters {
 			if len(filter.Values) > 0 {
-				values := PointerToStringArray(filter.Values)
+				values := pointerToStringArray(filter.Values)
 
 				if len(propTypeMap) > 0 {
 					if dataTypeInMap, ok := propTypeMap[filter.Property]; !ok { //check if value exists/if value doesn't exist
 						klog.Warningf("Property type for [%s] doesn't exist in cache. Refreshing property type cache",
 							filter.Property)
-						refresh := true
-						propTypeMapNew, err := GetPropertyTypeCache(ctx, refresh) //call database cache again
+						propTypeMapNew, err := getPropertyType(ctx, true) //call database cache again
 						if err != nil {
 							klog.Warningf("Error creating property type map with err: [%s] ", err)
 						}
@@ -317,23 +316,23 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 						klog.V(5).Infof("Prop in map:%s, filter prop is: %s, datatype :%s\n", dataTypeInMap, filter.Property)
 
 						//if property mactches then call decode function:
-						values, dataTypeFromMap = DecodePropertyTypes(values, dataTypeInMap)
+						values, dataTypeFromMap = decodePropertyTypes(values, dataTypeInMap)
 						// Check if value is a number or date and get the cleaned up value
-						opDateValueMap = GetOperatorAndNumDateFilter(filter.Property, values, dataTypeFromMap)
+						opDateValueMap = getOperatorAndNumDateFilter(filter.Property, values, dataTypeFromMap)
 					}
 				} else {
 					klog.Error("Error with property type list is empty.")
-					values = DecodePropertyTypesNoPropMap(values, filter)
+					values = decodePropertyTypesNoPropMap(values, filter)
 					// Check if value is a number or date and get the cleaned up value
-					opDateValueMap = GetOperatorAndNumDateFilter(filter.Property, values, nil)
+					opDateValueMap = getOperatorAndNumDateFilter(filter.Property, values, nil)
 
 				}
 				//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
-				keys := GetKeys(opDateValueMap)
+				keys := getKeys(opDateValueMap)
 				var operatorWhereDs []exp.Expression //store all the clauses for this filter together
 				for _, operator := range keys {
 					operatorWhereDs = append(operatorWhereDs,
-						GetWhereClauseExpression(filter.Property, operator, opDateValueMap[operator], dataTypeFromMap)...)
+						getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator], dataTypeFromMap)...)
 				}
 
 				whereDs = append(whereDs, goqu.Or(operatorWhereDs...)) //Join all the clauses with OR

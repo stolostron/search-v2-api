@@ -19,13 +19,13 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func GetPropertyTypeCache(ctx context.Context, refresh bool) (map[string]string, error) {
+func getPropertyType(ctx context.Context, refresh bool) (map[string]string, error) {
 	propTypesCache, err := rbac.GetCache().GetPropertyTypes(ctx, refresh)
 	return propTypesCache, err
 }
 
 // Remove operator (<=, >=, !=, !, <, >, =) if any from values
-func GetOperator(values []string) map[string][]string {
+func getOperator(values []string) map[string][]string {
 	// Get the operator (/^<=|^>=|^!=|^!|^<|^>|^=/)
 	var operator string
 	// Replace any of these symbols with ""
@@ -53,7 +53,7 @@ func GetOperator(values []string) map[string][]string {
 	return operatorValue
 }
 
-func GetWhereClauseExpression(prop, operator string, values []string, propType string) []exp.Expression {
+func getWhereClauseExpression(prop, operator string, values []string, propType string) []exp.Expression {
 	exps := []exp.Expression{}
 
 	switch operator {
@@ -92,7 +92,7 @@ func GetWhereClauseExpression(prop, operator string, values []string, propType s
 		if prop == "cluster" {
 			exps = append(exps, goqu.C(prop).In(values))
 		} else if prop == "kind" { //ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
-			if IsLower(values) {
+			if isLower(values) {
 				exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
 				klog.Warning("Using ILIKE for lower case KIND string comparison.",
 					"- This behavior is needed for V1 compatibility and will be deprecated with Search V2.")
@@ -108,7 +108,7 @@ func GetWhereClauseExpression(prop, operator string, values []string, propType s
 }
 
 //if any string values starts with lower case letters, return true
-func IsLower(values []string) bool {
+func isLower(values []string) bool {
 	for _, str := range values {
 		firstChar := rune(str[0]) //check if first character of the string is lower case
 		if unicode.IsLower(firstChar) && unicode.IsLetter(firstChar) {
@@ -120,8 +120,8 @@ func IsLower(values []string) bool {
 
 // Check if value is a number or date and get the operator
 // Returns a map that stores operator and values
-func GetOperatorAndNumDateFilter(filter string, values []string, dataType interface{}) map[string][]string {
-	opValueMap := GetOperator(values) //If values are numbers
+func getOperatorAndNumDateFilter(filter string, values []string, dataType interface{}) map[string][]string {
+	opValueMap := getOperator(values) //If values are numbers
 
 	// Store the operator and value in a map - this is to handle multiple values
 	updateOpValueMap := func(operator string, operatorValueMap map[string][]string, operatorRemovedValue string) {
@@ -180,7 +180,7 @@ func GetOperatorAndNumDateFilter(filter string, values []string, dataType interf
 // Labels are sorted alphabetically to ensure consistency, then encoded in a
 // string with the following format.
 // key1:value1; key2:value2; ...
-func FormatLabels(labels map[string]interface{}) string {
+func formatLabels(labels map[string]interface{}) string {
 	keys := make([]string, 0)
 	labelStrings := make([]string, 0)
 	for k := range labels {
@@ -195,17 +195,17 @@ func FormatLabels(labels map[string]interface{}) string {
 
 // Encode array into a single string with the format.
 //  value1; value2; ...
-func FormatArray(itemlist []interface{}) string {
+func formatArray(itemlist []interface{}) string {
 	keys := make([]string, len(itemlist))
 	for i, k := range itemlist {
-		keys[i] = ConvertToString(k)
+		keys[i] = convertToString(k)
 	}
 	sort.Strings(keys)
 	return strings.Join(keys, "; ")
 }
 
 // Convert interface to string format
-func ConvertToString(data interface{}) string {
+func convertToString(data interface{}) string {
 	var item string
 	switch v := data.(type) {
 	case string:
@@ -220,7 +220,7 @@ func ConvertToString(data interface{}) string {
 	return item
 }
 
-func FormatDataMap(data map[string]interface{}) map[string]interface{} {
+func formatDataMap(data map[string]interface{}) map[string]interface{} {
 	item := make(map[string]interface{})
 	for key, value := range data {
 		switch v := value.(type) {
@@ -231,9 +231,9 @@ func FormatDataMap(data map[string]interface{}) map[string]interface{} {
 		case float64:
 			item[key] = strconv.FormatInt(int64(v), 10)
 		case map[string]interface{}:
-			item[key] = FormatLabels(v)
+			item[key] = formatLabels(v)
 		case []interface{}:
-			item[key] = FormatArray(v)
+			item[key] = formatArray(v)
 		default:
 			klog.Warningf("Error formatting property with key: %+v  type: %+v\n", key, reflect.TypeOf(v))
 			continue
@@ -243,7 +243,7 @@ func FormatDataMap(data map[string]interface{}) map[string]interface{} {
 }
 
 // helper function to point values in string  array
-func PointerToStringArray(pointerArray []*string) []string {
+func pointerToStringArray(pointerArray []*string) []string {
 
 	values := make([]string, len(pointerArray))
 	for i, val := range pointerArray {
@@ -254,7 +254,7 @@ func PointerToStringArray(pointerArray []*string) []string {
 	return values
 }
 
-func DecodePropertyTypes(values []string, dataTypeFromMap string) ([]string, string) {
+func decodePropertyTypes(values []string, dataTypeFromMap string) ([]string, string) {
 	dataType := dataTypeFromMap
 	cleanedVal := make([]string, len(values))
 
@@ -276,7 +276,7 @@ func DecodePropertyTypes(values []string, dataTypeFromMap string) ([]string, str
 }
 
 // if func above fails because proptypes map is empty/doesn't contain value we default to old implementation:
-func DecodePropertyTypesNoPropMap(values []string, filter *model.SearchFilter) []string {
+func decodePropertyTypesNoPropMap(values []string, filter *model.SearchFilter) []string {
 	// If property is of array type like label, remove the equal sign in it and use colon
 	// - to be similar to how it is stored in the database
 	if _, ok := arrayProperties[filter.Property]; ok {
@@ -300,7 +300,7 @@ func DecodePropertyTypesNoPropMap(values []string, filter *model.SearchFilter) [
 	return values
 }
 
-func GetKeys(stringKeyMap interface{}) []string {
+func getKeys(stringKeyMap interface{}) []string {
 	v := reflect.ValueOf(stringKeyMap)
 	if v.Kind() != reflect.Map {
 		klog.Error("input in getKeys is not a map")
@@ -317,7 +317,7 @@ func GetKeys(stringKeyMap interface{}) []string {
 }
 
 // Set limit for queries
-func (s *SearchResult) SetLimit() int {
+func (s *SearchResult) setLimit() int {
 	var limit int
 	if s.input != nil && s.input.Limit != nil && *s.input.Limit > 0 {
 		limit = *s.input.Limit
