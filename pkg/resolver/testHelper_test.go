@@ -39,32 +39,33 @@ func getUserInfo() authv1.UserInfo {
 		Username: "unique-username",
 	}
 }
-func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*string, ud *rbac.UserData) (*SearchResult, *pgxpoolmock.MockPgxPool) {
+func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*string, ud *rbac.UserData, propTypes map[string]string) (*SearchResult, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 
 	mockResolver := &SearchResult{
-		input:    input,
-		pool:     mockPool,
-		uids:     uids,
-		wg:       sync.WaitGroup{},
-		userData: ud,
-		context:  context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
+		input:     input,
+		pool:      mockPool,
+		uids:      uids,
+		wg:        sync.WaitGroup{},
+		userData:  ud,
+		propTypes: propTypes,
+		context:   context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
 	}
 
 	return mockResolver, mockPool
 }
-func newMockSearchComplete(t *testing.T, input *model.SearchInput, property string, ud *rbac.UserData) (*SearchCompleteResult, *pgxpoolmock.MockPgxPool) {
+func newMockSearchComplete(t *testing.T, input *model.SearchInput, property string, ud *rbac.UserData, PropTypes map[string]string) (*SearchCompleteResult, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
-
 	mockResolver := &SearchCompleteResult{
-		input:    input,
-		pool:     mockPool,
-		property: property,
-		userData: ud,
+		input:     input,
+		pool:      mockPool,
+		property:  property,
+		userData:  ud,
+		propTypes: PropTypes,
 	}
 	return mockResolver, mockPool
 }
@@ -165,7 +166,6 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 					case map[string]interface{}:
 						propsArray = append(propsArray, v)
 					case []interface{}:
-
 						propsList = append(propsList, v...)
 
 					default:
@@ -264,7 +264,6 @@ func stringInSlice(a string, list []string) bool {
 
 // Only load mock data items if the input filters conditions are satisfied
 func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, item interface{}) bool {
-	// var destkind string
 	var relatedValues []string
 
 	if len(input.RelatedKinds) > 0 {
@@ -281,8 +280,10 @@ func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, ite
 	for _, filter := range input.Filters {
 		if len(filter.Values) > 0 {
 			values := pointerToStringArray(filter.Values) //get the filter values
+			propTypesMock := map[string]string{}
+			_, datatype, _ := WhereClauseFilter(context.Background(), input, propTypesMock)
 
-			opValueMap := getOperatorAndNumDateFilter(filter.Property, values) // get the filter values if property is a number or date
+			opValueMap := getOperatorAndNumDateFilter(filter.Property, values, datatype) // get the filter values if property is a number or date
 			var op string
 			for key, val := range opValueMap {
 				op = key

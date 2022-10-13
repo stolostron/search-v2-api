@@ -21,6 +21,7 @@ type SharedData struct {
 	namespaces       []string
 	managedClusters  map[string]struct{}
 	disabledClusters map[string]struct{}
+	propTypes        map[string]string
 
 	// These are internal objects to track the state of the cache.
 	dcErr       error      // Error while updating clusters data.
@@ -38,6 +39,8 @@ type SharedData struct {
 	nsErr       error      // Capture errors retrieving namespaces.
 	nsLock      sync.Mutex // Locks the namespaces array while updating it.
 	nsUpdatedAt time.Time  // Time when namespaces data was last updated.
+
+	propTypeErr error // Capture errors retrieving property types
 }
 
 type Resource struct {
@@ -51,39 +54,118 @@ var managedClusterResourceGvr = schema.GroupVersionResource{
 	Resource: "managedclusters",
 }
 
+// Query the database to get all properties and their types.
+// Sample query:
+//   select distinct key, jsonb_typeof(value) as datatype FROM search.resources,jsonb_each(data);
+func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (map[string]string, error) {
+	propTypeMap := make(map[string]string)
+	var selectDs *goqu.SelectDataset
+
+	// define schema
+	schemaTable := goqu.S("search").Table("resources")
+
+	// data expression to get value and key
+	jsb := goqu.L("jsonb_each(?)", goqu.C("data"))
+
+	// select from these datasets
+	ds := goqu.From(schemaTable, jsb)
+
+	// select statement with orderby and distinct clause
+	selectDs = ds.Select(goqu.L("key"), goqu.L("jsonb_typeof(?)",
+		goqu.C("value")).As("datatype")).Distinct()
+
+	query, params, err := selectDs.ToSQL()
+	if err != nil {
+		klog.Errorf("Error building Search query: %s", err.Error())
+		return propTypeMap, err
+	}
+
+	klog.V(5).Infof("Query for property datatypes: [%s] ", query)
+	rows, err := cache.pool.Query(ctx, query, params...)
+	if err != nil {
+		klog.Errorf("Error resolving property types query [%s] with args [%+v]. Error: [%+v]", query, err)
+		return propTypeMap, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var key, value string
+		err = rows.Scan(&key, &value)
+		if err != nil {
+			klog.Errorf("Error %s scanning value for getPropertyTypes:%s", err.Error(), query)
+			continue
+		}
+		propTypeMap[key] = value
+
+	}
+	// NOTE: we will have to do this for any property that is not in the data field,
+	// especially if new columns are added to the resources table.
+	propTypeMap["cluster"] = "string"
+
+	//cache results:
+	shared.propTypes = propTypeMap
+	shared.propTypeErr = err
+
+	return propTypeMap, err
+}
+
+// Get all available properties and their types. Will use cached data if available.
+//   refresh - forces cached data to refresh from database.
+func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[string]string, error) {
+	// check if propTypes data in cache and not nil and return
+	if len(cache.shared.propTypes) > 0 && cache.shared.propTypeErr == nil && !refresh {
+		propTypesMap := cache.shared.propTypes
+		return propTypesMap, nil
+
+	} else {
+		klog.V(6).Info("Getting property types from database.")
+		// run query to refresh data
+		propTypes, err := cache.shared.getPropertyTypes(cache, ctx)
+		if err != nil {
+			klog.Errorf("Error retrieving property types. Error: [%+v]", err)
+			return map[string]string{}, err
+		} else {
+			klog.V(6).Info("Successfully retrieved property types!")
+
+			return propTypes, nil
+		}
+	}
+}
+
 func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 
-	if sharedCacheValid(&cache.shared) { //if all cache is valid we use cache data
+	if sharedCacheValid(&cache.shared) { // if all cache is valid we use cache data
 		klog.V(5).Info("Using shared data from cache.")
 		return nil
-	} else { //get data and cache
+	} else { // get data and cache
 
 		var error error
 		// get all cluster-scoped resources and cache in shared.csResources
 		err := cache.shared.GetClusterScopedResources(cache, ctx)
-		if err == nil {
-			klog.V(6).Info("Successfully retrieved cluster scoped resources!")
-		} else {
+		if err != nil {
 			error = err
+			klog.Errorf("Error retrieving cluster scoped resources. Error: [%+v]", err)
+		} else {
+			klog.V(6).Info("Successfully retrieved cluster scoped resources!")
 		}
 		// get all namespaces in cluster and cache in shared.namespaces.
 		err = cache.shared.GetSharedNamespaces(cache, ctx)
-		if err == nil {
-			klog.V(6).Info("Successfully retrieved shared namespaces!")
-		} else {
+		if err != nil {
 			error = err
+			klog.Errorf("Error retrieving shared namespaces. Error: [%+v]", err)
+		} else {
+			klog.V(6).Info("Successfully retrieved shared namespaces!")
 		}
 		// get all managed clustsers in cache
 		err = cache.shared.GetManagedClusters(cache, ctx)
 		if err == nil {
-			klog.V(6).Info("Successfully retrieved managed clusters!")
-		} else {
 			error = err
+			klog.Errorf("Error retrieving managed clusters. Error: [%+v]", err)
+		} else {
+			klog.V(6).Info("Successfully retrieved managed clusters!")
 		}
+
 		return error
-
 	}
-
 }
 
 func (cache *Cache) sharedCacheDisabledClustersValid() bool {
@@ -130,10 +212,10 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 		return shared.csErr
 	}
 
-	rows, queryerr := cache.pool.Query(ctx, query)
-	if queryerr != nil {
-		klog.Errorf("Error resolving query [%s]. Error: [%+v]", query, queryerr.Error())
-		shared.csErr = queryerr
+	rows, err := cache.pool.Query(ctx, query)
+	if err != nil {
+		klog.Errorf("Error resolving cluster scoped resources. Query [%s]. Error: [%+v]", query, err.Error())
+		shared.csErr = err
 		shared.csResourcesMap = map[Resource]struct{}{}
 
 		return shared.csErr
