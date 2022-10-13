@@ -2,7 +2,6 @@ package rbac
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -42,7 +41,6 @@ type SharedData struct {
 	nsUpdatedAt time.Time  // Time when namespaces data was last updated.
 
 	propTypeErr error // Capture errors retrieving property types
-	// propTypeTime time.Time // Time when property types data was last updated
 }
 
 type Resource struct {
@@ -103,7 +101,6 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 	// NOTE: we will have to do this for any property we choose to remove from data field and to column.
 	propTypeMap["cluster"] = "string"
 
-	fmt.Println(propTypeMap)
 	//cache results:
 	shared.propTypes = propTypeMap
 	shared.propTypeErr = err
