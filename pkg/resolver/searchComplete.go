@@ -46,7 +46,7 @@ func SearchComplete(ctx context.Context, property string, srchInput *model.Searc
 		return []*string{}, userDataErr
 	}
 
-	//check that shared cache has property types:
+	// Check that shared cache has property types:
 	propTypes, err := rbac.GetCache().GetPropertyTypes(ctx, false)
 	if err != nil {
 		klog.Warningf("Error creating datatype map with err: [%s] ", err)
@@ -79,12 +79,12 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 	ds := goqu.From(schemaTable)
 	if s.property != "" {
 
-		//WHERE CLAUSE
+		// WHERE CLAUSE
 		if s.input != nil && len(s.input.Filters) > 0 {
 			whereDs, s.propTypes, _ = WhereClauseFilter(ctx, s.input, s.propTypes)
 		}
 
-		//SELECT CLAUSE
+		// SELECT CLAUSE
 		if s.property == "cluster" {
 			selectDs = ds.SelectDistinct(goqu.C(s.property).As("prop"))
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
@@ -98,10 +98,10 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			whereDs = append(whereDs, goqu.L(`"data"->?`, s.property).IsNotNull())
 		}
 
-		//get user info for logging
+		// get user info for logging
 		_, userInfo := rbac.GetCache().GetUserUID(ctx)
 
-		//RBAC CLAUSE
+		// RBAC CLAUSE
 		if s.userData != nil {
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
@@ -109,11 +109,12 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			panic(fmt.Sprintf("RBAC clause is required! None found for searchComplete query %+v for user %s ",
 				s.input, ctx.Value(rbac.ContextAuthTokenKey)))
 		}
-		//Adding an arbitrarily high number 100000 as limit here in the inner query
+		// Adding an arbitrarily high number 100000 as limit here in the inner query
 		// Adding a LIMIT helps to speed up the query
 		// Adding a high number so as to get almost all the distinct properties from the database
 		selectDs = selectDs.Where(whereDs...).Limit(uint(config.Cfg.QueryLimit) * 100).As("searchComplete")
-		//LIMIT CLAUSE
+
+		// LIMIT CLAUSE
 		if s.limit != nil && *s.limit > 0 {
 			limit = *s.limit
 		} else if s.limit != nil && *s.limit == -1 {
@@ -121,7 +122,8 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		} else {
 			limit = config.Cfg.QueryLimit
 		}
-		//Get the query
+
+		// Get the query
 		sql, params, err := ds.SelectDistinct("prop").From(selectDs).Order(goqu.L("prop").Asc()).
 			Limit(uint(limit)).ToSQL()
 		if err != nil {
@@ -158,11 +160,9 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			scanErr := rows.Scan(&input)
 			if scanErr != nil {
 				klog.Error("Error reading searchCompleteResults", scanErr)
-
 			}
 
 			switch v := input.(type) {
-
 			case string:
 				prop = v
 				props[v] = struct{}{}
@@ -172,20 +172,17 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			case float64:
 				prop = strconv.FormatInt(int64(v), 10)
 				props[prop] = struct{}{}
-
 			case map[string]interface{}:
 				arrayProperties[s.property] = struct{}{}
 				for key, value := range v {
 					labelString := fmt.Sprintf("%s=%s", key, value.(string))
 					props[labelString] = struct{}{}
 				}
-
 			case []interface{}:
 				arrayProperties[s.property] = struct{}{}
 				for _, value := range v {
 					props[value.(string)] = struct{}{}
 				}
-
 			default:
 				prop = v.(string)
 				props[prop] = struct{}{}

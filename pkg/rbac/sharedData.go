@@ -40,8 +40,8 @@ type SharedData struct {
 	nsLock      sync.Mutex // Locks the namespaces array while updating it.
 	nsUpdatedAt time.Time  // Time when namespaces data was last updated.
 
-	propTypeErr  error     // Capture errors retrieving property types
-	propTypeTime time.Time // Time when property types data was last updated
+	propTypeErr error // Capture errors retrieving property types
+	// propTypeTime time.Time // Time when property types data was last updated
 }
 
 type Resource struct {
@@ -55,22 +55,23 @@ var managedClusterResourceGvr = schema.GroupVersionResource{
 	Resource: "managedclusters",
 }
 
+// Query the database to get all properties and their types.
+// Sample query:
+//   select distinct key, jsonb_typeof(value) as datatype FROM search.resources,jsonb_each(data);
 func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (map[string]string, error) {
 	propTypeMap := make(map[string]string)
-
-	// original query: select distinct key, jsonb_typeof(value) as datatype FROM search.resources,jsonb_each(data);
 	var selectDs *goqu.SelectDataset
 
-	//define schema:
+	// define schema
 	schemaTable := goqu.S("search").Table("resources")
 
-	//data expression to get value and key
+	// data expression to get value and key
 	jsb := goqu.L("jsonb_each(?)", goqu.C("data"))
 
-	//select from these datasets
+	// select from these datasets
 	ds := goqu.From(schemaTable, jsb)
 
-	//select statement with orderby and distinct clause
+	// select statement with orderby and distinct clause
 	selectDs = ds.Select(goqu.L("key"), goqu.L("jsonb_typeof(?)",
 		goqu.C("value")).As("datatype")).Distinct()
 
@@ -90,7 +91,6 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 	for rows.Next() {
 		var key, value string
 		err = rows.Scan(&key, &value)
-
 		if err != nil {
 			klog.Errorf("Error %s scanning value for getPropertyTypes:%s", err.Error(), query)
 			continue
@@ -98,26 +98,27 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 		propTypeMap[key] = value
 
 	}
-	//cache results:
+	// Save results to cache.
 	shared.propTypes = propTypeMap
 	shared.propTypeErr = err
-	shared.propTypeTime = time.Now()
 
 	return propTypeMap, err
 }
 
+// Get all available properties and their types. Will use cached data if available.
+//   refresh - forces cached data to refresh from database.
 func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[string]string, error) {
-	//check if propTypes data in cache and not nil and return
+	// check if propTypes data in cache and not nil and return
 	if len(cache.shared.propTypes) > 0 && cache.shared.propTypeErr == nil && !refresh {
 		propTypesMap := cache.shared.propTypes
 		return propTypesMap, nil
 
 	} else {
 		klog.V(6).Info("Getting property types from database.")
-		//run query to refresh data
+		// run query to refresh data
 		propTypes, err := cache.shared.getPropertyTypes(cache, ctx)
 		if err != nil {
-			klog.Errorf("Error retrieving property resources. Error: [%+v]", err)
+			klog.Errorf("Error retrieving property types. Error: [%+v]", err)
 			return map[string]string{}, err
 		} else {
 			klog.V(6).Info("Successfully retrieved property types!")
@@ -129,10 +130,10 @@ func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[str
 
 func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 
-	if sharedCacheValid(&cache.shared) { //if all cache is valid we use cache data
+	if sharedCacheValid(&cache.shared) { // if all cache is valid we use cache data
 		klog.V(5).Info("Using shared data from cache.")
 		return nil
-	} else { //get data and cache
+	} else { // get data and cache
 
 		var error error
 		// get all cluster-scoped resources and cache in shared.csResources
@@ -161,9 +162,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 		}
 
 		return error
-
 	}
-
 }
 
 func (cache *Cache) sharedCacheDisabledClustersValid() bool {

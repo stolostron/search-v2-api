@@ -120,20 +120,17 @@ func Test_getResouces_usingCache(t *testing.T) {
 	manClusters := map[string]struct{}{"test-man": {}}
 	res := Resource{Apigroup: "apigroup1", Kind: "kind1"}
 	csRes := map[Resource]struct{}{}
-	propTypes := make(map[string]string)
-	propTypes["kind"] = "string"
-	propTypes["label"] = "object"
+	propTypesMock := map[string]string{"kind": "string", "label": "object"}
 
 	csRes[res] = struct{}{}
-	//Adding cache:
+	// Adding cache:
 	mock_cache.shared = SharedData{
 		namespaces:      namespaces,
 		managedClusters: manClusters,
 		mcUpdatedAt:     time.Now(),
 		csUpdatedAt:     time.Now(),
 		csResourcesMap:  csRes,
-		propTypes:       propTypes,
-		propTypeTime:    time.Now(),
+		propTypes:       propTypesMock,
 	}
 
 	err := mock_cache.PopulateSharedCache(ctx)
