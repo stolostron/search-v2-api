@@ -280,7 +280,8 @@ func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, ite
 	for _, filter := range input.Filters {
 		if len(filter.Values) > 0 {
 			values := pointerToStringArray(filter.Values) //get the filter values
-			_, datatype, _ := WhereClauseFilter(context.Background(), input, PropTypes)
+			propTypesMock := map[string]string{}
+			_, datatype, _ := WhereClauseFilter(context.Background(), input, propTypesMock)
 
 			opValueMap := getOperatorAndNumDateFilter(filter.Property, values, datatype) // get the filter values if property is a number or date
 			var op string

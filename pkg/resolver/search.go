@@ -20,16 +20,16 @@ import (
 )
 
 type SearchResult struct {
-	input     *model.SearchInput
-	pool      pgxpoolmock.PgxPool
-	uids      []*string      // List of uids from search result to be used to get relatioinships.
-	wg        sync.WaitGroup // WORKAROUND: Used to serialize search query and relatioinships query.
-	query     string
-	params    []interface{}
-	level     int // The number of levels/hops for finding relationships for a particular resource
-	propTypes map[string]string
-	userData  *rbac.UserData
 	context   context.Context
+	input     *model.SearchInput
+	level     int // The number of levels/hops for finding relationships for a particular resource
+	params    []interface{}
+	pool      pgxpoolmock.PgxPool // Used to mock database pool in tests
+	propTypes map[string]string
+	query     string
+	uids      []*string // List of uids from search result to be used to get relatioinships.
+	userData  *rbac.UserData
+	wg        sync.WaitGroup // Used to serialize search query and relatioinships query.
 }
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
@@ -293,8 +293,8 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 			whereDs = append(whereDs, goqu.L(`"value"`).ILike(key).Expression())
 		}
 	}
-	if input.Filters != nil {
 
+	if input.Filters != nil {
 		for _, filter := range input.Filters {
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
