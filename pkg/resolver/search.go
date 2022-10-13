@@ -311,7 +311,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 						break
 
 					} else {
-						klog.V(5).Infof("Prop in map:%s, filter prop is: %s, datatype :%s\n", dataTypeInMap, filter.Property)
+						klog.V(5).Infof("For filter prop: %s, datatype is :%s\n", filter.Property, dataTypeInMap)
 
 						// if property mactches then call decode function:
 						values, dataTypeFromMap = decodePropertyTypes(values, dataTypeInMap)
