@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -98,6 +99,11 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 		propTypeMap[key] = value
 
 	}
+	//We need to manually add the cluster proptype as string because it does not appear in the data column:
+	// NOTE: we will have to do this for any property we choose to remove from data field and to column.
+	propTypeMap["cluster"] = "string"
+
+	fmt.Println(propTypeMap)
 	//cache results:
 	shared.propTypes = propTypeMap
 	shared.propTypeErr = err
