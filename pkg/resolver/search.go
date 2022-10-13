@@ -20,16 +20,16 @@ import (
 )
 
 type SearchResult struct {
-	input     *model.SearchInput
-	pool      pgxpoolmock.PgxPool
-	uids      []*string      // List of uids from search result to be used to get relatioinships.
-	wg        sync.WaitGroup // WORKAROUND: Used to serialize search query and relatioinships query.
-	query     string
-	params    []interface{}
-	level     int // The number of levels/hops for finding relationships for a particular resource
-	propTypes map[string]string
-	userData  *rbac.UserData
 	context   context.Context
+	input     *model.SearchInput
+	level     int // The number of levels/hops for finding relationships for a particular resource
+	params    []interface{}
+	pool      pgxpoolmock.PgxPool // Used to mock database pool in tests
+	propTypes map[string]string
+	query     string
+	uids      []*string // List of uids from search result to be used to get relatioinships.
+	userData  *rbac.UserData
+	wg        sync.WaitGroup // Used to serialize search query and relatioinships query.
 }
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
@@ -40,10 +40,10 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 		return srchResult, userDataErr
 	}
 
-	//check that shared cache has resource datatypes:
-	propTypesCache, err := getPropertyType(ctx, false)
+	// check that shared cache has resource datatypes
+	propTypes, err := getPropertyType(ctx, false)
 	if err != nil {
-		klog.Warningf("Error creating datatype map with err: [%s] ", err)
+		klog.Warningf("Error creating datatype map. Error: [%s] ", err)
 	}
 
 	// Proceed if user's rbac data exists
@@ -54,7 +54,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 				pool:      db.GetConnection(),
 				userData:  userData,
 				context:   ctx,
-				propTypes: propTypesCache,
+				propTypes: propTypes,
 			}
 		}
 	}
@@ -144,7 +144,6 @@ func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData, userInfo
 
 // Example query: SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN
 // (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 1000
-
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) {
 	var limit int
 	var selectDs *goqu.SelectDataset
@@ -153,7 +152,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	var sql string
 	var err error
 
-	//define schema table:
+	// define schema table:
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 
@@ -163,11 +162,11 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	}
 
 	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
-		//WHERE CLAUSE
+		// WHERE CLAUSE
 		whereDs, s.propTypes, err = WhereClauseFilter(s.context, s.input, s.propTypes)
 		if whereDs != nil {
 
-			//SELECT CLAUSE
+			// SELECT CLAUSE
 			if count {
 				selectDs = ds.Select(goqu.COUNT("uid"))
 			} else if uid {
@@ -176,10 +175,10 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 				selectDs = ds.SelectDistinct("uid", "cluster", "data")
 			}
 
-			sql, _, err = selectDs.Where(whereDs...).ToSQL() //use original query
+			sql, _, err = selectDs.Where(whereDs...).ToSQL() // use original query
 			klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
 
-			//RBAC CLAUSE
+			// RBAC CLAUSE
 			if s.userData != nil {
 				_, userInfo := rbac.GetCache().GetUserUID(ctx)
 				whereDs = append(whereDs,
@@ -192,15 +191,15 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 			klog.Errorf("Error building Search query: %s", err.Error())
 		}
 	} else {
-		klog.Errorf("Error building Search query: %s", err.Error())
+		klog.Errorf("Error: query input must contain a filter or keyword. Received: %+v", s.input)
 	}
 
-	//LIMIT CLAUSE
+	// LIMIT CLAUSE
 	if !count {
 		limit = s.setLimit()
 	}
 
-	//Get the query
+	// Get the query
 	if limit != 0 {
 		sql, params, err = selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
 	} else {
@@ -212,7 +211,6 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	klog.V(5).Infof("Search query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
-
 }
 
 func (s *SearchResult) resolveCount() int {
@@ -295,17 +293,17 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 			whereDs = append(whereDs, goqu.L(`"value"`).ILike(key).Expression())
 		}
 	}
-	if input.Filters != nil {
 
+	if input.Filters != nil {
 		for _, filter := range input.Filters {
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
 
 				if len(propTypeMap) > 0 {
-					if dataTypeInMap, ok := propTypeMap[filter.Property]; !ok { //check if value exists/if value doesn't exist
+					if dataTypeInMap, ok := propTypeMap[filter.Property]; !ok { // check if value exists
 						klog.Warningf("Property type for [%s] doesn't exist in cache. Refreshing property type cache",
 							filter.Property)
-						propTypeMapNew, err := getPropertyType(ctx, true) //call database cache again
+						propTypeMapNew, err := getPropertyType(ctx, true) // Refresh the property type cache.
 						if err != nil {
 							klog.Warningf("Error creating property type map with err: [%s] ", err)
 						}
@@ -315,7 +313,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 					} else {
 						klog.V(5).Infof("Prop in map:%s, filter prop is: %s, datatype :%s\n", dataTypeInMap, filter.Property)
 
-						//if property mactches then call decode function:
+						// if property mactches then call decode function:
 						values, dataTypeFromMap = decodePropertyTypes(values, dataTypeInMap)
 						// Check if value is a number or date and get the cleaned up value
 						opDateValueMap = getOperatorAndNumDateFilter(filter.Property, values, dataTypeFromMap)
@@ -339,7 +337,6 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 
 			} else {
 				klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
-
 			}
 		}
 	}
