@@ -83,7 +83,7 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 	klog.V(5).Infof("Query for property datatypes: [%s] ", query)
 	rows, err := cache.pool.Query(ctx, query, params...)
 	if err != nil {
-		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", query, err)
+		klog.Errorf("Error resolving property types query [%s] with args [%+v]. Error: [%+v]", query, err)
 		return propTypeMap, err
 	}
 	defer rows.Close()
@@ -97,8 +97,8 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 		propTypeMap[key] = value
 
 	}
-	//We need to manually add the cluster proptype as string because it does not appear in the data column:
-	// NOTE: we will have to do this for any property we choose to remove from data field and to column.
+	// NOTE: we will have to do this for any property that is not in the data field,
+	// especially if new columns are added to the resources table.
 	propTypeMap["cluster"] = "string"
 
 	//cache results:
