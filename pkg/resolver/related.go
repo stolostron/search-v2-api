@@ -14,59 +14,54 @@ import (
 )
 
 type SearchRelatedResult struct {
-	// input *model.SearchInput //nolint: unused,structcheck
 	Kind  string                   `json:"kind"`
 	Count *int                     `json:"count"`
 	Items []map[string]interface{} `json:"items"`
 }
 
 // func (s *SearchRelatedResult) Count() int {
-// 	klog.Info("TODO: Resolve SearchRelatedResult: Count() - model/related.go")
 // 	return 0
 // }
-
-// func (s *SearchRelatedResult) Kind() string {
-// 	klog.Info("TODO: Resolve SearchRelatedResult: Kind()  - model/related.go")
-// 	return "TODO:Kind"
-// }
-
 // func (s *SearchRelatedResult) Items() []map[string]interface{} {
-// 	klog.Info("TODO: Resolve SearchRelatedResult: Items() - model/related.go")
 // 	return nil
 // }
+
+// Builds the database query to get relationships for the items in the search result.
 func (s *SearchResult) buildRelationsQuery() {
-	// Example query to find relations between resources - accepts an array of uids
-	// =============================================================================
-	// 	SELECT "uid", "kind", MIN("level") AS "level" FROM
-	// (
-	// 	SELECT "level", unnest(array[sourceid, destid, concat('cluster__',cluster)]) AS "uid",
-	// unnest(array[sourcekind, destkind, 'Cluster']) AS "kind"
-	// 	FROM (
-	// 		WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster) AS
-	// 		(SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster"
-	// 		 FROM "search"."edges" AS "e"
-	// 		 WHERE (("destid" IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc' )) OR
-	// 					("sourceid" IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc'))
-	// 			   )
-	// 				   UNION
-	// 		 (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster"
-	// 		  FROM "search"."edges" AS "e"
-	// 		  INNER JOIN "search_graph" AS "sg"
-	// 		  ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR
-	// 			  ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))
-	// 			 )
-	//  		  WHERE (("e"."destkind" != 'Node') AND
-	// 				 ("sg"."level" <=3)
-	//  				)
-	// 		 )
-	// 		) SELECT DISTINCT "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search_graph"
-	// 	) AS "search_graph"
-	// ) AS "combineIds"
-	// WHERE (("level" <=3)
-	// AND ("uid" NOT IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc')))
-	// GROUP BY "uid", "kind"
-	// -- union -- This is added if `kind:Cluster` is present in search term
-	//-- select uid as uid, data->>'kind' as kind, 1 AS "level" FROM search.resources where cluster IN ('local-cluster')
+	/**
+	Example query to find relations between resources - accepts an array of uids
+	=============================================================================
+	SELECT "uid", "kind", MIN("level") AS "level" FROM
+	(
+		SELECT "level", unnest(array[sourceid, destid, concat('cluster__',cluster)]) AS "uid",
+	unnest(array[sourcekind, destkind, 'Cluster']) AS "kind"
+		FROM (
+			WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster) AS
+			(SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster"
+			 FROM "search"."edges" AS "e"
+			 WHERE (("destid" IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc' )) OR
+						("sourceid" IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc'))
+				   )
+					   UNION
+			 (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster"
+			  FROM "search"."edges" AS "e"
+			  INNER JOIN "search_graph" AS "sg"
+			  ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR
+				  ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))
+				 )
+	 		  WHERE (("e"."destkind" != 'Node') AND
+					 ("sg"."level" <=3)
+	 				)
+			 )
+			) SELECT DISTINCT "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search_graph"
+		) AS "search_graph"
+	) AS "combineIds"
+	WHERE (("level" <=3)
+	AND ("uid" NOT IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc')))
+	GROUP BY "uid", "kind"
+	-- union -- This is added if `kind:Cluster` is present in search term
+	-- select uid as uid, data->>'kind' as kind, 1 AS "level" FROM search.resources where cluster IN ('local-cluster')
+	*/
 	s.setDepth()
 	whereDs := []exp.Expression{
 		goqu.C("level").Lte(s.level), // Add filter to select up to level (default 3) relationships
@@ -197,25 +192,26 @@ func (s *SearchResult) selectIfClusterUIDPresent() *goqu.SelectDataset {
 	}
 }
 
-func (s *SearchResult) buildRelatedKindsQuery() {
-	klog.V(3).Infof("Resolving relationships for [%d] uids.\n", len(s.uids))
+// Builds the query to get resource data from the relationships UIDs.
+func (s *SearchResult) buildQueryToGetItemsFromUIDs() {
+	klog.V(3).Infof("Building query to get items for [%d] uids.\n", len(s.uids))
 	var params []interface{}
 	var sql string
 	var err error
-	//define schema table:
+	// define schema table
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 
-	//SELECT CLAUSE
+	// SELECT CLAUSE
 	selectDs := ds.Select("uid", "cluster", "data")
 
-	//WHERE CLAUSE
+	// WHERE CLAUSE
 	whereDs := []exp.Expression{goqu.C("uid").In(s.uids)} // Add filter to avoid selecting the search object itself
 
-	//LIMIT CLAUSE
+	// LIMIT CLAUSE
 	limit := s.setLimit()
 
-	//Get the query
+	// Get the query
 	if limit != 0 {
 		sql, params, err = selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
 	} else {
@@ -230,11 +226,11 @@ func (s *SearchResult) buildRelatedKindsQuery() {
 	s.params = params
 }
 
-func (s *SearchResult) getRelations(ctx context.Context) []SearchRelatedResult {
+func (s *SearchResult) getRelationResolvers(ctx context.Context) []SearchRelatedResult {
 	klog.V(3).Infof("Resolving relationships for [%d] uids.\n", len(s.uids))
 	relatedSearch := []SearchRelatedResult{}
 
-	//defining variables
+	// defining variables
 	relatedMap := map[string][]string{} // Map to store relations
 	if s.context == nil {
 		s.context = ctx
@@ -263,50 +259,51 @@ func (s *SearchResult) getRelations(ctx context.Context) []SearchRelatedResult {
 	}
 
 	// get uids for related items that match the relatedKind filter.
-	s.relatedKindUIDs(relatedMap)
+	s.filterRelatedUIDs(relatedMap)
 
-	// Build Related kinds query
-	s.buildRelatedKindsQuery()
+	// Build query to get full item data from s.uids
+	s.buildQueryToGetItemsFromUIDs()
 	items, err := s.resolveItems() // Fetch the related items
 	if err != nil {
 		klog.Warning("Error resolving related items.", err)
 		return []SearchRelatedResult{}
 	}
 
-	// Convert to (kind, count, items) format
+	// Convert to format of the relationships resolver []SearchRelatedResult{kind, count, items}
 	relatedSearch = s.searchRelatedResultKindItems(items)
 
 	klog.V(5).Info("RelatedSearch Result: ", relatedSearch)
 	return relatedSearch
 }
 
-// Gets the UIDs of relationships that match the relatedKinds filter.
-func (s *SearchResult) relatedKindUIDs(levelsMap map[string][]string) {
+// Filters the related UIDs to match the relatedKinds input.
+func (s *SearchResult) filterRelatedUIDs(levelsMap map[string][]string) {
 	klog.V(6).Info("levelsMap in relatedKindUIDs: ", levelsMap)
 
 	s.uids = []*string{}
 
-	// If relatedKinds filter is empty, need to resolve all.
+	// If relatedKinds filter is empty, include all.
 	if len(s.input.RelatedKinds) == 0 {
 		for _, values := range levelsMap {
 			s.uids = append(s.uids, stringArrayToPointer(values)...)
 		}
 	} else {
-		// Get UIDs of related items that match the kind filter.
+		// Only include UIDs of related items that match the relatedKinds filter.
 		kinds := getKeys(levelsMap)
 		for _, kindFilter := range s.input.RelatedKinds {
 			for _, kind := range kinds {
 				if strings.EqualFold(kind, *kindFilter) {
 					s.uids = append(s.uids, stringArrayToPointer(levelsMap[kind])...)
+					break
 				}
 			}
 		}
+		if len(s.uids) == 0 {
+			klog.Warning("No UIDs matched for relatedKinds: ", pointerToStringArray(s.input.RelatedKinds))
+		}
 	}
 
-	klog.V(6).Info("Number of relatedKind UIDs: ", len(s.uids))
-	if len(s.uids) == 0 && len(s.input.RelatedKinds) > 0 {
-		klog.Warning("No UIDs matched for relatedKinds: ", pointerToStringArray(s.input.RelatedKinds))
-	}
+	klog.V(6).Info("Number of related UIDs after filtering relatedKinds: ", len(s.uids))
 }
 
 func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface{}) []SearchRelatedResult {

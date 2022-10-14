@@ -100,7 +100,7 @@ func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
 	if len(s.uids) > 0 {
 		start = time.Now()
 		numUIDs = len(s.uids)
-		r = s.getRelations(ctx)
+		r = s.getRelationResolvers(ctx)
 	} else {
 		klog.Warning("No uids selected for query:Related()")
 	}
