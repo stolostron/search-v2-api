@@ -262,88 +262,69 @@ func (s *SearchResult) getRelations(ctx context.Context) []SearchRelatedResult {
 		s.updateKindMap(uid, kind, relatedMap) // Store result in a map
 	}
 
-	// retrieve provided kind filters only
-	if len(s.input.RelatedKinds) > 0 {
-		s.relatedKindUIDs(relatedMap) // get uids for provided kinds
-		// Build Related kinds query
-		s.buildRelatedKindsQuery()
-		items, err := s.resolveItems() // Fetch the related kind items
-		if err != nil {
-			klog.Warning("Error resolving relatedKind items", err)
-		} else { // Convert to (kind, items) format - when relatedKinds are requested
-			relatedSearch = s.searchRelatedResultKindItems(items)
-		}
-	} else { // Retrieve kind and count of related items
-		relatedSearch = s.searchRelatedResultKindCount(relatedMap)
+	// get uids for related items that match the relatedKind filter.
+	s.relatedKindUIDs(relatedMap)
+
+	// Build Related kinds query
+	s.buildRelatedKindsQuery()
+	items, err := s.resolveItems() // Fetch the related items
+	if err != nil {
+		klog.Warning("Error resolving related items.", err)
+		return []SearchRelatedResult{}
 	}
-	klog.V(5).Info("relatedSearch: ", relatedSearch)
+
+	// Convert to (kind, count, items) format
+	relatedSearch = s.searchRelatedResultKindItems(items)
+
+	klog.V(5).Info("RelatedSearch Result: ", relatedSearch)
 	return relatedSearch
 }
 
+// Gets the UIDs of relationships that match the relatedKinds filter.
 func (s *SearchResult) relatedKindUIDs(levelsMap map[string][]string) {
 	klog.V(6).Info("levelsMap in relatedKindUIDs: ", levelsMap)
 
-	relatedKinds := pointerToStringArray(s.input.RelatedKinds)
 	s.uids = []*string{}
-	keys := getKeys(levelsMap)
-	for _, kind := range relatedKinds {
-		// Convert kind to right case even if incoming query in RelatedKinds is all lowercase
-		// Needed for V1 compatibility.
-		for _, key := range keys {
-			if strings.EqualFold(key, kind) {
-				s.uids = append(s.uids, stringArrayToPointer(levelsMap[key])...)
-				break
+
+	// If relatedKinds filter is empty, need to resolve all.
+	if len(s.input.RelatedKinds) == 0 {
+		for _, values := range levelsMap {
+			s.uids = append(s.uids, stringArrayToPointer(values)...)
+		}
+	} else {
+		// Get UIDs of related items that match the kind filter.
+		kinds := getKeys(levelsMap)
+		for _, kindFilter := range s.input.RelatedKinds {
+			for _, kind := range kinds {
+				if strings.EqualFold(kind, *kindFilter) {
+					s.uids = append(s.uids, stringArrayToPointer(levelsMap[kind])...)
+				}
 			}
 		}
 	}
+
 	klog.V(6).Info("Number of relatedKind UIDs: ", len(s.uids))
 	if len(s.uids) == 0 && len(s.input.RelatedKinds) > 0 {
 		klog.Warning("No UIDs matched for relatedKinds: ", pointerToStringArray(s.input.RelatedKinds))
 	}
 }
 
-func (s *SearchResult) searchRelatedResultKindCount(levelMap map[string][]string) []SearchRelatedResult {
-
-	relatedSearch := make([]SearchRelatedResult, len(levelMap))
-
-	i := 0
-	//iterating and sending values to relatedSearch
-	for kind, uidArray := range levelMap {
-		count := len(uidArray)
-		relatedSearch[i] = SearchRelatedResult{Kind: kind, Count: &count}
-		i++
-	}
-	return relatedSearch
-}
-
 func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface{}) []SearchRelatedResult {
-
-	relatedSearch := make([]SearchRelatedResult, 0)
-	relatedItems := map[string][]map[string]interface{}{}
-	relatedKinds := pointerToStringArray(s.input.RelatedKinds)
-
-	//iterating and sending values to relatedSearch
+	// Organize the related items by kind.
+	relatedItemsByKind := map[string][]map[string]interface{}{}
 	for _, currItem := range items {
-		currKind := currItem["kind"].(string)
-		for _, relKind := range relatedKinds {
-			if strings.EqualFold(relKind, currKind) {
-				// Convert kind to right case if incoming query in RelatedKinds is all lowercase
-				// Needed for V1 compatibility.
-				kindItemList := relatedItems[relKind]
-				currItem["kind"] = relKind
-				kindItemList = append(kindItemList, currItem)
-				relatedItems[relKind] = kindItemList
-				break
-			}
-		}
-
+		kind := currItem["kind"].(string)
+		kindItemList := relatedItemsByKind[kind]
+		relatedItemsByKind[kind] = append(kindItemList, currItem)
 	}
 
-	//iterating and sending values to relatedSearch
-	for kind, items := range relatedItems {
-		relatedSearch = append(relatedSearch, SearchRelatedResult{Kind: kind, Items: items})
+	// Generate result for each kind.
+	result := make([]SearchRelatedResult, 0)
+	for kind, items := range relatedItemsByKind {
+		count := len(items)
+		result = append(result, SearchRelatedResult{Kind: kind, Items: items, Count: &count})
 	}
-	return relatedSearch
+	return result
 }
 
 func (s *SearchResult) updateKindMap(uid string, kind string, levelMap map[string][]string) {
@@ -391,7 +372,6 @@ func (s *SearchResult) searchApplication() bool {
 }
 
 func stringArrayToPointer(stringArray []string) []*string {
-
 	values := make([]*string, len(stringArray))
 	for i, val := range stringArray {
 		tmpVal := val
