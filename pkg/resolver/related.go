@@ -283,7 +283,7 @@ func (s *SearchResult) filterRelatedUIDs(levelsMap map[string][]string) {
 	s.uids = []*string{}
 
 	// If relatedKinds filter is empty, include all.
-	if len(s.input.RelatedKinds) == 0 {
+	if s.input.RelatedKinds == nil || len(s.input.RelatedKinds) == 0 {
 		for _, values := range levelsMap {
 			s.uids = append(s.uids, stringArrayToPointer(values)...)
 		}

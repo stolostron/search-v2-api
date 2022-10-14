@@ -93,7 +93,50 @@ func (r *Row) Scan(dest ...interface{}) error {
 	return nil
 }
 
-//Prop will be the property input for searchComplete
+// Load mock data from a json file.
+// NOTE: Don't add additional logic to filter or modify the mock data in
+//       this function. If needed, it should be added in a separate function.
+func newMockRows(mockDataFile string) *MockRows {
+	bytes, _ := ioutil.ReadFile(mockDataFile)
+	var data map[string]interface{}
+	if err := json.Unmarshal(bytes, &data); err != nil {
+		panic(err)
+	}
+
+	columns := data["columns"].([]interface{})
+	columnHeaders := make([]string, len(columns))
+	for i, col := range columns {
+		columnHeaders[i] = col.(string)
+	}
+
+	items := data["records"].([]interface{})
+	mockData := make([]map[string]interface{}, 0)
+
+	for _, item := range items {
+		uid := item.(map[string]interface{})["uid"].(string)
+
+		mockDatum := map[string]interface{}{
+			"uid":     uid,
+			"cluster": strings.Split(uid, "/")[0],
+			"data":    item.(map[string]interface{})["properties"],
+		}
+
+		mockData = append(mockData, mockDatum)
+	}
+
+	return &MockRows{
+		mockData:      mockData,
+		index:         0,
+		columnHeaders: columnHeaders,
+	}
+}
+
+// TODO: Update this function to load the date with newMockRows()
+//       and then filter or update the mocks as needed.
+// NOTE: Try to keep the mock data as simple as possible. Try creating a new mock data json file
+//       instead of adding special load logic in this function.
+//
+// Prop will be the property input for searchComplete
 func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop string, limit int) *MockRows {
 	// Read json file and build mock data
 	bytes, _ := ioutil.ReadFile(mockDataFile)
@@ -249,10 +292,7 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 	}
 }
 
-//TODO: divide the function above into two functions:
-//1. function to get the mock data (keep simple)
-//2. function to filter the mock data we get from step 1.
-
+// Check if the slice contains the string.
 func stringInSlice(a string, list []string) bool {
 	for _, b := range list {
 		if strings.EqualFold(b, a) {
