@@ -22,7 +22,7 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "uid", Values: resultList}}}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, resultList, &rbac.UserData{}, nil)
 
-	// Mock FIRST ddatabase request.
+	// Mock FIRST database request.
 	query := strings.TrimSpace(`SELECT "related"."uid", "related"."kind", "related"."level" FROM (SELECT "uid", "kind", MIN("level") AS "level" FROM (SELECT "level", unnest(array[sourceid, destid, concat('cluster__',cluster)]) AS "uid", unnest(array[sourcekind, destkind, 'Cluster']) AS "kind" FROM (WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster) AS (SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search"."edges" AS "e" WHERE (("destid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b')) OR ("sourceid" IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b'))) UNION (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster" FROM "search"."edges" AS "e" INNER JOIN "search_graph" AS "sg" ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))) WHERE (("e"."destkind" NOT IN ('Node', 'Channel')) AND ("e"."sourcekind" NOT IN ('Node', 'Channel')) AND ("sg"."level" <= 3)))) SELECT DISTINCT "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search_graph") AS "search_graph") AS "combineIds" WHERE (("level" <= 3) AND ("uid" NOT IN ('local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd', 'local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b'))) GROUP BY "uid", "kind") AS "related" INNER JOIN "search"."resources" ON ("related"."uid" = "resources".uid) WHERE (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))`)
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock-rel-1.json", searchInput, "", 0)
 	mockPool.EXPECT().Query(gomock.Any(),
@@ -30,7 +30,7 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 
-	// Mock SECOND ddatabase request.
+	// Mock SECOND database request.
 	query2 := `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("uid" IN ('local-cluster/411e30e4-f773-41a6-b745-24c93c173f45', 'local-cluster/30c35f12-320a-417f-98d1-fbee28a4b2a6')) LIMIT 1000`
 	mockRows2 := newMockRows("./mocks/mock-related-test.json")
 	mockPool.EXPECT().Query(gomock.Any(),
@@ -73,7 +73,7 @@ func Test_SearchResolver_RelationshipsWithCluster(t *testing.T) {
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: resultList}}}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, resultList, &ud, nil)
 
-	// Mock FIRST ddatabase request.
+	// Mock FIRST database request.
 	query1 := strings.TrimSpace(`SELECT "related"."uid", "related"."kind", "related"."level" FROM (SELECT "uid", "kind", MIN("level") AS "level" FROM (SELECT "level", unnest(array[sourceid, destid, concat('cluster__',cluster)]) AS "uid", unnest(array[sourcekind, destkind, 'Cluster']) AS "kind" FROM (WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster) AS (SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search"."edges" AS "e" WHERE (("destid" IN ('cluster__local-cluster')) OR ("sourceid" IN ('cluster__local-cluster'))) UNION (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster" FROM "search"."edges" AS "e" INNER JOIN "search_graph" AS "sg" ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))) WHERE (("e"."destkind" NOT IN ('Node', 'Channel')) AND ("e"."sourcekind" NOT IN ('Node', 'Channel')) AND ("sg"."level" <= 3)))) SELECT DISTINCT "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search_graph") AS "search_graph") AS "combineIds" WHERE (("level" <= 3) AND ("uid" NOT IN ('cluster__local-cluster'))) GROUP BY "uid", "kind" UNION (SELECT "uid" AS "uid", data->>'kind' AS "kind", 1 AS "level" FROM "search"."resources" WHERE ("cluster" IN ('local-cluster')))) AS "related" INNER JOIN "search"."resources" ON ("related"."uid" = "resources".uid) WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))`)
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock-rel-1.json", searchInput, "", 0)
 	mockPool.EXPECT().Query(gomock.Any(),
