@@ -28,7 +28,7 @@ func initializePool() {
 	)
 
 	// Remove password from connection log.
-	redactedDbConn := strings.ReplaceAll(dbConnString, cfg.DBPass, "[REDACTED]")
+	redactedDbConn := strings.ReplaceAll(dbConnString, "password="+cfg.DBPass, "password=[REDACTED]")
 	klog.Infof("Connecting to PostgreSQL using: %s", redactedDbConn)
 
 	config, configErr := pgxpool.ParseConfig(dbConnString)
@@ -38,7 +38,7 @@ func initializePool() {
 
 	conn, err := pgxpool.ConnectConfig(context.TODO(), config)
 	if err != nil {
-		klog.Error("Unable to connect to database: %+v\n", err)
+		klog.Errorf("Unable to connect to database: %+v\n", err)
 		metric.DBConnectionFailed.WithLabelValues("DBConnect").Inc()
 	}
 
