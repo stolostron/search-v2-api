@@ -387,6 +387,7 @@ func Test_getDisabledClustersCacheInValid_RunQuery(t *testing.T) {
 	).Return(pgxRows, nil)
 
 	mock_cache.pool = mockPool
+	mock_cache.shared.pool = mockPool
 	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(), ContextAuthTokenKey, "123456"))
 	if len(*disabledClustersRes) != 1 || err != nil {
 		t.Error("Expected the cache.shared.disabledClusters to be updated with 1 cluster and no error")
@@ -425,6 +426,7 @@ func Test_getDisabledClustersCacheInValid_RunQueryError(t *testing.T) {
 		gomock.Eq(`SELECT DISTINCT "mcInfo".data->>'name' AS "srchAddonDisabledCluster" FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`),
 	).Return(pgxRows, fmt.Errorf("Error fetching data"))
 	mock_cache.pool = mockPool
+	mock_cache.shared.pool = mockPool
 	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(), ContextAuthTokenKey, "123456"))
 
 	if disabledClustersRes != nil || err == nil {
