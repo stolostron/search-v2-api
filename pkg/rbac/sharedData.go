@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -43,7 +44,11 @@ type SharedData struct {
 
 	propTypeErr error // Capture errors retrieving property types
 
-	pool pgxpoolmock.PgxPool // Database client
+	// Clients to external APIs.
+	// Defining these here allow the tests to replace with a mock client.
+	corev1Client corev1.CoreV1Interface
+	pool         pgxpoolmock.PgxPool // Database client
+
 }
 
 type Resource struct {
@@ -151,7 +156,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 			klog.V(6).Info("Successfully retrieved cluster scoped resources!")
 		}
 		// get all namespaces in cluster and cache in shared.namespaces.
-		err = cache.shared.GetSharedNamespaces(cache, ctx)
+		err = cache.shared.GetSharedNamespaces(ctx)
 		if err != nil {
 			error = err
 			klog.Errorf("Error retrieving shared namespaces. Error: [%+v]", err)
@@ -245,7 +250,7 @@ func (shared *SharedData) GetClusterScopedResources(ctx context.Context) error {
 
 // Obtain all the namespaces in the hub cluster.
 // Equivalent to `oc get namespaces`
-func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context) error {
+func (shared *SharedData) GetSharedNamespaces(ctx context.Context) error {
 	shared.nsLock.Lock()
 	defer shared.nsLock.Unlock()
 	//empty previous cache
@@ -254,7 +259,7 @@ func (shared *SharedData) GetSharedNamespaces(cache *Cache, ctx context.Context)
 
 	klog.V(5).Info("Getting namespaces from Kube Client.")
 
-	namespaceList, nsErr := cache.corev1Client.Namespaces().List(ctx, metav1.ListOptions{})
+	namespaceList, nsErr := shared.corev1Client.Namespaces().List(ctx, metav1.ListOptions{})
 	if nsErr != nil {
 		klog.Warning("Error resolving namespaces from KubeClient: ", nsErr)
 		shared.nsErr = nsErr

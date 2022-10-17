@@ -35,12 +35,15 @@ var cacheInst = Cache{
 	tokenReviews:     map[string]*tokenReviewCache{},
 	tokenReviewsLock: sync.Mutex{},
 	usersLock:        sync.Mutex{},
-	shared:           SharedData{pool: db.GetConnection()},
-	users:            map[string]*UserDataCache{},
-	restConfig:       config.GetClientConfig(),
-	pool:             db.GetConnection(),
-	corev1Client:     config.GetCoreClient(),
-	dynamicClient:    config.GetDynamicClient(),
+	shared: SharedData{
+		pool:         db.GetConnection(),
+		corev1Client: config.GetCoreClient(),
+	},
+	users:         map[string]*UserDataCache{},
+	restConfig:    config.GetClientConfig(),
+	pool:          db.GetConnection(),
+	corev1Client:  config.GetCoreClient(),
+	dynamicClient: config.GetDynamicClient(),
 }
 
 // Get a reference to the cache instance.
