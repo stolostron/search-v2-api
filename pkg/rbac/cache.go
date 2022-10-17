@@ -36,8 +36,9 @@ var cacheInst = Cache{
 	tokenReviewsLock: sync.Mutex{},
 	usersLock:        sync.Mutex{},
 	shared: SharedData{
-		pool:         db.GetConnection(),
-		corev1Client: config.GetCoreClient(),
+		pool:          db.GetConnection(),
+		corev1Client:  config.GetCoreClient(),
+		dynamicClient: config.GetDynamicClient(),
 	},
 	users:         map[string]*UserDataCache{},
 	restConfig:    config.GetClientConfig(),

@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/klog/v2"
 )
@@ -46,8 +47,9 @@ type SharedData struct {
 
 	// Clients to external APIs.
 	// Defining these here allow the tests to replace with a mock client.
-	corev1Client corev1.CoreV1Interface
-	pool         pgxpoolmock.PgxPool // Database client
+	corev1Client  corev1.CoreV1Interface
+	dynamicClient dynamic.Interface
+	pool          pgxpoolmock.PgxPool // Database client
 
 }
 
@@ -65,7 +67,7 @@ var managedClusterResourceGvr = schema.GroupVersionResource{
 // Query the database to get all properties and their types.
 // Sample query:
 //   select distinct key, jsonb_typeof(value) as datatype FROM search.resources,jsonb_each(data);
-func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (map[string]string, error) {
+func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]string, error) {
 	propTypeMap := make(map[string]string)
 	var selectDs *goqu.SelectDataset
 
@@ -89,7 +91,7 @@ func (shared *SharedData) getPropertyTypes(cache *Cache, ctx context.Context) (m
 	}
 
 	klog.V(5).Infof("Query for property datatypes: [%s] ", query)
-	rows, err := cache.pool.Query(ctx, query, params...)
+	rows, err := shared.pool.Query(ctx, query, params...)
 	if err != nil {
 		klog.Errorf("Error resolving property types query [%s] with args [%+v]. Error: [%+v]", query, err)
 		return propTypeMap, err
@@ -127,7 +129,7 @@ func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[str
 	} else {
 		klog.V(6).Info("Getting property types from database.")
 		// run query to refresh data
-		propTypes, err := cache.shared.getPropertyTypes(cache, ctx)
+		propTypes, err := cache.shared.getPropertyTypes(ctx)
 		if err != nil {
 			klog.Errorf("Error retrieving property types. Error: [%+v]", err)
 			return map[string]string{}, err
@@ -164,7 +166,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 			klog.V(6).Info("Successfully retrieved shared namespaces!")
 		}
 		// get all managed clustsers in cache
-		err = cache.shared.GetManagedClusters(cache, ctx)
+		err = cache.shared.GetManagedClusters(ctx)
 		if err == nil {
 			error = err
 			klog.Errorf("Error retrieving managed clusters. Error: [%+v]", err)
@@ -278,7 +280,7 @@ func (shared *SharedData) GetSharedNamespaces(ctx context.Context) error {
 
 // Obtain all the managedclusters.
 // Equivalent to `oc get managedclusters`
-func (shared *SharedData) GetManagedClusters(cache *Cache, ctx context.Context) error {
+func (shared *SharedData) GetManagedClusters(ctx context.Context) error {
 
 	shared.mcLock.Lock()
 	defer shared.mcLock.Unlock()
@@ -291,7 +293,7 @@ func (shared *SharedData) GetManagedClusters(cache *Cache, ctx context.Context) 
 	scheme := runtime.NewScheme()
 	scheme.AddKnownTypes(managedClusterResourceGvr.GroupVersion())
 
-	resourceObj, err := cache.dynamicClient.Resource(managedClusterResourceGvr).List(ctx, metav1.ListOptions{})
+	resourceObj, err := shared.dynamicClient.Resource(managedClusterResourceGvr).List(ctx, metav1.ListOptions{})
 
 	if err != nil {
 		klog.Warning("Error resolving ManagedClusters with dynamic client", err.Error())
