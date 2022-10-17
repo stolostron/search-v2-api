@@ -133,7 +133,7 @@ func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[str
 
 func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 
-	if sharedCacheValid(&cache.shared) { // if all cache is valid we use cache data
+	if cache.shared.sharedCacheValid() { // if all cache is valid we use cache data
 		klog.V(5).Info("Using shared data from cache.")
 		return nil
 	} else { // get data and cache
@@ -168,12 +168,12 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 	}
 }
 
-func (cache *Cache) sharedCacheDisabledClustersValid() bool {
-	return cache.shared.dcErr == nil && time.Now().Before(
-		cache.shared.dcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond))
+func (shared *SharedData) sharedCacheDisabledClustersValid() bool {
+	return shared.dcErr == nil && time.Now().Before(
+		shared.dcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond))
 }
 
-func sharedCacheValid(shared *SharedData) bool {
+func (shared *SharedData) sharedCacheValid() bool {
 
 	if (time.Now().Before(shared.csUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) &&
 		(time.Now().Before(shared.nsUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) &&
@@ -317,16 +317,16 @@ func (cache *Cache) GetDisabledClusters(ctx context.Context) (*map[string]struct
 	cache.shared.dcLock.Lock()
 	defer cache.shared.dcLock.Unlock()
 
-	if !cache.sharedCacheDisabledClustersValid() {
+	if !cache.shared.sharedCacheDisabledClustersValid() {
 		klog.V(5).Info("DisabledClusters cache empty or expired. Querying database.")
 		// - running query to get search addon disabled clusters")
 		//run query and get disabled clusters
 		if disabledClustersFromQuery, err := cache.findSrchAddonDisabledClusters(ctx); err != nil {
 			klog.Error("Error retrieving Search Addon disabled clusters: ", err)
-			cache.setDisabledClusters(map[string]struct{}{}, err)
+			cache.shared.setDisabledClusters(map[string]struct{}{}, err)
 			return nil, err
 		} else {
-			cache.setDisabledClusters(*disabledClustersFromQuery, nil)
+			cache.shared.setDisabledClusters(*disabledClustersFromQuery, nil)
 		}
 	}
 
@@ -355,10 +355,10 @@ func disabledClustersForUser(disabledClusters map[string]struct{},
 	return userAccessDisabledClusters
 }
 
-func (cache *Cache) setDisabledClusters(disabledClusters map[string]struct{}, err error) {
-	cache.shared.disabledClusters = disabledClusters
-	cache.shared.dcUpdatedAt = time.Now()
-	cache.shared.dcErr = err
+func (shared *SharedData) setDisabledClusters(disabledClusters map[string]struct{}, err error) {
+	shared.disabledClusters = disabledClusters
+	shared.dcUpdatedAt = time.Now()
+	shared.dcErr = err
 }
 
 // Build the query to find any ManagedClusters where the search addon is disabled.
@@ -407,14 +407,14 @@ func (cache *Cache) findSrchAddonDisabledClusters(ctx context.Context) (*map[str
 	sql, queryBuildErr := buildSearchAddonDisabledQuery(ctx)
 	if queryBuildErr != nil {
 		klog.Error("Error fetching SearchAddon disabled cluster results from db ", queryBuildErr)
-		cache.setDisabledClusters(disabledClusters, queryBuildErr)
+		cache.shared.setDisabledClusters(disabledClusters, queryBuildErr)
 		return &disabledClusters, queryBuildErr
 	}
 	// run the query
 	rows, err := cache.pool.Query(ctx, sql)
 	if err != nil {
 		klog.Error("Error fetching SearchAddon disabled cluster results from db ", err)
-		cache.setDisabledClusters(disabledClusters, err)
+		cache.shared.setDisabledClusters(disabledClusters, err)
 		return &disabledClusters, err
 	}
 
@@ -429,7 +429,7 @@ func (cache *Cache) findSrchAddonDisabledClusters(ctx context.Context) (*map[str
 			disabledClusters[srchAddonDisabledCluster] = struct{}{}
 		}
 		//Since cache was not valid, update shared cache with disabled clusters result
-		cache.setDisabledClusters(disabledClusters, nil)
+		cache.shared.setDisabledClusters(disabledClusters, nil)
 		defer rows.Close()
 	}
 	return &disabledClusters, err

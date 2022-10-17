@@ -25,9 +25,9 @@ type Cache struct {
 	// Defining these here allow the tests to replace with a mock client.
 	authnClient   authnv1.AuthenticationV1Interface
 	corev1Client  corev1.CoreV1Interface
+	dynamicClient dynamic.Interface
 	pool          pgxpoolmock.PgxPool // Database client
 	restConfig    *rest.Config
-	dynamicClient dynamic.Interface
 }
 
 // Initialize the cache as a singleton instance.
