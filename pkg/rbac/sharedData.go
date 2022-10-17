@@ -50,7 +50,6 @@ type SharedData struct {
 	corev1Client  corev1.CoreV1Interface
 	dynamicClient dynamic.Interface
 	pool          pgxpoolmock.PgxPool // Database client
-
 }
 
 type Resource struct {
@@ -142,7 +141,7 @@ func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[str
 }
 
 func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
-	if cache.shared.sharedCacheValid() { // if all cache is valid we use cache data
+	if cache.shared.isValid() { // if all cache is valid we use cache data
 		klog.V(5).Info("Using shared data from cache.")
 		return nil
 	} else { // get data and cache
@@ -182,7 +181,7 @@ func (shared *SharedData) sharedCacheDisabledClustersValid() bool {
 		shared.dcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond))
 }
 
-func (shared *SharedData) sharedCacheValid() bool {
+func (shared *SharedData) isValid() bool {
 
 	if (time.Now().Before(shared.csUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) &&
 		(time.Now().Before(shared.nsUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) &&

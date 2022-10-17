@@ -88,7 +88,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	cachedUserData, userDataExists := cache.users[uid] //check if userData cache for user already exists
 
 	// UserDataExists and its valid
-	if userDataExists && userCacheValid(cachedUserData) {
+	if userDataExists && cachedUserData.isValid() {
 
 		klog.V(5).Info("Using user data from cache.")
 
@@ -181,7 +181,7 @@ func (cache *Cache) GetUserData(ctx context.Context) (*UserData, error) {
 
 /* Cache is Valid if the csrUpdatedAt and nsrUpdatedAt times are before the
 Cache expiry time */
-func userCacheValid(user *UserDataCache) bool {
+func (user *UserDataCache) isValid() bool {
 	if (time.Now().Before(user.csrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) &&
 		(time.Now().Before(user.nsrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) &&
 		(time.Now().Before(user.clustersUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) {
