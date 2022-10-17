@@ -7,6 +7,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
+	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -41,6 +42,8 @@ type SharedData struct {
 	nsUpdatedAt time.Time  // Time when namespaces data was last updated.
 
 	propTypeErr error // Capture errors retrieving property types
+
+	pool pgxpoolmock.PgxPool // Database client
 }
 
 type Resource struct {
@@ -140,7 +143,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 
 		var error error
 		// get all cluster-scoped resources and cache in shared.csResources
-		err := cache.shared.GetClusterScopedResources(cache, ctx)
+		err := cache.shared.GetClusterScopedResources(ctx)
 		if err != nil {
 			error = err
 			klog.Errorf("Error retrieving cluster scoped resources. Error: [%+v]", err)
@@ -187,7 +190,7 @@ func (shared *SharedData) sharedCacheValid() bool {
 // Obtain all the cluster-scoped resources in the hub cluster that support list and watch
 // Get the list of resources in the database where namespace field is null.
 // Equivalent to: `oc api-resources -o wide | grep false | grep watch | grep list`
-func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Context) error {
+func (shared *SharedData) GetClusterScopedResources(ctx context.Context) error {
 
 	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
 	shared.csLock.Lock()
@@ -212,7 +215,7 @@ func (shared *SharedData) GetClusterScopedResources(cache *Cache, ctx context.Co
 		return shared.csErr
 	}
 
-	rows, err := cache.pool.Query(ctx, query)
+	rows, err := shared.pool.Query(ctx, query)
 	if err != nil {
 		klog.Errorf("Error resolving cluster scoped resources. Query [%s]. Error: [%+v]", query, err.Error())
 		shared.csErr = err
