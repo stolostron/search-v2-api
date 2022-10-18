@@ -20,7 +20,7 @@ func AuthorizeUser(next http.Handler) http.Handler {
 			klog.Warning("Unexpected error while obtaining cluster-scoped resources.", err)
 			metric.AuthzFailed.WithLabelValues("UnexpectedAuthzError").Inc()
 		}
-		klog.V(6).Info("Finished getting shared resources. Now getting user data..")
+		klog.V(6).Info("Finished getting shared resources. Now getting user data.")
 
 		_, userErr := GetCache().GetUserDataCache(r.Context(), nil)
 		if userErr != nil {
