@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -83,8 +84,11 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 			},
 		},
 	}
-	fs := fake.NewSimpleClientset()
-	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+	fs := fake.Clientset{}
+	fs.AddReactor("create", "selfsubjectaccessreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, fmt.Errorf("Error creating ssar")
+	})
+	fs.AddReactor("create", "selfsubjectrulesreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
 		ret = action.(testingk8s.CreateAction).GetObject()
 		_, ok := ret.(metav1.Object)
 		if !ok {
@@ -213,8 +217,11 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 			},
 		},
 	}
-	fs := fake.NewSimpleClientset()
-	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+	fs := fake.Clientset{}
+	fs.AddReactor("create", "selfsubjectaccessreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, fmt.Errorf("Error creating ssar")
+	})
+	fs.AddReactor("create", "selfsubjectrulesreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
 		ret = action.(testingk8s.CreateAction).GetObject()
 		_, ok := ret.(metav1.Object)
 		if !ok {
@@ -392,8 +399,11 @@ func Test_managedClusters_emptyCache(t *testing.T) {
 		},
 	}
 
-	fs := fake.NewSimpleClientset()
-	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+	fs := fake.Clientset{}
+	fs.AddReactor("create", "selfsubjectaccessreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, fmt.Errorf("Error creating ssar")
+	})
+	fs.AddReactor("create", "selfsubjectrulesreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
 		ret = action.(testingk8s.CreateAction).GetObject()
 		meta, ok := ret.(metav1.Object)
 		if !ok {
@@ -500,8 +510,11 @@ func Test_managedCluster_expiredCache(t *testing.T) {
 		},
 	}
 
-	fs := fake.NewSimpleClientset()
-	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+	fs := fake.Clientset{}
+	fs.AddReactor("create", "selfsubjectaccessreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, fmt.Errorf("Error creating ssar")
+	})
+	fs.AddReactor("create", "selfsubjectrulesreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
 		ret = action.(testingk8s.CreateAction).GetObject()
 		meta, ok := ret.(metav1.Object)
 		if !ok {
@@ -665,8 +678,11 @@ func Test_hasAccessToAllResourcesInNamespace(t *testing.T) {
 			},
 		},
 	}
-	fs := fake.NewSimpleClientset()
-	fs.PrependReactor("create", "*", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+	fs := fake.Clientset{}
+	fs.AddReactor("create", "selfsubjectaccessreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, fmt.Errorf("Error creating ssar")
+	})
+	fs.AddReactor("create", "selfsubjectrulesreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
 		ret = action.(testingk8s.CreateAction).GetObject()
 		_, ok := ret.(metav1.Object)
 		if !ok {
@@ -688,6 +704,54 @@ func Test_hasAccessToAllResourcesInNamespace(t *testing.T) {
 		t.Error("Unexpected error while obtaining namespaces.", err)
 	}
 
+}
+
+func Test_hasAccessToAllResources(t *testing.T) {
+	mock_cache := mockNamespaceCache()
+	mock_cache = setupToken(mock_cache)
+
+	var namespaces []string
+
+	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
+	mock_cache.shared.managedClusters = map[string]struct{}{"managed-cluster1": {}}
+
+	accessCheck := &authz.SelfSubjectAccessReview{
+		Spec: authz.SelfSubjectAccessReviewSpec{},
+		Status: authz.SubjectAccessReviewStatus{
+			Allowed: true,
+			Denied:  false,
+			Reason:  "Service account allows it",
+		},
+	}
+	fs := fake.Clientset{}
+	fs.AddReactor("create", "selfsubjectaccessreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		return true, accessCheck, nil
+	})
+
+	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
+	result, err := mock_cache.GetUserDataCache(ctx, fs.AuthorizationV1())
+	fmt.Printf("res:%+v \n ", result.userData)
+	if len(result.userData.NsResources) != 1 ||
+		result.userData.NsResources["*"][0].Apigroup != "*" ||
+		result.userData.NsResources["*"][0].Kind != "*" {
+		t.Errorf("Cache does not have expected namespace resources ")
+
+	}
+	if len(result.userData.CsResources) != 1 ||
+		result.userData.CsResources[0].Apigroup != "*" ||
+		result.userData.CsResources[0].Kind != "*" {
+		t.Errorf("Cache does not have expected cluster-scoped resources ")
+
+	}
+	_, mcPresent := result.userData.ManagedClusters["managed-cluster1"]
+	if len(result.userData.ManagedClusters) != 1 ||
+		!mcPresent {
+		t.Errorf("Cache does not have expected managed cluster resources ")
+
+	}
+	if err != nil {
+		t.Error("Unexpected error while obtaining SSAR.", err)
+	}
 }
 
 //User should have access to ManagedClusters

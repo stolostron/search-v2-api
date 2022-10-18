@@ -18,6 +18,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
+var impersonationConfigCreationerror = "Error creating clientset with impersonation config"
+
 // Contains data about the resources the user is allowed to access.
 type UserDataCache struct {
 	userData UserData
@@ -74,9 +76,9 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	var user *UserDataCache
 	var uid string
 	var err error
-
+	var userInfo authv1.UserInfo
 	// get uid from tokenreview
-	if uid, _ = cache.GetUserUID(ctx); uid == "noUidFound" {
+	if uid, userInfo = cache.GetUserUID(ctx); uid == "noUidFound" {
 		return user, fmt.Errorf("cannot find user with uid: %s", uid)
 	}
 	clientToken := ctx.Value(ContextAuthTokenKey).(string)
@@ -86,7 +88,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	cachedUserData, userDataExists := cache.users[uid] //check if userData cache for user already exists
 
 	// UserDataExists and its valid
-	if userDataExists && userCacheValid(cachedUserData) {
+	if userDataExists && cachedUserData.isValid() {
 
 		klog.V(5).Info("Using user data from cache.")
 
@@ -108,6 +110,19 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 		}
 	}
 
+	// Before checking each namespace and clusterscoped resource, check if user has access to everything
+	userHasAllAccess, err := user.userHasAllAccess(cache, ctx, clientToken)
+	if err != nil {
+		klog.Warning("Encountered error while checking if user has access to everything ", err)
+	} else {
+		if userHasAllAccess {
+			klog.V(4).Infof("User %s with uid %s has access to all resources.", userInfo.Username, userInfo.UID)
+			return user, nil
+		}
+		klog.V(5).Infof("User %s with uid %s doesn't have access to all resources. Checking individually",
+			userInfo.Username, userInfo.UID)
+	}
+
 	userDataCache, err := user.getNamespacedResources(cache, ctx, clientToken)
 
 	// Get cluster scoped resources for the user
@@ -118,6 +133,32 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 		userDataCache, err = user.getClusterScopedResources(cache, ctx, clientToken)
 	}
 	return userDataCache, err
+}
+
+func (user *UserDataCache) userHasAllAccess(cache *Cache, ctx context.Context, clientToken string) (bool, error) {
+	impersClientset, err := user.getImpersonationClientSet(clientToken, cache)
+	if err != nil {
+		klog.Warning(impersonationConfigCreationerror, err.Error())
+		return false, err
+	}
+	//If we have a new set of authorized list for the user reset the previous one
+	if user.userAuthorizedListSSAR(ctx, impersClientset, "*", "*") {
+		user.csrLock.Lock()
+		defer user.csrLock.Unlock()
+		user.userData.CsResources = []Resource{{Apigroup: "*", Kind: "*"}}
+		user.csrUpdatedAt = time.Now()
+
+		user.nsrLock.Lock()
+		defer user.nsrLock.Unlock()
+		user.userData.NsResources = map[string][]Resource{"*": {{Apigroup: "*", Kind: "*"}}}
+		user.nsrUpdatedAt = time.Now()
+
+		user.userData.ManagedClusters = cache.shared.managedClusters
+		user.clustersUpdatedAt = time.Now()
+		user.csrErr, user.nsrErr, user.clustersErr = nil, nil, nil
+		return true, nil
+	}
+	return false, nil
 }
 
 // Get a static copy of the current user data. It will use cached data if valid or refresh if needed.
@@ -140,7 +181,7 @@ func (cache *Cache) GetUserData(ctx context.Context) (*UserData, error) {
 
 /* Cache is Valid if the csrUpdatedAt and nsrUpdatedAt times are before the
 Cache expiry time */
-func userCacheValid(user *UserDataCache) bool {
+func (user *UserDataCache) isValid() bool {
 	if (time.Now().Before(user.csrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) &&
 		(time.Now().Before(user.nsrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) &&
 		(time.Now().Before(user.clustersUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) {
@@ -168,13 +209,13 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 	impersClientset, err := user.getImpersonationClientSet(clientToken, cache)
 	if err != nil {
 		user.csrErr = err
-		klog.Warning("Error creating clientset with impersonation config.", err.Error())
+		klog.Warning(impersonationConfigCreationerror, err.Error())
 		return user, user.csrErr
 	}
 	//If we have a new set of authorized list for the user reset the previous one
 	user.userData.CsResources = nil
 	for res := range clusterScopedResources {
-		if user.userAuthorizedListCSResource(ctx, impersClientset, res.Apigroup, res.Kind) {
+		if user.userAuthorizedListSSAR(ctx, impersClientset, res.Apigroup, res.Kind) {
 			user.userData.CsResources = append(user.userData.CsResources,
 				Resource{Apigroup: res.Apigroup, Kind: res.Kind})
 		}
@@ -186,7 +227,7 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 	return user, user.csrErr
 }
 
-func (user *UserDataCache) userAuthorizedListCSResource(ctx context.Context, authzClient v1.AuthorizationV1Interface,
+func (user *UserDataCache) userAuthorizedListSSAR(ctx context.Context, authzClient v1.AuthorizationV1Interface,
 	apigroup string, kind_plural string) bool {
 	accessCheck := &authz.SelfSubjectAccessReview{
 		Spec: authz.SelfSubjectAccessReviewSpec{
@@ -249,7 +290,7 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 
 	impersClientset, err := user.getImpersonationClientSet(clientToken, cache)
 	if err != nil {
-		klog.Warning("Error creating clientset with impersonation config.", err.Error())
+		klog.Warning(impersonationConfigCreationerror, err.Error())
 		return user, err
 	}
 
@@ -274,7 +315,7 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	resourceRulesLoop:
 		for _, rules := range result.Status.ResourceRules {
 			for _, verb := range rules.Verbs {
-				if verb == "list" || verb == "*" { //TODO: resourceName == "*" && verb == "*" then exit loop
+				if verb == "list" || verb == "*" {
 					for _, res := range rules.Resources {
 						for _, api := range rules.APIGroups {
 							//Add the resource if it is not cluster scoped

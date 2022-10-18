@@ -41,12 +41,14 @@ func mockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, Cache) {
 	}
 
 	return mockPool, Cache{
-		users:         map[string]*UserDataCache{},
-		shared:        SharedData{},
-		dynamicClient: fakedynclient.NewSimpleDynamicClient(testScheme, testmc),
-		restConfig:    &rest.Config{},
-		corev1Client:  fakekubeclient.NewSimpleClientset(testns).CoreV1(),
-		pool:          mockPool,
+		users: map[string]*UserDataCache{},
+		shared: SharedData{
+			pool:          mockPool,
+			corev1Client:  fakekubeclient.NewSimpleClientset(testns).CoreV1(),
+			dynamicClient: fakedynclient.NewSimpleDynamicClient(testScheme, testmc),
+		},
+		restConfig: &rest.Config{},
+		pool:       mockPool,
 	}
 }
 
@@ -57,19 +59,32 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 	columns := []string{"kind", "apigroup"}
 	pgxRows := pgxpoolmock.NewRows(columns).AddRow("addon.open-cluster-management.io", "Nodes").ToPgxRows()
 
+	columns1 := []string{"key", "datatype"}
+	pgxRows1 := pgxpoolmock.NewRows(columns1).AddRow("kind", "string").AddRow("apigroup", "string").ToPgxRows()
+
 	mockpool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"->>'_hubClusterResource'='true' AND ("data"->>'namespace' IS NULL))`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
+	mockpool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq([]interface{}{}),
+	).Return(pgxRows1, nil)
+
+	propTypes, _ := mock_cache.GetPropertyTypes(ctx, true) //query map
+	propTypes["kind"] = "string"
+	propTypes["apigroup"] = "string"
+
 	err := mock_cache.PopulateSharedCache(ctx)
 	res := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
+
 	_, csResPresent := mock_cache.shared.csResourcesMap[res]
 	if len(mock_cache.shared.csResourcesMap) != 1 || !csResPresent {
 		t.Error("Cluster Scoped Resources not in cache")
 	}
 
-	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" {
+	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" || mock_cache.shared.propTypes["kind"] != "string" {
 		t.Error("Shared Namespaces not in cache")
 	}
 
@@ -90,24 +105,37 @@ func Test_getResouces_usingCache(t *testing.T) {
 	columns := []string{"apigroup", "kind"}
 	pgxRows := pgxpoolmock.NewRows(columns).AddRow("addon.open-cluster-management.io", "Nodes").ToPgxRows()
 
+	columns1 := []string{"key", "datatype"}
+	pgxRows1 := pgxpoolmock.NewRows(columns1).AddRow("kind", "string").AddRow("apigroup", "string").ToPgxRows()
+
 	mockpool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"->>'_hubClusterResource'='true' AND ("data"->>'namespace' IS NULL))`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
+	mockpool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq([]interface{}{}),
+	).Return(pgxRows1, nil)
+
 	namespaces := []string{"test-namespace"}
 	manClusters := map[string]struct{}{"test-man": {}}
 	res := Resource{Apigroup: "apigroup1", Kind: "kind1"}
 	csRes := map[Resource]struct{}{}
+	propTypesMock := map[string]string{"kind": "string", "label": "object"}
 
 	csRes[res] = struct{}{}
-	//Adding cache:
+	// Adding cache:
 	mock_cache.shared = SharedData{
 		namespaces:      namespaces,
 		managedClusters: manClusters,
 		mcUpdatedAt:     time.Now(),
 		csUpdatedAt:     time.Now(),
 		csResourcesMap:  csRes,
+		propTypes:       propTypesMock,
+		corev1Client:    mock_cache.shared.corev1Client,
+		dynamicClient:   mock_cache.shared.dynamicClient,
+		pool:            mock_cache.pool,
 	}
 
 	err := mock_cache.PopulateSharedCache(ctx)
@@ -117,7 +145,7 @@ func Test_getResouces_usingCache(t *testing.T) {
 	if len(mock_cache.shared.csResourcesMap) != 1 || !csResPresent {
 		t.Error("Cluster Scoped Resources not in cache")
 	}
-	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" {
+	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" || mock_cache.shared.propTypes["kind"] != "string" {
 		t.Error("Shared Namespaces not in cache")
 	}
 	_, ok := mock_cache.shared.managedClusters["test-man"]
@@ -137,10 +165,18 @@ func Test_getResources_expiredCache(t *testing.T) {
 	columns := []string{"apigroup", "kind"}
 	pgxRows := pgxpoolmock.NewRows(columns).AddRow("addon.open-cluster-management.io", "Nodes").ToPgxRows()
 
+	columns1 := []string{"key", "datatype"}
+	pgxRows1 := pgxpoolmock.NewRows(columns1).AddRow("kind", "string").AddRow("apigroup", "string").ToPgxRows()
+
 	mockpool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"->>'_hubClusterResource'='true' AND ("data"->>'namespace' IS NULL))`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
+
+	mockpool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq([]interface{}{}),
+	).Return(pgxRows1, nil)
 
 	namespaces := []string{"test-namespace"}
 	manClusters := map[string]struct{}{"test-man": {}}
@@ -157,9 +193,16 @@ func Test_getResources_expiredCache(t *testing.T) {
 		mcUpdatedAt:     last_cache_time,
 		csUpdatedAt:     last_cache_time,
 		csResourcesMap:  csRes,
+		corev1Client:    mock_cache.shared.corev1Client,
+		dynamicClient:   mock_cache.shared.dynamicClient,
+		pool:            mock_cache.pool,
 	}
 
 	err := mock_cache.PopulateSharedCache(ctx)
+
+	propTypes, _ := mock_cache.GetPropertyTypes(ctx, false)
+	propTypes["kind"] = "string"
+	propTypes["apigroup"] = "string"
 
 	csResource := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
 	_, csResPresent := mock_cache.shared.csResourcesMap[csResource]
@@ -168,7 +211,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 		t.Error("Cluster Scoped Resources not in cache")
 	}
 
-	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" {
+	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" || mock_cache.shared.propTypes["kind"] != "string" {
 		t.Error("Shared Namespaces not in cache")
 	}
 	_, ok := mock_cache.shared.managedClusters["test-man"]
@@ -187,7 +230,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 
 func Test_SharedCacheDisabledClustersInValid(t *testing.T) {
 	_, mock_cache := mockResourcesListCache(t)
-	valid := mock_cache.sharedCacheDisabledClustersValid()
+	valid := mock_cache.shared.sharedCacheDisabledClustersValid()
 	if valid {
 		t.Errorf("Expected false from cache validity check. Got %t", valid)
 	}
@@ -196,7 +239,7 @@ func Test_SharedCacheDisabledClustersInValid(t *testing.T) {
 func Test_SharedCacheDisabledClustersValid(t *testing.T) {
 	_, mock_cache := mockResourcesListCache(t)
 	mock_cache.shared.dcUpdatedAt = time.Now()
-	valid := mock_cache.sharedCacheDisabledClustersValid()
+	valid := mock_cache.shared.sharedCacheDisabledClustersValid()
 	if !valid {
 		t.Errorf("Expected true from cache validity check. Got %t", valid)
 	}
@@ -208,7 +251,7 @@ func Test_GetandSetDisabledClusters(t *testing.T) {
 
 	dClusters := map[string]struct{}{"managed1": {}, "managed2": {}}
 	setupToken(&mock_cache)
-	mock_cache.setDisabledClusters(dClusters, nil)
+	mock_cache.shared.setDisabledClusters(dClusters, nil)
 
 	//user's managedclusters
 
@@ -227,7 +270,7 @@ func Test_setDisabledClusters(t *testing.T) {
 	disabledClusters := map[string]struct{}{}
 	disabledClusters["disabled1"] = struct{}{}
 	_, mock_cache := mockResourcesListCache(t)
-	mock_cache.setDisabledClusters(disabledClusters, nil)
+	mock_cache.shared.setDisabledClusters(disabledClusters, nil)
 
 	if len(mock_cache.shared.disabledClusters) != 1 || mock_cache.shared.dcErr != nil {
 		t.Error("Expected the cache.shared.disabledClusters to be updated with 1 cluster and no error")
@@ -340,7 +383,9 @@ func Test_getDisabledClustersCacheInValid_RunQuery(t *testing.T) {
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "mcInfo".data->>'name' AS "srchAddonDisabledCluster" FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`),
 	).Return(pgxRows, nil)
+
 	mock_cache.pool = mockPool
+	mock_cache.shared.pool = mockPool
 	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(), ContextAuthTokenKey, "123456"))
 	if len(*disabledClustersRes) != 1 || err != nil {
 		t.Error("Expected the cache.shared.disabledClusters to be updated with 1 cluster and no error")
@@ -379,6 +424,7 @@ func Test_getDisabledClustersCacheInValid_RunQueryError(t *testing.T) {
 		gomock.Eq(`SELECT DISTINCT "mcInfo".data->>'name' AS "srchAddonDisabledCluster" FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`),
 	).Return(pgxRows, fmt.Errorf("Error fetching data"))
 	mock_cache.pool = mockPool
+	mock_cache.shared.pool = mockPool
 	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(), ContextAuthTokenKey, "123456"))
 
 	if disabledClustersRes != nil || err == nil {
