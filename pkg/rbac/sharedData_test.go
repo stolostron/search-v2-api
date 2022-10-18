@@ -41,12 +41,14 @@ func mockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, Cache) {
 	}
 
 	return mockPool, Cache{
-		users:         map[string]*UserDataCache{},
-		shared:        SharedData{},
-		dynamicClient: fakedynclient.NewSimpleDynamicClient(testScheme, testmc),
-		restConfig:    &rest.Config{},
-		corev1Client:  fakekubeclient.NewSimpleClientset(testns).CoreV1(),
-		pool:          mockPool,
+		users: map[string]*UserDataCache{},
+		shared: SharedData{
+			pool:          mockPool,
+			corev1Client:  fakekubeclient.NewSimpleClientset(testns).CoreV1(),
+			dynamicClient: fakedynclient.NewSimpleDynamicClient(testScheme, testmc),
+		},
+		restConfig: &rest.Config{},
+		pool:       mockPool,
 	}
 }
 
@@ -131,6 +133,9 @@ func Test_getResouces_usingCache(t *testing.T) {
 		csUpdatedAt:     time.Now(),
 		csResourcesMap:  csRes,
 		propTypes:       propTypesMock,
+		corev1Client:    mock_cache.shared.corev1Client,
+		dynamicClient:   mock_cache.shared.dynamicClient,
+		pool:            mock_cache.pool,
 	}
 
 	err := mock_cache.PopulateSharedCache(ctx)
@@ -188,6 +193,9 @@ func Test_getResources_expiredCache(t *testing.T) {
 		mcUpdatedAt:     last_cache_time,
 		csUpdatedAt:     last_cache_time,
 		csResourcesMap:  csRes,
+		corev1Client:    mock_cache.shared.corev1Client,
+		dynamicClient:   mock_cache.shared.dynamicClient,
+		pool:            mock_cache.pool,
 	}
 
 	err := mock_cache.PopulateSharedCache(ctx)
@@ -222,7 +230,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 
 func Test_SharedCacheDisabledClustersInValid(t *testing.T) {
 	_, mock_cache := mockResourcesListCache(t)
-	valid := mock_cache.sharedCacheDisabledClustersValid()
+	valid := mock_cache.shared.sharedCacheDisabledClustersValid()
 	if valid {
 		t.Errorf("Expected false from cache validity check. Got %t", valid)
 	}
@@ -231,7 +239,7 @@ func Test_SharedCacheDisabledClustersInValid(t *testing.T) {
 func Test_SharedCacheDisabledClustersValid(t *testing.T) {
 	_, mock_cache := mockResourcesListCache(t)
 	mock_cache.shared.dcUpdatedAt = time.Now()
-	valid := mock_cache.sharedCacheDisabledClustersValid()
+	valid := mock_cache.shared.sharedCacheDisabledClustersValid()
 	if !valid {
 		t.Errorf("Expected true from cache validity check. Got %t", valid)
 	}
@@ -243,7 +251,7 @@ func Test_GetandSetDisabledClusters(t *testing.T) {
 
 	dClusters := map[string]struct{}{"managed1": {}, "managed2": {}}
 	setupToken(&mock_cache)
-	mock_cache.setDisabledClusters(dClusters, nil)
+	mock_cache.shared.setDisabledClusters(dClusters, nil)
 
 	//user's managedclusters
 
@@ -262,7 +270,7 @@ func Test_setDisabledClusters(t *testing.T) {
 	disabledClusters := map[string]struct{}{}
 	disabledClusters["disabled1"] = struct{}{}
 	_, mock_cache := mockResourcesListCache(t)
-	mock_cache.setDisabledClusters(disabledClusters, nil)
+	mock_cache.shared.setDisabledClusters(disabledClusters, nil)
 
 	if len(mock_cache.shared.disabledClusters) != 1 || mock_cache.shared.dcErr != nil {
 		t.Error("Expected the cache.shared.disabledClusters to be updated with 1 cluster and no error")
@@ -377,6 +385,7 @@ func Test_getDisabledClustersCacheInValid_RunQuery(t *testing.T) {
 	).Return(pgxRows, nil)
 
 	mock_cache.pool = mockPool
+	mock_cache.shared.pool = mockPool
 	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(), ContextAuthTokenKey, "123456"))
 	if len(*disabledClustersRes) != 1 || err != nil {
 		t.Error("Expected the cache.shared.disabledClusters to be updated with 1 cluster and no error")
@@ -415,6 +424,7 @@ func Test_getDisabledClustersCacheInValid_RunQueryError(t *testing.T) {
 		gomock.Eq(`SELECT DISTINCT "mcInfo".data->>'name' AS "srchAddonDisabledCluster" FROM "search"."resources" AS "mcInfo" LEFT OUTER JOIN "search"."resources" AS "srchAddon" ON (("mcInfo".data->>'name' = "srchAddon".data->>'namespace') AND ("srchAddon".data->>'kind' = 'ManagedClusterAddOn') AND ("srchAddon".data->>'name' = 'search-collector')) WHERE (("mcInfo".data->>'kind' = 'ManagedClusterInfo') AND ("srchAddon".uid IS NULL) AND ("mcInfo".data->>'name' != 'local-cluster'))`),
 	).Return(pgxRows, fmt.Errorf("Error fetching data"))
 	mock_cache.pool = mockPool
+	mock_cache.shared.pool = mockPool
 	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(), ContextAuthTokenKey, "123456"))
 
 	if disabledClustersRes != nil || err == nil {
