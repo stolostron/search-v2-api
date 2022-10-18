@@ -15,19 +15,19 @@ import (
 // Watch namespaces
 func (c *Cache) watchNamespaces(ctx context.Context, gvr schema.GroupVersionResource) {
 	// cache.corev1Client.Namespaces().List(ctx, metav1.ListOptions{})
-	watch, watchError := c.dynamicClient.Resource(gvr).Watch(ctx, metav1.ListOptions{})
+	watch, watchError := c.shared.dynamicClient.Resource(gvr).Watch(ctx, metav1.ListOptions{})
 	if watchError != nil {
 		klog.Warningf("Error watching %s.  Error: %s", gvr.String(), watchError)
 		return
 	}
 	defer watch.Stop()
 
-	klog.V(3).Infof("Watching\t[Group: %s \tKind: %s]", gvr.Group, gvr.Resource)
+	klog.V(3).Infof("Watching\t%s", gvr.String())
 
 	for {
 		select {
 		case <-ctx.Done():
-			klog.V(2).Info("Informer watch() was stopped. ", gvr.String())
+			klog.V(2).Info("Namespaces watch() has stopped. ", gvr.String())
 			return
 
 		case event := <-watch.ResultChan(): // Read events from the watch channel.
@@ -41,11 +41,11 @@ func (c *Cache) watchNamespaces(ctx context.Context, gvr schema.GroupVersionReso
 
 			switch event.Type {
 			case "ADDED":
-				klog.V(3).Infof("Event: ADDED  Resource: %s  Name: %s", gvr.Resource, obj.GetName())
+				// klog.V(3).Infof("Event: ADDED \tResource: %s  Name: %s", gvr.Resource, obj.GetName())
 				c.addNamespace(obj.GetName())
 
 			case "DELETED":
-				klog.V(3).Infof("Event: DELETED  Resource: %s  Name: %s", gvr.Resource, obj.GetName())
+				// klog.V(3).Infof("Event: DELETED \tResource: %s  Name: %s", gvr.Resource, obj.GetName())
 				c.deleteNamespace(obj.GetName())
 
 			case "MODIFIED":

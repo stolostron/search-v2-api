@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 )
@@ -22,54 +23,81 @@ func (c *Cache) backgroundValidation(ctx context.Context) {
 
 	// Watch namespaces
 	namespacesGVR := schema.GroupVersionResource{Resource: "namespaces", Group: "", Version: "v1"}
-	c.watchNamespaces(ctx, namespacesGVR)
+	go c.watchNamespaces(ctx, namespacesGVR)
+
+	// Watch resources that could invalidate RBAC cache.
+	rolesGVR := schema.GroupVersionResource{Resource: "roles", Group: "rbac.authorization.k8s.io", Version: "v1"}
+	go c.watch(ctx, rolesGVR)
+
+	clusterRolesGVR := schema.GroupVersionResource{Resource: "clusterroles", Group: "rbac.authorization.k8s.io", Version: "v1"}
+	go c.watch(ctx, clusterRolesGVR)
+
+	roleBindingsGVR := schema.GroupVersionResource{Resource: "rolebindings", Group: "rbac.authorization.k8s.io", Version: "v1"}
+	go c.watch(ctx, roleBindingsGVR)
+
+	// clusterRoleBindingsGVR := schema.GroupVersionResource{Resource: "clusterrolebindings", Group: "rbac.authorization.k8s.io", Version: "v1"}
+	// c.watch(ctx, clusterRoleBindingsGVR)
+
+	groupsGVR := schema.GroupVersionResource{Resource: "groups", Group: "user.openshift.io", Version: "v1"}
+	go c.watch(ctx, groupsGVR)
+
+	crdsGVR := schema.GroupVersionResource{Resource: "customresourcedefinitions", Group: "apiextensions.k8s.io", Version: "v1"}
+	c.watch(ctx, crdsGVR)
+
 }
 
-// Watch resource
-// func (c *Cache) watch(ctx context.Context, gvr schema.GroupVersionResource) {
-// 	watch, watchError := c.dynamicClient.Resource(gvr).Watch(ctx, metav1.ListOptions{})
-// 	if watchError != nil {
-// 		klog.Warningf("Error watching %s.  Error: %s", gvr.String(), watchError)
-// 		return
-// 	}
-// 	defer watch.Stop()
+// Watch resource and invalidate RBAC cache if anything changes.
+func (c *Cache) watch(ctx context.Context, gvr schema.GroupVersionResource) {
+	watch, watchError := c.shared.dynamicClient.Resource(gvr).Watch(ctx, metav1.ListOptions{})
+	if watchError != nil {
+		klog.Warningf("Error watching %s.  Error: %s", gvr.String(), watchError)
+		return
+	}
+	defer watch.Stop()
 
-// 	klog.V(3).Infof("Watching\t[Group: %s \tKind: %s]", gvr.Group, gvr.Resource)
+	klog.V(3).Infof("Watching\t%s", gvr.String())
 
-// 	for {
-// 		select {
-// 		case <-ctx.Done():
-// 			klog.V(2).Info("Informer watch() was stopped. ", gvr.String())
-// 			return
+	for {
+		select {
+		case <-ctx.Done():
+			klog.V(2).Info("Informer watch() was stopped. ", gvr.String())
+			return
 
-// 		case event := <-watch.ResultChan(): // Read events from the watch channel.
-// 			//  Process ADDED or DELETED, events.
-// 			o, error := runtime.UnstructuredConverter.ToUnstructured(runtime.DefaultUnstructuredConverter, &event.Object)
-// 			if error != nil {
-// 				klog.Warningf("Error converting %s event.Object to unstructured.Unstructured on ADDED event. %s",
-// 					gvr.Resource, error)
-// 			}
-// 			obj := &unstructured.Unstructured{Object: o}
+		case event := <-watch.ResultChan(): // Read events from the watch channel.
+			// klog.Infof("Event: %s \tResource: %s  ", event.Type, gvr.String())
+			switch event.Type {
+			case "ADDED", "DELETED", "MODIFIED":
+				c.invalidateCache()
 
-// 			switch event.Type {
-// 			case "ADDED":
-// 				// klog.V(3).Infof("Received ADDED event. Kind: %s ", gvr.Resource)
-// 				klog.Infof("Event: ADDED  Resource: %s  Name: %s", gvr.Resource, obj.GetName())
-// 				c.shared.addNamespace(obj.GetName())
+			default:
+				klog.V(2).Infof("Received unexpected event. Ending listAndWatch() for %s", gvr.String())
+				return
+			}
+		}
+	}
+}
 
-// 			case "DELETED":
-// 				// klog.V(3).Infof("Received DELETED event. Kind: %s ", gvr.Resource)
-// 				klog.Infof("Event: DELETED  Resource: %s  Name: %s", gvr.Resource, obj.GetName())
-// 				c.shared.deleteNamespace(obj.GetName())
+var cacheInvalidationPending bool
 
-// 			case "MODIFIED":
-// 				// klog.V(3).Infof("Received MODIFY event. Kind: %s ", gvr.Resource)
-// 				break
+func (c *Cache) invalidateCache() {
+	if cacheInvalidationPending {
+		// klog.Info("There's a pending cache invalidation request.")
+		return
+	}
+	cacheInvalidationPending = true
+	klog.Info("Invalidating user data cache. Waiting 5 seconds to 'debounce' or avoid multiple invalidation requests.")
 
-// 			default:
-// 				klog.V(2).Infof("Received unexpected event. Ending listAndWatch() for %s", gvr.String())
-// 				return
-// 			}
-// 		}
-// 	}
-// }
+	go func() {
+		time.Sleep(5 * time.Second)
+
+		c.usersLock.Lock()
+		defer c.usersLock.Unlock()
+		for _, userCache := range c.users {
+			userCache.clustersUpdatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
+			userCache.csrUpdatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
+			userCache.nsrUpdatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
+		}
+		cacheInvalidationPending = false
+		klog.Info("Invalidated the user data cache.")
+	}()
+}
