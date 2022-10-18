@@ -15,9 +15,9 @@ import (
 
 // Cache helps optimize requests to external APIs (Kubernetes and Database)
 type Cache struct {
+	shared           SharedData
 	tokenReviews     map[string]*tokenReviewCache //Key:ClientToken
 	tokenReviewsLock sync.Mutex
-	shared           SharedData
 	users            map[string]*UserDataCache // UID:{userdata} UID comes from tokenreview
 	usersLock        sync.Mutex
 
@@ -34,9 +34,9 @@ type Cache struct {
 var cacheInst = Cache{
 	tokenReviews:     map[string]*tokenReviewCache{},
 	tokenReviewsLock: sync.Mutex{},
-	usersLock:        sync.Mutex{},
 	shared:           SharedData{},
 	users:            map[string]*UserDataCache{},
+	usersLock:        sync.Mutex{},
 	restConfig:       config.GetClientConfig(),
 	pool:             db.GetConnection(),
 	corev1Client:     config.GetCoreClient(),
