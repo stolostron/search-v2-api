@@ -47,10 +47,8 @@ func mockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, Cache) {
 			corev1Client:  fakekubeclient.NewSimpleClientset(testns).CoreV1(),
 			dynamicClient: fakedynclient.NewSimpleDynamicClient(testScheme, testmc),
 		},
-		dynamicClient: fakedynclient.NewSimpleDynamicClient(testScheme, testmc),
-		restConfig:    &rest.Config{},
-		corev1Client:  fakekubeclient.NewSimpleClientset(testns).CoreV1(),
-		pool:          mockPool,
+		restConfig: &rest.Config{},
+		pool:       mockPool,
 	}
 }
 
@@ -135,8 +133,8 @@ func Test_getResouces_usingCache(t *testing.T) {
 		csUpdatedAt:     time.Now(),
 		csResourcesMap:  csRes,
 		propTypes:       propTypesMock,
-		corev1Client:    mock_cache.corev1Client,
-		dynamicClient:   mock_cache.dynamicClient,
+		corev1Client:    mock_cache.shared.corev1Client,
+		dynamicClient:   mock_cache.shared.dynamicClient,
 		pool:            mock_cache.pool,
 	}
 
@@ -195,8 +193,8 @@ func Test_getResources_expiredCache(t *testing.T) {
 		mcUpdatedAt:     last_cache_time,
 		csUpdatedAt:     last_cache_time,
 		csResourcesMap:  csRes,
-		corev1Client:    mock_cache.corev1Client,
-		dynamicClient:   mock_cache.dynamicClient,
+		corev1Client:    mock_cache.shared.corev1Client,
+		dynamicClient:   mock_cache.shared.dynamicClient,
 		pool:            mock_cache.pool,
 	}
 
