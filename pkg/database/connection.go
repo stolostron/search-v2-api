@@ -34,7 +34,7 @@ func initializePool(ctx context.Context) {
 		klog.Error("Error parsing database connection configuration.", configErr)
 	}
 
-	conn, err := pgxpool.ConnectConfig(context.TODO(), config)
+	conn, err := pgxpool.ConnectConfig(ctx, config)
 	if err != nil {
 		klog.Errorf("Unable to connect to database: %+v\n", err)
 		metric.DBConnectionFailed.WithLabelValues("DBConnect").Inc()
@@ -50,14 +50,16 @@ func GetConnection() *pgxpool.Pool {
 		metric.DBConnectionSuccess.WithLabelValues("DBConnect").Inc()
 	}
 
-	err := pool.Ping(ctx)
-	if err != nil {
-		klog.Error("Unable to get a database connection. ", err)
-		metric.DBConnectionFailed.WithLabelValues("DBPing").Inc()
-		// Here we may need to add retry.
-		return pool
+	if pool != nil {
+		err := pool.Ping(ctx)
+		if err != nil {
+			klog.Error("Unable to get a database connection. ", err)
+			metric.DBConnectionFailed.WithLabelValues("DBPing").Inc()
+			// Here we may need to add retry.
+			return pool
+		}
+		metric.DBConnectionSuccess.WithLabelValues("DBPing").Inc()
+		klog.Info("Successfully connected to database!")
 	}
-	metric.DBConnectionSuccess.WithLabelValues("DBPing").Inc()
-	klog.Info("Successfully connected to database!")
 	return pool
 }
