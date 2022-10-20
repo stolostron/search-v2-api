@@ -165,7 +165,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
 		}
 		// get all managed clustsers in cache
 		err = cache.shared.getManagedClusters(ctx)
-		if err == nil {
+		if err != nil {
 			error = err
 			klog.Errorf("Error retrieving managed clusters. Error: [%+v]", err)
 		} else {

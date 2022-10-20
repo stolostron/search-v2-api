@@ -133,7 +133,7 @@ func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData, userInfo
 	return goqu.Or(
 		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
 		goqu.And(
-			matchHubCluster(), // goqu.L(`data->>?`, "_hubClusterResource").Eq("true")
+			matchHubCluster(), // "data"?'_hubClusterResource'
 			goqu.Or(
 				matchClusterScopedResources(userrbac.CsResources, userInfo), // (namespace=null AND apigroup AND kind)
 				matchNamespacedResources(userrbac.NsResources, userInfo),    // (namespace AND apiproup AND kind)
