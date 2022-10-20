@@ -43,11 +43,5 @@ var cacheInst = Cache{
 
 // Get a reference to the cache instance.
 func GetCache() *Cache {
-	if cacheInst.pool == nil {
-		cacheInst.pool = db.GetConnection()
-	}
-	if cacheInst.shared.pool == nil {
-		cacheInst.shared.pool = db.GetConnection()
-	}
 	return &cacheInst
 }

@@ -51,17 +51,14 @@ func GetConnection() *pgxpool.Pool {
 		metric.DBConnectionSuccess.WithLabelValues("DBConnect").Inc()
 	}
 
-	if pool != nil {
-		err := pool.Ping(context.TODO())
-		if err != nil {
-			klog.Error("Unable to get a database connection. ", err)
-			metric.DBConnectionFailed.WithLabelValues("DBPing").Inc()
-			// Here we may need to add retry.
-			return nil
-		}
-		metric.DBConnectionSuccess.WithLabelValues("DBPing").Inc()
-		klog.Info("Successfully connected to database!")
-		return pool
+	err := pool.Ping(context.TODO())
+	if err != nil {
+		klog.Error("Unable to get a database connection. ", err)
+		metric.DBConnectionFailed.WithLabelValues("DBPing").Inc()
+		// Here we may need to add retry.
+		return nil
 	}
-	return nil
+	metric.DBConnectionSuccess.WithLabelValues("DBPing").Inc()
+	klog.Info("Successfully connected to database!")
+	return pool
 }
