@@ -14,10 +14,8 @@ import (
 
 var pool *pgxpool.Pool
 
-func initializePool() {
-	klog.Info("Initializing database connection pool.")
+func initializePool(ctx context.Context) {
 	cfg := config.Cfg
-
 	dbConnString := fmt.Sprint(
 		"host=", cfg.DBHost,
 		" port=", cfg.DBPort,
@@ -29,7 +27,7 @@ func initializePool() {
 
 	// Remove password from connection log.
 	redactedDbConn := strings.ReplaceAll(dbConnString, "password="+cfg.DBPass, "password=[REDACTED]")
-	klog.Infof("Connecting to PostgreSQL using: %s", redactedDbConn)
+	klog.Infof("Initializing connection to PostgreSQL using: %s", redactedDbConn)
 
 	config, configErr := pgxpool.ParseConfig(dbConnString)
 	if configErr != nil {
@@ -46,12 +44,13 @@ func initializePool() {
 }
 
 func GetConnection() *pgxpool.Pool {
+	ctx := context.TODO()
 	if pool == nil {
-		initializePool()
+		initializePool(ctx)
 		metric.DBConnectionSuccess.WithLabelValues("DBConnect").Inc()
 	}
 
-	err := pool.Ping(context.TODO())
+	err := pool.Ping(ctx)
 	if err != nil {
 		klog.Error("Unable to get a database connection. ", err)
 		metric.DBConnectionFailed.WithLabelValues("DBPing").Inc()
