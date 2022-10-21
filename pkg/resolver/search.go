@@ -132,13 +132,7 @@ func (s *SearchResult) Uids() {
 func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
 	return goqu.Or(
 		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
-		goqu.And(
-			matchHubCluster(), // "data"?'_hubClusterResource'
-			goqu.Or(
-				matchClusterScopedResources(userrbac.CsResources, userInfo), // (namespace=null AND apigroup AND kind)
-				matchNamespacedResources(userrbac.NsResources, userInfo),    // (namespace AND apiproup AND kind)
-			),
-		),
+		matchHubCluster(userrbac, userInfo),
 	)
 }
 
