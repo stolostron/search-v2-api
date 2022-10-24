@@ -3,6 +3,7 @@ package rbac
 
 import (
 	"sync"
+	"time"
 
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -13,6 +14,8 @@ import (
 
 // Cache helps optimize requests to external APIs (Kubernetes and Database)
 type Cache struct {
+	dbconnLock       sync.Mutex                   //lock to prevent multiple requests getting checked at once
+	lastCheckTime    time.Time                    // last time database connection was tested
 	tokenReviews     map[string]*tokenReviewCache //Key:ClientToken
 	tokenReviewsLock sync.Mutex
 	shared           SharedData
@@ -28,6 +31,8 @@ type Cache struct {
 
 // Initialize the cache as a singleton instance.
 var cacheInst = Cache{
+	dbconnLock:       sync.Mutex{},
+	lastCheckTime:    time.Time{},
 	tokenReviews:     map[string]*tokenReviewCache{},
 	tokenReviewsLock: sync.Mutex{},
 	usersLock:        sync.Mutex{},
