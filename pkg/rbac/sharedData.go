@@ -90,7 +90,7 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 	}
 
 	klog.V(5).Infof("Query for property datatypes: [%s] ", query)
-	rows, err := shared.pool.Query(ctx, query, params...)
+	rows, err := cacheInst.pool.Query(ctx, query, params...)
 	if err != nil {
 		klog.Errorf("Error resolving property types query [%s] with args [%+v]. Error: [%+v]", query, err)
 		return propTypeMap, err
@@ -220,7 +220,7 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 		return shared.csErr
 	}
 
-	rows, err := shared.pool.Query(ctx, query)
+	rows, err := cacheInst.pool.Query(ctx, query)
 	if err != nil {
 		klog.Errorf("Error resolving cluster scoped resources. Query [%s]. Error: [%+v]", query, err.Error())
 		shared.csErr = err
@@ -419,7 +419,7 @@ func (shared *SharedData) findSrchAddonDisabledClusters(ctx context.Context) (*m
 		return &disabledClusters, queryBuildErr
 	}
 	// run the query
-	rows, err := shared.pool.Query(ctx, sql)
+	rows, err := cacheInst.pool.Query(ctx, sql)
 	if err != nil {
 		klog.Error("Error fetching SearchAddon disabled cluster results from db ", err)
 		shared.setDisabledClusters(disabledClusters, err)
