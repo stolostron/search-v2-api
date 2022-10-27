@@ -214,11 +214,21 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 	}
 	//If we have a new set of authorized list for the user reset the previous one
 	user.userData.CsResources = nil
+
+	// Paralellize API calls.
+	var wg sync.WaitGroup
+	var lock sync.Mutex
 	for res := range clusterScopedResources {
-		if user.userAuthorizedListSSAR(ctx, impersClientset, res.Apigroup, res.Kind) {
-			user.userData.CsResources = append(user.userData.CsResources,
-				Resource{Apigroup: res.Apigroup, Kind: res.Kind})
-		}
+		wg.Add(1)
+		go func(apiGroup, kind string) {
+			defer wg.Done()
+			if user.userAuthorizedListSSAR(ctx, impersClientset, apiGroup, kind) {
+				lock.Lock()
+				user.userData.CsResources = append(user.userData.CsResources,
+					Resource{Apigroup: apiGroup, Kind: kind})
+				lock.Unlock()
+			}
+		}(res.Apigroup, res.Kind)
 	}
 	uid, userInfo := cache.GetUserUID(ctx)
 	klog.V(7).Infof("User %s with uid: %s has access to these cluster scoped res: %+v \n", userInfo.Username, uid,
