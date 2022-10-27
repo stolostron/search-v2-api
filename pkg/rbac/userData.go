@@ -19,7 +19,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-var impersonationConfigCreationerror = "Error creating clientset with impersonation config"
+const impersonationConfigCreationerror = "Error creating clientset with impersonation config"
 
 // Contains data about the resources the user is allowed to access.
 type UserDataCache struct {
