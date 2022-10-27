@@ -126,8 +126,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 
 	userDataCache, err := user.getNamespacedResources(cache, ctx, clientToken)
 
-	// Get cluster scoped resources for the user
-	// TO DO : Make this parallel operation
+	// Get cluster scoped resource access for the user.
 	if err == nil {
 		klog.V(5).Info("No errors on namespacedresources present for: ",
 			cache.tokenReviews[clientToken].tokenReview.Status.User.Username)
@@ -191,13 +190,12 @@ func (user *UserDataCache) isValid() bool {
 	return false
 }
 
+// Get cluster-scoped resources the user is authorized to list.
 // Equivalent to: oc auth can-i list <resource> --as=<user>
 func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.Context,
 	clientToken string) (*UserDataCache, error) {
 	defer metric.SlowLog("UserDataCache::getClusterScopedResources", 100*time.Millisecond)()
 
-	// get all cluster scoped from shared cache:
-	klog.V(5).Info("Getting cluster scoped resources from shared cache.")
 	user.csrErr = nil
 	user.csrLock.Lock()
 	defer user.csrLock.Unlock()
@@ -220,18 +218,21 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 	// Paralellize API calls.
 	var wg sync.WaitGroup
 	var lock sync.Mutex
+	// For each cluster-scoped resource, check if the user is authorized to list.
 	for res := range clusterScopedResources {
 		wg.Add(1)
-		go func(apiGroup, kind string) {
+		go func(group, kind string) {
 			defer wg.Done()
-			if user.userAuthorizedListSSAR(ctx, impersClientset, apiGroup, kind) {
+			if user.userAuthorizedListSSAR(ctx, impersClientset, group, kind) {
 				lock.Lock()
+				defer lock.Unlock()
 				user.userData.CsResources = append(user.userData.CsResources,
-					Resource{Apigroup: apiGroup, Kind: kind})
-				lock.Unlock()
+					Resource{Apigroup: group, Kind: kind})
 			}
 		}(res.Apigroup, res.Kind)
 	}
+	wg.Wait() // Wait for all requests to complete.
+
 	uid, userInfo := cache.GetUserUID(ctx)
 	klog.V(7).Infof("User %s with uid: %s has access to these cluster scoped res: %+v \n", userInfo.Username, uid,
 		user.userData.CsResources)
