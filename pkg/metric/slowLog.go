@@ -12,17 +12,17 @@ var DEFAULT_SLOW_LOG = time.Duration(config.Cfg.SlowLog) * time.Millisecond
 
 // Record the time when a function starts and logs if the function takes more than the expected duration.
 // This function should be invoked with defer.
-func SlowLog(funcName string, after time.Duration) func() {
+func SlowLog(funcName string, logAfter time.Duration) func() {
 	klog.V(7).Infof("ENTERING: %s", funcName)
 	start := time.Now()
 
 	// This part gets executed when the function exits.
 	return func() {
-		if (after > 0 && time.Since(start) > after) || (time.Since(start) > DEFAULT_SLOW_LOG) {
+		if (logAfter > 0 && time.Since(start) > logAfter) || (time.Since(start) > DEFAULT_SLOW_LOG) {
 			klog.Warningf("%s - %s", time.Since(start), funcName)
 		}
 
-		// We could emit metric here, but it could be too much data.
+		// We could emit metric here, but it could emit too much data.
 
 		klog.V(7).Infof("EXITING: %s", funcName)
 	}
