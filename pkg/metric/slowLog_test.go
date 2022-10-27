@@ -15,6 +15,7 @@ func Test_SlowLog_Default(t *testing.T) {
 	// Set env SLOW_LOG
 
 	endFn := SlowLog("Test", 0)
+	// nolint:staticcheck //lint:ignore SA1004
 	time.Sleep(100)
 	endFn()
 
@@ -25,6 +26,7 @@ func Test_SlowLog_CustomDuration(t *testing.T) {
 	// Mock console
 
 	endFn := SlowLog("Test", 5*time.Millisecond)
+	// nolint:staticcheck //lint:ignore SA1004
 	time.Sleep(10)
 	endFn()
 
@@ -35,6 +37,7 @@ func Test_SlowLog_ThreasholdNotMet(t *testing.T) {
 	// Mock console
 
 	endFn := SlowLog("Test", 5*time.Millisecond)
+	// nolint:staticcheck //lint:ignore SA1004
 	time.Sleep(1)
 	endFn()
 

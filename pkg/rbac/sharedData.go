@@ -146,10 +146,10 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) {
 	if cache.shared.isValid() { // if all cache is valid we use cache data
 		klog.V(5).Info("Using shared data from cache.")
 		return
-	} else { // get data and cache
+	} else { // get data and add to cache
 		var wg sync.WaitGroup
 
-		// get all hub cluster-scoped resources and cache in shared.csResources
+		// get hub cluster-scoped resources and cache in shared.csResources
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -159,7 +159,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) {
 			}
 		}()
 
-		// get all hub cluster namespaces and cache in shared.namespaces.
+		// get hub cluster namespaces and cache in shared.namespaces.
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -169,7 +169,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) {
 			}
 		}()
 
-		// get managed clusters
+		// get managed clusters and cache in shared.managedClusters
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
