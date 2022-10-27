@@ -30,6 +30,7 @@ type Config struct {
 	PlaygroundMode bool // Enable the GraphQL Playground client.
 	QueryLimit     int  // The default LIMIT to use on queries. Client can override.
 	RelationLevel  int  // The number of levels/hops for finding relationships for a particular resource
+	SlowLog        int  // Logs performance data for queries slower than the specified time duration in ms.
 	// Placeholder for future use.
 	// QueryLoopLimit          int // number of queries handled at a time
 	// RBAC_INACTIVITY_TIMEOUT int
@@ -52,6 +53,7 @@ func new() *Config {
 		HttpPort:       getEnvAsInt("HTTP_PORT", 4010),
 		PlaygroundMode: getEnvAsBool("PLAYGROUND_MODE", false),
 		QueryLimit:     getEnvAsInt("QUERY_LIMIT", 1000),
+		SlowLog:        getEnvAsInt("SLOW_LOG", int(500)),
 		//Setting default level to 0 to check if user has explicitly set this variable
 		// This will be updated to 1 for default searches and 3 for applications - unless set by the user
 		RelationLevel: getEnvAsInt("RELATION_LEVEL", 0),

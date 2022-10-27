@@ -9,6 +9,7 @@ import (
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/stolostron/search-v2-api/pkg/config"
+	"github.com/stolostron/search-v2-api/pkg/metric"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -140,39 +141,46 @@ func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[str
 	}
 }
 
-func (cache *Cache) PopulateSharedCache(ctx context.Context) error {
+func (cache *Cache) PopulateSharedCache(ctx context.Context) {
+	defer metric.SlowLog("PopulateSharedCache", 200*time.Millisecond)()
 	if cache.shared.isValid() { // if all cache is valid we use cache data
 		klog.V(5).Info("Using shared data from cache.")
-		return nil
+		return
 	} else { // get data and cache
+		var wg sync.WaitGroup
 
-		var error error
-		// get all cluster-scoped resources and cache in shared.csResources
-		err := cache.shared.getClusterScopedResources(ctx)
-		if err != nil {
-			error = err
-			klog.Errorf("Error retrieving cluster scoped resources. Error: [%+v]", err)
-		} else {
-			klog.V(6).Info("Successfully retrieved cluster scoped resources!")
-		}
-		// get all namespaces in cluster and cache in shared.namespaces.
-		err = cache.shared.getSharedNamespaces(ctx)
-		if err != nil {
-			error = err
-			klog.Errorf("Error retrieving shared namespaces. Error: [%+v]", err)
-		} else {
-			klog.V(6).Info("Successfully retrieved shared namespaces!")
-		}
-		// get all managed clustsers in cache
-		err = cache.shared.getManagedClusters(ctx)
-		if err == nil {
-			error = err
-			klog.Errorf("Error retrieving managed clusters. Error: [%+v]", err)
-		} else {
-			klog.V(6).Info("Successfully retrieved managed clusters!")
-		}
+		// get all hub cluster-scoped resources and cache in shared.csResources
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := cache.shared.getClusterScopedResources(ctx)
+			if err != nil {
+				klog.Errorf("Error retrieving cluster scoped resources. Error: [%+v]", err)
+			}
+		}()
 
-		return error
+		// get all hub cluster namespaces and cache in shared.namespaces.
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := cache.shared.getSharedNamespaces(ctx)
+			if err != nil {
+				klog.Errorf("Error retrieving shared namespaces. Error: [%+v]", err)
+			}
+		}()
+
+		// get managed clusters
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := cache.shared.getManagedClusters(ctx)
+			if err == nil {
+				klog.Errorf("Error retrieving managed clusters. Error: [%+v]", err)
+			}
+		}()
+
+		wg.Wait() // Wait for async go routines to complete.
+
 	}
 }
 
@@ -196,7 +204,7 @@ func (shared *SharedData) isValid() bool {
 // Get the list of resources in the database where namespace field is null.
 // Equivalent to: `oc api-resources -o wide | grep false | grep watch | grep list`
 func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
-
+	defer metric.SlowLog("SharedData::getClusterScopedResources", 100*time.Millisecond)()
 	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
 	shared.csLock.Lock()
 	defer shared.csLock.Unlock()
@@ -251,6 +259,7 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 // Obtain all the namespaces in the hub cluster.
 // Equivalent to `oc get namespaces`
 func (shared *SharedData) getSharedNamespaces(ctx context.Context) error {
+	defer metric.SlowLog("getSharedNamespaces", 100*time.Millisecond)()
 	shared.nsLock.Lock()
 	defer shared.nsLock.Unlock()
 	//empty previous cache
@@ -279,6 +288,7 @@ func (shared *SharedData) getSharedNamespaces(ctx context.Context) error {
 // Obtain all the managedclusters.
 // Equivalent to `oc get managedclusters`
 func (shared *SharedData) getManagedClusters(ctx context.Context) error {
+	defer metric.SlowLog("getManagedClusters", 100*time.Millisecond)()
 
 	shared.mcLock.Lock()
 	defer shared.mcLock.Unlock()
