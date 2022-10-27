@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
+	"github.com/stolostron/search-v2-api/pkg/metric"
 	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -193,6 +194,7 @@ func (user *UserDataCache) isValid() bool {
 // Equivalent to: oc auth can-i list <resource> --as=<user>
 func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.Context,
 	clientToken string) (*UserDataCache, error) {
+	defer metric.SlowLog("UserDataCache::getClusterScopedResources", 100*time.Millisecond)()
 
 	// get all cluster scoped from shared cache:
 	klog.V(5).Info("Getting cluster scoped resources from shared cache.")
@@ -212,7 +214,7 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 		klog.Warning(impersonationConfigCreationerror, err.Error())
 		return user, user.csrErr
 	}
-	//If we have a new set of authorized list for the user reset the previous one
+	// If we have a new set of authorized list for the user reset the previous one
 	user.userData.CsResources = nil
 
 	// Paralellize API calls.
@@ -277,7 +279,7 @@ func (user *UserDataCache) updateUserManagedClusterList(cache *Cache, ns string)
 // Equivalent to: oc auth can-i --list -n <iterate-each-namespace>
 func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Context,
 	clientToken string) (*UserDataCache, error) {
-
+	defer metric.SlowLog("UserDataCache::getNamespacedResources", 200*time.Millisecond)()
 	// check if we already have user's namespaced resources in userData cache and check if time is expired
 	user.nsrLock.Lock()
 	defer user.nsrLock.Unlock()
