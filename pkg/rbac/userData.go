@@ -194,7 +194,7 @@ func (user *UserDataCache) isValid() bool {
 // Equivalent to: oc auth can-i list <resource> --as=<user>
 func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.Context,
 	clientToken string) (*UserDataCache, error) {
-	defer metric.SlowLog("UserDataCache::getClusterScopedResources", 100*time.Millisecond)()
+	defer metric.SlowLog("UserDataCache::getClusterScopedResources", 200*time.Millisecond)()
 
 	user.csrErr = nil
 	user.csrLock.Lock()
