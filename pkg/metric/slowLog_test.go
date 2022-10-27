@@ -27,7 +27,7 @@ func Test_SlowLog_CustomDuration(t *testing.T) {
 
 	endFn := SlowLog("Test", 5*time.Millisecond)
 	// nolint:staticcheck //lint:ignore SA1004
-	time.Sleep(10)
+	time.Sleep(100)
 	endFn()
 
 	// Verify console is called.
