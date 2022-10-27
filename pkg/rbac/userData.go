@@ -217,7 +217,6 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 	// If we have a new set of authorized list for the user reset the previous one
 	user.userData.CsResources = nil
 
-	// TODO Paralellize API calls in this loop.
 	for res := range clusterScopedResources {
 		if user.userAuthorizedListSSAR(ctx, impersClientset, res.Apigroup, res.Kind) {
 			user.userData.CsResources = append(user.userData.CsResources,
@@ -302,7 +301,6 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	user.userData.ManagedClusters = make(map[string]struct{})
 	uid, userInfo := cache.GetUserUID(ctx)
 
-	// TODO Paralellize API calls in this loop.
 	for _, ns := range allNamespaces {
 		rulesCheck := authz.SelfSubjectRulesReview{
 			Spec: authz.SelfSubjectRulesReviewSpec{
