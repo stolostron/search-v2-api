@@ -149,6 +149,8 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) {
 	} else { // get data and add to cache
 		var wg sync.WaitGroup
 
+		// get hub cluster-scoped resources and cache in shared.csResources
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			err := cache.shared.getClusterScopedResources(ctx)
