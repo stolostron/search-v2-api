@@ -76,7 +76,7 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 	propTypes["kind"] = "string"
 	propTypes["apigroup"] = "string"
 
-	err := mock_cache.PopulateSharedCache(ctx)
+	mock_cache.PopulateSharedCache(ctx)
 	res := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
 
 	_, csResPresent := mock_cache.shared.csResourcesMap[res]
@@ -92,11 +92,6 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 	if len(mock_cache.shared.managedClusters) != 1 || !ok {
 		t.Error("ManagedClusters not in cache")
 	}
-
-	if err != nil {
-		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
-	}
-
 }
 
 func Test_getResouces_usingCache(t *testing.T) {
@@ -138,7 +133,7 @@ func Test_getResouces_usingCache(t *testing.T) {
 		pool:            mock_cache.pool,
 	}
 
-	err := mock_cache.PopulateSharedCache(ctx)
+	mock_cache.PopulateSharedCache(ctx)
 	csResource := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
 	_, csResPresent := mock_cache.shared.csResourcesMap[csResource]
 
@@ -152,11 +147,6 @@ func Test_getResouces_usingCache(t *testing.T) {
 	if len(mock_cache.shared.managedClusters) != 1 || !ok {
 		t.Error("ManagedClusters not in cache")
 	}
-
-	if err != nil {
-		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
-	}
-
 }
 
 func Test_getResources_expiredCache(t *testing.T) {
@@ -198,7 +188,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 		pool:            mock_cache.pool,
 	}
 
-	err := mock_cache.PopulateSharedCache(ctx)
+	mock_cache.PopulateSharedCache(ctx)
 
 	propTypes, _ := mock_cache.GetPropertyTypes(ctx, false)
 	propTypes["kind"] = "string"
@@ -217,9 +207,6 @@ func Test_getResources_expiredCache(t *testing.T) {
 	_, ok := mock_cache.shared.managedClusters["test-man"]
 	if len(mock_cache.shared.managedClusters) != 1 || !ok {
 		t.Error("ManagedClusters not in cache")
-	}
-	if err != nil {
-		t.Error("Unexpected error while obtaining cluster-scoped resources.", err)
 	}
 	// Verify that cache was updated within the last 2 millisecond.
 	if !mock_cache.shared.csUpdatedAt.After(last_cache_time) || !mock_cache.shared.mcUpdatedAt.After(last_cache_time) || !mock_cache.shared.nsUpdatedAt.After(last_cache_time) {

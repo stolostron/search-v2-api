@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	pgxpool "github.com/jackc/pgx/v4/pgxpool"
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -13,6 +14,7 @@ import (
 )
 
 var pool *pgxpool.Pool
+var timeLastPing time.Time
 
 func initializePool(ctx context.Context) {
 	cfg := config.Cfg
@@ -51,14 +53,18 @@ func GetConnection() *pgxpool.Pool {
 	}
 
 	if pool != nil {
+		// Skip database ping if checked less than 1 second ago.
+		if time.Since(timeLastPing) < time.Second {
+			return pool
+		}
 		err := pool.Ping(ctx)
 		if err != nil {
 			klog.Error("Unable to get a database connection. ", err)
 			metric.DBConnectionFailed.WithLabelValues("DBPing").Inc()
-			// Here we may need to add retry.
-			return pool
+			return nil
 		}
 		metric.DBConnectionSuccess.WithLabelValues("DBPing").Inc()
+		timeLastPing = time.Now()
 		klog.Info("Successfully connected to database!")
 	}
 	return pool

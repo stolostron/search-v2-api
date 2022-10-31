@@ -33,6 +33,7 @@ type SearchResult struct {
 }
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
+	defer metric.SlowLog("SearchResolver", 0)()
 	// For each input, create a SearchResult resolver.
 	srchResult := make([]*SearchResult, len(input))
 	userData, userDataErr := rbac.GetCache().GetUserData(ctx)

@@ -43,5 +43,10 @@ var cacheInst = Cache{
 
 // Get a reference to the cache instance.
 func GetCache() *Cache {
+	// Workaround. Update cache connection with every request.
+	// We need a better way to maintain this connection.
+	cacheInst.pool = db.GetConnection()
+	cacheInst.shared.pool = db.GetConnection()
+
 	return &cacheInst
 }
