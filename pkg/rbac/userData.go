@@ -278,10 +278,9 @@ func (user *UserDataCache) updateUserManagedClusterList(cache *Cache, ns string)
 }
 
 // Request the SelfSubjectRullesRreview(SSRR) for the namespace and process the rules.
-func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache, ns string, wg *sync.WaitGroup, lock *sync.Mutex) {
+func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache, ns string,
+	userInfo authv1.UserInfo, wg *sync.WaitGroup, lock *sync.Mutex) {
 	defer wg.Done()
-	// TO-DO-Separate-PR: userInfo should be in the UserDataCache struct so it's accessible by all functions.
-	_, userInfo := cache.GetUserUID(ctx)
 
 	rulesCheck := authz.SelfSubjectRulesReview{
 		Spec: authz.SelfSubjectRulesReviewSpec{
@@ -366,7 +365,7 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	klog.V(5).Info("Getting namespaces from shared cache.")
 	user.csrLock.Lock()
 	defer user.csrLock.Unlock()
-	allNamespaces := cache.shared.namespaces // <<< FIX: Should not access data from shared cache directly.
+	allNamespaces := cache.shared.namespaces // TO-DO-Separate-PR: Should not access data from shared cache directly.
 	if len(allNamespaces) == 0 {
 		klog.Warning("All namespaces array from shared cache is empty.", cache.shared.nsErr)
 		return user, cache.shared.nsErr
@@ -381,7 +380,7 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	lock := sync.Mutex{}
 	for _, ns := range allNamespaces {
 		wg.Add(1)
-		go user.getSSRRforNamespace(ctx, cache, ns, &wg, &lock)
+		go user.getSSRRforNamespace(ctx, cache, ns, userInfo, &wg, &lock)
 	}
 
 	// Wait for all go routines to complete.
