@@ -278,10 +278,12 @@ func (user *UserDataCache) updateUserManagedClusterList(cache *Cache, ns string)
 }
 
 // Request the SelfSubjectRullesRreview(SSRR) for the namespace and process the rules.
+// TO-DO-Separate-PR: Reduce the args required by this func.
 func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache, ns string,
 	userInfo authv1.UserInfo, wg *sync.WaitGroup, lock *sync.Mutex) {
 	defer wg.Done()
 
+	// Request the SelfSubjectRulesReview for the namespace.
 	rulesCheck := authz.SelfSubjectRulesReview{
 		Spec: authz.SelfSubjectRulesReviewSpec{
 			Namespace: ns,
@@ -294,7 +296,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 		klog.V(9).Infof("SelfSubjectRulesReviews Kube API result for ns:%s : %v\n", ns, prettyPrint(result.Status))
 	}
 
-	// Process the SSRR result.
+	// Process the SSRR result and add to this UserDataCache object.
 	for _, rules := range result.Status.ResourceRules {
 		for _, verb := range rules.Verbs {
 			if verb == "list" || verb == "*" {
@@ -375,7 +377,7 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	user.userData.ManagedClusters = make(map[string]struct{})
 	uid, userInfo := cache.GetUserUID(ctx)
 
-	// Process each namespace in async go routine.
+	// Process each namespace SSRR in an async go routine.
 	wg := sync.WaitGroup{}
 	lock := sync.Mutex{}
 	for _, ns := range allNamespaces {
