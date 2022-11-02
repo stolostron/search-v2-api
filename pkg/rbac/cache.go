@@ -28,7 +28,7 @@ type Cache struct {
 }
 
 // Common fields to manage a cached data field.
-type cacheFieldMgmt struct {
+type cacheMetadata struct {
 	err       error      // Error while retrieving the data from external API.
 	lock      sync.Mutex // Locks the data field while requesting the latest data.
 	updatedAt time.Time  // Time when the data field was last updated.

@@ -25,10 +25,10 @@ const impersonationConfigCreationerror = "Error creating clientset with imperson
 type UserDataCache struct {
 	UserData
 
-	// Added fields to manage the state of the cached data.
-	clustersCache cacheFieldMgmt // NOTE: clustersCache.lock not used because we use the nsrCache.lock
-	csrCache      cacheFieldMgmt
-	nsrCache      cacheFieldMgmt
+	// Metadata to manage the state of the cached data.
+	clustersCache cacheMetadata // NOTE: clustersCache.lock not used because we use the nsrCache.lock
+	csrCache      cacheMetadata
+	nsrCache      cacheMetadata
 
 	// Client to external API to be replaced with a mock by unit tests.
 	authzClient v1.AuthorizationV1Interface

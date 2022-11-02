@@ -27,11 +27,11 @@ type SharedData struct {
 	namespaces       []string
 	propTypes        map[string]string
 
-	// Added fields to manage the state of the cached data.
-	csrCache    cacheFieldMgmt
-	dcCache     cacheFieldMgmt
-	mcCache     cacheFieldMgmt
-	nsCache     cacheFieldMgmt
+	// Metadata to manage the state of the cached data.
+	csrCache    cacheMetadata
+	dcCache     cacheMetadata
+	mcCache     cacheMetadata
+	nsCache     cacheMetadata
 	propTypeErr error // Capture errors retrieving property types
 
 	// Clients to external APIs to be replaced with a mock by unit tests.

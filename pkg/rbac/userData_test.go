@@ -135,9 +135,9 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 	mock_cache.users["unique-user-id"] = &UserDataCache{
 		UserData: UserData{ManagedClusters: managedclusters,
 			NsResources: nsresources},
-		csrCache:      cacheFieldMgmt{updatedAt: time.Now()},
-		nsrCache:      cacheFieldMgmt{updatedAt: time.Now()},
-		clustersCache: cacheFieldMgmt{updatedAt: time.Now()},
+		csrCache:      cacheMetadata{updatedAt: time.Now()},
+		nsrCache:      cacheMetadata{updatedAt: time.Now()},
+		clustersCache: cacheMetadata{updatedAt: time.Now()},
 	}
 
 	rulesCheck := &authz.SelfSubjectRulesReview{
@@ -201,7 +201,7 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
 	mock_cache.users["unique-user-id"] = &UserDataCache{
 		UserData: UserData{NsResources: nsresources},
-		nsrCache: cacheFieldMgmt{updatedAt: last_cache_time},
+		nsrCache: cacheMetadata{updatedAt: last_cache_time},
 	}
 	rulesCheck := &authz.SelfSubjectRulesReview{
 		Spec: authz.SelfSubjectRulesReviewSpec{
@@ -264,10 +264,10 @@ func Test_clusterScoped_usingCache(t *testing.T) {
 		UserData: UserData{
 			CsResources:     []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}},
 			ManagedClusters: map[string]struct{}{"some-namespace": {}}},
-		clustersCache: cacheFieldMgmt{updatedAt: time.Now()},
+		clustersCache: cacheMetadata{updatedAt: time.Now()},
 		// Using current time , GetUserData should have the same values as cache
-		csrCache: cacheFieldMgmt{updatedAt: time.Now()},
-		nsrCache: cacheFieldMgmt{updatedAt: time.Now()},
+		csrCache: cacheMetadata{updatedAt: time.Now()},
+		nsrCache: cacheMetadata{updatedAt: time.Now()},
 	}
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 
@@ -338,7 +338,7 @@ func Test_clusterScoped_expiredCache(t *testing.T) {
 		UserData: UserData{
 			CsResources: []Resource{{Apigroup: "k8s.io", Kind: "csinodes"}},
 		},
-		csrCache:    cacheFieldMgmt{updatedAt: last_cache_time},
+		csrCache:    cacheMetadata{updatedAt: last_cache_time},
 		authzClient: fs.AuthorizationV1(),
 	}
 
@@ -447,10 +447,10 @@ func Test_managedClusters_usingCache(t *testing.T) {
 			CsResources:     []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}},
 			ManagedClusters: map[string]struct{}{"some-managed-cluster": {}, "some-other-managed-cluster": {}},
 		},
-		clustersCache: cacheFieldMgmt{updatedAt: time.Now()},
+		clustersCache: cacheMetadata{updatedAt: time.Now()},
 		// Using current time , GetUserData should have the same values as cache
-		csrCache: cacheFieldMgmt{updatedAt: time.Now()},
-		nsrCache: cacheFieldMgmt{updatedAt: time.Now()},
+		csrCache: cacheMetadata{updatedAt: time.Now()},
+		nsrCache: cacheMetadata{updatedAt: time.Now()},
 	}
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 
@@ -538,7 +538,7 @@ func Test_managedCluster_expiredCache(t *testing.T) {
 	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
 	mock_cache.users["unique-user-id"] = &UserDataCache{
 		UserData:      UserData{ManagedClusters: pastManClusters},
-		clustersCache: cacheFieldMgmt{updatedAt: last_cache_time},
+		clustersCache: cacheMetadata{updatedAt: last_cache_time},
 		authzClient:   fs.AuthorizationV1(),
 	}
 
@@ -573,7 +573,7 @@ func Test_managedCluster_GetUserData(t *testing.T) {
 	last_cache_time := time.Now().Add(time.Duration(-5) * time.Minute)
 	mock_cache.users["unique-user-id"] = &UserDataCache{
 		UserData:      UserData{ManagedClusters: managedClusters, CsResources: csRes, NsResources: nsRes},
-		clustersCache: cacheFieldMgmt{updatedAt: last_cache_time},
+		clustersCache: cacheMetadata{updatedAt: last_cache_time},
 	}
 	csResResult := mock_cache.users["unique-user-id"].GetCsResources()
 	if len(csResResult) != 2 {
@@ -601,9 +601,9 @@ func Test_getUserData(t *testing.T) {
 			NsResources:     map[string][]Resource{"ns1": {{Apigroup: "", Kind: "pods"}}},
 		},
 		// Using current time , GetUserData should have the same values as cache
-		clustersCache: cacheFieldMgmt{updatedAt: time.Now()},
-		csrCache:      cacheFieldMgmt{updatedAt: time.Now()},
-		nsrCache:      cacheFieldMgmt{updatedAt: time.Now()},
+		clustersCache: cacheMetadata{updatedAt: time.Now()},
+		csrCache:      cacheMetadata{updatedAt: time.Now()},
+		nsrCache:      cacheMetadata{updatedAt: time.Now()},
 	}
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 
@@ -648,7 +648,7 @@ func Test_getImpersonationClientSet(t *testing.T) {
 
 	udc := &UserDataCache{
 		UserData: UserData{},
-		nsrCache: cacheFieldMgmt{updatedAt: time.Now()},
+		nsrCache: cacheMetadata{updatedAt: time.Now()},
 	}
 	_, err := udc.getImpersonationClientSet("123456", mock_cache)
 	// Ensure that there is no error
@@ -761,7 +761,7 @@ func Test_updateUserManagedClusterList(t *testing.T) {
 
 	udc := &UserDataCache{
 		UserData: UserData{ManagedClusters: make(map[string]struct{})},
-		nsrCache: cacheFieldMgmt{updatedAt: time.Now()},
+		nsrCache: cacheMetadata{updatedAt: time.Now()},
 	}
 	// All namespaces list
 	namespaces := map[string]struct{}{"some-namespace": {}, "some-nonmatching-namespace": {}, "invalid-namespace": {}}

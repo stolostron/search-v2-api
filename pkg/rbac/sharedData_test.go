@@ -124,8 +124,8 @@ func Test_getResouces_usingCache(t *testing.T) {
 	mock_cache.shared = SharedData{
 		namespaces:      namespaces,
 		managedClusters: manClusters,
-		mcCache:         cacheFieldMgmt{updatedAt: time.Now()},
-		csrCache:        cacheFieldMgmt{updatedAt: time.Now()},
+		mcCache:         cacheMetadata{updatedAt: time.Now()},
+		csrCache:        cacheMetadata{updatedAt: time.Now()},
 		csResourcesMap:  csRes,
 		propTypes:       propTypesMock,
 		corev1Client:    mock_cache.shared.corev1Client,
@@ -179,9 +179,9 @@ func Test_getResources_expiredCache(t *testing.T) {
 	mock_cache.shared = SharedData{
 		namespaces:      namespaces,
 		managedClusters: manClusters,
-		nsCache:         cacheFieldMgmt{updatedAt: last_cache_time},
-		mcCache:         cacheFieldMgmt{updatedAt: last_cache_time},
-		csrCache:        cacheFieldMgmt{updatedAt: last_cache_time},
+		nsCache:         cacheMetadata{updatedAt: last_cache_time},
+		mcCache:         cacheMetadata{updatedAt: last_cache_time},
+		csrCache:        cacheMetadata{updatedAt: last_cache_time},
 		csResourcesMap:  csRes,
 		corev1Client:    mock_cache.shared.corev1Client,
 		dynamicClient:   mock_cache.shared.dynamicClient,
@@ -243,9 +243,9 @@ func Test_GetandSetDisabledClusters(t *testing.T) {
 	//user's managedclusters
 
 	userdataCache := UserDataCache{UserData: UserData{ManagedClusters: dClusters},
-		csrCache:      cacheFieldMgmt{updatedAt: time.Now()},
-		nsrCache:      cacheFieldMgmt{updatedAt: time.Now()},
-		clustersCache: cacheFieldMgmt{updatedAt: time.Now()}}
+		csrCache:      cacheMetadata{updatedAt: time.Now()},
+		nsrCache:      cacheMetadata{updatedAt: time.Now()},
+		clustersCache: cacheMetadata{updatedAt: time.Now()}}
 	setupUserDataCache(&mock_cache, &userdataCache)
 
 	res, _ := mock_cache.GetDisabledClusters(context.WithValue(context.Background(),
@@ -276,9 +276,9 @@ func Test_getDisabledClusters_UserNotFound(t *testing.T) {
 	manClusters := map[string]struct{}{}
 	manClusters["disabled1"] = struct{}{}
 	userdataCache := UserDataCache{UserData: UserData{ManagedClusters: manClusters},
-		csrCache:      cacheFieldMgmt{updatedAt: time.Now()},
-		nsrCache:      cacheFieldMgmt{updatedAt: time.Now()},
-		clustersCache: cacheFieldMgmt{updatedAt: time.Now()}}
+		csrCache:      cacheMetadata{updatedAt: time.Now()},
+		nsrCache:      cacheMetadata{updatedAt: time.Now()},
+		clustersCache: cacheMetadata{updatedAt: time.Now()}}
 	setupUserDataCache(&mock_cache, &userdataCache)
 
 	mock_cache.shared.dcCache.err = nil
@@ -304,9 +304,9 @@ func Test_getDisabledClustersValid(t *testing.T) {
 	manClusters := map[string]struct{}{"disabled1": {}}
 
 	userdataCache := UserDataCache{UserData: UserData{ManagedClusters: manClusters},
-		csrCache:      cacheFieldMgmt{updatedAt: time.Now()},
-		nsrCache:      cacheFieldMgmt{updatedAt: time.Now()},
-		clustersCache: cacheFieldMgmt{updatedAt: time.Now()}}
+		csrCache:      cacheMetadata{updatedAt: time.Now()},
+		nsrCache:      cacheMetadata{updatedAt: time.Now()},
+		clustersCache: cacheMetadata{updatedAt: time.Now()}}
 	setupUserDataCache(&mock_cache, &userdataCache)
 
 	mock_cache.shared.dcCache.err = nil
@@ -332,9 +332,9 @@ func Test_getDisabledClustersValid_User_NoAccess(t *testing.T) {
 
 	//user only has access to "managed1" cluster, but not "disabled1" cluster
 	userdataCache := UserDataCache{UserData: UserData{ManagedClusters: manClusters},
-		csrCache:      cacheFieldMgmt{updatedAt: time.Now()},
-		nsrCache:      cacheFieldMgmt{updatedAt: time.Now()},
-		clustersCache: cacheFieldMgmt{updatedAt: time.Now()}}
+		csrCache:      cacheMetadata{updatedAt: time.Now()},
+		nsrCache:      cacheMetadata{updatedAt: time.Now()},
+		clustersCache: cacheMetadata{updatedAt: time.Now()}}
 	setupUserDataCache(&mock_cache, &userdataCache)
 
 	mock_cache.shared.dcCache.err = nil
@@ -359,9 +359,9 @@ func Test_getDisabledClustersCacheInValid_RunQuery(t *testing.T) {
 	//user's managedclusters
 	manClusters := map[string]struct{}{"disabled1": {}}
 	userdataCache := UserDataCache{UserData: UserData{ManagedClusters: manClusters},
-		csrCache:      cacheFieldMgmt{updatedAt: time.Now()},
-		nsrCache:      cacheFieldMgmt{updatedAt: time.Now()},
-		clustersCache: cacheFieldMgmt{updatedAt: time.Now()}}
+		csrCache:      cacheMetadata{updatedAt: time.Now()},
+		nsrCache:      cacheMetadata{updatedAt: time.Now()},
+		clustersCache: cacheMetadata{updatedAt: time.Now()}}
 	setupUserDataCache(&mock_cache, &userdataCache)
 
 	mock_cache.shared.dcCache.err = nil
@@ -401,9 +401,9 @@ func Test_getDisabledClustersCacheInValid_RunQueryError(t *testing.T) {
 
 	//user has no access to disabled clusters
 	userdataCache := UserDataCache{UserData: UserData{ManagedClusters: manClusters},
-		csrCache:      cacheFieldMgmt{updatedAt: time.Now()},
-		nsrCache:      cacheFieldMgmt{updatedAt: time.Now()},
-		clustersCache: cacheFieldMgmt{updatedAt: time.Now()}}
+		csrCache:      cacheMetadata{updatedAt: time.Now()},
+		nsrCache:      cacheMetadata{updatedAt: time.Now()},
+		clustersCache: cacheMetadata{updatedAt: time.Now()}}
 	setupUserDataCache(&mock_cache, &userdataCache)
 
 	mock_cache.shared.dcCache.err = nil
