@@ -3,6 +3,7 @@ package rbac
 
 import (
 	"sync"
+	"time"
 
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -24,6 +25,13 @@ type Cache struct {
 	authnClient authnv1.AuthenticationV1Interface
 	pool        pgxpoolmock.PgxPool // Database client
 	restConfig  *rest.Config
+}
+
+// Common fields to manage a cached data field.
+type cacheFieldMgmt struct {
+	err       error      // Error while retrieving the data from external API.
+	lock      sync.Mutex // Locks the data field while requesting the latest data.
+	updatedAt time.Time  // Time when the data field was last updated.
 }
 
 // Initialize the cache as a singleton instance.
