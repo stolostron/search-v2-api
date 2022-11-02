@@ -27,15 +27,14 @@ type SharedData struct {
 	namespaces       []string
 	propTypes        map[string]string
 
-	// These are internal objects to track the state of the cache.
-	csrCache    cacheFieldMgmt
-	dcCache     cacheFieldMgmt
-	mcCache     cacheFieldMgmt
-	nsCache     cacheFieldMgmt
+	// Metadata to manage the state of the cached data.
+	csrCache    cacheMetadata
+	dcCache     cacheMetadata
+	mcCache     cacheMetadata
+	nsCache     cacheMetadata
 	propTypeErr error // Capture errors retrieving property types
 
-	// Clients to external APIs.
-	// Defining these here allow the tests to replace with a mock client.
+	// Clients to external APIs to be replaced with a mock by unit tests.
 	corev1Client  corev1.CoreV1Interface
 	dynamicClient dynamic.Interface
 	pool          pgxpoolmock.PgxPool // Database client

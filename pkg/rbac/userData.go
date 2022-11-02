@@ -25,20 +25,12 @@ const impersonationConfigCreationerror = "Error creating clientset with imperson
 type UserDataCache struct {
 	UserData
 
-	// Internal fields to manage the cache.
-	clustersErr error // Error while updating clusters data.
-	// NOTE: not implemented because we use the nsrLock
-	// clustersLock      sync.Mutex // Locks when clusters data is being updated.
-	clustersUpdatedAt time.Time // Time clusters was last updated.
+	// Metadata to manage the state of the cached data.
+	clustersCache cacheMetadata // NOTE: clustersCache.lock not used because we use the nsrCache.lock
+	csrCache      cacheMetadata
+	nsrCache      cacheMetadata
 
-	csrErr       error      // Error while updating cluster-scoped resources data.
-	csrLock      sync.Mutex // Locks when cluster-scoped resources data is being updated.
-	csrUpdatedAt time.Time  // Time cluster-scoped resources was last updated.
-
-	nsrErr       error      // Error while updating namespaced resources data.
-	nsrLock      sync.Mutex // Locks when namespaced resources data is being updated.
-	nsrUpdatedAt time.Time  // Time namespaced resources was last updated.
-
+	// Client to external API to be replaced with a mock by unit tests.
 	authzClient v1.AuthorizationV1Interface
 }
 
@@ -143,19 +135,19 @@ func (user *UserDataCache) userHasAllAccess(cache *Cache, ctx context.Context, c
 	}
 	//If we have a new set of authorized list for the user reset the previous one
 	if user.userAuthorizedListSSAR(ctx, impersClientset, "*", "*") {
-		user.csrLock.Lock()
-		defer user.csrLock.Unlock()
+		user.csrCache.lock.Lock()
+		defer user.csrCache.lock.Unlock()
 		user.CsResources = []Resource{{Apigroup: "*", Kind: "*"}}
-		user.csrUpdatedAt = time.Now()
+		user.csrCache.updatedAt = time.Now()
 
-		user.nsrLock.Lock()
-		defer user.nsrLock.Unlock()
+		user.nsrCache.lock.Lock()
+		defer user.nsrCache.lock.Unlock()
 		user.NsResources = map[string][]Resource{"*": {{Apigroup: "*", Kind: "*"}}}
-		user.nsrUpdatedAt = time.Now()
+		user.nsrCache.updatedAt = time.Now()
 
 		user.ManagedClusters = cache.shared.managedClusters
-		user.clustersUpdatedAt = time.Now()
-		user.csrErr, user.nsrErr, user.clustersErr = nil, nil, nil
+		user.clustersCache.updatedAt = time.Now()
+		user.csrCache.err, user.nsrCache.err, user.clustersCache.err = nil, nil, nil
 		return true, nil
 	}
 	return false, nil
@@ -182,9 +174,9 @@ func (cache *Cache) GetUserData(ctx context.Context) (*UserData, error) {
 /* Cache is Valid if the csrUpdatedAt and nsrUpdatedAt times are before the
 Cache expiry time */
 func (user *UserDataCache) isValid() bool {
-	if (time.Now().Before(user.csrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) &&
-		(time.Now().Before(user.nsrUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) &&
-		(time.Now().Before(user.clustersUpdatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) {
+	if (time.Now().Before(user.csrCache.updatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) &&
+		(time.Now().Before(user.nsrCache.updatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) &&
+		(time.Now().Before(user.clustersCache.updatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) {
 		return true
 	}
 	return false
@@ -196,21 +188,21 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 	clientToken string) (*UserDataCache, error) {
 	defer metric.SlowLog("UserDataCache::getClusterScopedResources", 150*time.Millisecond)()
 
-	user.csrErr = nil
-	user.csrLock.Lock()
-	defer user.csrLock.Unlock()
+	user.csrCache.err = nil
+	user.csrCache.lock.Lock()
+	defer user.csrCache.lock.Unlock()
 
 	// Not present in cache, find all cluster scoped resources
 	clusterScopedResources := cache.shared.csResourcesMap
 	if len(clusterScopedResources) == 0 {
-		klog.Warning("Cluster scoped resources from shared cache empty.", user.csrErr)
-		return user, user.csrErr
+		klog.Warning("Cluster scoped resources from shared cache empty.", user.csrCache.err)
+		return user, user.csrCache.err
 	}
 	impersClientset, err := user.getImpersonationClientSet(clientToken, cache)
 	if err != nil {
-		user.csrErr = err
+		user.csrCache.err = err
 		klog.Warning(impersonationConfigCreationerror, err.Error())
-		return user, user.csrErr
+		return user, user.csrCache.err
 	}
 	// If we have a new set of authorized list for the user reset the previous one
 	user.CsResources = nil
@@ -236,8 +228,8 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 	uid, userInfo := cache.GetUserUID(ctx)
 	klog.V(7).Infof("User %s with uid: %s has access to these cluster scoped res: %+v \n", userInfo.Username, uid,
 		user.CsResources)
-	user.csrUpdatedAt = time.Now()
-	return user, user.csrErr
+	user.csrCache.updatedAt = time.Now()
+	return user, user.csrCache.err
 }
 
 func (user *UserDataCache) userAuthorizedListSSAR(ctx context.Context, authzClient v1.AuthorizationV1Interface,
@@ -354,19 +346,19 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	clientToken string) (*UserDataCache, error) {
 	defer metric.SlowLog("UserDataCache::getNamespacedResources", 250*time.Millisecond)()
 	// check if we already have user's namespaced resources in userData cache and check if time is expired
-	user.nsrLock.Lock()
-	defer user.nsrLock.Unlock()
+	user.nsrCache.lock.Lock()
+	defer user.nsrCache.lock.Unlock()
 
 	// clear cache
-	user.csrErr = nil
+	user.csrCache.err = nil
 	user.NsResources = nil
-	user.clustersErr = nil
+	user.clustersCache.err = nil
 	user.ManagedClusters = nil
 
 	// get all namespaces from shared cache:
 	klog.V(5).Info("Getting namespaces from shared cache.")
-	user.csrLock.Lock()
-	defer user.csrLock.Unlock()
+	user.csrCache.lock.Lock()
+	defer user.csrCache.lock.Unlock()
 	allNamespaces := cache.shared.namespaces // TO-DO-Separate-PR: Should not access data from shared cache directly.
 	if len(allNamespaces) == 0 {
 		klog.Warning("All namespaces array from shared cache is empty.", cache.shared.nsCache.err)
@@ -393,10 +385,10 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	klog.V(7).Infof("User %s with uid: %s has access to these ManagedClusters: %+v \n", userInfo.Username, uid,
 		user.ManagedClusters)
 
-	user.nsrUpdatedAt = time.Now()
-	user.clustersUpdatedAt = time.Now()
+	user.nsrCache.updatedAt = time.Now()
+	user.clustersCache.updatedAt = time.Now()
 
-	return user, user.nsrErr
+	return user, user.nsrCache.err
 }
 
 // SSRR has resources that are clusterscoped too
