@@ -23,7 +23,7 @@ const impersonationConfigCreationerror = "Error creating clientset with imperson
 
 // Contains data about the resources the user is allowed to access.
 type UserDataCache struct {
-	userData UserData
+	UserData
 
 	// Internal fields to manage the cache.
 	clustersErr error // Error while updating clusters data.
@@ -145,15 +145,15 @@ func (user *UserDataCache) userHasAllAccess(cache *Cache, ctx context.Context, c
 	if user.userAuthorizedListSSAR(ctx, impersClientset, "*", "*") {
 		user.csrLock.Lock()
 		defer user.csrLock.Unlock()
-		user.userData.CsResources = []Resource{{Apigroup: "*", Kind: "*"}}
+		user.CsResources = []Resource{{Apigroup: "*", Kind: "*"}}
 		user.csrUpdatedAt = time.Now()
 
 		user.nsrLock.Lock()
 		defer user.nsrLock.Unlock()
-		user.userData.NsResources = map[string][]Resource{"*": {{Apigroup: "*", Kind: "*"}}}
+		user.NsResources = map[string][]Resource{"*": {{Apigroup: "*", Kind: "*"}}}
 		user.nsrUpdatedAt = time.Now()
 
-		user.userData.ManagedClusters = cache.shared.managedClusters
+		user.ManagedClusters = cache.shared.managedClusters
 		user.clustersUpdatedAt = time.Now()
 		user.csrErr, user.nsrErr, user.clustersErr = nil, nil, nil
 		return true, nil
@@ -213,7 +213,7 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 		return user, user.csrErr
 	}
 	// If we have a new set of authorized list for the user reset the previous one
-	user.userData.CsResources = nil
+	user.CsResources = nil
 
 	// Paralellize SSAR API calls.
 	var wg sync.WaitGroup
@@ -226,7 +226,7 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 			if user.userAuthorizedListSSAR(ctx, impersClientset, group, kind) {
 				lock.Lock()
 				defer lock.Unlock()
-				user.userData.CsResources = append(user.userData.CsResources,
+				user.CsResources = append(user.CsResources,
 					Resource{Apigroup: group, Kind: kind})
 			}
 		}(res.Apigroup, res.Kind)
@@ -235,7 +235,7 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 
 	uid, userInfo := cache.GetUserUID(ctx)
 	klog.V(7).Infof("User %s with uid: %s has access to these cluster scoped res: %+v \n", userInfo.Username, uid,
-		user.userData.CsResources)
+		user.CsResources)
 	user.csrUpdatedAt = time.Now()
 	return user, user.csrErr
 }
@@ -269,10 +269,10 @@ func (user *UserDataCache) userAuthorizedListSSAR(ctx context.Context, authzClie
 func (user *UserDataCache) updateUserManagedClusterList(cache *Cache, ns string) {
 	_, managedClusterNs := cache.shared.managedClusters[ns]
 	if managedClusterNs {
-		if user.userData.ManagedClusters == nil {
-			user.userData.ManagedClusters = map[string]struct{}{}
+		if user.ManagedClusters == nil {
+			user.ManagedClusters = map[string]struct{}{}
 		}
-		user.userData.ManagedClusters[ns] = struct{}{}
+		user.ManagedClusters[ns] = struct{}{}
 
 	}
 }
@@ -311,7 +311,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 							// No need to loop through all resources. Save the wildcard *
 							// exit the resourceRulesLoop
 							if res == "*" && api == "*" {
-								user.userData.NsResources[ns] = []Resource{{Apigroup: api, Kind: res}}
+								user.NsResources[ns] = []Resource{{Apigroup: api, Kind: res}}
 								klog.V(5).Infof("User %s with uid: %s has access to everything in the namespace %s",
 									userInfo.Username, userInfo.UID, ns)
 
@@ -320,7 +320,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 
 								return
 							}
-							user.userData.NsResources[ns] = append(user.userData.NsResources[ns],
+							user.NsResources[ns] = append(user.NsResources[ns],
 								Resource{Apigroup: api, Kind: res})
 						} else if cache.shared.isClusterScoped(res, api) {
 							klog.V(5).Info("Got clusterscoped resource", api, "/",
@@ -359,9 +359,9 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 
 	// clear cache
 	user.csrErr = nil
-	user.userData.NsResources = nil
+	user.NsResources = nil
 	user.clustersErr = nil
-	user.userData.ManagedClusters = nil
+	user.ManagedClusters = nil
 
 	// get all namespaces from shared cache:
 	klog.V(5).Info("Getting namespaces from shared cache.")
@@ -373,8 +373,8 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 		return user, cache.shared.nsErr
 	}
 
-	user.userData.NsResources = make(map[string][]Resource)
-	user.userData.ManagedClusters = make(map[string]struct{})
+	user.NsResources = make(map[string][]Resource)
+	user.ManagedClusters = make(map[string]struct{})
 	uid, userInfo := cache.GetUserUID(ctx)
 
 	// Process each namespace SSRR in an async go routine.
@@ -389,9 +389,9 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	wg.Wait()
 
 	klog.V(7).Infof("User %s with uid: %s has access to these namespace scoped res: %+v \n", userInfo.Username, uid,
-		user.userData.NsResources)
+		user.NsResources)
 	klog.V(7).Infof("User %s with uid: %s has access to these ManagedClusters: %+v \n", userInfo.Username, uid,
-		user.userData.ManagedClusters)
+		user.ManagedClusters)
 
 	user.nsrUpdatedAt = time.Now()
 	user.clustersUpdatedAt = time.Now()
@@ -468,13 +468,13 @@ func (user *UserDataCache) getAuthzClient() v1.AuthorizationV1Interface {
 }
 
 func (user *UserDataCache) GetCsResources() []Resource {
-	return user.userData.CsResources
+	return user.CsResources
 }
 
 func (user *UserDataCache) GetNsResources() map[string][]Resource {
-	return user.userData.NsResources
+	return user.NsResources
 }
 
 func (user *UserDataCache) GetManagedClusters() map[string]struct{} {
-	return user.userData.ManagedClusters
+	return user.ManagedClusters
 }
