@@ -98,6 +98,7 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 	// especially if new columns are added to the resources table.
 	propTypeMap["cluster"] = "string"
 
+	klog.Info("Successfully fetched property types from the database.")
 	//cache results:
 	shared.propTypes = propTypeMap
 	shared.propTypeErr = err
@@ -161,7 +162,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) {
 		go func() {
 			defer wg.Done()
 			err := cache.shared.getManagedClusters(ctx)
-			if err == nil {
+			if err != nil {
 				klog.Errorf("Error retrieving managed clusters. Error: [%+v]", err)
 			}
 		}()

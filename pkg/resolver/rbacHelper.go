@@ -20,11 +20,19 @@ func matchApigroupKind(resources []rbac.Resource) exp.ExpressionList {
 		whereOrDs := []exp.Expression{}
 		//add apigroup filter
 		if clusterRes.Apigroup != "*" { // if all apigroups are allowed, this filter is not needed
-			whereOrDs = append(whereOrDs, goqu.COALESCE(goqu.L(`data->>?`, "apigroup"), "").Eq(clusterRes.Apigroup))
+			var isApiGrp exp.LiteralExpression
+			if clusterRes.Apigroup == "" { // if apigroup is empty
+				isApiGrp = goqu.L("NOT(???)", goqu.C("data"), goqu.Literal("?"), "apigroup")
+			} else {
+				isApiGrp = goqu.L("???", goqu.L(`data->?`, "apigroup"),
+					goqu.Literal("?"), clusterRes.Apigroup)
+			}
+			whereOrDs = append(whereOrDs, isApiGrp) //data->'apigroup'?'storage.k8s.io'
 		}
 		//add kind filter
 		if clusterRes.Kind != "*" { // if all kinds are allowed, this filter is not needed
-			whereOrDs = append(whereOrDs, goqu.L(`data->>?`, "kind_plural").Eq(clusterRes.Kind))
+			whereOrDs = append(whereOrDs, goqu.L("???", goqu.L(`data->?`, "kind_plural"),
+				goqu.Literal("?"), clusterRes.Kind))
 		}
 		// special case: if both apigroup and kind are stars - all resources are allowed
 		if clusterRes.Apigroup == "*" && clusterRes.Kind == "*" {
@@ -48,8 +56,8 @@ func matchApigroupKind(resources []rbac.Resource) exp.ExpressionList {
 // Resolves to something like:
 //   (AND data->>'namespace' = '')
 func matchClusterScopedResources(csRes []rbac.Resource, userInfo v1.UserInfo) exp.ExpressionList {
-	if len(csRes) < 1 {
-		return exp.NewExpressionList(0, nil)
+	if len(csRes) == 0 {
+		return goqu.Or() // return empty clause
 
 		// user has access to all cluster scoped resources
 	} else if len(csRes) == 1 && csRes[0].Apigroup == "*" && csRes[0].Kind == "*" {
@@ -59,7 +67,8 @@ func matchClusterScopedResources(csRes []rbac.Resource, userInfo v1.UserInfo) ex
 		return goqu.Or() // return empty clause
 
 	} else {
-		return goqu.And(goqu.COALESCE(goqu.L(`data->>?`, "namespace"), "").Eq(""),
+		//cluster scoped resources do not have namespace set. So, add the condition below to check that.
+		return goqu.And(goqu.L("NOT(???)", goqu.C("data"), goqu.Literal("?"), "namespace"), //NOT("data"?'namespace')
 			matchApigroupKind(csRes))
 	}
 }
@@ -84,19 +93,35 @@ func matchNamespacedResources(nsResources map[string][]rbac.Resource, userInfo v
 	} else {
 		whereNsDs = make([]exp.Expression, len(nsResources))
 		for nsCount, namespace := range namespaces {
-			whereNsDs[nsCount] = goqu.And(goqu.L(`data->>?`, "namespace").Eq(namespace),
+
+			whereNsDs[nsCount] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
+				goqu.Literal("?"), namespace),
 				matchApigroupKind(nsResources[namespace]))
 		}
 		return goqu.Or(whereNsDs...)
 	}
 }
 
-// Match resources from the hub. These are identified by containing the property _hubClusterResource=true
+// Match cluster scoped and namespace scoped resources from the hub.
+// These are identified by containing the property _hubClusterResource=true
 // Resolves to:
-//    (data->>'_hubClusterResource' = true)
-func matchHubCluster() exp.BooleanExpression {
-	//hub cluster
-	return goqu.L(`data->>?`, "_hubClusterResource").Eq("true")
+// (data->>'_hubClusterResource' = true)
+// AND ((namespace=null AND apigroup AND kind) OR
+// 		(namespace AND apiproup AND kind))
+func matchHubCluster(userrbac *rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
+	if len(userrbac.CsResources) == 0 && len(userrbac.NsResources) == 0 {
+		// Do not match hub cluster if user doesn't have access to cluster scoped or namespace scoped resources on hub
+		return goqu.And()
+	} else {
+		// hub cluster rbac clause
+		return goqu.And(
+			goqu.L("???", goqu.C("data"), goqu.Literal("?"), "_hubClusterResource"), // "data"?'_hubClusterResource'
+			goqu.Or(
+				matchClusterScopedResources(userrbac.CsResources, userInfo), // (namespace=null AND apigroup AND kind)
+				matchNamespacedResources(userrbac.NsResources, userInfo),    // (namespace AND apiproup AND kind)
+			),
+		)
+	}
 }
 
 // Match resources from the managed clusters.
