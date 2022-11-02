@@ -124,8 +124,8 @@ func Test_getResouces_usingCache(t *testing.T) {
 	mock_cache.shared = SharedData{
 		namespaces:      namespaces,
 		managedClusters: manClusters,
-		mcUpdatedAt:     time.Now(),
-		csUpdatedAt:     time.Now(),
+		mcCache:         cacheFieldMgmt{updatedAt: time.Now()},
+		csrCache:        cacheFieldMgmt{updatedAt: time.Now()},
 		csResourcesMap:  csRes,
 		propTypes:       propTypesMock,
 		corev1Client:    mock_cache.shared.corev1Client,
@@ -179,9 +179,9 @@ func Test_getResources_expiredCache(t *testing.T) {
 	mock_cache.shared = SharedData{
 		namespaces:      namespaces,
 		managedClusters: manClusters,
-		nsUpdatedAt:     last_cache_time,
-		mcUpdatedAt:     last_cache_time,
-		csUpdatedAt:     last_cache_time,
+		nsCache:         cacheFieldMgmt{updatedAt: last_cache_time},
+		mcCache:         cacheFieldMgmt{updatedAt: last_cache_time},
+		csrCache:        cacheFieldMgmt{updatedAt: last_cache_time},
 		csResourcesMap:  csRes,
 		corev1Client:    mock_cache.shared.corev1Client,
 		dynamicClient:   mock_cache.shared.dynamicClient,
@@ -209,7 +209,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 		t.Error("ManagedClusters not in cache")
 	}
 	// Verify that cache was updated within the last 2 millisecond.
-	if !mock_cache.shared.csUpdatedAt.After(last_cache_time) || !mock_cache.shared.mcUpdatedAt.After(last_cache_time) || !mock_cache.shared.nsUpdatedAt.After(last_cache_time) {
+	if !mock_cache.shared.csrCache.updatedAt.After(last_cache_time) || !mock_cache.shared.mcCache.updatedAt.After(last_cache_time) || !mock_cache.shared.nsCache.updatedAt.After(last_cache_time) {
 		t.Error("Expected the cache.shared.updatedAt to have a later timestamp")
 	}
 
@@ -225,7 +225,7 @@ func Test_SharedCacheDisabledClustersInValid(t *testing.T) {
 
 func Test_SharedCacheDisabledClustersValid(t *testing.T) {
 	_, mock_cache := mockResourcesListCache(t)
-	mock_cache.shared.dcUpdatedAt = time.Now()
+	mock_cache.shared.dcCache.updatedAt = time.Now()
 	valid := mock_cache.shared.sharedCacheDisabledClustersValid()
 	if !valid {
 		t.Errorf("Expected true from cache validity check. Got %t", valid)
@@ -234,7 +234,7 @@ func Test_SharedCacheDisabledClustersValid(t *testing.T) {
 
 func Test_GetandSetDisabledClusters(t *testing.T) {
 	_, mock_cache := mockResourcesListCache(t)
-	mock_cache.shared.dcUpdatedAt = time.Now()
+	mock_cache.shared.dcCache.updatedAt = time.Now()
 
 	dClusters := map[string]struct{}{"managed1": {}, "managed2": {}}
 	setupToken(&mock_cache)
@@ -259,7 +259,7 @@ func Test_setDisabledClusters(t *testing.T) {
 	_, mock_cache := mockResourcesListCache(t)
 	mock_cache.shared.setDisabledClusters(disabledClusters, nil)
 
-	if len(mock_cache.shared.disabledClusters) != 1 || mock_cache.shared.dcErr != nil {
+	if len(mock_cache.shared.disabledClusters) != 1 || mock_cache.shared.dcCache.err != nil {
 		t.Error("Expected the cache.shared.disabledClusters to be updated with 1 cluster and no error")
 	}
 }
@@ -277,9 +277,9 @@ func Test_getDisabledClusters_UserNotFound(t *testing.T) {
 		csrUpdatedAt: time.Now(), nsrUpdatedAt: time.Now(), clustersUpdatedAt: time.Now()}
 	setupUserDataCache(&mock_cache, &userdataCache)
 
-	mock_cache.shared.dcErr = nil
+	mock_cache.shared.dcCache.err = nil
 	mock_cache.shared.disabledClusters = disabledClusters
-	mock_cache.shared.dcUpdatedAt = time.Now()
+	mock_cache.shared.dcCache.updatedAt = time.Now()
 
 	// Context key is not set - so, user won't be found
 	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.TODO())
@@ -303,9 +303,9 @@ func Test_getDisabledClustersValid(t *testing.T) {
 		csrUpdatedAt: time.Now(), nsrUpdatedAt: time.Now(), clustersUpdatedAt: time.Now()}
 	setupUserDataCache(&mock_cache, &userdataCache)
 
-	mock_cache.shared.dcErr = nil
+	mock_cache.shared.dcCache.err = nil
 	mock_cache.shared.disabledClusters = disabledClusters
-	mock_cache.shared.dcUpdatedAt = time.Now()
+	mock_cache.shared.dcCache.updatedAt = time.Now()
 
 	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(),
 		ContextAuthTokenKey, "123456"))
@@ -329,9 +329,9 @@ func Test_getDisabledClustersValid_User_NoAccess(t *testing.T) {
 		csrUpdatedAt: time.Now(), nsrUpdatedAt: time.Now(), clustersUpdatedAt: time.Now()}
 	setupUserDataCache(&mock_cache, &userdataCache)
 
-	mock_cache.shared.dcErr = nil
+	mock_cache.shared.dcCache.err = nil
 	mock_cache.shared.disabledClusters = disabledClusters
-	mock_cache.shared.dcUpdatedAt = time.Now()
+	mock_cache.shared.dcCache.updatedAt = time.Now()
 
 	disabledClustersRes, err := mock_cache.GetDisabledClusters(context.WithValue(context.Background(),
 		ContextAuthTokenKey, "123456"))
@@ -354,9 +354,9 @@ func Test_getDisabledClustersCacheInValid_RunQuery(t *testing.T) {
 		csrUpdatedAt: time.Now(), nsrUpdatedAt: time.Now(), clustersUpdatedAt: time.Now()}
 	setupUserDataCache(&mock_cache, &userdataCache)
 
-	mock_cache.shared.dcErr = nil
+	mock_cache.shared.dcCache.err = nil
 	mock_cache.shared.disabledClusters = disabledClusters
-	mock_cache.shared.dcUpdatedAt = time.Now().Add(-24 * time.Hour) //to invalidate cache
+	mock_cache.shared.dcCache.updatedAt = time.Now().Add(-24 * time.Hour) //to invalidate cache
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -394,9 +394,9 @@ func Test_getDisabledClustersCacheInValid_RunQueryError(t *testing.T) {
 		csrUpdatedAt: time.Now(), nsrUpdatedAt: time.Now(), clustersUpdatedAt: time.Now()}
 	setupUserDataCache(&mock_cache, &userdataCache)
 
-	mock_cache.shared.dcErr = nil
+	mock_cache.shared.dcCache.err = nil
 	mock_cache.shared.disabledClusters = disabledClusters
-	mock_cache.shared.dcUpdatedAt = time.Now().Add(-24 * time.Hour) // to invalidate cache
+	mock_cache.shared.dcCache.updatedAt = time.Now().Add(-24 * time.Hour) // to invalidate cache
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

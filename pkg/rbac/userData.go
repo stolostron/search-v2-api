@@ -369,8 +369,8 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	defer user.csrLock.Unlock()
 	allNamespaces := cache.shared.namespaces // TO-DO-Separate-PR: Should not access data from shared cache directly.
 	if len(allNamespaces) == 0 {
-		klog.Warning("All namespaces array from shared cache is empty.", cache.shared.nsErr)
-		return user, cache.shared.nsErr
+		klog.Warning("All namespaces array from shared cache is empty.", cache.shared.nsCache.err)
+		return user, cache.shared.nsCache.err
 	}
 
 	user.userData.NsResources = make(map[string][]Resource)
@@ -402,8 +402,8 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 // SSRR has resources that are clusterscoped too
 func (shared *SharedData) isClusterScoped(kindPlural, apigroup string) bool {
 	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
-	shared.csLock.Lock()
-	defer shared.csLock.Unlock()
+	shared.csrCache.lock.Lock()
+	defer shared.csrCache.lock.Unlock()
 	_, ok := shared.csResourcesMap[Resource{Apigroup: apigroup, Kind: kindPlural}]
 	if ok {
 		klog.V(9).Info("resource is ClusterScoped ", kindPlural, " ", apigroup, ": ", ok)

@@ -22,28 +22,16 @@ import (
 type SharedData struct {
 	// These are the data fields.
 	csResourcesMap   map[Resource]struct{}
-	namespaces       []string
-	managedClusters  map[string]struct{}
 	disabledClusters map[string]struct{}
+	managedClusters  map[string]struct{}
+	namespaces       []string
 	propTypes        map[string]string
 
 	// These are internal objects to track the state of the cache.
-	dcErr       error      // Error while updating clusters data.
-	dcLock      sync.Mutex // Locks when clusters data is being updated.
-	dcUpdatedAt time.Time  // Time clusters was last updated.
-
-	mcErr       error      // Error while updating clusters data.
-	mcLock      sync.Mutex // Locks when clusters data is being updated.
-	mcUpdatedAt time.Time  // Time clusters was last updated.
-
-	csErr       error      // Capture errors retrieving cluster-scoped resources.
-	csLock      sync.Mutex // Locks the csResources map while updating it.
-	csUpdatedAt time.Time  // Time when cluster-scoped data was last updated.
-
-	nsErr       error      // Capture errors retrieving namespaces.
-	nsLock      sync.Mutex // Locks the namespaces array while updating it.
-	nsUpdatedAt time.Time  // Time when namespaces data was last updated.
-
+	csrCache    cacheFieldMgmt
+	dcCache     cacheFieldMgmt
+	mcCache     cacheFieldMgmt
+	nsCache     cacheFieldMgmt
 	propTypeErr error // Capture errors retrieving property types
 
 	// Clients to external APIs.
@@ -185,15 +173,15 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) {
 }
 
 func (shared *SharedData) sharedCacheDisabledClustersValid() bool {
-	return shared.dcErr == nil && time.Now().Before(
-		shared.dcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond))
+	return shared.dcCache.err == nil && time.Now().Before(
+		shared.dcCache.updatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond))
 }
 
 func (shared *SharedData) isValid() bool {
 
-	if (time.Now().Before(shared.csUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) &&
-		(time.Now().Before(shared.nsUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) &&
-		(time.Now().Before(shared.mcUpdatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) {
+	if (time.Now().Before(shared.csrCache.updatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) &&
+		(time.Now().Before(shared.nsCache.updatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) &&
+		(time.Now().Before(shared.mcCache.updatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) {
 
 		return true
 	}
@@ -206,11 +194,11 @@ func (shared *SharedData) isValid() bool {
 func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 	defer metric.SlowLog("SharedData::getClusterScopedResources", 100*time.Millisecond)()
 	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
-	shared.csLock.Lock()
-	defer shared.csLock.Unlock()
+	shared.csrCache.lock.Lock()
+	defer shared.csrCache.lock.Unlock()
 	//clear previous cache
 	shared.csResourcesMap = make(map[Resource]struct{})
-	shared.csErr = nil
+	shared.csrCache.err = nil
 	klog.V(6).Info("Querying database for cluster-scoped resources.")
 
 	// Building query to get cluster scoped resources
@@ -223,18 +211,18 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 		Where(goqu.L(`"data"->>'_hubClusterResource'='true'`), goqu.L(`"data"->>'namespace'`).IsNull()).ToSQL()
 	if err != nil {
 		klog.Errorf("Error creating query [%s]. Error: [%+v]", query, err)
-		shared.csErr = err
+		shared.csrCache.err = err
 		shared.csResourcesMap = map[Resource]struct{}{}
-		return shared.csErr
+		return shared.csrCache.err
 	}
 
 	rows, err := shared.pool.Query(ctx, query)
 	if err != nil {
 		klog.Errorf("Error resolving cluster scoped resources. Query [%s]. Error: [%+v]", query, err.Error())
-		shared.csErr = err
+		shared.csrCache.err = err
 		shared.csResourcesMap = map[Resource]struct{}{}
 
-		return shared.csErr
+		return shared.csrCache.err
 	}
 
 	if rows != nil {
@@ -251,38 +239,38 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 			shared.csResourcesMap[Resource{Apigroup: apigroup, Kind: kind}] = struct{}{}
 		}
 	}
-	shared.csUpdatedAt = time.Now()
+	shared.csrCache.updatedAt = time.Now()
 
-	return shared.csErr
+	return shared.csrCache.err
 }
 
 // Obtain all the namespaces in the hub cluster.
 // Equivalent to `oc get namespaces`
 func (shared *SharedData) getSharedNamespaces(ctx context.Context) error {
 	defer metric.SlowLog("getSharedNamespaces", 100*time.Millisecond)()
-	shared.nsLock.Lock()
-	defer shared.nsLock.Unlock()
+	shared.nsCache.lock.Lock()
+	defer shared.nsCache.lock.Unlock()
 	//empty previous cache
 	shared.namespaces = nil
-	shared.nsErr = nil
+	shared.nsCache.err = nil
 
 	klog.V(5).Info("Getting namespaces from Kube Client.")
 
 	namespaceList, nsErr := shared.corev1Client.Namespaces().List(ctx, metav1.ListOptions{})
 	if nsErr != nil {
 		klog.Warning("Error resolving namespaces from KubeClient: ", nsErr)
-		shared.nsErr = nsErr
-		shared.nsUpdatedAt = time.Now()
-		return shared.nsErr
+		shared.nsCache.err = nsErr
+		shared.nsCache.updatedAt = time.Now()
+		return shared.nsCache.err
 	}
 
 	// add namespaces to allNamespace List
 	for _, n := range namespaceList.Items {
 		shared.namespaces = append(shared.namespaces, n.Name)
 	}
-	shared.nsUpdatedAt = time.Now()
+	shared.nsCache.updatedAt = time.Now()
 
-	return shared.nsErr
+	return shared.nsCache.err
 }
 
 // Obtain all the managedclusters.
@@ -290,11 +278,11 @@ func (shared *SharedData) getSharedNamespaces(ctx context.Context) error {
 func (shared *SharedData) getManagedClusters(ctx context.Context) error {
 	defer metric.SlowLog("getManagedClusters", 100*time.Millisecond)()
 
-	shared.mcLock.Lock()
-	defer shared.mcLock.Unlock()
+	shared.mcCache.lock.Lock()
+	defer shared.mcCache.lock.Unlock()
 	// clear previous cache
 	shared.managedClusters = nil
-	shared.mcErr = nil
+	shared.mcCache.err = nil
 
 	managedClusters := make(map[string]struct{})
 
@@ -305,9 +293,9 @@ func (shared *SharedData) getManagedClusters(ctx context.Context) error {
 
 	if err != nil {
 		klog.Warning("Error resolving ManagedClusters with dynamic client", err.Error())
-		shared.mcErr = err
-		shared.mcUpdatedAt = time.Now()
-		return shared.mcErr
+		shared.mcCache.err = err
+		shared.mcCache.updatedAt = time.Now()
+		return shared.mcCache.err
 	}
 
 	for _, item := range resourceObj.Items {
@@ -319,8 +307,8 @@ func (shared *SharedData) getManagedClusters(ctx context.Context) error {
 
 	klog.V(3).Info("List of managed clusters in shared data: ", managedClusters)
 	shared.managedClusters = managedClusters
-	shared.mcUpdatedAt = time.Now()
-	return shared.mcErr
+	shared.mcCache.updatedAt = time.Now()
+	return shared.mcCache.err
 
 }
 
@@ -332,8 +320,8 @@ func (cache *Cache) GetDisabledClusters(ctx context.Context) (*map[string]struct
 		return nil, userDataErr
 	}
 	// lock to prevent the query from running repeatedly
-	cache.shared.dcLock.Lock()
-	defer cache.shared.dcLock.Unlock()
+	cache.shared.dcCache.lock.Lock()
+	defer cache.shared.dcCache.lock.Unlock()
 
 	if !cache.shared.sharedCacheDisabledClustersValid() {
 		klog.V(5).Info("DisabledClusters cache empty or expired. Querying database.")
@@ -352,7 +340,7 @@ func (cache *Cache) GetDisabledClusters(ctx context.Context) (*map[string]struct
 	userAccessClusters := disabledClustersForUser(cache.shared.disabledClusters, userData.ManagedClusters, uid)
 	if len(userAccessClusters) > 0 {
 		klog.V(5).Info("user ", uid, " has access to Search Addon disabled clusters ")
-		return &userAccessClusters, cache.shared.dcErr
+		return &userAccessClusters, cache.shared.dcCache.err
 
 	} else {
 		klog.V(5).Info("user does not have access to Search Addon disabled clusters ")
@@ -375,8 +363,8 @@ func disabledClustersForUser(disabledClusters map[string]struct{},
 
 func (shared *SharedData) setDisabledClusters(disabledClusters map[string]struct{}, err error) {
 	shared.disabledClusters = disabledClusters
-	shared.dcUpdatedAt = time.Now()
-	shared.dcErr = err
+	shared.dcCache.updatedAt = time.Now()
+	shared.dcCache.err = err
 }
 
 // Build the query to find any ManagedClusters where the search addon is disabled.
