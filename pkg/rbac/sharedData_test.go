@@ -215,23 +215,6 @@ func Test_getResources_expiredCache(t *testing.T) {
 
 }
 
-func Test_SharedCacheDisabledClustersInValid(t *testing.T) {
-	_, mock_cache := mockResourcesListCache(t)
-	valid := mock_cache.shared.sharedCacheDisabledClustersValid()
-	if valid {
-		t.Errorf("Expected false from cache validity check. Got %t", valid)
-	}
-}
-
-func Test_SharedCacheDisabledClustersValid(t *testing.T) {
-	_, mock_cache := mockResourcesListCache(t)
-	mock_cache.shared.dcCache.updatedAt = time.Now()
-	valid := mock_cache.shared.sharedCacheDisabledClustersValid()
-	if !valid {
-		t.Errorf("Expected true from cache validity check. Got %t", valid)
-	}
-}
-
 func Test_GetandSetDisabledClusters(t *testing.T) {
 	_, mock_cache := mockResourcesListCache(t)
 	mock_cache.shared.dcCache.updatedAt = time.Now()
