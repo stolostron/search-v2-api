@@ -4,6 +4,7 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/doug-martin/goqu/v9"
@@ -261,18 +262,23 @@ func (s *SearchResult) getRelationResolvers(ctx context.Context) []SearchRelated
 	// get uids for related items that match the relatedKind filter.
 	s.filterRelatedUIDs(relatedMap)
 
-	// Build query to get full item data from s.uids
-	s.buildQueryToGetItemsFromUIDs()
-	items, err := s.resolveItems() // Fetch the related items
-	if err != nil {
-		klog.Warning("Error resolving related items.", err)
-		return []SearchRelatedResult{}
+	// if no relatedKind uids are present - return empty related Search
+	if len(s.uids) > 0 {
+		// Build query to get full item data from s.uids
+		s.buildQueryToGetItemsFromUIDs()
+		items, err := s.resolveItems() // Fetch the related items
+		if err != nil {
+			klog.Warning("Error resolving related items.", err)
+			return []SearchRelatedResult{}
+		}
+
+		// Convert to format of the relationships resolver []SearchRelatedResult{kind, count, items}
+		relatedSearch = s.searchRelatedResultKindItems(items)
+
+		klog.V(5).Info("RelatedSearch Result: ", relatedSearch)
+	} else {
+		klog.Warning("No UIDs matched for relatedKinds: ", pointerToStringArray(s.input.RelatedKinds))
 	}
-
-	// Convert to format of the relationships resolver []SearchRelatedResult{kind, count, items}
-	relatedSearch = s.searchRelatedResultKindItems(items)
-
-	klog.V(5).Info("RelatedSearch Result: ", relatedSearch)
 	return relatedSearch
 }
 
@@ -293,7 +299,9 @@ func (s *SearchResult) filterRelatedUIDs(levelsMap map[string][]string) {
 		for _, kindFilter := range s.input.RelatedKinds {
 			for _, kind := range kinds {
 				if strings.EqualFold(kind, *kindFilter) {
-					s.uids = append(s.uids, stringArrayToPointer(levelsMap[kind])...)
+					uids := levelsMap[kind]
+					sort.Strings(uids) //stabilize unit tests
+					s.uids = append(s.uids, stringArrayToPointer(uids)...)
 					break
 				}
 			}
