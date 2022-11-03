@@ -294,6 +294,7 @@ func (s *SearchResult) filterRelatedUIDs(levelsMap map[string][]string) {
 	if s.input.RelatedKinds == nil || len(s.input.RelatedKinds) == 0 {
 		for _, values := range levelsMap {
 			s.uids = append(s.uids, stringArrayToPointer(values)...)
+			sort.Strings(pointerToStringArray(s.uids)) //stabilize unit tests
 		}
 	} else {
 		// Only include UIDs of related items that match the relatedKinds filter.

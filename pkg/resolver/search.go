@@ -32,6 +32,8 @@ type SearchResult struct {
 	wg        sync.WaitGroup // Used to serialize search query and relatioinships query.
 }
 
+const ErrorMsg string = "Error building Search query"
+
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
 	defer metric.SlowLog("SearchResolver", 0)()
 	// For each input, create a SearchResult resolver.
@@ -160,7 +162,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		// WHERE CLAUSE
 		whereDs, s.propTypes, err = WhereClauseFilter(s.context, s.input, s.propTypes)
 		if err != nil {
-			s.checkErrorBuildingQuery(err, "Error building Search query")
+			s.checkErrorBuildingQuery(err, ErrorMsg)
 			return
 		}
 
@@ -183,18 +185,18 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 				buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
 			if len(whereDs) == 0 {
 				s.checkErrorBuildingQuery(fmt.Errorf("search query must contain a whereClause"),
-					"Error building Search query")
+					ErrorMsg)
 				return
 			}
 		} else {
 			errorStr := fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s with uid %s ",
 				s.input, userInfo.Username, userInfo.UID)
-			s.checkErrorBuildingQuery(fmt.Errorf(errorStr), "Error building search query")
+			s.checkErrorBuildingQuery(fmt.Errorf(errorStr), ErrorMsg)
 			return
 		}
 	} else {
 		s.checkErrorBuildingQuery(fmt.Errorf("query input must contain a filter or keyword. Received: %+v",
-			s.input), "Error building Search query")
+			s.input), ErrorMsg)
 		return
 	}
 
@@ -307,53 +309,53 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 
 	if input.Filters != nil {
 		for _, filter := range input.Filters {
-			if len(filter.Values) > 0 {
-				values := pointerToStringArray(filter.Values)
-
-				dataType, dataTypeInMap := propTypeMap[filter.Property]
-				if len(propTypeMap) == 0 || !dataTypeInMap {
-					klog.V(3).Info("Property type for [%s] doesn't exist in cache. Refreshing property type cache",
-						filter.Property)
-					propTypeMapNew, err := getPropertyType(ctx, true) // Refresh the property type cache.
-					if err != nil {
-						klog.Errorf("Error creating property type map with err: [%s] ", err)
-						break
-					}
-
-					propTypeMap = propTypeMapNew
-
-					dataType, dataTypeInMap = propTypeMap[filter.Property]
-					klog.Infof("For filter prop: %s, datatype is :%s dataTypeInMap: %t\n", filter.Property,
-						dataType, dataTypeInMap)
-				}
-
-				if len(propTypeMap) > 0 && dataTypeInMap {
-					klog.V(5).Infof("For filter prop: %s, datatype is :%s\n", filter.Property, dataType)
-
-					// if property matches then call decode function:
-					values, dataTypeFromMap = decodePropertyTypes(values, dataType)
-					// Check if value is a number or date and get the cleaned up value
-					opDateValueMap = getOperatorAndNumDateFilter(filter.Property, values, dataTypeFromMap)
-				} else {
-					klog.Error("Error with property type list is empty.")
-					values = decodePropertyTypesNoPropMap(values, filter)
-					// Check if value is a number or date and get the cleaned up value
-					opDateValueMap = getOperatorAndNumDateFilter(filter.Property, values, nil)
-
-				}
-				//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
-				keys := getKeys(opDateValueMap)
-				var operatorWhereDs []exp.Expression //store all the clauses for this filter together
-				for _, operator := range keys {
-					operatorWhereDs = append(operatorWhereDs,
-						getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator])...)
-				}
-
-				whereDs = append(whereDs, goqu.Or(operatorWhereDs...)) //Join all the clauses with OR
-
-			} else {
+			if len(filter.Values) == 0 {
 				klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
+				continue
 			}
+			values := pointerToStringArray(filter.Values)
+
+			dataType, dataTypeInMap := propTypeMap[filter.Property]
+			if len(propTypeMap) == 0 || !dataTypeInMap {
+				klog.V(3).Info("Property type for [%s] doesn't exist in cache. Refreshing property type cache",
+					filter.Property)
+				propTypeMapNew, err := getPropertyType(ctx, true) // Refresh the property type cache.
+				if err != nil {
+					klog.Errorf("Error creating property type map with err: [%s] ", err)
+					break
+				}
+
+				propTypeMap = propTypeMapNew
+
+				dataType, dataTypeInMap = propTypeMap[filter.Property]
+				klog.Infof("For filter prop: %s, datatype is :%s dataTypeInMap: %t\n", filter.Property,
+					dataType, dataTypeInMap)
+			}
+
+			if len(propTypeMap) > 0 && dataTypeInMap {
+				klog.V(5).Infof("For filter prop: %s, datatype is :%s\n", filter.Property, dataType)
+
+				// if property matches then call decode function:
+				values, dataTypeFromMap = decodePropertyTypes(values, dataType)
+				// Check if value is a number or date and get the cleaned up value
+				opDateValueMap = getOperatorAndNumDateFilter(filter.Property, values, dataTypeFromMap)
+			} else {
+				klog.Error("Error with property type list is empty.")
+				values = decodePropertyTypesNoPropMap(values, filter)
+				// Check if value is a number or date and get the cleaned up value
+				opDateValueMap = getOperatorAndNumDateFilter(filter.Property, values, nil)
+
+			}
+			//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
+			keys := getKeys(opDateValueMap)
+			var operatorWhereDs []exp.Expression //store all the clauses for this filter together
+			for _, operator := range keys {
+				operatorWhereDs = append(operatorWhereDs,
+					getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator])...)
+			}
+
+			whereDs = append(whereDs, goqu.Or(operatorWhereDs...)) //Join all the clauses with OR
+
 		}
 	}
 
