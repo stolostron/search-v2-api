@@ -11,7 +11,7 @@ func AuthorizeUser(next http.Handler) http.Handler {
 
 		// Trigger initialization of the shared cache. We should move this to a
 		// different place where it's independent of the request.
-		GetCache().PopulateSharedCache(r.Context())
+		GetCache().shared.PopulateSharedCache(r.Context())
 
 		_, userErr := GetCache().GetUserDataCache(r.Context(), nil)
 		if userErr != nil {

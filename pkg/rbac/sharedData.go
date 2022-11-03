@@ -1,3 +1,4 @@
+// Copyright Contributors to the Open Cluster Management project
 package rbac
 
 import (
@@ -8,7 +9,6 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
-	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/metric"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -129,9 +129,9 @@ func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[str
 	}
 }
 
-func (cache *Cache) PopulateSharedCache(ctx context.Context) {
+func (shared *SharedData) PopulateSharedCache(ctx context.Context) {
 	defer metric.SlowLog("PopulateSharedCache", 200*time.Millisecond)()
-	if cache.shared.isValid() { // if all cache is valid we use cache data
+	if shared.isValid() { // if all cache is valid we use cache data
 		klog.V(5).Info("Using shared data from cache.")
 		return
 	} else { // get data and add to cache
@@ -141,7 +141,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := cache.shared.getClusterScopedResources(ctx)
+			err := shared.getClusterScopedResources(ctx)
 			if err != nil {
 				klog.Errorf("Error retrieving cluster scoped resources. Error: [%+v]", err)
 			}
@@ -151,7 +151,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := cache.shared.getSharedNamespaces(ctx)
+			_, err := shared.getNamespaces(ctx)
 			if err != nil {
 				klog.Errorf("Error retrieving shared namespaces. Error: [%+v]", err)
 			}
@@ -161,7 +161,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := cache.shared.getManagedClusters(ctx)
+			err := shared.getManagedClusters(ctx)
 			if err != nil {
 				klog.Errorf("Error retrieving managed clusters. Error: [%+v]", err)
 			}
@@ -172,17 +172,8 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) {
 	}
 }
 
-func (shared *SharedData) sharedCacheDisabledClustersValid() bool {
-	return shared.dcCache.err == nil && time.Now().Before(
-		shared.dcCache.updatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL)*time.Millisecond))
-}
-
 func (shared *SharedData) isValid() bool {
-
-	if (time.Now().Before(shared.csrCache.updatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) &&
-		(time.Now().Before(shared.nsCache.updatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) &&
-		(time.Now().Before(shared.mcCache.updatedAt.Add(time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond))) {
-
+	if shared.csrCache.isValid() && shared.nsCache.isValid() && shared.mcCache.isValid() {
 		return true
 	}
 	return false
@@ -246,11 +237,17 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 
 // Obtain all the namespaces in the hub cluster.
 // Equivalent to `oc get namespaces`
-func (shared *SharedData) getSharedNamespaces(ctx context.Context) error {
+func (shared *SharedData) getNamespaces(ctx context.Context) ([]string, error) {
 	defer metric.SlowLog("getSharedNamespaces", 100*time.Millisecond)()
 	shared.nsCache.lock.Lock()
 	defer shared.nsCache.lock.Unlock()
-	//empty previous cache
+
+	// Return cached namespaces if valid.
+	if shared.nsCache.isValid() {
+		return shared.namespaces, nil
+	}
+
+	// Empty previous cache and request new data.
 	shared.namespaces = nil
 	shared.nsCache.err = nil
 
@@ -261,7 +258,7 @@ func (shared *SharedData) getSharedNamespaces(ctx context.Context) error {
 		klog.Warning("Error resolving namespaces from KubeClient: ", nsErr)
 		shared.nsCache.err = nsErr
 		shared.nsCache.updatedAt = time.Now()
-		return shared.nsCache.err
+		return shared.namespaces, shared.nsCache.err
 	}
 
 	// add namespaces to allNamespace List
@@ -270,7 +267,7 @@ func (shared *SharedData) getSharedNamespaces(ctx context.Context) error {
 	}
 	shared.nsCache.updatedAt = time.Now()
 
-	return shared.nsCache.err
+	return shared.namespaces, shared.nsCache.err
 }
 
 // Obtain all the managedclusters.
@@ -323,7 +320,7 @@ func (cache *Cache) GetDisabledClusters(ctx context.Context) (*map[string]struct
 	cache.shared.dcCache.lock.Lock()
 	defer cache.shared.dcCache.lock.Unlock()
 
-	if !cache.shared.sharedCacheDisabledClustersValid() {
+	if !cache.shared.dcCache.isValid() {
 		klog.V(5).Info("DisabledClusters cache empty or expired. Querying database.")
 		// - running query to get search addon disabled clusters")
 		//run query and get disabled clusters

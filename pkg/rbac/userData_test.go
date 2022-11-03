@@ -69,6 +69,7 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 	var namespaces []string
 
 	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
+	mock_cache.shared.nsCache.updatedAt = time.Now()
 
 	rulesCheck := &authz.SelfSubjectRulesReview{
 		Spec: authz.SelfSubjectRulesReviewSpec{
@@ -190,9 +191,11 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 	//mock cache for token review to get user data:
 	mock_cache = setupToken(mock_cache)
 	mock_cache.shared.managedClusters = map[string]struct{}{"some-namespace": {}, "some-nonmatching-namespace": {}}
+	mock_cache.shared.mcCache.updatedAt = time.Now()
 
 	//mock cache for cluster-scoped resouces to get all namespaces:
 	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
+	mock_cache.shared.nsCache.updatedAt = time.Now()
 
 	//mock cache for namespaced-resources:
 	nsresources["some-namespace"] = append(nsresources["some-namespace"],
@@ -284,6 +287,7 @@ func Test_clusterScoped_expiredCache(t *testing.T) {
 
 	mock_cache := mockNamespaceCache()
 	mock_cache = setupToken(mock_cache)
+	mock_cache.shared.nsCache.updatedAt = time.Now()
 
 	//mock response objects for KUBEAPI call for SelfSubjectAccessReview
 	trueCheck := &authz.SelfSubjectAccessReview{
@@ -368,6 +372,7 @@ func Test_managedClusters_emptyCache(t *testing.T) {
 	mock_cache.shared.managedClusters = map[string]struct{}{"some-managed-cluster": {}, "some-managed-cluster1": {}}
 
 	mock_cache.shared.namespaces = append(namespaces, "some-managed-cluster", "some-managed-cluster1")
+	mock_cache.shared.nsCache.updatedAt = time.Now()
 
 	//mock response objects for KUBEAPI call for SelfSubjectRulesReview
 	createRule := &authz.SelfSubjectRulesReview{
@@ -478,7 +483,9 @@ func Test_managedCluster_expiredCache(t *testing.T) {
 	var namespaces []string
 	//mock mc from shared cache
 	mock_cache.shared.managedClusters = managedClusters
+	mock_cache.shared.mcCache.updatedAt = time.Now()
 	mock_cache.shared.namespaces = append(namespaces, "some-managed-cluster", "some-managed-cluster1")
+	mock_cache.shared.nsCache.updatedAt = time.Now()
 
 	//mock response objects for KUBEAPI call for SelfSubjectRulesReview
 	createRule := &authz.SelfSubjectRulesReview{
@@ -663,6 +670,7 @@ func Test_hasAccessToAllResourcesInNamespace(t *testing.T) {
 	var namespaces []string
 
 	mock_cache.shared.namespaces = append(namespaces, "some-namespace")
+	mock_cache.shared.nsCache.updatedAt = time.Now()
 
 	rulesCheck := &authz.SelfSubjectRulesReview{
 		Spec: authz.SelfSubjectRulesReviewSpec{

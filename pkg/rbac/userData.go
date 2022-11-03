@@ -355,12 +355,10 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	user.clustersCache.err = nil
 	user.ManagedClusters = nil
 
-	// get all namespaces from shared cache:
+	// get all namespaces from shared cache
 	klog.V(5).Info("Getting namespaces from shared cache.")
-	user.csrCache.lock.Lock()
-	defer user.csrCache.lock.Unlock()
-	allNamespaces := cache.shared.namespaces // TO-DO-Separate-PR: Should not access data from shared cache directly.
-	if len(allNamespaces) == 0 {
+	allNamespaces, err := cache.shared.getNamespaces(ctx)
+	if err != nil || len(allNamespaces) == 0 {
 		klog.Warning("All namespaces array from shared cache is empty.", cache.shared.nsCache.err)
 		return user, cache.shared.nsCache.err
 	}
