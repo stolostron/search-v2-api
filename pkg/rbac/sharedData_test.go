@@ -76,7 +76,7 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 	propTypes["kind"] = "string"
 	propTypes["apigroup"] = "string"
 
-	mock_cache.PopulateSharedCache(ctx)
+	mock_cache.shared.PopulateSharedCache(ctx)
 	res := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
 
 	_, csResPresent := mock_cache.shared.csResourcesMap[res]
@@ -133,7 +133,7 @@ func Test_getResouces_usingCache(t *testing.T) {
 		pool:            mock_cache.pool,
 	}
 
-	mock_cache.PopulateSharedCache(ctx)
+	mock_cache.shared.PopulateSharedCache(ctx)
 	csResource := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
 	_, csResPresent := mock_cache.shared.csResourcesMap[csResource]
 
@@ -188,7 +188,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 		pool:            mock_cache.pool,
 	}
 
-	mock_cache.PopulateSharedCache(ctx)
+	mock_cache.shared.PopulateSharedCache(ctx)
 
 	propTypes, _ := mock_cache.GetPropertyTypes(ctx, false)
 	propTypes["kind"] = "string"

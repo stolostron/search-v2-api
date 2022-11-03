@@ -1,3 +1,4 @@
+// Copyright Contributors to the Open Cluster Management project
 package rbac
 
 import (
@@ -128,9 +129,9 @@ func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[str
 	}
 }
 
-func (cache *Cache) PopulateSharedCache(ctx context.Context) {
+func (shared *SharedData) PopulateSharedCache(ctx context.Context) {
 	defer metric.SlowLog("PopulateSharedCache", 200*time.Millisecond)()
-	if cache.shared.isValid() { // if all cache is valid we use cache data
+	if shared.isValid() { // if all cache is valid we use cache data
 		klog.V(5).Info("Using shared data from cache.")
 		return
 	} else { // get data and add to cache
@@ -140,7 +141,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := cache.shared.getClusterScopedResources(ctx)
+			err := shared.getClusterScopedResources(ctx)
 			if err != nil {
 				klog.Errorf("Error retrieving cluster scoped resources. Error: [%+v]", err)
 			}
@@ -150,7 +151,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := cache.shared.getNamespaces(ctx)
+			_, err := shared.getNamespaces(ctx)
 			if err != nil {
 				klog.Errorf("Error retrieving shared namespaces. Error: [%+v]", err)
 			}
@@ -160,7 +161,7 @@ func (cache *Cache) PopulateSharedCache(ctx context.Context) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := cache.shared.getManagedClusters(ctx)
+			err := shared.getManagedClusters(ctx)
 			if err != nil {
 				klog.Errorf("Error retrieving managed clusters. Error: [%+v]", err)
 			}
