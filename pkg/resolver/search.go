@@ -164,8 +164,6 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 			return
 		}
 
-		err = nil
-
 		// SELECT CLAUSE
 		if count {
 			selectDs = ds.Select(goqu.COUNT("uid"))
@@ -312,23 +310,21 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 			if len(filter.Values) > 0 {
 				values := pointerToStringArray(filter.Values)
 
-				delete(propTypeMap, "kind")
 				dataType, dataTypeInMap := propTypeMap[filter.Property]
 				if len(propTypeMap) == 0 || !dataTypeInMap {
-					klog.Warningf("Property type for [%s] doesn't exist in cache. Refreshing property type cache",
+					klog.V(3).Info("Property type for [%s] doesn't exist in cache. Refreshing property type cache",
 						filter.Property)
 					propTypeMapNew, err := getPropertyType(ctx, true) // Refresh the property type cache.
 					if err != nil {
 						klog.Errorf("Error creating property type map with err: [%s] ", err)
 						break
 					}
-					delete(propTypeMap, "kind")
 
 					propTypeMap = propTypeMapNew
-					delete(propTypeMap, "kind")
 
 					dataType, dataTypeInMap = propTypeMap[filter.Property]
-					klog.Infof("For filter prop: %s, datatype is :%s dataTypeInMap: %t\n", filter.Property, dataType, dataTypeInMap)
+					klog.Infof("For filter prop: %s, datatype is :%s dataTypeInMap: %t\n", filter.Property,
+						dataType, dataTypeInMap)
 				}
 
 				if len(propTypeMap) > 0 && dataTypeInMap {

@@ -218,8 +218,10 @@ func Test_SearchCompleteWithObject_Query(t *testing.T) {
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
 
+	propTypesMock := map[string]string{"label": "object", "namespace": "string", "cluster": "string"}
+
 	//mock searchcomplete for searchinput
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud, nil)
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud, propTypesMock)
 
 	val1 := "samples.operator.openshift.io/managed=true"
 	val2 := "pod-template-hash=5f5575c669"

@@ -108,9 +108,9 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
 		} else {
-			klog.Errorf(fmt.Sprintf("Error building searchComplete query: RBAC clause is required!"+
+			klog.Errorf("Error building searchComplete query: RBAC clause is required!"+
 				" None found for searchComplete query %+v for user %s with uid %s ",
-				s.input, userInfo.Username, userInfo.UID))
+				s.input, userInfo.Username, userInfo.UID)
 
 			s.query = ""
 			s.params = nil
