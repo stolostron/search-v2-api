@@ -10,19 +10,25 @@ import (
 
 // Common fields to manage a cached data field.
 type cacheMetadata struct {
-	err       error      // Error while retrieving the data from external API.
-	lock      sync.Mutex // Locks the data field while requesting the latest data.
-	updatedAt time.Time  // Time when the data field was last updated.
+	err       error         // Error while retrieving the data from external API.
+	lock      sync.Mutex    // Locks the data field while requesting the latest data.
+	updatedAt time.Time     // Time when the data field was last updated.
+	ttl       time.Duration // Time duration for which this cache is valid.
 }
 
+// Checks if the cached data is valid or expired.
 func (cacheMeta *cacheMetadata) isValid() bool {
+	// Default TTL
+	cacheTTL := time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond
+
+	// Custom TTL
+	if cacheMeta.ttl > 0 {
+		cacheTTL = cacheMeta.ttl
+	}
+
+	// Error TTL. Errors are valid for a shorter period to allow fast recovery.
 	if cacheMeta.err != nil {
-		return false
+		cacheTTL = time.Duration(1000) * time.Millisecond
 	}
-	// TODO handle different cache durations.
-	cacheDuration := time.Duration(config.Cfg.SharedCacheTTL) * time.Millisecond
-	if time.Now().Before(cacheMeta.updatedAt.Add(cacheDuration)) {
-		return true
-	}
-	return false
+	return time.Now().Before(cacheMeta.updatedAt.Add(cacheTTL))
 }
