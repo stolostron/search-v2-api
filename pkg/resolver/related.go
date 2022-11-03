@@ -149,8 +149,10 @@ func (s *SearchResult) buildRelationsQuery() {
 		// add rbac
 		relQueryWithRbac = relQueryInnerJoin.Where(buildRbacWhereClause(s.context, s.userData, userInfo))
 	} else {
-		panic(fmt.Sprintf("RBAC clause is required! None found for search relations query %+v for user %s ", s.input,
-			s.context.Value(rbac.ContextAuthTokenKey)))
+		errorStr := fmt.Sprintf("RBAC clause is required! None found for relations query %+v for user %s with uid %s ",
+			s.input, userInfo.Username, userInfo.UID)
+		s.checkErrorBuildingQuery(fmt.Errorf(errorStr), "Error building search relations query")
+		return
 	}
 	sql, params, err := relQueryWithRbac.ToSQL()
 
@@ -159,7 +161,7 @@ func (s *SearchResult) buildRelationsQuery() {
 	} else {
 		s.query = sql
 		s.params = params
-		klog.V(6).Info("Relations query: ", s.query)
+		klog.V(7).Info("Relations query: ", s.query)
 	}
 }
 

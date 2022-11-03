@@ -53,7 +53,7 @@ func getOperator(values []string) map[string][]string {
 	return operatorValue
 }
 
-func getWhereClauseExpression(prop, operator string, values []string, propType string) []exp.Expression {
+func getWhereClauseExpression(prop, operator string, values []string) []exp.Expression {
 	exps := []exp.Expression{}
 
 	switch operator {

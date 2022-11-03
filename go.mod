@@ -3,7 +3,7 @@ module github.com/stolostron/search-v2-api
 go 1.18
 
 require (
-	github.com/99designs/gqlgen v0.17.16
+	github.com/99designs/gqlgen v0.17.20
 	github.com/doug-martin/goqu/v9 v9.18.0
 	github.com/driftprogramming/pgxpoolmock v1.1.0
 	github.com/golang/mock v1.6.0
@@ -11,7 +11,7 @@ require (
 	github.com/jackc/pgproto3/v2 v2.3.1
 	github.com/jackc/pgx/v4 v4.17.0
 	github.com/prometheus/client_golang v1.12.2
-	github.com/vektah/gqlparser/v2 v2.5.0
+	github.com/vektah/gqlparser/v2 v2.5.1
 	k8s.io/klog/v2 v2.70.1
 )
 
@@ -78,7 +78,7 @@ require (
 	github.com/urfave/cli/v2 v2.11.1 // indirect
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
-	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f // indirect
+	golang.org/x/sys v0.0.0-20220811171246-fbc7d0a398ab // indirect
 	golang.org/x/text v0.4.0 // indirect
 	golang.org/x/tools v0.1.12 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

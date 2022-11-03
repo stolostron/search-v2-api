@@ -108,8 +108,13 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
 		} else {
-			panic(fmt.Sprintf("RBAC clause is required! None found for searchComplete query %+v for user %s ",
-				s.input, ctx.Value(rbac.ContextAuthTokenKey)))
+			klog.Errorf(fmt.Sprintf("Error building searchComplete query: RBAC clause is required!"+
+				" None found for searchComplete query %+v for user %s with uid %s ",
+				s.input, userInfo.Username, userInfo.UID))
+
+			s.query = ""
+			s.params = nil
+			return
 		}
 		// Adding an arbitrarily high number 100000 as limit here in the inner query
 		// Adding a LIMIT helps to speed up the query
