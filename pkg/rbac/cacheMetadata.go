@@ -13,7 +13,7 @@ type cacheMetadata struct {
 	err       error         // Error while retrieving the data from external API.
 	lock      sync.Mutex    // Locks the data field while requesting the latest data.
 	updatedAt time.Time     // Time when the data field was last updated.
-	ttl       time.Duration // Time duration for which this cache is valid.
+	ttl       time.Duration // Time-to-live, time duration for which this cache is valid.
 }
 
 // Checks if the cached data is valid or expired.

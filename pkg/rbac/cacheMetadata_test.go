@@ -1,10 +1,10 @@
+// Copyright Contributors to the Open Cluster Management project
 package rbac
 
 import (
 	"errors"
-	"time"
-	// "fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
