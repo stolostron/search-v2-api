@@ -158,8 +158,9 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 		klog.Error("Error fetching search complete results from db ", err)
 		return srchCompleteOut, err
 	}
-	defer rows.Close()
+
 	if rows != nil {
+		defer rows.Close()
 		props := make(map[string]struct{})
 		for rows.Next() {
 			prop := ""

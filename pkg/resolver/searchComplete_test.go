@@ -281,3 +281,25 @@ func Test_SearchCompleteWithContainer_Query(t *testing.T) {
 	// Verify response
 	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteWithLabel_Query")
 }
+
+func Test_SearchComplete_EmptyQueryWithoutRbac(t *testing.T) {
+
+	// Create a SearchCompleteResolver instance with a mock connection pool.
+	prop1 := "kind"
+	searchInput := &model.SearchInput{}
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, nil, nil)
+
+	// Mock the database query
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(``), // empty query
+		gomock.Eq([]interface{}{})).Return(nil, nil)
+	// This should become empty after function execution
+	resolver.query = "mock Query"
+	// Execute function
+	_, err := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
+	if err != nil {
+		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
+
+	}
+	assert.Equal(t, resolver.query, "", "query should be empty as there is no rbac clause")
+}

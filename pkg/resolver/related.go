@@ -247,21 +247,21 @@ func (s *SearchResult) getRelationResolvers(ctx context.Context) []SearchRelated
 		return relatedSearch
 	}
 
-	defer relations.Close()
+	if relations != nil {
+		defer relations.Close()
+		// iterating through resulting rows and scaning data, destid  and destkind
+		for relations.Next() {
+			var kind, uid string
+			var level int
+			relatedResultError := relations.Scan(&uid, &kind, &level)
 
-	// iterating through resulting rows and scaning data, destid  and destkind
-	for relations.Next() {
-		var kind, uid string
-		var level int
-		relatedResultError := relations.Scan(&uid, &kind, &level)
-
-		if relatedResultError != nil {
-			klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
-			continue
+			if relatedResultError != nil {
+				klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
+				continue
+			}
+			s.updateKindMap(uid, kind, relatedMap) // Store result in a map
 		}
-		s.updateKindMap(uid, kind, relatedMap) // Store result in a map
 	}
-
 	// get uids for related items that match the relatedKind filter.
 	s.filterRelatedUIDs(relatedMap)
 
