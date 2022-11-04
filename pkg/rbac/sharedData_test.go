@@ -11,7 +11,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakedynclient "k8s.io/client-go/dynamic/fake"
-	fakekubeclient "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -30,22 +29,21 @@ func mockResourcesListCache(t *testing.T) (*pgxpoolmock.MockPgxPool, Cache) {
 		t.Errorf("error adding managed cluster scheme: (%v)", err)
 	}
 
-	testmc := &clusterv1.ManagedCluster{
+	mockmc := &clusterv1.ManagedCluster{
 		TypeMeta:   metav1.TypeMeta{Kind: "ManagedCluster"},
 		ObjectMeta: metav1.ObjectMeta{Name: "test-man"},
 	}
 
-	testns := &corev1.Namespace{
+	mockns := &corev1.Namespace{
 		TypeMeta:   metav1.TypeMeta{Kind: "Namespace"},
-		ObjectMeta: metav1.ObjectMeta{Name: "test-namespace", Namespace: "test-namespace"},
+		ObjectMeta: metav1.ObjectMeta{Name: "test-namespace"},
 	}
 
 	return mockPool, Cache{
 		users: map[string]*UserDataCache{},
 		shared: SharedData{
 			pool:          mockPool,
-			corev1Client:  fakekubeclient.NewSimpleClientset(testns).CoreV1(),
-			dynamicClient: fakedynclient.NewSimpleDynamicClient(testScheme, testmc),
+			dynamicClient: fakedynclient.NewSimpleDynamicClient(testScheme, mockmc, mockns),
 		},
 		restConfig: &rest.Config{},
 		pool:       mockPool,
@@ -128,7 +126,6 @@ func Test_getResouces_usingCache(t *testing.T) {
 		csrCache:        cacheMetadata{updatedAt: time.Now()},
 		csResourcesMap:  csRes,
 		propTypes:       propTypesMock,
-		corev1Client:    mock_cache.shared.corev1Client,
 		dynamicClient:   mock_cache.shared.dynamicClient,
 		pool:            mock_cache.pool,
 	}
@@ -183,7 +180,6 @@ func Test_getResources_expiredCache(t *testing.T) {
 		mcCache:         cacheMetadata{updatedAt: last_cache_time},
 		csrCache:        cacheMetadata{updatedAt: last_cache_time},
 		csResourcesMap:  csRes,
-		corev1Client:    mock_cache.shared.corev1Client,
 		dynamicClient:   mock_cache.shared.dynamicClient,
 		pool:            mock_cache.pool,
 	}

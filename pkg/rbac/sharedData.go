@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -35,7 +34,6 @@ type SharedData struct {
 	propTypeErr error // Capture errors retrieving property types
 
 	// Clients to external APIs to be replaced with a mock by unit tests.
-	corev1Client  corev1.CoreV1Interface
 	dynamicClient dynamic.Interface
 	pool          pgxpoolmock.PgxPool // Database client
 }
@@ -49,6 +47,11 @@ var managedClusterResourceGvr = schema.GroupVersionResource{
 	Group:    "cluster.open-cluster-management.io",
 	Version:  "v1",
 	Resource: "managedclusters",
+}
+var namespacesGvr = schema.GroupVersionResource{
+	Group:    "",
+	Version:  "v1",
+	Resource: "namespaces",
 }
 
 // Query the database to get all properties and their types.
@@ -252,8 +255,10 @@ func (shared *SharedData) getNamespaces(ctx context.Context) ([]string, error) {
 	shared.nsCache.err = nil
 
 	klog.V(5).Info("Getting namespaces from Kube Client.")
+	scheme := runtime.NewScheme()
+	scheme.AddKnownTypes(namespacesGvr.GroupVersion())
 
-	namespaceList, nsErr := shared.corev1Client.Namespaces().List(ctx, metav1.ListOptions{})
+	namespaceList, nsErr := shared.dynamicClient.Resource(namespacesGvr).List(ctx, metav1.ListOptions{})
 	if nsErr != nil {
 		klog.Warning("Error resolving namespaces from KubeClient: ", nsErr)
 		shared.nsCache.err = nsErr
@@ -263,7 +268,7 @@ func (shared *SharedData) getNamespaces(ctx context.Context) ([]string, error) {
 
 	// add namespaces to allNamespace List
 	for _, n := range namespaceList.Items {
-		shared.namespaces = append(shared.namespaces, n.Name)
+		shared.namespaces = append(shared.namespaces, n.GetName())
 	}
 	shared.nsCache.updatedAt = time.Now()
 
