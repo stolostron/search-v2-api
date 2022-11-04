@@ -33,7 +33,6 @@ var cacheInst = Cache{
 	usersLock:        sync.Mutex{},
 	shared: SharedData{
 		pool:          db.GetConnection(),
-		corev1Client:  config.GetCoreClient(),
 		dynamicClient: config.GetDynamicClient(),
 	},
 	users:      map[string]*UserDataCache{},
