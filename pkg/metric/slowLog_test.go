@@ -58,7 +58,7 @@ func Test_SlowLog_CustomDuration(t *testing.T) {
 	}
 }
 
-func Test_SlowLog_ThreasholdNotMet(t *testing.T) {
+func Test_SlowLog_ThresholdNotMet(t *testing.T) {
 	// Capture the logger output for verification.
 	stop := captureLogOutput()
 

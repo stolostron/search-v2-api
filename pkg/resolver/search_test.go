@@ -3,6 +3,7 @@ package resolver
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/doug-martin/goqu/v9"
@@ -662,4 +663,13 @@ func Test_SearchResolver_UidsAllAccess(t *testing.T) {
 			t.Errorf("Value of key [uid] does not match for item [%d].\nExpected: %s\nGot: %s", i, expectedRow["_uid"], *item)
 		}
 	}
+}
+
+func Test_checkErrorBuildingQuery(t *testing.T) {
+	mock := SearchResult{query: "Mock query", params: []interface{}{}}
+
+	mock.checkErrorBuildingQuery(fmt.Errorf("mock error"), "Mock error message")
+
+	assert.Equal(t, mock.query, "", "Query should be cleared after error")
+	assert.Nil(t, mock.params)
 }
