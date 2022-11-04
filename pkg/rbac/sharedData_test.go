@@ -76,7 +76,7 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 	propTypes["kind"] = "string"
 	propTypes["apigroup"] = "string"
 
-	mock_cache.PopulateSharedCache(ctx)
+	mock_cache.shared.PopulateSharedCache(ctx)
 	res := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
 
 	_, csResPresent := mock_cache.shared.csResourcesMap[res]
@@ -133,7 +133,7 @@ func Test_getResouces_usingCache(t *testing.T) {
 		pool:            mock_cache.pool,
 	}
 
-	mock_cache.PopulateSharedCache(ctx)
+	mock_cache.shared.PopulateSharedCache(ctx)
 	csResource := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
 	_, csResPresent := mock_cache.shared.csResourcesMap[csResource]
 
@@ -188,7 +188,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 		pool:            mock_cache.pool,
 	}
 
-	mock_cache.PopulateSharedCache(ctx)
+	mock_cache.shared.PopulateSharedCache(ctx)
 
 	propTypes, _ := mock_cache.GetPropertyTypes(ctx, false)
 	propTypes["kind"] = "string"
@@ -213,23 +213,6 @@ func Test_getResources_expiredCache(t *testing.T) {
 		t.Error("Expected the cache.shared.updatedAt to have a later timestamp")
 	}
 
-}
-
-func Test_SharedCacheDisabledClustersInValid(t *testing.T) {
-	_, mock_cache := mockResourcesListCache(t)
-	valid := mock_cache.shared.sharedCacheDisabledClustersValid()
-	if valid {
-		t.Errorf("Expected false from cache validity check. Got %t", valid)
-	}
-}
-
-func Test_SharedCacheDisabledClustersValid(t *testing.T) {
-	_, mock_cache := mockResourcesListCache(t)
-	mock_cache.shared.dcCache.updatedAt = time.Now()
-	valid := mock_cache.shared.sharedCacheDisabledClustersValid()
-	if !valid {
-		t.Errorf("Expected true from cache validity check. Got %t", valid)
-	}
 }
 
 func Test_GetandSetDisabledClusters(t *testing.T) {
