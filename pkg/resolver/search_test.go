@@ -711,7 +711,6 @@ func Test_buildSearchQuery_EmptyQueryWithoutRbac(t *testing.T) {
 func Test_buildSearchQuery_EmptyQueryNoFilter(t *testing.T) {
 
 	// Create a SearchResolver instance with a mock connection pool.
-	// val1 := "template"
 	propTypesMock := map[string]string{"kind": "string"}
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{}}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserData{},
