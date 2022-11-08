@@ -208,7 +208,6 @@ func (s *SearchResult) buildQueryToGetItemsFromUIDs() {
 	// SELECT CLAUSE
 	selectDs := ds.Select("uid", "cluster", "data")
 
-	sort.Strings(pointerToStringArray(s.uids)) //to stabilize unit tests
 	// WHERE CLAUSE
 	whereDs := []exp.Expression{goqu.C("uid").In(s.uids)} // Add filter to avoid selecting the search object itself
 
