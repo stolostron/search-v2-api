@@ -10,6 +10,7 @@ import (
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_SearchResolver_Relationships(t *testing.T) {
@@ -233,4 +234,29 @@ func Test_SearchResolver_Level1Related(t *testing.T) {
 	if len(result) != len(mockRows2.mockData) {
 		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result))
 	}
+}
+
+func Test_SearchResolver_Relationships_NoUserData(t *testing.T) {
+	config.Cfg.RelationLevel = 3
+
+	// Build a mock SearchResolver{} using uids as filter input.
+	uid1 := "local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd"
+	uid2 := "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b"
+	resultList := []*string{&uid1, &uid2}
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "uid", Values: resultList}}}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, resultList, nil, nil)
+
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(``), //query will be empty as user data for rbac is not provided
+		gomock.Eq([]interface{}{}),
+	).Return(nil, nil)
+	// This should become empty after function execution
+	resolver.query = "mock Query"
+
+	// Execute the function - should return a relatedResults object
+	resolver.Related(context.Background())
+
+	// Verify expected and result kinds
+	assert.Equal(t, resolver.query, "", "query should be empty as user data is not provided")
+
 }

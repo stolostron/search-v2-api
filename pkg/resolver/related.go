@@ -149,8 +149,10 @@ func (s *SearchResult) buildRelationsQuery() {
 		// add rbac
 		relQueryWithRbac = relQueryInnerJoin.Where(buildRbacWhereClause(s.context, s.userData, userInfo))
 	} else {
-		panic(fmt.Sprintf("RBAC clause is required! None found for search relations query %+v for user %s ", s.input,
-			s.context.Value(rbac.ContextAuthTokenKey)))
+		errorStr := fmt.Sprintf("RBAC clause is required! None found for relations query %+v for user %s with uid %s ",
+			s.input, userInfo.Username, userInfo.UID)
+		s.checkErrorBuildingQuery(fmt.Errorf(errorStr), "Error building search relations query")
+		return
 	}
 	sql, params, err := relQueryWithRbac.ToSQL()
 
@@ -159,7 +161,7 @@ func (s *SearchResult) buildRelationsQuery() {
 	} else {
 		s.query = sql
 		s.params = params
-		klog.V(6).Info("Relations query: ", s.query)
+		klog.V(7).Info("Relations query: ", s.query)
 	}
 }
 
@@ -244,21 +246,21 @@ func (s *SearchResult) getRelationResolvers(ctx context.Context) []SearchRelated
 		return relatedSearch
 	}
 
-	defer relations.Close()
+	if relations != nil {
+		defer relations.Close()
+		// iterating through resulting rows and scaning data, destid  and destkind
+		for relations.Next() {
+			var kind, uid string
+			var level int
+			relatedResultError := relations.Scan(&uid, &kind, &level)
 
-	// iterating through resulting rows and scaning data, destid  and destkind
-	for relations.Next() {
-		var kind, uid string
-		var level int
-		relatedResultError := relations.Scan(&uid, &kind, &level)
-
-		if relatedResultError != nil {
-			klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
-			continue
+			if relatedResultError != nil {
+				klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
+				continue
+			}
+			s.updateKindMap(uid, kind, relatedMap) // Store result in a map
 		}
-		s.updateKindMap(uid, kind, relatedMap) // Store result in a map
 	}
-
 	// get uids for related items that match the relatedKind filter.
 	s.filterRelatedUIDs(relatedMap)
 

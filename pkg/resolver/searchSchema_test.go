@@ -8,6 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_SearchSchema_Query(t *testing.T) {
@@ -53,4 +54,18 @@ func Test_SearchSchema_Results(t *testing.T) {
 	expectedResult := stringArrayToPointer(expectedRes["allProperties"].([]string))
 
 	AssertStringArrayEqual(t, result, expectedResult, "Search schema results doesn't match.")
+}
+
+func Test_SearchSchema_EmptyQueryNoUserData(t *testing.T) {
+	// Create a SearchSchemaResolver instance with a mock connection pool.
+	resolver, _ := newMockSearchSchema(t)
+
+	resolver.userData = nil
+	resolver.query = "mock Query"
+	// Execute function
+	resolver.buildSearchSchemaQuery(context.TODO())
+
+	// Verify response
+	assert.Equal(t, resolver.query, "", "query should be empty as there is no rbac clause")
+
 }

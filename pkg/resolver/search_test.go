@@ -3,6 +3,7 @@ package resolver
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/doug-martin/goqu/v9"
@@ -662,4 +663,67 @@ func Test_SearchResolver_UidsAllAccess(t *testing.T) {
 			t.Errorf("Value of key [uid] does not match for item [%d].\nExpected: %s\nGot: %s", i, expectedRow["_uid"], *item)
 		}
 	}
+}
+
+func Test_checkErrorBuildingQuery(t *testing.T) {
+	mock := SearchResult{query: "Mock query", params: []interface{}{}}
+
+	mock.checkErrorBuildingQuery(fmt.Errorf("mock error"), "Mock error message")
+
+	assert.Equal(t, mock.query, "", "Query should be cleared after error")
+	assert.Nil(t, mock.params)
+}
+
+func Test_whereClauseFilter_IgnoreNoValues(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val := "Pod"
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "prop1", Values: []*string{}},
+		{Property: "kind", Values: []*string{&val}}}}
+	// execute function - this should ignore the first filter as it has no values
+	whereDs, propTypes, err := WhereClauseFilter(context.TODO(), searchInput, propTypesMock)
+
+	assert.Equal(t, len(whereDs), 1, "whereDs should have 1 expression")
+	assert.Equal(t, propTypes, propTypesMock, "propTypes should have only kind property")
+	assert.Nil(t, err)
+}
+
+func Test_buildSearchQuery_EmptyQueryWithoutRbac(t *testing.T) {
+
+	// Create a SearchResolver instance with a mock connection pool.
+	val1 := "template"
+	propTypesMock := map[string]string{"kind": "string"}
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, nil, //user data is nil
+		propTypesMock)
+	// Mock the database queries.
+	mockPool.EXPECT().QueryRow(gomock.Any(),
+		gomock.Eq(``), //query will be empty as user data for rbac is not provided
+		gomock.Eq([]interface{}{}),
+	).Return(&Row{MockValue: 0})
+	// This should become empty after function execution
+	resolver.query = "mock Query"
+	// execute function
+	resolver.Count()
+
+	assert.Equal(t, resolver.query, "", "query should be empty as there is no rbac clause")
+}
+
+func Test_buildSearchQuery_EmptyQueryNoFilter(t *testing.T) {
+
+	// Create a SearchResolver instance with a mock connection pool.
+	propTypesMock := map[string]string{"kind": "string"}
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{}}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, &rbac.UserData{},
+		propTypesMock)
+	// Mock the database queries.
+	mockPool.EXPECT().QueryRow(gomock.Any(),
+		gomock.Eq(``), //query will be empty as user data for rbac is not provided
+		gomock.Eq([]interface{}{}),
+	).Return(&Row{MockValue: 0})
+	// This should become empty after function execution
+	resolver.query = "mock Query"
+	// execute function
+	resolver.Count()
+
+	assert.Equal(t, resolver.query, "", "query should be empty as search filter is not provided")
 }
