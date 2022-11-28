@@ -31,8 +31,8 @@ func main() {
 	database.GetConnection()
 
 	// Watch the cache
-	ctx1 := context.Background()
-	go rbac.StartCacheValidation(ctx1)
+	ctx := context.Background()
+	go rbac.StartCacheValidation(ctx)
 
 	server.StartAndListen()
 }

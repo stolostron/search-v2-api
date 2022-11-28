@@ -2,67 +2,15 @@
 package rbac
 
 import (
-	"context"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/klog/v2"
 )
 
-// Watch namespaces
-func (c *Cache) watchNamespaces(ctx context.Context, gvr schema.GroupVersionResource) {
-	// cache.corev1Client.Namespaces().List(ctx, metav1.ListOptions{})
-	watch, watchError := c.shared.dynamicClient.Resource(gvr).Watch(ctx, metav1.ListOptions{})
-	if watchError != nil {
-		klog.Warningf("Error watching %s.  Error: %s", gvr.String(), watchError)
-		return
-	}
-	defer watch.Stop()
-
-	klog.V(3).Infof("Watching\t%s", gvr.String())
-
-	for {
-		select {
-		case <-ctx.Done():
-			klog.V(2).Info("Namespaces watch() has stopped. ", gvr.String())
-			return
-
-		case event := <-watch.ResultChan(): // Read events from the watch channel.
-			//  Process ADDED or DELETED, events.
-			o, error := runtime.UnstructuredConverter.ToUnstructured(runtime.DefaultUnstructuredConverter, &event.Object)
-			if error != nil {
-				klog.Warningf("Error converting %s event.Object to unstructured.Unstructured. Error: %s",
-					gvr.Resource, error)
-			}
-			obj := &unstructured.Unstructured{Object: o}
-
-			switch event.Type {
-			case "ADDED":
-				// klog.V(3).Infof("Event: ADDED \tResource: %s  Name: %s", gvr.Resource, obj.GetName())
-				c.addNamespace(obj.GetName())
-
-			case "DELETED":
-				// klog.V(3).Infof("Event: DELETED \tResource: %s  Name: %s", gvr.Resource, obj.GetName())
-				c.deleteNamespace(obj.GetName())
-
-			case "MODIFIED":
-				// Modified namespaces don't affect the cached data.
-				break
-			default:
-				klog.V(2).Infof("Received unexpected event. Ending listAndWatch() for %s", gvr.String())
-				return
-			}
-		}
-	}
-}
-
-func (c *Cache) addNamespace(ns string) {
+func (c *Cache) addNamespace(obj *unstructured.Unstructured) {
 	c.shared.nsLock.Lock()
 	defer c.shared.nsLock.Unlock()
-	c.shared.namespaces = append(c.shared.namespaces, ns)
+	c.shared.namespaces = append(c.shared.namespaces, obj.GetName())
 	c.shared.nsUpdatedAt = time.Now()
 
 	// Invalidate the ManagedClusters cache. TODO: Update instead of invalidating.
@@ -81,9 +29,10 @@ func (c *Cache) addNamespace(ns string) {
 	}
 }
 
-func (c *Cache) deleteNamespace(ns string) {
+func (c *Cache) deleteNamespace(obj *unstructured.Unstructured) {
 	c.shared.nsLock.Lock()
 	defer c.shared.nsLock.Unlock()
+	ns := obj.GetName()
 	newNsamespaces := make([]string, 0)
 	for _, n := range c.shared.namespaces {
 		if n != ns {
