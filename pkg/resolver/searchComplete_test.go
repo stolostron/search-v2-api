@@ -27,7 +27,7 @@ func Test_SearchComplete_Query(t *testing.T) {
 	// Mock the database query
 	// SELECT DISTINCT "prop" FROM (SELECT "data"->>'kind' AS "prop" FROM "search"."resources" WHERE ("data"->>'kind' IS NOT NULL) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'kind' AS "prop" FROM "search"."resources" WHERE (("data"->'kind' IS NOT NULL) AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'kind' AS "prop" FROM "search"."resources" WHERE (("data"->'kind' IS NOT NULL) AND ("cluster" = ANY ('{}'))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
@@ -55,7 +55,7 @@ func Test_SearchComplete_Query_WithLimit(t *testing.T) {
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'kind' AS "prop" FROM "search"."resources" WHERE (("data"->'kind' IS NOT NULL) AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 2`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'kind' AS "prop" FROM "search"."resources" WHERE (("data"->'kind' IS NOT NULL) AND ("cluster" = ANY ('{}'))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 2`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
@@ -112,7 +112,7 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 	// Mock the database query
 	// check if cluster
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'kind' AS "prop" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster')) AND ("data"->'kind' IS NOT NULL) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'kind' AS "prop" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster')) AND ("data"->'kind' IS NOT NULL) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?'default' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?'ocm' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 10`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
@@ -139,7 +139,7 @@ func Test_SearchCompleteWithCluster(t *testing.T) {
 	// Mock the database query
 	// SELECT DISTINCT "prop" FROM (SELECT DISTINCT "cluster" AS "prop" FROM "search"."resources" WHERE (("cluster" IS NOT NULL) AND ("cluster" != '')) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 10
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT DISTINCT "cluster" AS "prop" FROM "search"."resources" WHERE (("cluster" IS NOT NULL) AND ("cluster" != '') AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT DISTINCT "cluster" AS "prop" FROM "search"."resources" WHERE (("cluster" IS NOT NULL) AND ("cluster" != '') AND ("cluster" = ANY ('{}'))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 10`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
@@ -161,7 +161,7 @@ func Test_SearchCompleteQuery_PropDate(t *testing.T) {
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, 0)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'created' AS "prop" FROM "search"."resources" WHERE (("data"->'created' IS NOT NULL) AND (("cluster" = ANY ('{}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'created' AS "prop" FROM "search"."resources" WHERE (("data"->'created' IS NOT NULL) AND ("cluster" = ANY ('{}'))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
@@ -190,7 +190,7 @@ func Test_SearchCompleteQuery_PropNum(t *testing.T) {
 	// SELECT DISTINCT "prop" FROM (SELECT "data"->>'current' AS "prop" FROM "search"."resources" WHERE ("data"->>'current' IS NOT NULL) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'current' AS "prop" FROM "search"."resources" WHERE (("data"->'current' IS NOT NULL) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND NULL))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'current' AS "prop" FROM "search"."resources" WHERE (("data"->'current' IS NOT NULL) AND ("cluster" = ANY ('{"managed1","managed2"}'))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
@@ -218,8 +218,10 @@ func Test_SearchCompleteWithObject_Query(t *testing.T) {
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
 
+	propTypesMock := map[string]string{"label": "object", "namespace": "string", "cluster": "string"}
+
 	//mock searchcomplete for searchinput
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud, nil)
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud, propTypesMock)
 
 	val1 := "samples.operator.openshift.io/managed=true"
 	val2 := "pod-template-hash=5f5575c669"
@@ -228,7 +230,7 @@ func Test_SearchCompleteWithObject_Query(t *testing.T) {
 
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'label' AS "prop" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster')) AND ("data"->'label' IS NOT NULL) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'label' AS "prop" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster')) AND ("data"->'label' IS NOT NULL) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?'default' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?'ocm' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 	// Execute function
 	result, err := resolver.autoComplete(context.TODO())
@@ -267,7 +269,7 @@ func Test_SearchCompleteWithContainer_Query(t *testing.T) {
 	expectedProps := []*string{&val1, &val2, &val3}
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'container' AS "prop" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster')) AND ("data"->'container' IS NOT NULL) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ((data->>'_hubClusterResource' = 'true') AND (((COALESCE(data->>'namespace', '') = '') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'nodes')) OR ((COALESCE(data->>'apigroup', '') = 'storage.k8s.io') AND (data->>'kind_plural' = 'csinodes')))) OR (((data->>'namespace' = 'default') AND (((COALESCE(data->>'apigroup', '') = '') AND (data->>'kind_plural' = 'configmaps')) OR ((COALESCE(data->>'apigroup', '') = 'v4') AND (data->>'kind_plural' = 'services')))) OR ((data->>'namespace' = 'ocm') AND (((COALESCE(data->>'apigroup', '') = 'v1') AND (data->>'kind_plural' = 'pods')) OR ((COALESCE(data->>'apigroup', '') = 'v2') AND (data->>'kind_plural' = 'deployments'))))))))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'container' AS "prop" FROM "search"."resources" WHERE (("data"->>'namespace' IN ('openshift', 'openshift-monitoring')) AND ("cluster" IN ('local-cluster')) AND ("data"->'container' IS NOT NULL) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?'default' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?'ocm' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
@@ -278,4 +280,26 @@ func Test_SearchCompleteWithContainer_Query(t *testing.T) {
 
 	// Verify response
 	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteWithLabel_Query")
+}
+
+func Test_SearchComplete_EmptyQueryWithoutRbac(t *testing.T) {
+
+	// Create a SearchCompleteResolver instance with a mock connection pool.
+	prop1 := "kind"
+	searchInput := &model.SearchInput{}
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, nil, nil)
+
+	// Mock the database query
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(``), // empty query
+		gomock.Eq([]interface{}{})).Return(nil, nil)
+	// This should become empty after function execution
+	resolver.query = "mock Query"
+	// Execute function
+	_, err := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
+	if err != nil {
+		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
+
+	}
+	assert.Equal(t, resolver.query, "", "query should be empty as there is no rbac clause")
 }

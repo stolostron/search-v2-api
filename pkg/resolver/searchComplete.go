@@ -14,6 +14,7 @@ import (
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
+	"github.com/stolostron/search-v2-api/pkg/metric"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	klog "k8s.io/klog/v2"
 )
@@ -41,6 +42,7 @@ func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, err
 }
 
 func SearchComplete(ctx context.Context, property string, srchInput *model.SearchInput, limit *int) ([]*string, error) {
+	defer metric.SlowLog("SearchCompleteResolver", 0)()
 	userData, userDataErr := rbac.GetCache().GetUserData(ctx)
 	if userDataErr != nil {
 		return []*string{}, userDataErr
@@ -106,8 +108,13 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
 		} else {
-			panic(fmt.Sprintf("RBAC clause is required! None found for searchComplete query %+v for user %s ",
-				s.input, ctx.Value(rbac.ContextAuthTokenKey)))
+			klog.Errorf("Error building searchComplete query: RBAC clause is required!"+
+				" None found for searchComplete query %+v for user %s with uid %s ",
+				s.input, userInfo.Username, userInfo.UID)
+
+			s.query = ""
+			s.params = nil
+			return
 		}
 		// Adding an arbitrarily high number 100000 as limit here in the inner query
 		// Adding a LIMIT helps to speed up the query
@@ -151,8 +158,9 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 		klog.Error("Error fetching search complete results from db ", err)
 		return srchCompleteOut, err
 	}
-	defer rows.Close()
+
 	if rows != nil {
+		defer rows.Close()
 		props := make(map[string]struct{})
 		for rows.Next() {
 			prop := ""

@@ -33,7 +33,6 @@ var cacheInst = Cache{
 	usersLock:        sync.Mutex{},
 	shared: SharedData{
 		pool:          db.GetConnection(),
-		corev1Client:  config.GetCoreClient(),
 		dynamicClient: config.GetDynamicClient(),
 	},
 	users:      map[string]*UserDataCache{},
@@ -43,5 +42,10 @@ var cacheInst = Cache{
 
 // Get a reference to the cache instance.
 func GetCache() *Cache {
+	// Workaround. Update cache connection with every request.
+	// We need a better way to maintain this connection.
+	cacheInst.pool = db.GetConnection()
+	cacheInst.shared.pool = db.GetConnection()
+
 	return &cacheInst
 }
