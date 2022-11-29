@@ -27,12 +27,12 @@ func main() {
 		klog.Fatal(configError)
 	}
 
-	// Get database connection
+	// Establish the database connection.
 	database.GetConnection()
 
-	// Watch the cache
+	// Start process to watch the RBAC config andd update the cache.
 	ctx := context.Background()
-	go rbac.StartCacheValidation(ctx)
+	go rbac.GetCache().StartBackgroundValidation(ctx)
 
 	server.StartAndListen()
 }

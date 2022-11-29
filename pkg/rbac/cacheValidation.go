@@ -9,113 +9,156 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
 )
 
-func StartCacheValidation(ctx context.Context) {
-	for {
-		GetCache().backgroundValidation(ctx)
-		klog.Warning("Cache background validation stopped. Restarting process.")
-		time.Sleep(1 * time.Second)
-	}
+type watchResource struct {
+	dynamicClient dynamic.Interface
+	gvr           schema.GroupVersionResource
+	onAdd         func(*unstructured.Unstructured)
+	onModify      func(*unstructured.Unstructured)
+	onDelete      func(*unstructured.Unstructured)
 }
 
-// Watch resources that could invalidate RBAC cache.
-func (c *Cache) backgroundValidation(ctx context.Context) {
+// Watch resources that could invalidate the cache.
+func (c *Cache) StartBackgroundValidation(ctx context.Context) {
 	klog.Info("Starting cache background validation.")
 
 	// Watch NAMESPACES
-	// Only ADD and DELETE affect the cached data, ignore MODIFY.
-	namespacesGVR := schema.GroupVersionResource{Resource: "namespaces", Group: "", Version: "v1"}
-	go c.watch(ctx, namespacesGVR, c.addNamespace, nil, c.deleteNamespace)
+	watchNamespaces := watchResource{
+		dynamicClient: c.shared.dynamicClient,
+		gvr:           schema.GroupVersionResource{Resource: "namespaces", Group: "", Version: "v1"},
+		onAdd:         c.addNamespace,
+		onModify:      nil, // Ignoring MODIFY because it doesn't affect the cached data.
+		onDelete:      c.deleteNamespace,
+	}
+	go watchNamespaces.start(ctx)
 
 	// Watch ROLES
-	rolesGVR := schema.GroupVersionResource{Resource: "roles", Group: "rbac.authorization.k8s.io", Version: "v1"}
-	go c.watch(ctx, rolesGVR, c.forceExpiration, c.forceExpiration, c.forceExpiration)
+	watchRoles := watchResource{
+		dynamicClient: c.shared.dynamicClient,
+		gvr:           schema.GroupVersionResource{Resource: "roles", Group: "rbac.authorization.k8s.io", Version: "v1"},
+		onAdd:         c.clearUserData,
+		onModify:      c.clearUserData,
+		onDelete:      c.clearUserData,
+	}
+	go watchRoles.start(ctx)
 
 	// Watch CLUSTERROLES
-	clusterRolesGVR := schema.GroupVersionResource{Resource: "clusterroles", Group: "rbac.authorization.k8s.io", Version: "v1"}
-	go c.watch(ctx, clusterRolesGVR, c.forceExpiration, c.forceExpiration, c.forceExpiration)
+	watchClusterRoles := watchResource{
+		dynamicClient: c.shared.dynamicClient,
+		gvr:           schema.GroupVersionResource{Resource: "clusterroles", Group: "rbac.authorization.k8s.io", Version: "v1"},
+		onAdd:         c.clearUserData,
+		onModify:      c.clearUserData,
+		onDelete:      c.clearUserData,
+	}
+	go watchClusterRoles.start(ctx)
 
 	// Watch ROLEBINDINGS
-	roleBindingsGVR := schema.GroupVersionResource{Resource: "rolebindings", Group: "rbac.authorization.k8s.io", Version: "v1"}
-	go c.watch(ctx, roleBindingsGVR, c.forceExpiration, skipEvent, c.forceExpiration)
+	watchRoleBindings := watchResource{
+		dynamicClient: c.shared.dynamicClient,
+		gvr:           schema.GroupVersionResource{Resource: "rolebindings", Group: "rbac.authorization.k8s.io", Version: "v1"},
+		onAdd:         c.clearUserData,
+		onModify:      nil, // FIXME: Skipping MODIFY because we are receiving too many events.
+		onDelete:      c.clearUserData,
+	}
+	go watchRoleBindings.start(ctx)
 
 	// Watch CLUSTERRROLEBINDINGS
-	clusterRoleBindingsGVR := schema.GroupVersionResource{Resource: "clusterrolebindings", Group: "rbac.authorization.k8s.io", Version: "v1"}
-	c.watch(ctx, clusterRoleBindingsGVR, c.forceExpiration, skipEvent, c.forceExpiration)
+	watchClusterRoleBindings := watchResource{
+		dynamicClient: c.shared.dynamicClient,
+		gvr:           schema.GroupVersionResource{Resource: "clusterrolebindings", Group: "rbac.authorization.k8s.io", Version: "v1"},
+		onAdd:         c.clearUserData,
+		onModify:      nil, // FIXME: Skipping MODIFY because we are receiving too many events.
+		onDelete:      c.clearUserData,
+	}
+	go watchClusterRoleBindings.start(ctx)
 
 	// Watch GROUPS
-	groupsGVR := schema.GroupVersionResource{Resource: "groups", Group: "user.openshift.io", Version: "v1"}
-	go c.watch(ctx, groupsGVR, c.forceExpiration, c.forceExpiration, c.forceExpiration)
+	watchGroups := watchResource{
+		dynamicClient: c.shared.dynamicClient,
+		gvr:           schema.GroupVersionResource{Resource: "groups", Group: "user.openshift.io", Version: "v1"},
+		onAdd:         c.clearUserData,
+		onModify:      c.clearUserData,
+		onDelete:      c.clearUserData,
+	}
+	go watchGroups.start(ctx)
 
 	// Watch CRDS
-	// Only ADDED CRDs require a cache refresh. Deletions can wait for normal expiration.
-	crdsGVR := schema.GroupVersionResource{Resource: "customresourcedefinitions", Group: "apiextensions.k8s.io", Version: "v1"}
-	c.watch(ctx, crdsGVR, c.forceExpiration, nil, nil)
-}
-
-func skipEvent(obj *unstructured.Unstructured) {
-	klog.Infof(">>> Ignoring event. KIND: %s  NAME: %s", obj.GetKind(), obj.GetName())
-}
-
-// Watch resource and invalidate RBAC cache if anything changes.
-func (c *Cache) watch(ctx context.Context, gvr schema.GroupVersionResource, onAdd, onModify, onDelete func(*unstructured.Unstructured)) {
-	watch, watchError := c.shared.dynamicClient.Resource(gvr).Watch(ctx, metav1.ListOptions{})
-	if watchError != nil {
-		klog.Warningf("Error watching resource %s. Error: %s", gvr.String(), watchError)
-		return
+	watchCRDs := watchResource{
+		dynamicClient: c.shared.dynamicClient,
+		gvr:           schema.GroupVersionResource{Resource: "customresourcedefinitions", Group: "apiextensions.k8s.io", Version: "v1"},
+		onAdd:         c.clearUserData,
+		onModify:      c.clearUserData,
+		onDelete:      nil, // Deletions can wait for normal expiration.
 	}
-	defer watch.Stop()
+	go watchCRDs.start(ctx)
+}
 
-	klog.V(3).Infof("Watching resource: %s", gvr.String())
+// func skipEvent(obj *unstructured.Unstructured) {
+// 	klog.Infof(">>> Ignoring event. KIND: %s  NAME: %s", obj.GetKind(), obj.GetName())
+// }
 
+// Start watching for configuration changes and invalidate RBAC cache.
+func (w watchResource) start(ctx context.Context) {
 	for {
-		select {
-		case <-ctx.Done():
-			klog.V(2).Info("Stopped watching resource. ", gvr.String())
-			return
+		watch, watchError := w.dynamicClient.Resource(w.gvr).Watch(ctx, metav1.ListOptions{})
+		if watchError != nil {
+			klog.Warningf("Error watching resource %s. Error: %s", w.gvr.String(), watchError)
+			time.Sleep(5 * time.Second)
+			continue
+		}
 
-		case event := <-watch.ResultChan(): // Read events from the watch channel.
-			// klog.Infof("Event: %s \tResource: %s  ", event.Type, gvr.String())
-			o, error := runtime.UnstructuredConverter.ToUnstructured(runtime.DefaultUnstructuredConverter, &event.Object)
-			if error != nil {
-				klog.Warningf("Error converting %s event.Object to unstructured.Unstructured. Error: %s",
-					gvr.Resource, error)
-			}
-			obj := &unstructured.Unstructured{Object: o}
+		defer watch.Stop()
+		klog.V(2).Infof("Watching resource: %s", w.gvr.String())
 
-			switch event.Type {
-			case "ADDED":
-				if onAdd != nil {
-					onAdd(obj)
-				}
-			case "MODIFIED":
-				if onModify != nil {
-					onModify(obj)
-				}
-			case "DELETED":
-				if onDelete != nil {
-					onDelete(obj)
-				}
-
-			default:
-				klog.V(2).Infof("Received unexpected event. Ending listAndWatch() for %s", gvr.String())
+		for {
+			select {
+			case <-ctx.Done():
+				klog.V(2).Info("Stopped watching resource. ", w.gvr.String())
 				return
+
+			case event := <-watch.ResultChan(): // Read events from the watch channel.
+				klog.V(6).Infof("Event: %s \tResource: %s  ", event.Type, w.gvr.String())
+				o, error := runtime.UnstructuredConverter.ToUnstructured(runtime.DefaultUnstructuredConverter, &event.Object)
+				if error != nil {
+					klog.Warningf("Error converting %s event.Object to unstructured.Unstructured. Error: %s",
+						w.gvr.Resource, error)
+				}
+				obj := &unstructured.Unstructured{Object: o}
+
+				switch event.Type {
+				case "ADDED":
+					if w.onAdd != nil {
+						w.onAdd(obj)
+					}
+				case "MODIFIED":
+					if w.onModify != nil {
+						w.onModify(obj)
+					}
+				case "DELETED":
+					if w.onDelete != nil {
+						w.onDelete(obj)
+					}
+
+				default:
+					klog.V(2).Infof("Received unexpected event. Restarting watch for %s", w.gvr.String())
+					watch.Stop()
+				}
 			}
 		}
 	}
 }
 
-var pendingExpiration bool
+var pendingInvalidation bool
 
-func (c *Cache) forceExpiration(obj *unstructured.Unstructured) {
-	klog.V(9).Info("obj:", obj)
-	if pendingExpiration {
+func (c *Cache) clearUserData(obj *unstructured.Unstructured) {
+	if pendingInvalidation {
 		klog.V(9).Info("There's a pending request to force the cache to expire.")
 		return
 	}
-	pendingExpiration = true
+	pendingInvalidation = true
 	klog.Info("Invalidating user data cache. Waiting 5 seconds to 'debounce' or avoid too many invalidation requests.")
 
 	go func() {
@@ -128,7 +171,7 @@ func (c *Cache) forceExpiration(obj *unstructured.Unstructured) {
 			userCache.csrUpdatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
 			userCache.nsrUpdatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
 		}
-		pendingExpiration = false
-		klog.Info("Invalidated the user data cache.")
+		pendingInvalidation = false
+		klog.Info("Done invalidating the user data cache.")
 	}()
 }
