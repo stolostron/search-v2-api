@@ -13,6 +13,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// Holds the objects needed to watch a kubernetes resource and trigger an action when a change is detected.
 type watchResource struct {
 	dynamicClient dynamic.Interface
 	gvr           schema.GroupVersionResource
@@ -29,9 +30,9 @@ func (c *Cache) StartBackgroundValidation(ctx context.Context) {
 	watchNamespaces := watchResource{
 		dynamicClient: c.shared.dynamicClient,
 		gvr:           schema.GroupVersionResource{Resource: "namespaces", Group: "", Version: "v1"},
-		onAdd:         c.addNamespace,
+		onAdd:         c.namespaceAdded,
 		onModify:      nil, // Ignoring MODIFY because it doesn't affect the cached data.
-		onDelete:      c.deleteNamespace,
+		onDelete:      c.namespaceDeleted,
 	}
 	go watchNamespaces.start(ctx)
 
@@ -100,7 +101,7 @@ func (c *Cache) StartBackgroundValidation(ctx context.Context) {
 // 	klog.Infof(">>> Ignoring event. KIND: %s  NAME: %s", obj.GetKind(), obj.GetName())
 // }
 
-// Start watching for configuration changes and invalidate RBAC cache.
+// Start watching for changes to a resource and trigger the action to update the cache.
 func (w watchResource) start(ctx context.Context) {
 	for {
 		watch, watchError := w.dynamicClient.Resource(w.gvr).Watch(ctx, metav1.ListOptions{})
@@ -117,6 +118,7 @@ func (w watchResource) start(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				klog.V(2).Info("Stopped watching resource. ", w.gvr.String())
+				watch.Stop()
 				return
 
 			case event := <-watch.ResultChan(): // Read events from the watch channel.
@@ -143,8 +145,9 @@ func (w watchResource) start(ctx context.Context) {
 					}
 
 				default:
-					klog.V(2).Infof("Received unexpected event. Restarting watch for %s", w.gvr.String())
+					klog.V(2).Infof("Received unexpected event. Waiting 5 seconds and restarting watch for %s", w.gvr.String())
 					watch.Stop()
+					time.Sleep(5 * time.Second)
 				}
 			}
 		}
@@ -155,11 +158,11 @@ var pendingInvalidation bool
 
 func (c *Cache) clearUserData(obj *unstructured.Unstructured) {
 	if pendingInvalidation {
-		klog.V(9).Info("There's a pending request to force the cache to expire.")
+		klog.V(5).Info("There's a pending request to clear the User Data cache.")
 		return
 	}
 	pendingInvalidation = true
-	klog.Info("Invalidating user data cache. Waiting 5 seconds to 'debounce' or avoid too many invalidation requests.")
+	klog.Info("Invalidating UserData cache. Waiting 5 seconds to 'debounce' or avoid triggering too many requests.")
 
 	go func() {
 		time.Sleep(5 * time.Second)
@@ -172,6 +175,58 @@ func (c *Cache) clearUserData(obj *unstructured.Unstructured) {
 			userCache.nsrUpdatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
 		}
 		pendingInvalidation = false
-		klog.Info("Done invalidating the user data cache.")
+		klog.Info("Done invalidating the UserData cache.")
 	}()
+}
+
+// Update the cache when a namespace is ADDED.
+func (c *Cache) namespaceAdded(obj *unstructured.Unstructured) {
+	c.shared.nsLock.Lock()
+	defer c.shared.nsLock.Unlock()
+	c.shared.namespaces = append(c.shared.namespaces, obj.GetName())
+	c.shared.nsUpdatedAt = time.Now()
+
+	// Invalidate the ManagedClusters cache.
+	c.shared.mcUpdatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
+
+	// Invalidate DisabledClusters cache.
+	c.shared.dcUpdatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
+
+	// Invalidate UserData cache.
+	c.clearUserData(obj)
+}
+
+// Update the cache when a namespace is DELETED.
+func (c *Cache) namespaceDeleted(obj *unstructured.Unstructured) {
+	c.shared.nsLock.Lock()
+	defer c.shared.nsLock.Unlock()
+	ns := obj.GetName()
+	newNsamespaces := make([]string, 0)
+	for _, n := range c.shared.namespaces {
+		if n != ns {
+			newNsamespaces = append(newNsamespaces, n)
+		}
+	}
+	c.shared.namespaces = newNsamespaces
+	c.shared.nsUpdatedAt = time.Now()
+
+	// Delete from ManagedClusters
+	c.shared.mcLock.Lock()
+	defer c.shared.mcLock.Unlock()
+	delete(c.shared.managedClusters, ns)
+	c.shared.mcUpdatedAt = time.Now()
+
+	// Delete from DisabledClusters
+	c.shared.dcLock.Lock()
+	defer c.shared.dcLock.Unlock()
+	delete(c.shared.disabledClusters, ns)
+	c.shared.dcUpdatedAt = time.Now()
+
+	// Delete from UserData caches
+	c.usersLock.Lock()
+	defer c.usersLock.Unlock()
+	for _, userCache := range c.users {
+		delete(userCache.userData.NsResources, ns)
+		delete(userCache.userData.ManagedClusters, ns)
+	}
 }
