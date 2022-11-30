@@ -170,9 +170,9 @@ func (c *Cache) clearUserData(obj *unstructured.Unstructured) {
 		c.usersLock.Lock()
 		defer c.usersLock.Unlock()
 		for _, userCache := range c.users {
-			userCache.clustersUpdatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
-			userCache.csrUpdatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
-			userCache.nsrUpdatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
+			userCache.clustersCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
+			userCache.csrCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
+			userCache.nsrCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
 		}
 		pendingInvalidation = false
 		klog.Info("Done invalidating the UserData cache.")
@@ -181,16 +181,16 @@ func (c *Cache) clearUserData(obj *unstructured.Unstructured) {
 
 // Update the cache when a namespace is ADDED.
 func (c *Cache) namespaceAdded(obj *unstructured.Unstructured) {
-	c.shared.nsLock.Lock()
-	defer c.shared.nsLock.Unlock()
+	c.shared.nsCache.lock.Lock()
+	defer c.shared.nsCache.lock.Unlock()
 	c.shared.namespaces = append(c.shared.namespaces, obj.GetName())
-	c.shared.nsUpdatedAt = time.Now()
+	c.shared.nsCache.updatedAt = time.Now()
 
 	// Invalidate the ManagedClusters cache.
-	c.shared.mcUpdatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
+	c.shared.mcCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
 
 	// Invalidate DisabledClusters cache.
-	c.shared.dcUpdatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
+	c.shared.dcCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
 
 	// Invalidate UserData cache.
 	c.clearUserData(obj)
@@ -198,8 +198,8 @@ func (c *Cache) namespaceAdded(obj *unstructured.Unstructured) {
 
 // Update the cache when a namespace is DELETED.
 func (c *Cache) namespaceDeleted(obj *unstructured.Unstructured) {
-	c.shared.nsLock.Lock()
-	defer c.shared.nsLock.Unlock()
+	c.shared.nsCache.lock.Lock()
+	defer c.shared.nsCache.lock.Unlock()
 	ns := obj.GetName()
 	newNsamespaces := make([]string, 0)
 	for _, n := range c.shared.namespaces {
@@ -208,25 +208,25 @@ func (c *Cache) namespaceDeleted(obj *unstructured.Unstructured) {
 		}
 	}
 	c.shared.namespaces = newNsamespaces
-	c.shared.nsUpdatedAt = time.Now()
+	c.shared.nsCache.updatedAt = time.Now()
 
 	// Delete from ManagedClusters
-	c.shared.mcLock.Lock()
-	defer c.shared.mcLock.Unlock()
+	c.shared.mcCache.lock.Lock()
+	defer c.shared.mcCache.lock.Unlock()
 	delete(c.shared.managedClusters, ns)
-	c.shared.mcUpdatedAt = time.Now()
+	c.shared.mcCache.updatedAt = time.Now()
 
 	// Delete from DisabledClusters
-	c.shared.dcLock.Lock()
-	defer c.shared.dcLock.Unlock()
+	c.shared.dcCache.lock.Lock()
+	defer c.shared.dcCache.lock.Unlock()
 	delete(c.shared.disabledClusters, ns)
-	c.shared.dcUpdatedAt = time.Now()
+	c.shared.dcCache.updatedAt = time.Now()
 
 	// Delete from UserData caches
 	c.usersLock.Lock()
 	defer c.usersLock.Unlock()
 	for _, userCache := range c.users {
-		delete(userCache.userData.NsResources, ns)
-		delete(userCache.userData.ManagedClusters, ns)
+		delete(userCache.UserData.NsResources, ns)
+		delete(userCache.UserData.ManagedClusters, ns)
 	}
 }
