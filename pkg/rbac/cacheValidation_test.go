@@ -26,6 +26,7 @@ func Test_cacheValidation_StartBackgroundValidation(t *testing.T) {
 			disabledClusters: map[string]struct{}{"a": {}, "b": {}},
 			dynamicClient:    fakedynclient.NewSimpleDynamicClient(testScheme, mockns),
 		},
+		users: map[string]*UserDataCache{"usr1": &UserDataCache{}},
 	}
 
 	ctx := context.Background()
@@ -39,6 +40,7 @@ func Test_cacheValidation_namespaceAdded(t *testing.T) {
 			managedClusters:  map[string]struct{}{"a": {}, "b": {}},
 			disabledClusters: map[string]struct{}{"a": {}, "b": {}},
 		},
+		users: map[string]*UserDataCache{"usr1": &UserDataCache{}},
 	}
 
 	mock_namespace := &unstructured.Unstructured{
@@ -65,6 +67,7 @@ func Test_cacheValidation_namespaceDeleted(t *testing.T) {
 			managedClusters:  map[string]struct{}{"a": {}, "b": {}},
 			disabledClusters: map[string]struct{}{"a": {}, "b": {}},
 		},
+		users: map[string]*UserDataCache{"usr1": &UserDataCache{}},
 	}
 
 	mock_namespace := &unstructured.Unstructured{
