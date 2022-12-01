@@ -56,8 +56,6 @@ func Test_cacheValidation_namespaceAdded(t *testing.T) {
 	mock_cache.namespaceAdded(mock_namespace)
 
 	assert.Equal(t, []string{"a", "b", "c"}, mock_cache.shared.namespaces)
-	// assert.Equal(t, map[string]struct{}{"a": {}, "b": {}, "c": {}}, mock_cache.shared.disabledClusters)
-	// assert.Equal(t, map[string]struct{}{"a": {}, "b": {}, "c": {}}, mock_cache.shared.managedClusters)
 }
 
 func Test_cacheValidation_namespaceDeleted(t *testing.T) {

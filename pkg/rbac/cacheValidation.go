@@ -13,6 +13,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
+const RBAC_AUTHZ_K8S_IO = "rbac.authorization.k8s.io"
+
 // Holds the objects needed to watch a kubernetes resource and trigger an action when a change is detected.
 type watchResource struct {
 	dynamicClient dynamic.Interface
@@ -39,7 +41,7 @@ func (c *Cache) StartBackgroundValidation(ctx context.Context) {
 	// Watch ROLES
 	watchRoles := watchResource{
 		dynamicClient: c.shared.dynamicClient,
-		gvr:           schema.GroupVersionResource{Resource: "roles", Group: "rbac.authorization.k8s.io", Version: "v1"},
+		gvr:           schema.GroupVersionResource{Resource: "roles", Group: RBAC_AUTHZ_K8S_IO, Version: "v1"},
 		onAdd:         c.clearUserData,
 		onModify:      c.clearUserData,
 		onDelete:      c.clearUserData,
@@ -49,7 +51,7 @@ func (c *Cache) StartBackgroundValidation(ctx context.Context) {
 	// Watch CLUSTERROLES
 	watchClusterRoles := watchResource{
 		dynamicClient: c.shared.dynamicClient,
-		gvr:           schema.GroupVersionResource{Resource: "clusterroles", Group: "rbac.authorization.k8s.io", Version: "v1"},
+		gvr:           schema.GroupVersionResource{Resource: "clusterroles", Group: RBAC_AUTHZ_K8S_IO, Version: "v1"},
 		onAdd:         c.clearUserData,
 		onModify:      c.clearUserData,
 		onDelete:      c.clearUserData,
@@ -59,7 +61,7 @@ func (c *Cache) StartBackgroundValidation(ctx context.Context) {
 	// Watch ROLEBINDINGS
 	watchRoleBindings := watchResource{
 		dynamicClient: c.shared.dynamicClient,
-		gvr:           schema.GroupVersionResource{Resource: "rolebindings", Group: "rbac.authorization.k8s.io", Version: "v1"},
+		gvr:           schema.GroupVersionResource{Resource: "rolebindings", Group: RBAC_AUTHZ_K8S_IO, Version: "v1"},
 		onAdd:         c.clearUserData,
 		onModify:      nil, // FIXME: Skipping MODIFY because we are receiving too many events.
 		onDelete:      c.clearUserData,
@@ -69,10 +71,11 @@ func (c *Cache) StartBackgroundValidation(ctx context.Context) {
 	// Watch CLUSTERRROLEBINDINGS
 	watchClusterRoleBindings := watchResource{
 		dynamicClient: c.shared.dynamicClient,
-		gvr:           schema.GroupVersionResource{Resource: "clusterrolebindings", Group: "rbac.authorization.k8s.io", Version: "v1"},
-		onAdd:         c.clearUserData,
-		onModify:      nil, // FIXME: Skipping MODIFY because we are receiving too many events.
-		onDelete:      c.clearUserData,
+		gvr: schema.GroupVersionResource{Resource: "clusterrolebindings",
+			Group: RBAC_AUTHZ_K8S_IO, Version: "v1"},
+		onAdd:    c.clearUserData,
+		onModify: nil, // FIXME: Skipping MODIFY because we are receiving too many events.
+		onDelete: c.clearUserData,
 	}
 	go watchClusterRoleBindings.start(ctx)
 
@@ -89,17 +92,14 @@ func (c *Cache) StartBackgroundValidation(ctx context.Context) {
 	// Watch CRDS
 	watchCRDs := watchResource{
 		dynamicClient: c.shared.dynamicClient,
-		gvr:           schema.GroupVersionResource{Resource: "customresourcedefinitions", Group: "apiextensions.k8s.io", Version: "v1"},
-		onAdd:         c.clearUserData,
-		onModify:      c.clearUserData,
-		onDelete:      nil, // Deletions can wait for normal expiration.
+		gvr: schema.GroupVersionResource{Resource: "customresourcedefinitions",
+			Group: "apiextensions.k8s.io", Version: "v1"},
+		onAdd:    c.clearUserData,
+		onModify: c.clearUserData,
+		onDelete: nil, // Deletions can wait for normal expiration.
 	}
 	go watchCRDs.start(ctx)
 }
-
-// func skipEvent(obj *unstructured.Unstructured) {
-// 	klog.Infof(">>> Ignoring event. KIND: %s  NAME: %s", obj.GetKind(), obj.GetName())
-// }
 
 // Start watching for changes to a resource and trigger the action to update the cache.
 func (w watchResource) start(ctx context.Context) {
@@ -154,14 +154,12 @@ func (w watchResource) start(ctx context.Context) {
 	}
 }
 
-var pendingInvalidation bool
-
 func (c *Cache) clearUserData(obj *unstructured.Unstructured) {
-	if pendingInvalidation {
+	if c.pendingInvalidation {
 		klog.V(5).Info("There's a pending request to clear the User Data cache.")
 		return
 	}
-	pendingInvalidation = true
+	c.pendingInvalidation = true
 	klog.Info("Invalidating UserData cache. Waiting 5 seconds to 'debounce' or avoid triggering too many requests.")
 
 	go func() {
@@ -174,7 +172,7 @@ func (c *Cache) clearUserData(obj *unstructured.Unstructured) {
 			userCache.csrCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
 			userCache.nsrCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
 		}
-		pendingInvalidation = false
+		c.pendingInvalidation = false
 		klog.Info("Done invalidating the UserData cache.")
 	}()
 }
