@@ -176,7 +176,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		}
 
 		sql, _, err = selectDs.Where(whereDs...).ToSQL() // use original query
-		klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
+		klog.V(9).Info("Search query before adding RBAC clause:", sql, " error:", err)
 
 		_, userInfo := rbac.GetCache().GetUserUID(ctx)
 		// RBAC CLAUSE
@@ -257,7 +257,7 @@ func (s *SearchResult) resolveUids() {
 func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	items := []map[string]interface{}{}
 	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveItemsFunc"))
-	klog.V(5).Infof("Query issued by resolver [%s] ", s.query)
+	klog.V(9).Infof("Query issued by resolver [%s] ", s.query)
 	rows, err := s.pool.Query(s.context, s.query, s.params...)
 
 	defer timer.ObserveDuration()
