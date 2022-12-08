@@ -100,6 +100,9 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			whereDs = append(whereDs, goqu.L(`"data"->?`, s.property).IsNotNull())
 		}
 
+		sql, _, err := selectDs.Where(whereDs...).ToSQL() // use original query
+		klog.V(3).Info("SearchComplete query before adding RBAC clause:", sql, " error:", err)
+
 		// get user info for logging
 		_, userInfo := rbac.GetCache().GetUserUID(ctx)
 
@@ -138,7 +141,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		}
 		s.query = sql
 		s.params = params
-		klog.V(5).Info("SearchComplete Query: ", s.query)
+		klog.V(9).Info("SearchComplete Query: ", s.query)
 	} else {
 		s.query = ""
 		s.params = nil

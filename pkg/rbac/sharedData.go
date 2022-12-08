@@ -80,7 +80,7 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 		return propTypeMap, err
 	}
 
-	klog.V(5).Infof("Query for property datatypes: [%s] ", query)
+	klog.V(9).Infof("Query for property datatypes: [%s] ", query)
 	rows, err := shared.pool.Query(ctx, query, params...)
 	if err != nil {
 		klog.Errorf("Error resolving property types query [%s] with args [%+v]. Error: [%+v]", query, err)
@@ -405,7 +405,8 @@ func buildSearchAddonDisabledQuery(ctx context.Context) (string, error) {
 		klog.Errorf("Error building Query for managed clusters with Search addon disabled: %s", err.Error())
 		return "", err
 	}
-	klog.V(3).Infof("Query for managed clusters with Search addon disabled: %s %s\n", sql, params)
+	klog.V(3).Infof("Successfully created query for managed clusters with Search addon disabled!")
+	klog.V(9).Infof("Query for managed clusters with Search addon disabled: %s %s\n", sql, params)
 	return sql, nil
 }
 
