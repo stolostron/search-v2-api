@@ -100,6 +100,7 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 	// NOTE: we will have to do this for any property that is not in the data field,
 	// especially if new columns are added to the resources table.
 	propTypeMap["cluster"] = "string"
+	propTypeMap["addon"] = "string"
 
 	klog.Info("Successfully fetched property types from the database.")
 	//cache results:
