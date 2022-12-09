@@ -75,6 +75,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 		return user, fmt.Errorf("cannot find user with uid: %s", uid)
 	}
 	clientToken := ctx.Value(ContextAuthTokenKey).(string)
+	klog.V(3).Info("ClientToken is %s", clientToken)
 
 	cache.usersLock.Lock()
 	defer cache.usersLock.Unlock()
@@ -109,11 +110,11 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 		klog.Warning("Encountered error while checking if user has access to everything ", err)
 	} else {
 		if userHasAllAccess {
-			klog.V(4).Infof("User %s with uid %s has access to all resources.", userInfo.Username, userInfo.UID)
+			klog.V(4).Infof("User %s with uid %s has access to all resources. The clientToken is %s.", userInfo.Username, userInfo.UID, clientToken)
 			return user, nil
 		}
-		klog.V(5).Infof("User %s with uid %s doesn't have access to all resources. Checking individually",
-			userInfo.Username, userInfo.UID)
+		klog.V(5).Infof("User %s with uid %s doesn't have access to all resources. Checking individually. The clientToken is  %s.",
+			userInfo.Username, userInfo.UID, clientToken)
 	}
 
 	userDataCache, err := user.getNamespacedResources(cache, ctx, clientToken)
