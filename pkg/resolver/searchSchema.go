@@ -89,7 +89,8 @@ func (s *SearchSchema) buildSearchSchemaQuery(ctx context.Context) {
 	}
 	s.query = sql
 	s.params = params
-	klog.V(3).Info("SearchSchema Query: ", sql)
+	klog.V(3).Info("SearchSchema Query created!")
+	klog.V(9).Info("SearchSchema Query: ", sql)
 }
 
 func (s *SearchSchema) searchSchemaResults(ctx context.Context) (map[string]interface{}, error) {
