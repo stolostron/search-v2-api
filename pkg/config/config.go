@@ -41,9 +41,9 @@ func new() *Config {
 	// Simply put, the order of preference is env -> default values (from left to right)
 	conf := &Config{
 		API_SERVER_URL: getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
-		AuthCacheTTL:   getEnvAsInt("AUTH_CACHE_TTL", int(10000)),   // 1 minute
-		SharedCacheTTL: getEnvAsInt("SHARED_CACHE_TTL", int(10000)), // 2 min (increase to 10min after implementation)
-		UserCacheTTL:   getEnvAsInt("USER_CACHE_TTL", int(10000)),   // 2 min (increase to 10min after implementation)
+		AuthCacheTTL:   getEnvAsInt("AUTH_CACHE_TTL", int(1000000)),   // 1 minute
+		SharedCacheTTL: getEnvAsInt("SHARED_CACHE_TTL", int(1000000)), // 2 min (increase to 10min after implementation)
+		UserCacheTTL:   getEnvAsInt("USER_CACHE_TTL", int(1000000)),   // 2 min (increase to 10min after implementation)
 		ContextPath:    getEnv("CONTEXT_PATH", "/searchapi"),
 		DBHost:         getEnv("DB_HOST", "localhost"),
 		DBName:         getEnv("DB_NAME", ""),
