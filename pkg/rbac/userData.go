@@ -316,6 +316,8 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 								// Update user's managedcluster list too as the user has access to everything
 								user.updateUserManagedClusterList(cache, ns)
 
+								lock.Unlock()
+
 								return
 							}
 							user.NsResources[ns] = append(user.NsResources[ns],
