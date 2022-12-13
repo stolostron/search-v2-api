@@ -146,6 +146,7 @@ func (shared *SharedData) PopulateSharedCache(ctx context.Context) {
 		go func() {
 			defer wg.Done()
 			err := shared.getClusterScopedResources(ctx)
+			klog.V(3).Info(shared.csResourcesMap)
 			if err != nil {
 				klog.Errorf("Error retrieving cluster scoped resources. Error: [%+v]", err)
 			}
@@ -156,6 +157,7 @@ func (shared *SharedData) PopulateSharedCache(ctx context.Context) {
 		go func() {
 			defer wg.Done()
 			_, err := shared.getNamespaces(ctx)
+			klog.V(3).Info(shared.namespaces)
 			if err != nil {
 				klog.Errorf("Error retrieving shared namespaces. Error: [%+v]", err)
 			}
@@ -166,6 +168,7 @@ func (shared *SharedData) PopulateSharedCache(ctx context.Context) {
 		go func() {
 			defer wg.Done()
 			err := shared.getManagedClusters(ctx)
+			klog.V(3).Info(shared.managedClusters)
 			if err != nil {
 				klog.Errorf("Error retrieving managed clusters. Error: [%+v]", err)
 			}

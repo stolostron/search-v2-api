@@ -232,7 +232,7 @@ func (s *SearchResult) resolveCount() int {
 	var count int
 	err := rows.Scan(&count)
 	if err != nil {
-		klog.Errorf("Error %s resolving count for query:%s", err.Error(), s.query)
+		klog.Errorf("Error %s resolving count for query:%s", err.Error())
 	}
 	return count
 }
