@@ -125,6 +125,11 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 			cache.tokenReviews[clientToken].tokenReview.Status.User.Username)
 		userDataCache, err = user.getClusterScopedResources(cache, ctx, clientToken)
 	}
+
+	klog.V(3).Info("User cs resources cache", userDataCache.CsResources)
+	klog.V(3).Info("User ns resources cache", userDataCache.NsResources)
+	klog.V(3).Info("User mc resources cache", userDataCache.ManagedClusters)
+
 	return userDataCache, err
 }
 
