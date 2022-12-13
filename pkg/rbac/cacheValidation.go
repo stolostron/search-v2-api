@@ -38,67 +38,19 @@ func (c *Cache) StartBackgroundValidation(ctx context.Context) {
 	}
 	go watchNamespaces.start(ctx)
 
+	// Watch ManagedClusterAddon
+
 	// Watch ROLES
-	watchRoles := watchResource{
-		dynamicClient: c.shared.dynamicClient,
-		gvr:           schema.GroupVersionResource{Resource: "roles", Group: RBAC_AUTHZ_K8S_IO, Version: "v1"},
-		onAdd:         c.clearUserData,
-		onModify:      c.clearUserData,
-		onDelete:      c.clearUserData,
-	}
-	go watchRoles.start(ctx)
 
 	// Watch CLUSTERROLES
-	watchClusterRoles := watchResource{
-		dynamicClient: c.shared.dynamicClient,
-		gvr:           schema.GroupVersionResource{Resource: "clusterroles", Group: RBAC_AUTHZ_K8S_IO, Version: "v1"},
-		onAdd:         c.clearUserData,
-		onModify:      c.clearUserData,
-		onDelete:      c.clearUserData,
-	}
-	go watchClusterRoles.start(ctx)
 
 	// Watch ROLEBINDINGS
-	watchRoleBindings := watchResource{
-		dynamicClient: c.shared.dynamicClient,
-		gvr:           schema.GroupVersionResource{Resource: "rolebindings", Group: RBAC_AUTHZ_K8S_IO, Version: "v1"},
-		onAdd:         c.clearUserData,
-		onModify:      nil, // FIXME: Skipping MODIFY because we are receiving too many events.
-		onDelete:      c.clearUserData,
-	}
-	go watchRoleBindings.start(ctx)
 
 	// Watch CLUSTERRROLEBINDINGS
-	watchClusterRoleBindings := watchResource{
-		dynamicClient: c.shared.dynamicClient,
-		gvr: schema.GroupVersionResource{Resource: "clusterrolebindings",
-			Group: RBAC_AUTHZ_K8S_IO, Version: "v1"},
-		onAdd:    c.clearUserData,
-		onModify: nil, // FIXME: Skipping MODIFY because we are receiving too many events.
-		onDelete: c.clearUserData,
-	}
-	go watchClusterRoleBindings.start(ctx)
 
 	// Watch GROUPS
-	watchGroups := watchResource{
-		dynamicClient: c.shared.dynamicClient,
-		gvr:           schema.GroupVersionResource{Resource: "groups", Group: "user.openshift.io", Version: "v1"},
-		onAdd:         c.clearUserData,
-		onModify:      c.clearUserData,
-		onDelete:      c.clearUserData,
-	}
-	go watchGroups.start(ctx)
 
 	// Watch CRDS
-	watchCRDs := watchResource{
-		dynamicClient: c.shared.dynamicClient,
-		gvr: schema.GroupVersionResource{Resource: "customresourcedefinitions",
-			Group: "apiextensions.k8s.io", Version: "v1"},
-		onAdd:    c.clearUserData,
-		onModify: c.clearUserData,
-		onDelete: nil, // Deletions can wait for normal expiration.
-	}
-	go watchCRDs.start(ctx)
 }
 
 // Start watching for changes to a resource and trigger the action to update the cache.
@@ -106,8 +58,8 @@ func (w watchResource) start(ctx context.Context) {
 	for {
 		watch, watchError := w.dynamicClient.Resource(w.gvr).Watch(ctx, metav1.ListOptions{})
 		if watchError != nil {
-			klog.Warningf("Error watching resource %s. Error: %s", w.gvr.String(), watchError)
-			time.Sleep(5 * time.Second)
+			klog.Warningf("Error watching %s, waiting 5 seconds before retry. Error: %s", w.gvr.String(), watchError)
+			time.Sleep(5 * time.Second) // Wait before retrying.
 			continue
 		}
 
@@ -123,10 +75,10 @@ func (w watchResource) start(ctx context.Context) {
 
 			case event := <-watch.ResultChan(): // Read events from the watch channel.
 				klog.V(6).Infof("Event: %s \tResource: %s  ", event.Type, w.gvr.String())
-				o, error := runtime.UnstructuredConverter.ToUnstructured(runtime.DefaultUnstructuredConverter, &event.Object)
-				if error != nil {
+				o, err := runtime.UnstructuredConverter.ToUnstructured(runtime.DefaultUnstructuredConverter, &event.Object)
+				if err != nil {
 					klog.Warningf("Error converting %s event.Object to unstructured.Unstructured. Error: %s",
-						w.gvr.Resource, error)
+						w.gvr.Resource, err)
 				}
 				obj := &unstructured.Unstructured{Object: o}
 
@@ -145,7 +97,7 @@ func (w watchResource) start(ctx context.Context) {
 					}
 
 				default:
-					klog.V(2).Infof("Received unexpected event. Waiting 5 seconds and restarting watch for %s", w.gvr.String())
+					klog.V(2).Infof("Unexpected event, waiting 5 seconds and restarting watch for %s", w.gvr.String())
 					watch.Stop()
 					time.Sleep(5 * time.Second)
 				}
