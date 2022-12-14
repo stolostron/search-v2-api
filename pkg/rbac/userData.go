@@ -91,7 +91,11 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 			cache.users = map[string]*UserDataCache{}
 		}
 		// User not in cache , Initialize and assign to the UID
-		user = &UserDataCache{}
+		user = &UserDataCache{
+			clustersCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+			csrCache:      cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+			nsrCache:      cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+		}
 		if cache.users == nil {
 			cache.users = map[string]*UserDataCache{}
 		}
@@ -171,15 +175,9 @@ func (cache *Cache) GetUserData(ctx context.Context) (*UserData, error) {
 	return userAccess, nil
 }
 
-/* Cache is Valid if the csrUpdatedAt and nsrUpdatedAt times are before the
-Cache expiry time */
+// UserCache is valid if the clustersCache, csrCache, and nsrCache are valid
 func (user *UserDataCache) isValid() bool {
-	if (time.Now().Before(user.csrCache.updatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) &&
-		(time.Now().Before(user.nsrCache.updatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) &&
-		(time.Now().Before(user.clustersCache.updatedAt.Add(time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond))) {
-		return true
-	}
-	return false
+	return user.csrCache.isValid() && user.nsrCache.isValid() && user.clustersCache.isValid()
 }
 
 // Get cluster-scoped resources the user is authorized to list.
