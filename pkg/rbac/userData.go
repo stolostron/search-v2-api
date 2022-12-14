@@ -41,7 +41,7 @@ type UserData struct {
 	ManagedClusters map[string]struct{}   // Managed clusters where the user has view access.
 }
 
-//Get user's UID
+// Get user's UID
 // Note: kubeadmin gets an empty string for uid
 func (cache *Cache) GetUserUID(ctx context.Context) (string, authv1.UserInfo) {
 	authKey := ctx.Value(ContextAuthTokenKey)
@@ -82,7 +82,6 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 
 	// UserDataExists and its valid
 	if userDataExists && cachedUserData.isValid() {
-
 		klog.V(5).Info("Using user data from cache.")
 
 		return cachedUserData, nil
