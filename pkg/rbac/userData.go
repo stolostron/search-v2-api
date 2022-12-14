@@ -209,12 +209,15 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 
 	// For each cluster-scoped resource, check if the user is authorized to list.
 	// Paralellize SSAR API calls.
-	var wg sync.WaitGroup
+	wg := sync.WaitGroup{}
+	lock := sync.Mutex{}
 	for res := range clusterScopedResources {
 		wg.Add(1)
 		go func(group, kind string) {
 			defer wg.Done()
 			if user.userAuthorizedListSSAR(ctx, impersClientset, group, kind) {
+				lock.Lock()
+				defer lock.Unlock()
 				user.CsResources = append(user.CsResources,
 					Resource{Apigroup: group, Kind: kind})
 			}
@@ -256,6 +259,8 @@ func (user *UserDataCache) userAuthorizedListSSAR(ctx context.Context, authzClie
 }
 
 func (user *UserDataCache) updateUserManagedClusterList(cache *Cache, ns string) {
+	user.clustersCache.lock.Lock()
+	defer user.clustersCache.lock.Unlock()
 	_, managedClusterNs := cache.shared.managedClusters[ns]
 	if managedClusterNs {
 		if user.ManagedClusters == nil {
@@ -268,7 +273,7 @@ func (user *UserDataCache) updateUserManagedClusterList(cache *Cache, ns string)
 
 // Request the SelfSubjectRullesRreview(SSRR) for the namespace and process the rules.
 func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache, ns string,
-	userInfo authv1.UserInfo) {
+	userInfo authv1.UserInfo, lock *sync.Mutex) {
 
 	// Request the SelfSubjectRulesReview for the namespace.
 	rulesCheck := authz.SelfSubjectRulesReview{
@@ -282,6 +287,9 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 	} else {
 		klog.V(9).Infof("SelfSubjectRulesReviews Kube API result for ns:%s : %v\n", ns, prettyPrint(result.Status))
 	}
+
+	lock.Lock()
+	defer lock.Unlock()
 
 	// Process the SSRR result and add to this UserDataCache object.
 	for _, rules := range result.Status.ResourceRules {
@@ -358,11 +366,12 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 
 	// Process each namespace SSRR in an async go routine.
 	wg := sync.WaitGroup{}
+	lock := sync.Mutex{}
 	for _, ns := range allNamespaces {
 		wg.Add(1)
 		go func(namespace string) {
 			defer wg.Done()
-			user.getSSRRforNamespace(ctx, cache, namespace, userInfo)
+			user.getSSRRforNamespace(ctx, cache, namespace, userInfo, &lock)
 		}(ns)
 	}
 	wg.Wait() // Wait for all go routines to complete.
