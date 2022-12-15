@@ -205,10 +205,10 @@ func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache 
 	// If we have a new set of authorized list for the user reset the previous one
 	user.CsResources = nil
 
-	// Paralellize SSAR API calls.
-	var wg sync.WaitGroup
-	var lock sync.Mutex
 	// For each cluster-scoped resource, check if the user is authorized to list.
+	// Paralellize SSAR API calls.
+	wg := sync.WaitGroup{}
+	lock := sync.Mutex{}
 	for res := range clusterScopedResources {
 		wg.Add(1)
 		go func(group, kind string) {
@@ -257,8 +257,8 @@ func (user *UserDataCache) userAuthorizedListSSAR(ctx context.Context, authzClie
 }
 
 func (user *UserDataCache) updateUserManagedClusterList(cache *Cache, ns string) {
-	cache.shared.mcCache.lock.Lock()
-	defer cache.shared.mcCache.lock.Unlock()
+	user.clustersCache.lock.Lock()
+	defer user.clustersCache.lock.Unlock()
 	_, managedClusterNs := cache.shared.managedClusters[ns]
 	if managedClusterNs {
 		if user.ManagedClusters == nil {
@@ -308,7 +308,6 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 
 								// Update user's managedcluster list too as the user has access to everything
 								user.updateUserManagedClusterList(cache, ns)
-
 								return
 							}
 							user.NsResources[ns] = append(user.NsResources[ns],
@@ -319,9 +318,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 						} else if len(rules.ResourceNames) > 0 && rules.ResourceNames[0] != "*" {
 							klog.V(5).Info("Got whitelist in resourcenames. Excluding resource", api, "/", res,
 								" from ns scoped resoures.")
-
 						}
-
 					}
 				}
 			}
