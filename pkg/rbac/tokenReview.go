@@ -82,6 +82,15 @@ func (trc *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
 	return trc.tokenReview, trc.meta.err
 }
 
+// Obtain the UserInfo from a given token.
+// func (c *Cache) getUserInfo(ctx context.Context, token string) (authv1.UserInfo, error) {
+// 	tr, err := c.GetTokenReview(ctx, token)
+// 	if err != nil {
+// 		return authv1.UserInfo{}, err
+// 	}
+// 	return tr.Status.User, nil
+// }
+
 // https://stackoverflow.com/a/51270134
 func prettyPrint(i interface{}) string {
 	s, _ := json.MarshalIndent(i, "", "\t")

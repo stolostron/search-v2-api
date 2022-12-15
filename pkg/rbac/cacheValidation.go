@@ -3,6 +3,7 @@ package rbac
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,8 +13,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
 )
-
-const RBAC_AUTHZ_K8S_IO = "rbac.authorization.k8s.io"
 
 // Holds the objects needed to watch a kubernetes resource and trigger an action when a change is detected.
 type watchResource struct {
@@ -106,73 +105,95 @@ func (w watchResource) start(ctx context.Context) {
 	}
 }
 
-func (c *Cache) clearUserData(obj *unstructured.Unstructured) {
-	if c.pendingInvalidation {
-		klog.V(5).Info("There's a pending request to clear the User Data cache.")
-		return
+// Update all users in the cache with the new namespace.
+func (c *Cache) addNamespaceToUsers(obj *unstructured.Unstructured) {
+	c.usersLock.Lock()
+	defer c.usersLock.Unlock()
+
+	wg := sync.WaitGroup{}
+	lock := sync.Mutex{}
+	for _, userCache := range c.users {
+		wg.Add(1)
+		go func(userCache *UserDataCache) { // All users updated asynchhronously
+			defer wg.Done()
+			userCache.updateUserManagedClusterList(c, obj.GetName())
+			userCache.getSSRRforNamespace(context.TODO(), c, obj.GetName(), &lock)
+		}(userCache)
 	}
-	c.pendingInvalidation = true
-	klog.Info("Invalidating UserData cache. Waiting 5 seconds to 'debounce' or avoid triggering too many requests.")
-
-	go func() {
-		time.Sleep(5 * time.Second)
-
-		c.usersLock.Lock()
-		defer c.usersLock.Unlock()
-		for _, userCache := range c.users {
-			userCache.clustersCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
-			userCache.csrCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
-			userCache.nsrCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
-		}
-		c.pendingInvalidation = false
-		klog.Info("Done invalidating the UserData cache.")
-	}()
+	wg.Wait() // Wait until all users have been updated.
 }
+
+// func (c *Cache) clearUserData(obj *unstructured.Unstructured) {
+// 	if c.pendingUpdate {
+// 		klog.V(5).Info("There's a pending request to clear the UserData cache.")
+// 		return
+// 	}
+// 	c.pendingUpdate = true
+// 	klog.Info("Clearing UserData cache. Waiting 5 seconds to 'debounce' or avoid triggering too many requests.")
+
+// 	go func() {
+// 		time.Sleep(5 * time.Second)
+
+// 		c.usersLock.Lock()
+// 		defer c.usersLock.Unlock()
+// 		for _, userCache := range c.users {
+// 			userCache.clustersCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
+// 			userCache.csrCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
+// 			userCache.nsrCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
+// 		}
+// 		c.pendingUpdate = false
+// 		klog.Info("Done updating the UserData cache.")
+// 	}()
+// }
 
 // Update the cache when a namespace is ADDED.
 func (c *Cache) namespaceAdded(obj *unstructured.Unstructured) {
+	// Addd namespace to shared cache.
 	c.shared.nsCache.lock.Lock()
-	defer c.shared.nsCache.lock.Unlock()
 	c.shared.namespaces = append(c.shared.namespaces, obj.GetName())
 	c.shared.nsCache.updatedAt = time.Now()
+	c.shared.nsCache.lock.Unlock()
 
+	// TODO: Check if namespace has a ManagedCluster and update cache.
 	// Invalidate the ManagedClusters cache.
 	c.shared.mcCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
 
+	// TODO: Check if namespace has a disabled ManagedCluster and update cache.
 	// Invalidate DisabledClusters cache.
 	c.shared.dcCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
 
-	// Invalidate UserData cache.
-	c.clearUserData(obj)
+	// Add the namespace to each user in UserData cache.
+	c.addNamespaceToUsers(obj)
 }
 
 // Update the cache when a namespace is DELETED.
 func (c *Cache) namespaceDeleted(obj *unstructured.Unstructured) {
+	// Delete from Namespaces shared cache.
 	c.shared.nsCache.lock.Lock()
 	defer c.shared.nsCache.lock.Unlock()
 	ns := obj.GetName()
-	newNsamespaces := make([]string, 0)
+	newNamespaces := make([]string, 0)
 	for _, n := range c.shared.namespaces {
 		if n != ns {
-			newNsamespaces = append(newNsamespaces, n)
+			newNamespaces = append(newNamespaces, n)
 		}
 	}
-	c.shared.namespaces = newNsamespaces
+	c.shared.namespaces = newNamespaces
 	c.shared.nsCache.updatedAt = time.Now()
 
-	// Delete from ManagedClusters
+	// Delete from ManagedClusters shared cache
 	c.shared.mcCache.lock.Lock()
 	defer c.shared.mcCache.lock.Unlock()
 	delete(c.shared.managedClusters, ns)
 	c.shared.mcCache.updatedAt = time.Now()
 
-	// Delete from DisabledClusters
+	// Delete from DisabledClusters shared cache
 	c.shared.dcCache.lock.Lock()
 	defer c.shared.dcCache.lock.Unlock()
 	delete(c.shared.disabledClusters, ns)
 	c.shared.dcCache.updatedAt = time.Now()
 
-	// Delete from UserData caches
+	// Delete from UserData cache
 	c.usersLock.Lock()
 	defer c.usersLock.Unlock()
 	for _, userCache := range c.users {

@@ -13,12 +13,12 @@ import (
 
 // Cache helps optimize requests to external APIs (Kubernetes and Database)
 type Cache struct {
-	pendingInvalidation bool // Used to avoid too many invalidation requests during a short time window.
-	shared              SharedData
-	tokenReviews        map[string]*tokenReviewCache //Key:ClientToken
-	tokenReviewsLock    sync.Mutex
-	users               map[string]*UserDataCache // UID:{userdata} UID comes from tokenreview
-	usersLock           sync.Mutex
+	// pendingUpdate    bool // Used to avoid too many update requests during a short time window.
+	shared           SharedData
+	tokenReviews     map[string]*tokenReviewCache //Key:ClientToken
+	tokenReviewsLock sync.Mutex
+	users            map[string]*UserDataCache // UID:{userdata} UID comes from tokenreview
+	usersLock        sync.Mutex
 
 	// Clients to external APIs.
 	// Defining these here allow the tests to replace with a mock client.

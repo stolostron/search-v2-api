@@ -24,6 +24,7 @@ const impersonationConfigCreationerror = "Error creating clientset with imperson
 // Contains data about the resources the user is allowed to access.
 type UserDataCache struct {
 	UserData
+	userInfo authv1.UserInfo
 
 	// Metadata to manage the state of the cached data.
 	clustersCache cacheMetadata // NOTE: clustersCache.lock not used because we use the nsrCache.lock
@@ -91,6 +92,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 		}
 		// User not in cache , Initialize and assign to the UID
 		user = &UserDataCache{
+			userInfo:      userInfo,
 			clustersCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 			csrCache:      cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 			nsrCache:      cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
@@ -107,7 +109,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	}
 
 	// Before checking each namespace and clusterscoped resource, check if user has access to everything
-	userHasAllAccess, err := user.userHasAllAccess(cache, ctx, clientToken)
+	userHasAllAccess, err := user.userHasAllAccess(ctx, cache)
 	if err != nil {
 		klog.Warning("Encountered error while checking if user has access to everything ", err)
 	} else {
@@ -125,19 +127,19 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	if err == nil {
 		klog.V(5).Info("No errors on namespacedresources present for: ",
 			cache.tokenReviews[clientToken].tokenReview.Status.User.Username)
-		userDataCache, err = user.getClusterScopedResources(cache, ctx, clientToken)
+		userDataCache, err = user.getClusterScopedResources(ctx, cache)
 	}
 	return userDataCache, err
 }
 
-func (user *UserDataCache) userHasAllAccess(cache *Cache, ctx context.Context, clientToken string) (bool, error) {
-	impersClientset, err := user.getImpersonationClientSet(clientToken, cache)
-	if err != nil {
-		klog.Warning(impersonationConfigCreationerror, err.Error())
-		return false, err
+func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (bool, error) {
+	impersClientSet := user.getImpersonationClientSet()
+	if impersClientSet == nil {
+		klog.Warning(impersonationConfigCreationerror)
+		return false, errors.New(impersonationConfigCreationerror)
 	}
 	//If we have a new set of authorized list for the user reset the previous one
-	if user.userAuthorizedListSSAR(ctx, impersClientset, "*", "*") {
+	if user.userAuthorizedListSSAR(ctx, impersClientSet, "*", "*") {
 		user.csrCache.lock.Lock()
 		defer user.csrCache.lock.Unlock()
 		user.CsResources = []Resource{{Apigroup: "*", Kind: "*"}}
@@ -181,8 +183,7 @@ func (user *UserDataCache) isValid() bool {
 
 // Get cluster-scoped resources the user is authorized to list.
 // Equivalent to: oc auth can-i list <resource> --as=<user>
-func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.Context,
-	clientToken string) (*UserDataCache, error) {
+func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache *Cache) (*UserDataCache, error) {
 	defer metric.SlowLog("UserDataCache::getClusterScopedResources", 150*time.Millisecond)()
 
 	user.csrCache.err = nil
@@ -195,10 +196,10 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 		klog.Warning("Cluster scoped resources from shared cache empty.", user.csrCache.err)
 		return user, user.csrCache.err
 	}
-	impersClientset, err := user.getImpersonationClientSet(clientToken, cache)
-	if err != nil {
-		user.csrCache.err = err
-		klog.Warning(impersonationConfigCreationerror, err.Error())
+	impersClientSet := user.getImpersonationClientSet()
+	if impersClientSet == nil {
+		user.csrCache.err = errors.New(impersonationConfigCreationerror)
+		klog.Warning(impersonationConfigCreationerror)
 		return user, user.csrCache.err
 	}
 	// If we have a new set of authorized list for the user reset the previous one
@@ -212,7 +213,7 @@ func (user *UserDataCache) getClusterScopedResources(cache *Cache, ctx context.C
 		wg.Add(1)
 		go func(group, kind string) {
 			defer wg.Done()
-			if user.userAuthorizedListSSAR(ctx, impersClientset, group, kind) {
+			if user.userAuthorizedListSSAR(ctx, impersClientSet, group, kind) {
 				lock.Lock()
 				defer lock.Unlock()
 				user.CsResources = append(user.CsResources,
@@ -256,6 +257,8 @@ func (user *UserDataCache) userAuthorizedListSSAR(ctx context.Context, authzClie
 }
 
 func (user *UserDataCache) updateUserManagedClusterList(cache *Cache, ns string) {
+	cache.shared.mcCache.lock.Lock()
+	defer cache.shared.mcCache.lock.Unlock()
 	_, managedClusterNs := cache.shared.managedClusters[ns]
 	if managedClusterNs {
 		if user.ManagedClusters == nil {
@@ -267,23 +270,23 @@ func (user *UserDataCache) updateUserManagedClusterList(cache *Cache, ns string)
 }
 
 // Request the SelfSubjectRullesRreview(SSRR) for the namespace and process the rules.
-// TO-DO-Separate-PR: Reduce the args required by this func.
 func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache, ns string,
-	userInfo authv1.UserInfo, wg *sync.WaitGroup, lock *sync.Mutex) {
-	defer wg.Done()
-
+	lock *sync.Mutex) {
 	// Request the SelfSubjectRulesReview for the namespace.
 	rulesCheck := authz.SelfSubjectRulesReview{
 		Spec: authz.SelfSubjectRulesReviewSpec{
 			Namespace: ns,
 		},
 	}
-	result, err := user.getAuthzClient().SelfSubjectRulesReviews().Create(ctx, &rulesCheck, metav1.CreateOptions{})
+	result, err := user.getImpersonationClientSet().SelfSubjectRulesReviews().Create(ctx, &rulesCheck, metav1.CreateOptions{})
 	if err != nil {
 		klog.Error("Error creating SelfSubjectRulesReviews for namespace", err, ns)
 	} else {
 		klog.V(9).Infof("SelfSubjectRulesReviews Kube API result for ns:%s : %v\n", ns, prettyPrint(result.Status))
 	}
+
+	lock.Lock()
+	defer lock.Unlock()
 
 	// Process the SSRR result and add to this UserDataCache object.
 	for _, rules := range result.Status.ResourceRules {
@@ -291,7 +294,6 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 			if verb == "list" || verb == "*" {
 				for _, res := range rules.Resources {
 					for _, api := range rules.APIGroups {
-						lock.Lock()
 						// Add the resource if it is not cluster scoped
 						// fail-safe mechanism to avoid whitelist - TODO: incorporate whitelist
 						if !cache.shared.isClusterScoped(res, api) && (len(rules.ResourceNames) == 0 ||
@@ -302,7 +304,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 							if res == "*" && api == "*" {
 								user.NsResources[ns] = []Resource{{Apigroup: api, Kind: res}}
 								klog.V(5).Infof("User %s with uid: %s has access to everything in the namespace %s",
-									userInfo.Username, userInfo.UID, ns)
+									user.userInfo.Username, user.userInfo.UID, ns)
 
 								// Update user's managedcluster list too as the user has access to everything
 								user.updateUserManagedClusterList(cache, ns)
@@ -319,7 +321,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 								" from ns scoped resoures.")
 
 						}
-						lock.Unlock()
+
 					}
 				}
 			}
@@ -328,9 +330,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 			if verb == "create" || verb == "*" {
 				for _, res := range rules.Resources {
 					if res == "managedclusterviews" {
-						lock.Lock()
 						user.updateUserManagedClusterList(cache, ns)
-						lock.Unlock()
 					}
 				}
 			}
@@ -369,9 +369,11 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	lock := sync.Mutex{}
 	for _, ns := range allNamespaces {
 		wg.Add(1)
-		go user.getSSRRforNamespace(ctx, cache, ns, userInfo, &wg, &lock)
+		go func(namespace string) {
+			defer wg.Done()
+			user.getSSRRforNamespace(ctx, cache, namespace, &lock)
+		}(ns)
 	}
-
 	// Wait for all go routines to complete.
 	wg.Wait()
 
@@ -425,31 +427,20 @@ func setImpersonationUserInfo(userInfo authv1.UserInfo) *rest.ImpersonationConfi
 	return impersonConfig
 }
 
-// TO-DO-Separate-PR: must not require cache object as argument. Combine with getAuthClient() function.
-func (user *UserDataCache) getImpersonationClientSet(clientToken string, cache *Cache) (v1.AuthorizationV1Interface,
-	error) {
-
+// Get a client impersonating the user.
+func (user *UserDataCache) getImpersonationClientSet() v1.AuthorizationV1Interface {
 	if user.authzClient == nil {
 		klog.V(5).Info("Creating New ImpersonationClientSet. ")
 		restConfig := config.GetClientConfig()
-		trUser := cache.tokenReviews[clientToken].tokenReview.Status.User
-		// set Impersonation user info
-		restConfig.Impersonate = *setImpersonationUserInfo(trUser)
 
+		// set Impersonation user info
+		restConfig.Impersonate = *setImpersonationUserInfo(user.userInfo)
 		clientset, err := kubernetes.NewForConfig(restConfig)
 		if err != nil {
 			klog.Error("Error with creating a new clientset with impersonation config.", err.Error())
-			return nil, err
+			return nil
 		}
 		user.authzClient = clientset.AuthorizationV1()
-	}
-	return user.authzClient, nil
-}
-
-// TO-DO-Separate-PR: Combine with getImpersonationClientSet above.
-func (user *UserDataCache) getAuthzClient() v1.AuthorizationV1Interface {
-	if user.authzClient == nil {
-		klog.Error("Impersonation kube client not set for user.")
 	}
 	return user.authzClient
 }

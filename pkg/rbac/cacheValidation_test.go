@@ -34,13 +34,21 @@ func Test_cacheValidation_StartBackgroundValidation(t *testing.T) {
 }
 
 func Test_cacheValidation_namespaceAdded(t *testing.T) {
+	testScheme := scheme.Scheme
+	mockns := &corev1.Namespace{
+		TypeMeta:   metav1.TypeMeta{Kind: "Namespace"},
+		ObjectMeta: metav1.ObjectMeta{Name: "test-namespace"},
+	}
 	mock_cache := Cache{
 		shared: SharedData{
 			namespaces:       []string{"a", "b"},
 			managedClusters:  map[string]struct{}{"a": {}, "b": {}},
 			disabledClusters: map[string]struct{}{"a": {}, "b": {}},
+			dynamicClient:    fakedynclient.NewSimpleDynamicClient(testScheme, mockns),
 		},
-		users: map[string]*UserDataCache{"usr1": &UserDataCache{}},
+		users: map[string]*UserDataCache{
+			"usr1": &UserDataCache{UserData: UserData{NsResources: map[string][]Resource{}}},
+		},
 	}
 
 	mock_namespace := &unstructured.Unstructured{
