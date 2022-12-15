@@ -202,7 +202,7 @@ func (c *Cache) managedClusterDeleted(obj *unstructured.Unstructured) {
 	// Delete from DisabledClusters shared cache
 	c.shared.dcCache.lock.Lock()
 	defer c.shared.dcCache.lock.Unlock()
-	delete(c.shared.disabledClusters, ns)
+	delete(c.shared.disabledClusters, obj.GetName())
 	c.shared.dcCache.updatedAt = time.Now()
 }
 
