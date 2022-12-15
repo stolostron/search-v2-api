@@ -4,7 +4,6 @@ package rbac
 import (
 	"context"
 	"encoding/json"
-	"sync"
 	"time"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -16,10 +15,9 @@ import (
 
 // Encapsulates a TokenReview to store in the cache.
 type tokenReviewCache struct {
+	meta cacheMetadata
+
 	authClient  v1.AuthenticationV1Interface // This allows tests to replace with mock client.
-	err         error
-	lock        sync.Mutex
-	updatedAt   time.Time
 	token       string
 	tokenReview *authv1.TokenReview
 }
@@ -55,12 +53,12 @@ func (c *Cache) GetTokenReview(ctx context.Context, token string) (*authv1.Token
 // Get the resolved TokenReview from the cached tokenReviewCachedRequest object.
 func (trc *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
 	// This ensures that only 1 process is updating the TokenReview data from API request.
-	trc.lock.Lock()
-	defer trc.lock.Unlock()
+	trc.meta.lock.Lock()
+	defer trc.meta.lock.Unlock()
 
 	// Check if cached TokenReview data is valid. Update if needed.
-	if time.Now().After(trc.updatedAt.Add(time.Duration(config.Cfg.AuthCacheTTL) * time.Millisecond)) {
-		klog.V(6).Infof("Starting TokenReview. tokenReviewCache expired or never updated. UpdatedAt %s", trc.updatedAt)
+	if time.Now().After(trc.meta.updatedAt.Add(time.Duration(config.Cfg.AuthCacheTTL) * time.Millisecond)) {
+		klog.V(6).Infof("Starting TokenReview. tokenReviewCache expired or never updated. UpdatedAt %s", trc.meta.updatedAt)
 
 		tr := authv1.TokenReview{
 			Spec: authv1.TokenReviewSpec{
@@ -74,14 +72,14 @@ func (trc *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
 		}
 		klog.V(9).Infof("TokenReview Kube API result: %v\n", prettyPrint(result.Status))
 
-		trc.updatedAt = time.Now()
-		trc.err = err
+		trc.meta.updatedAt = time.Now()
+		trc.meta.err = err
 		trc.tokenReview = result
 	} else {
 		klog.V(6).Info("Using cached TokenReview.")
 	}
 
-	return trc.tokenReview, trc.err
+	return trc.tokenReview, trc.meta.err
 }
 
 // https://stackoverflow.com/a/51270134
