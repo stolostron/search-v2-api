@@ -115,11 +115,17 @@ func (w watchResource) start(ctx context.Context) {
 	}
 }
 
-// Update all users in the cache with the new namespace.
-func (c *Cache) addNamespaceToUsers(obj *unstructured.Unstructured) {
+// Update the cache when a namespace is ADDED.
+func (c *Cache) namespaceAdded(obj *unstructured.Unstructured) {
+	// Addd namespace to shared cache.
+	c.shared.nsCache.lock.Lock()
+	c.shared.namespaces = append(c.shared.namespaces, obj.GetName())
+	c.shared.nsCache.updatedAt = time.Now()
+	c.shared.nsCache.lock.Unlock()
+
+	// Add the namespace to each user in UserData cache.
 	c.usersLock.Lock()
 	defer c.usersLock.Unlock()
-
 	wg := sync.WaitGroup{}
 	lock := sync.Mutex{}
 	for _, userCache := range c.users {
@@ -130,18 +136,6 @@ func (c *Cache) addNamespaceToUsers(obj *unstructured.Unstructured) {
 		}(userCache)
 	}
 	wg.Wait() // Wait until all users have been updated.
-}
-
-// Update the cache when a namespace is ADDED.
-func (c *Cache) namespaceAdded(obj *unstructured.Unstructured) {
-	// Addd namespace to shared cache.
-	c.shared.nsCache.lock.Lock()
-	c.shared.namespaces = append(c.shared.namespaces, obj.GetName())
-	c.shared.nsCache.updatedAt = time.Now()
-	c.shared.nsCache.lock.Unlock()
-
-	// Add the namespace to each user in UserData cache.
-	c.addNamespaceToUsers(obj)
 
 	// Note: The ManagedCluster and DisabledClusters cache will get updated
 	// when we receive the ManagedCluster ADD event.
@@ -161,12 +155,6 @@ func (c *Cache) namespaceDeleted(obj *unstructured.Unstructured) {
 	}
 	c.shared.namespaces = newNamespaces
 	c.shared.nsCache.updatedAt = time.Now()
-
-	// Delete from DisabledClusters shared cache
-	c.shared.dcCache.lock.Lock()
-	defer c.shared.dcCache.lock.Unlock()
-	delete(c.shared.disabledClusters, ns)
-	c.shared.dcCache.updatedAt = time.Now()
 
 	// Delete from UserData cache
 	c.usersLock.Lock()
@@ -190,7 +178,7 @@ func (c *Cache) managedClusterAdded(obj *unstructured.Unstructured) {
 		wg.Add(1)
 		go func(userCache *UserDataCache) { // All users updated asynchhronously
 			defer wg.Done()
-			// TODO: Need to check if user has access.
+			// TODO: Need to check if user has access to the managed cluster.
 			userCache.updateUserManagedClusterList(c, obj.GetName())
 		}(userCache)
 	}
@@ -210,6 +198,12 @@ func (c *Cache) managedClusterDeleted(obj *unstructured.Unstructured) {
 	for _, userCache := range c.users {
 		delete(userCache.UserData.ManagedClusters, obj.GetName())
 	}
+
+	// Delete from DisabledClusters shared cache
+	c.shared.dcCache.lock.Lock()
+	defer c.shared.dcCache.lock.Unlock()
+	delete(c.shared.disabledClusters, ns)
+	c.shared.dcCache.updatedAt = time.Now()
 }
 
 // func (c *Cache) clearUserData(obj *unstructured.Unstructured) {
