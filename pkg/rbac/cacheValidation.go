@@ -176,13 +176,16 @@ func (c *Cache) managedClusterAdded(obj *unstructured.Unstructured) {
 	c.shared.mcCache.lock.Unlock()
 
 	// Update UserData cache for users with access to the managed cluster.
+	c.usersLock.Lock()
+	defer c.usersLock.Unlock()
 	wg := sync.WaitGroup{}
+	lock := sync.Mutex{}
 	for _, userCache := range c.users {
 		wg.Add(1)
 		go func(userCache *UserDataCache) { // All users updated asynchhronously
 			defer wg.Done()
-			// TODO: Need to check if user has access to the managed cluster.
-			userCache.updateUserManagedClusterList(c, obj.GetName())
+			// Refresh the SSRR, this will add the Managed cluster if user has access.
+			userCache.getSSRRforNamespace(context.TODO(), c, obj.GetName(), &lock)
 		}(userCache)
 	}
 	wg.Wait() // Wait until all users have been updated.
