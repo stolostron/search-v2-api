@@ -133,7 +133,7 @@ func (c *Cache) namespaceAdded(obj *unstructured.Unstructured) {
 	lock := sync.Mutex{}
 	for _, userCache := range c.users {
 		wg.Add(1)
-		go func(userCache *UserDataCache) { // All users updated asynchhronously
+		go func(userCache *UserDataCache) { // All users updated asynchronously
 			defer wg.Done()
 			userCache.getSSRRforNamespace(context.TODO(), c, obj.GetName(), &lock)
 		}(userCache)
@@ -182,7 +182,7 @@ func (c *Cache) managedClusterAdded(obj *unstructured.Unstructured) {
 	lock := sync.Mutex{}
 	for _, userCache := range c.users {
 		wg.Add(1)
-		go func(userCache *UserDataCache) { // All users updated asynchhronously
+		go func(userCache *UserDataCache) { // All users updated asynchronously
 			defer wg.Done()
 			// Refresh the SSRR, this will add the Managed cluster if user has access.
 			userCache.getSSRRforNamespace(context.TODO(), c, obj.GetName(), &lock)
