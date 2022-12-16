@@ -120,7 +120,7 @@ func (w watchResource) start(ctx context.Context) {
 
 // Update the cache when a namespace is ADDED.
 func (c *Cache) namespaceAdded(obj *unstructured.Unstructured) {
-	// Addd namespace to shared cache.
+	// Add namespace to shared cache.
 	c.shared.nsCache.lock.Lock()
 	c.shared.namespaces = append(c.shared.namespaces, obj.GetName())
 	c.shared.nsCache.updatedAt = time.Now()
