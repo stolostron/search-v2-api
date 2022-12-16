@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"flag"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/database"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"github.com/stolostron/search-v2-api/pkg/server"
 	klog "k8s.io/klog/v2"
 )
@@ -25,8 +27,12 @@ func main() {
 		klog.Fatal(configError)
 	}
 
-	//Get database connection
+	// Establish the database connection.
 	database.GetConnection()
+
+	// Start process to watch the RBAC config andd update the cache.
+	ctx := context.Background()
+	go rbac.GetCache().StartBackgroundValidation(ctx)
 
 	server.StartAndListen()
 }

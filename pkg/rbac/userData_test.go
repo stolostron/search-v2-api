@@ -650,17 +650,13 @@ func Test_setImpersonationUserInfo(t *testing.T) {
 }
 
 func Test_getImpersonationClientSet(t *testing.T) {
-	mock_cache := mockNamespaceCache()
-	mock_cache = setupToken(mock_cache)
-
 	udc := &UserDataCache{
 		UserData: UserData{},
 		nsrCache: cacheMetadata{updatedAt: time.Now()},
 	}
-	_, err := udc.getImpersonationClientSet("123456", mock_cache)
-	// Ensure that there is no error
-	assert.Nil(t, err)
-
+	clientSet := udc.getImpersonationClientSet()
+	// Ensure client is not nil
+	assert.NotNil(t, clientSet)
 }
 
 func Test_hasAccessToAllResourcesInNamespace(t *testing.T) {
