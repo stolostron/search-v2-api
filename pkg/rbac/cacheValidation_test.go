@@ -13,33 +13,13 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
-func Test_cacheValidation_StartBackgroundValidation(t *testing.T) {
+func initMockCache() Cache {
 	testScheme := scheme.Scheme
 	mockns := &corev1.Namespace{
 		TypeMeta:   metav1.TypeMeta{Kind: "Namespace"},
 		ObjectMeta: metav1.ObjectMeta{Name: "test-namespace"},
 	}
-	mock_cache := Cache{
-		shared: SharedData{
-			namespaces:       []string{"a", "b"},
-			managedClusters:  map[string]struct{}{"a": {}, "b": {}},
-			disabledClusters: map[string]struct{}{"a": {}, "b": {}},
-			dynamicClient:    fakedynclient.NewSimpleDynamicClient(testScheme, mockns),
-		},
-		users: map[string]*UserDataCache{"usr1": &UserDataCache{}},
-	}
-
-	ctx := context.Background()
-	mock_cache.StartBackgroundValidation(ctx)
-}
-
-func Test_cacheValidation_namespaceAdded(t *testing.T) {
-	testScheme := scheme.Scheme
-	mockns := &corev1.Namespace{
-		TypeMeta:   metav1.TypeMeta{Kind: "Namespace"},
-		ObjectMeta: metav1.ObjectMeta{Name: "test-namespace"},
-	}
-	mock_cache := Cache{
+	return Cache{
 		shared: SharedData{
 			namespaces:       []string{"a", "b"},
 			managedClusters:  map[string]struct{}{"a": {}, "b": {}},
@@ -50,7 +30,17 @@ func Test_cacheValidation_namespaceAdded(t *testing.T) {
 			"usr1": &UserDataCache{UserData: UserData{NsResources: map[string][]Resource{}}},
 		},
 	}
+}
 
+func Test_cacheValidation_StartBackgroundValidation(t *testing.T) {
+	mock_cache := initMockCache()
+
+	ctx := context.Background()
+	mock_cache.StartBackgroundValidation(ctx)
+}
+
+func Test_cacheValidation_namespaceAdded(t *testing.T) {
+	mock_cache := initMockCache()
 	mock_namespace := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "v1",
@@ -62,20 +52,11 @@ func Test_cacheValidation_namespaceAdded(t *testing.T) {
 	}
 
 	mock_cache.namespaceAdded(mock_namespace)
-
 	assert.Equal(t, []string{"a", "b", "c"}, mock_cache.shared.namespaces)
 }
 
 func Test_cacheValidation_namespaceDeleted(t *testing.T) {
-	mock_cache := Cache{
-		shared: SharedData{
-			namespaces:       []string{"a", "b"},
-			managedClusters:  map[string]struct{}{"a": {}, "b": {}},
-			disabledClusters: map[string]struct{}{"a": {}, "b": {}},
-		},
-		users: map[string]*UserDataCache{"usr1": &UserDataCache{}},
-	}
-
+	mock_cache := initMockCache()
 	mock_namespace := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "v1",
@@ -87,8 +68,38 @@ func Test_cacheValidation_namespaceDeleted(t *testing.T) {
 	}
 
 	mock_cache.namespaceDeleted(mock_namespace)
-
 	assert.Equal(t, []string{"b"}, mock_cache.shared.namespaces)
-	// assert.Equal(t, map[string]struct{}{"b": {}}, mock_cache.shared.disabledClusters)
-	// assert.Equal(t, map[string]struct{}{"b": {}}, mock_cache.shared.managedClusters)
+}
+
+func Test_cacheValidation_ManagedClusterAdded(t *testing.T) {
+	mock_cache := initMockCache()
+	mock_managedCluster := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "ManagedCluster",
+			"metadata": map[string]interface{}{
+				"name": "c",
+			},
+		},
+	}
+
+	mock_cache.managedClusterAdded(mock_managedCluster)
+	assert.Equal(t, map[string]struct{}{"a": {}, "b": {}, "c": {}}, mock_cache.shared.managedClusters)
+}
+
+func Test_cacheValidation_managedClusterDeleted(t *testing.T) {
+	mock_cache := initMockCache()
+
+	mock_managedCluster := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "ManagedCluster",
+			"metadata": map[string]interface{}{
+				"name": "a",
+			},
+		},
+	}
+
+	mock_cache.managedClusterDeleted(mock_managedCluster)
+	assert.Equal(t, map[string]struct{}{"b": {}}, mock_cache.shared.managedClusters)
 }
