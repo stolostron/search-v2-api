@@ -13,7 +13,6 @@ import (
 
 // Cache helps optimize requests to external APIs (Kubernetes and Database)
 type Cache struct {
-	// pendingUpdate    bool // Used to avoid too many update requests during a short time window.
 	shared           SharedData
 	tokenReviews     map[string]*tokenReviewCache //Key:ClientToken
 	tokenReviewsLock sync.Mutex
@@ -33,8 +32,11 @@ var cacheInst = Cache{
 	tokenReviewsLock: sync.Mutex{},
 	usersLock:        sync.Mutex{},
 	shared: SharedData{
-		pool:          db.GetConnection(),
-		dynamicClient: config.GetDynamicClient(),
+		disabledClusters: map[string]struct{}{},
+		managedClusters:  map[string]struct{}{},
+		namespaces:       []string{},
+		pool:             db.GetConnection(),
+		dynamicClient:    config.GetDynamicClient(),
 	},
 	users:      map[string]*UserDataCache{},
 	restConfig: config.GetClientConfig(),

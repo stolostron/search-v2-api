@@ -278,7 +278,8 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 			Namespace: ns,
 		},
 	}
-	result, err := user.getImpersonationClientSet().SelfSubjectRulesReviews().Create(ctx, &rulesCheck, metav1.CreateOptions{})
+	result, err := user.getImpersonationClientSet().SelfSubjectRulesReviews().Create(ctx,
+		&rulesCheck, metav1.CreateOptions{})
 	if err != nil {
 		klog.Error("Error creating SelfSubjectRulesReviews for namespace", err, ns)
 	} else {

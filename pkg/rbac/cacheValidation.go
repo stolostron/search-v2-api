@@ -40,10 +40,13 @@ func (c *Cache) StartBackgroundValidation(ctx context.Context) {
 	// Watch ManagedClusters
 	watchManagedClusters := watchResource{
 		dynamicClient: c.shared.dynamicClient,
-		gvr:           schema.GroupVersionResource{Resource: "managedclusters", Group: "open-cluster-managemeent.io", Version: "v1"},
-		onAdd:         c.managedClusterAdded,
-		onModify:      nil, // Ignoring MODIFY because it doesn't affect the cached data.
-		onDelete:      c.managedClusterDeleted,
+		gvr: schema.GroupVersionResource{
+			Resource: "managedclusters",
+			Group:    "cluster.open-cluster-management.io",
+			Version:  "v1"},
+		onAdd:    c.managedClusterAdded,
+		onModify: nil, // Ignoring MODIFY because it doesn't affect the cached data.
+		onDelete: c.managedClusterDeleted,
 	}
 	go watchManagedClusters.start(ctx)
 
