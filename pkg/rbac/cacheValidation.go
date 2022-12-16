@@ -208,26 +208,3 @@ func (c *Cache) managedClusterDeleted(obj *unstructured.Unstructured) {
 	delete(c.shared.disabledClusters, obj.GetName())
 	c.shared.dcCache.updatedAt = time.Now()
 }
-
-// func (c *Cache) clearUserData(obj *unstructured.Unstructured) {
-// 	if c.pendingUpdate {
-// 		klog.V(5).Info("There's a pending request to clear the UserData cache.")
-// 		return
-// 	}
-// 	c.pendingUpdate = true
-// 	klog.Info("Clearing UserData cache. Waiting 5 seconds to 'debounce' or avoid triggering too many requests.")
-
-// 	go func() {
-// 		time.Sleep(5 * time.Second)
-
-// 		c.usersLock.Lock()
-// 		defer c.usersLock.Unlock()
-// 		for _, userCache := range c.users {
-// 			userCache.clustersCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
-// 			userCache.csrCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
-// 			userCache.nsrCache.updatedAt = time.Date(2000, 0, 0, 0, 0, 0, 0, time.UTC)
-// 		}
-// 		c.pendingUpdate = false
-// 		klog.Info("Done updating the UserData cache.")
-// 	}()
-// }

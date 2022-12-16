@@ -372,8 +372,7 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 			user.getSSRRforNamespace(ctx, cache, namespace, &lock)
 		}(ns)
 	}
-	// Wait for all go routines to complete.
-	wg.Wait()
+	wg.Wait() // Wait for all go routines to complete.
 
 	klog.V(7).Infof("User %s with uid: %s has access to these namespace scoped res: %+v \n", userInfo.Username, uid,
 		user.NsResources)
