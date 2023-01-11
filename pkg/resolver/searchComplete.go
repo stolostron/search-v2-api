@@ -183,7 +183,13 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			case map[string]interface{}:
 				arrayProperties[s.property] = struct{}{}
 				for key, value := range v {
-					labelString := fmt.Sprintf("%s=%s", key, value.(string))
+					var labelString string
+					switch v := value.(type) {
+					case bool:
+						labelString = fmt.Sprintf("%s=%s", key, strconv.FormatBool(v))
+					default:
+						labelString = fmt.Sprintf("%s=%s", key, v)
+					}
 					props[labelString] = struct{}{}
 				}
 			case []interface{}:
