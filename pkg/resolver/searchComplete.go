@@ -185,9 +185,9 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 				for key, value := range v {
 					var labelString string
 					switch v := value.(type) {
-					case bool:
+					case bool: // for addon property
 						labelString = fmt.Sprintf("%s=%s", key, strconv.FormatBool(v))
-					default:
+					default: // for label property and others
 						labelString = fmt.Sprintf("%s=%s", key, v)
 					}
 					props[labelString] = struct{}{}
