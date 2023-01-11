@@ -183,13 +183,7 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			case map[string]interface{}:
 				arrayProperties[s.property] = struct{}{}
 				for key, value := range v {
-					var labelString string
-					switch v := value.(type) {
-					case bool: // for addon property
-						labelString = fmt.Sprintf("%s=%s", key, strconv.FormatBool(v))
-					default: // for label property and others
-						labelString = fmt.Sprintf("%s=%s", key, v)
-					}
+					labelString := getLabelString(key, value)
 					props[labelString] = struct{}{}
 				}
 			case []interface{}:
@@ -262,4 +256,16 @@ func isNumber(vals []*string) bool {
 		}
 	}
 	return true
+}
+
+func getLabelString(key string, value interface{}) string {
+	var labelString string
+	switch v := value.(type) {
+	case bool: // for addon property
+		labelString = fmt.Sprintf("%s=%s", key, strconv.FormatBool(v))
+	default: // for label property and others
+		labelString = fmt.Sprintf("%s=%s", key, v)
+
+	}
+	return labelString
 }
