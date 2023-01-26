@@ -451,5 +451,6 @@ func (user *UserDataCache) GetNsResources() map[string][]Resource {
 }
 
 func (user *UserDataCache) GetManagedClusters() map[string]struct{} {
+	klog.V(3).Info("Managed Clusters User has access to are: ", user.ManagedClusters)
 	return user.ManagedClusters
 }
