@@ -150,6 +150,8 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		user.NsResources = map[string][]Resource{"*": {{Apigroup: "*", Kind: "*"}}}
 		user.nsrCache.updatedAt = time.Now()
 
+		cache.shared.mcCache.lock.Lock()
+		defer cache.shared.mcCache.lock.Unlock()
 		user.ManagedClusters = cache.shared.managedClusters
 		user.clustersCache.updatedAt = time.Now()
 		user.csrCache.err, user.nsrCache.err, user.clustersCache.err = nil, nil, nil
