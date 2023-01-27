@@ -80,6 +80,8 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	cache.usersLock.Lock()
 	defer cache.usersLock.Unlock()
 	cachedUserData, userDataExists := cache.users[uid] //check if userData cache for user already exists
+	klog.Infof("Cache User: %s", cache.users)
+	klog.Info("Cache User ID:", uid)
 
 	// UserDataExists and its valid
 	if userDataExists && cachedUserData.isValid() {
@@ -114,10 +116,10 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 		klog.Warning("Encountered error while checking if user has access to everything ", err)
 	} else {
 		if userHasAllAccess {
-			klog.V(4).Infof("User %s with uid %s has access to all resources.", userInfo.Username, userInfo.UID)
+			klog.Infof("User %s with uid %s has access to all resources.", userInfo.Username, userInfo.UID)
 			return user, nil
 		}
-		klog.V(5).Infof("User %s with uid %s doesn't have access to all resources. Checking individually",
+		klog.Infof("User %s with uid %s doesn't have access to all resources. Checking individually",
 			userInfo.Username, userInfo.UID)
 	}
 
@@ -150,6 +152,8 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		user.NsResources = map[string][]Resource{"*": {{Apigroup: "*", Kind: "*"}}}
 		user.nsrCache.updatedAt = time.Now()
 
+		// user.clustersCache.lock.Lock()
+		// defer user.clustersCache.lock.Unlock()
 		user.ManagedClusters = cache.shared.managedClusters
 		user.clustersCache.updatedAt = time.Now()
 		user.csrCache.err, user.nsrCache.err, user.clustersCache.err = nil, nil, nil
@@ -173,11 +177,19 @@ func (cache *Cache) GetUserData(ctx context.Context) (*UserData, error) {
 		NsResources:     userDataCache.GetNsResources(),
 		ManagedClusters: userDataCache.GetManagedClusters(),
 	}
+
+	klog.Info("managedcluster in user access:", len(userAccess.ManagedClusters))
+	klog.Info("csresources in user access:", userAccess.CsResources)
+	klog.Info("nsresources in user access:", len(userAccess.NsResources))
+
 	return userAccess, nil
 }
 
 // UserCache is valid if the clustersCache, csrCache, and nsrCache are valid
 func (user *UserDataCache) isValid() bool {
+
+	isVlid := user.csrCache.isValid() && user.nsrCache.isValid() && user.clustersCache.isValid()
+	klog.Info("Printing out IsValid", isVlid)
 	return user.csrCache.isValid() && user.nsrCache.isValid() && user.clustersCache.isValid()
 }
 

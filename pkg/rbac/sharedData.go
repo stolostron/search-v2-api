@@ -164,6 +164,7 @@ func (shared *SharedData) PopulateSharedCache(ctx context.Context) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			klog.Info("Calling getManagedClusters for shared cache")
 			err := shared.getManagedClusters(ctx)
 			if err != nil {
 				klog.Errorf("Error retrieving managed clusters. Error: [%+v]", err)
@@ -307,7 +308,7 @@ func (shared *SharedData) getManagedClusters(ctx context.Context) error {
 		}
 	}
 
-	klog.V(3).Info("List of managed clusters in shared data: ", managedClusters)
+	klog.Info("List of managed clusters in shared data: ", managedClusters)
 	shared.managedClusters = managedClusters
 	shared.mcCache.updatedAt = time.Now()
 	return shared.mcCache.err
