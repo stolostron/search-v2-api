@@ -42,8 +42,8 @@ func new() *Config {
 	conf := &Config{
 		API_SERVER_URL: getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
 		AuthCacheTTL:   getEnvAsInt("AUTH_CACHE_TTL", int(60000)),    // 1 minute
-		SharedCacheTTL: getEnvAsInt("SHARED_CACHE_TTL", int(120000)), // 2 min (increase to 10min after implementation)
-		UserCacheTTL:   getEnvAsInt("USER_CACHE_TTL", int(120000)),   // 2 min (increase to 10min after implementation)
+		SharedCacheTTL: getEnvAsInt("SHARED_CACHE_TTL", int(600000)), // 2 min (increase to 10min after implementation)
+		UserCacheTTL:   getEnvAsInt("USER_CACHE_TTL", int(600000)),   // 2 min (increase to 10min after implementation)
 		ContextPath:    getEnv("CONTEXT_PATH", "/searchapi"),
 		DBHost:         getEnv("DB_HOST", "localhost"),
 		DBName:         getEnv("DB_NAME", ""),
