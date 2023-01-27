@@ -27,7 +27,7 @@ type UserDataCache struct {
 	userInfo authv1.UserInfo
 
 	// Metadata to manage the state of the cached data.
-	clustersCache cacheMetadata // NOTE: clustersCache.lock not used because we use the nsrCache.lock
+	clustersCache cacheMetadata
 	csrCache      cacheMetadata
 	nsrCache      cacheMetadata
 
@@ -352,15 +352,18 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Context,
 	clientToken string) (*UserDataCache, error) {
 	defer metric.SlowLog("UserDataCache::getNamespacedResources", 250*time.Millisecond)()
-	// check if we already have user's namespaced resources in userData cache and check if time is expired
+
+	// Lock the cache
 	user.nsrCache.lock.Lock()
 	defer user.nsrCache.lock.Unlock()
+	user.clustersCache.lock.Lock() // Lock the ManagedCluster cache because this function will update it.
+	defer user.clustersCache.lock.Unlock()
 
-	// clear cache
-	user.csrCache.err = nil
-	user.NsResources = nil
+	// Clear cached data
+	user.nsrCache.err = nil
+	user.NsResources = make(map[string][]Resource)
 	user.clustersCache.err = nil
-	user.ManagedClusters = nil
+	user.ManagedClusters = make(map[string]struct{})
 
 	// get all namespaces from shared cache
 	klog.V(5).Info("Getting namespaces from shared cache.")
@@ -369,10 +372,6 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 		klog.Warning("All namespaces array from shared cache is empty.", cache.shared.nsCache.err)
 		return user, cache.shared.nsCache.err
 	}
-
-	user.NsResources = make(map[string][]Resource)
-	user.ManagedClusters = make(map[string]struct{})
-	uid, userInfo := cache.GetUserUID(ctx)
 
 	// Process each namespace SSRR in an async go routine.
 	wg := sync.WaitGroup{}
@@ -386,6 +385,7 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	}
 	wg.Wait() // Wait for all go routines to complete.
 
+	uid, userInfo := cache.GetUserUID(ctx)
 	klog.V(7).Infof("User %s with uid: %s has access to these namespace scoped res: %+v \n", userInfo.Username, uid,
 		user.NsResources)
 	klog.V(7).Infof("User %s with uid: %s has access to these ManagedClusters: %+v \n", userInfo.Username, uid,
@@ -455,14 +455,19 @@ func (user *UserDataCache) getImpersonationClientSet() v1.AuthorizationV1Interfa
 }
 
 func (user *UserDataCache) GetCsResources() []Resource {
+	user.csrCache.lock.Lock()
+	defer user.csrCache.lock.Unlock()
 	return user.CsResources
 }
 
 func (user *UserDataCache) GetNsResources() map[string][]Resource {
+	user.nsrCache.lock.Lock()
+	defer user.nsrCache.lock.Unlock()
 	return user.NsResources
 }
 
 func (user *UserDataCache) GetManagedClusters() map[string]struct{} {
-	klog.Info("Managed Clusters User has access to are: ", user.ManagedClusters)
+	user.clustersCache.lock.Lock()
+	defer user.clustersCache.lock.Unlock()
 	return user.ManagedClusters
 }
