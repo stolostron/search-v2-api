@@ -36,7 +36,7 @@ func initializePool(ctx context.Context) {
 		klog.Error("Error parsing database connection configuration.", configErr)
 	}
 
-	config.MaxConns = int32(cfg.DBMaxConns)
+	config.MaxConns = int32(cfg.MaxConns)
 	conn, err := pgxpool.ConnectConfig(ctx, config)
 	if err != nil {
 		klog.Errorf("Unable to connect to database: %+v\n", err)
