@@ -214,7 +214,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	if err != nil {
 		klog.Errorf("Error building Search query: %s", err.Error())
 	}
-	klog.V(5).Infof("Search query: %s\nargs: %s", sql, params)
+	klog.V(10).Infof("Search query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
 }
