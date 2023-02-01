@@ -52,7 +52,7 @@ func (cache *Cache) GetUserUID(ctx context.Context) (string, authv1.UserInfo) {
 		//get uid from tokenreview
 		if tokenReview, err := cache.GetTokenReview(ctx, clientToken); err == nil {
 			uid := tokenReview.Status.User.UID
-			klog.V(9).Info("Found uid: ", uid, " for user: ", tokenReview.Status.User.Username)
+			klog.V(5).Info("Found uid: ", uid, " for user: ", tokenReview.Status.User.Username)
 			return uid, tokenReview.Status.User
 		} else {
 			klog.Error("Error finding uid for user: ", tokenReview.Status.User.Username, err)
@@ -152,8 +152,8 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		user.NsResources = map[string][]Resource{"*": {{Apigroup: "*", Kind: "*"}}}
 		user.nsrCache.updatedAt = time.Now()
 
-		// user.clustersCache.lock.Lock()
-		// defer user.clustersCache.lock.Unlock()
+		cache.shared.mcCache.lock.Lock()
+		defer cache.shared.mcCache.lock.Unlock()
 		user.ManagedClusters = cache.shared.managedClusters
 		user.clustersCache.updatedAt = time.Now()
 		user.csrCache.err, user.nsrCache.err, user.clustersCache.err = nil, nil, nil
@@ -337,10 +337,11 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 			}
 			// Obtain namespaces with create managedclusterveiws resource action
 			// Equivalent to: oc auth can-i create ManagedClusterView -n <managedClusterName> --as=<user>
-			if verb == "create" || verb == "*" {
+			if verb == "create" || verb == "*" { //don't we already check all resources with the * why are we doing again?
 				for _, res := range rules.Resources {
 					if res == "managedclusterviews" {
 						user.updateUserManagedClusterList(cache, ns)
+						klog.Info("Namespace for resource maanagedclusterviews: %s", ns)
 					}
 				}
 			}
@@ -356,8 +357,8 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	// Lock the cache
 	user.nsrCache.lock.Lock()
 	defer user.nsrCache.lock.Unlock()
-	user.clustersCache.lock.Lock() // Lock the ManagedCluster cache because this function will update it.
-	defer user.clustersCache.lock.Unlock()
+	// user.clustersCache.lock.Lock() // Lock the ManagedCluster cache because this function will update it.
+	// defer user.clustersCache.lock.Unlock()
 
 	// Clear cached data
 	user.nsrCache.err = nil
