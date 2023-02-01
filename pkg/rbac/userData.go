@@ -346,8 +346,6 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	// Lock the cache
 	user.nsrCache.lock.Lock()
 	defer user.nsrCache.lock.Unlock()
-	user.clustersCache.lock.Lock() // Lock the ManagedCluster cache because this function will update it.
-	defer user.clustersCache.lock.Unlock()
 
 	// Clear cached data
 	user.nsrCache.err = nil
