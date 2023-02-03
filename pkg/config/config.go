@@ -20,9 +20,9 @@ type Config struct {
 	AuthCacheTTL   int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
 	SharedCacheTTL int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
 	UserCacheTTL   int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
-	MaxConns       int
 	ContextPath    string
 	DBHost         string
+	DBMaxConns     int // Max size of DB connection pool. Default: 10
 	DBName         string
 	DBPass         string
 	DBPort         int
@@ -45,9 +45,9 @@ func new() *Config {
 		AuthCacheTTL:   getEnvAsInt("AUTH_CACHE_TTL", int(60000)),    // 1 minute
 		SharedCacheTTL: getEnvAsInt("SHARED_CACHE_TTL", int(120000)), // 2 min (increase to 10min after implementation)
 		UserCacheTTL:   getEnvAsInt("USER_CACHE_TTL", int(120000)),   // 2 min (increase to 10min after implementation)
-		MaxConns:       getEnvAsInt("MAX_CONNS", int(10)),
 		ContextPath:    getEnv("CONTEXT_PATH", "/searchapi"),
 		DBHost:         getEnv("DB_HOST", "localhost"),
+		DBMaxConns:     getEnvAsInt("DB_MAX_CONNS", int(10)), // Postgres has 100 conns. Allow for scaling the indexer.
 		DBName:         getEnv("DB_NAME", ""),
 		DBPass:         getEnv("DB_PASS", ""),
 		DBPort:         getEnvAsInt("DB_PORT", int(5432)),
