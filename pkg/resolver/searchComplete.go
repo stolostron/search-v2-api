@@ -11,6 +11,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
@@ -33,8 +34,13 @@ type SearchCompleteResult struct {
 var arrayProperties = make(map[string]struct{})
 
 func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, error) {
+	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("buildAutoCompleteQuery"))
 	s.searchCompleteQuery(ctx)
+	defer timer.ObserveDuration()
+
+	timer2 := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveAutoComplete"))
 	res, autoCompleteErr := s.searchCompleteResults(ctx)
+	defer timer2.ObserveDuration()
 	if autoCompleteErr != nil {
 		klog.Error("Error resolving properties in autoComplete. ", autoCompleteErr)
 	}
