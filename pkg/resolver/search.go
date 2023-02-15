@@ -67,8 +67,10 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 
 func (s *SearchResult) Count() int {
 	klog.V(2).Info("Resolving SearchResult:Count()")
+	t := time.Now()
 	s.buildSearchQuery(s.context, true, false)
 	count := s.resolveCount()
+	klog.V(1).Info("Time took to build Coounts: ", time.Since(t))
 
 	return count
 }
@@ -115,7 +117,7 @@ func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
 					numUIDs, s.level, time.Since(start))
 				return
 			}
-			klog.V(4).Infof("Finding relationships for %d uids and %d level(s) took %s.",
+			klog.V(1).Infof("Finding relationships for %d uids and %d level(s) took %s.",
 				numUIDs, s.level, time.Since(start))
 		} else {
 			klog.V(4).Infof("Not finding relationships as there are %d uids and %d level(s).",
@@ -133,10 +135,12 @@ func (s *SearchResult) Uids() {
 
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
+
 	return goqu.Or(
 		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
 		matchHubCluster(userrbac, userInfo),
 	)
+
 }
 
 // Example query: SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN
@@ -148,6 +152,8 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	var params []interface{}
 	var sql string
 	var err error
+
+	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("buildSearchQuery"))
 
 	// define schema table:
 	schemaTable := goqu.S("search").Table("resources")
@@ -181,8 +187,10 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		_, userInfo := rbac.GetCache().GetUserUID(ctx)
 		// RBAC CLAUSE
 		if s.userData != nil {
+			timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("buildRbacClause"))
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
+			defer timer.ObserveDuration()
 			if len(whereDs) == 0 {
 				s.checkErrorBuildingQuery(fmt.Errorf("search query must contain a whereClause"),
 					ErrorMsg)
@@ -211,9 +219,11 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	} else {
 		sql, params, err = selectDs.Where(whereDs...).ToSQL()
 	}
+	defer timer.ObserveDuration()
 	if err != nil {
 		klog.Errorf("Error building Search query: %s", err.Error())
 	}
+
 	klog.V(5).Infof("Search query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
@@ -227,8 +237,9 @@ func (s *SearchResult) checkErrorBuildingQuery(err error, logMessage string) {
 }
 
 func (s *SearchResult) resolveCount() int {
+	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveCountFunc"))
 	rows := s.pool.QueryRow(context.TODO(), s.query, s.params...)
-
+	defer timer.ObserveDuration()
 	var count int
 	err := rows.Scan(&count)
 	if err != nil {

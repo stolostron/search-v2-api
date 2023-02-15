@@ -90,4 +90,30 @@ spec:
       - name: multiclusterhub-operator-pull-secret
 ```
 
+
+Metrics
+==================
+
+Search-v2-api also monitors and exports various metrics to Prometheus. Below is what search api currently
+
+Histograms:
+
+* `search_http_duration_seconds` - Latency of of HTTP requests in seconds.
+* `search_dbquery_duration_seconds` - Latency of DB requests in seconds.
+
+Counters:
+
+* `search_http_total` - Total number HTTP requests.
+* `search_authn_failed_total` - The total number of authentication requests that has failed
+* `search_authz_failed_total` - The total number of authorization requests that has failed
+* `search_db_connection_failed_total` - The total number of DB connection that has failed
+* `search_db_connection_success_total` - The total number of DB connection that has succeeded
+
+
+To view these metrics, with the search api pod running, run the following command:
+
+`curl https://localhost:4010/metrics -k | grep search_`
+
+
+
 Rebuild Date: 2022-08-16
