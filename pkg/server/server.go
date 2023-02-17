@@ -11,6 +11,8 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/stolostron/search-v2-api/graph"
 	"github.com/stolostron/search-v2-api/graph/generated"
@@ -21,6 +23,15 @@ import (
 
 func StartAndListen() {
 	port := config.Cfg.HttpPort
+
+	// Create non-global registry.
+	registry := prometheus.NewRegistry()
+
+	// Add go runtime metrics and process collectors.
+	registry.MustRegister(
+		collectors.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+	)
 
 	// Configure TLS
 	cfg := &tls.Config{
@@ -53,6 +64,8 @@ func StartAndListen() {
 
 	apiSubrouter.Handle("/graphql", handler.NewDefaultServer(generated.NewExecutableSchema(
 		generated.Config{Resolvers: &graph.Resolver{}})))
+
+	// apiSubrouter.Handle("/metrics", middleware.New(registry, nil).WrapHandler("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{})))
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),

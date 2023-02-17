@@ -94,12 +94,19 @@ spec:
 Metrics
 ==================
 
-Search-v2-api also monitors and exports various metrics to Prometheus. Below is what search api currently
+Search-v2-api also monitors and exports various metrics to Prometheus. Below is what search api currently monitors.
 
 Histograms:
 
 * `search_http_duration_seconds` - Latency of of HTTP requests in seconds.
 * `search_dbquery_duration_seconds` - Latency of DB requests in seconds.
+   * `resolveItemsFunc`- time it takes to resolve search query
+   * `resolveAutoComplete` - time it takes to resolve search complete
+   * `resolveCountFunc` - time it takes to resolve count
+* `search_dbquery_build_duration_seconds` - Latency of DB query build in seconds.
+   * `buildRbacClause` - time takes to build RBAC clause
+   * `buildRelationshipQuery` - time is takes to build relationship query
+
 
 Counters:
 
@@ -110,7 +117,7 @@ Counters:
 * `search_db_connection_success_total` - The total number of DB connection that has succeeded
 
 
-To view these metrics, with the search api pod running, run the following command:
+To view these metrics, with the search api pod and database running, run the following command:
 
 `curl https://localhost:4010/metrics -k | grep search_`
 

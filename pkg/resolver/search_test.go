@@ -8,6 +8,8 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/golang/mock/gomock"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"github.com/stretchr/testify/assert"
@@ -726,4 +728,35 @@ func Test_buildSearchQuery_EmptyQueryNoFilter(t *testing.T) {
 	resolver.Count()
 
 	assert.Equal(t, resolver.query, "", "query should be empty as search filter is not provided")
+}
+
+func TestMetricT(t *testing.T) {
+	// assert := assert.New(t)
+
+	// DBQueryDuration
+	var Duration = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "duration_query_in_seconds",
+		Help:    "Latency of DB requests in seconds.",
+		Buckets: prometheus.DefBuckets,
+	})
+
+	prometheus.MustRegister(Duration)
+
+	timer := prometheus.NewTimer(Duration)
+	timer.ObserveDuration()
+
+	observations := testutil.CollectAndCount(Duration)
+	if observations != 1 {
+		t.Error("not 1 observations but", observations)
+	}
+	// C.WithLabelValues("resolveRelationships")
+	// C.WithLabelValues("resolveCountFunc")
+	// C.WithLabelValues("resolveItemsFunc")
+	// // collected three metrics
+	// assert.Equal(3, testutil.CollectAndCount(C))
+	// // check the expected values using the ToFloat64 function
+	// assert.Equal(float64(1), testutil.ToFloat64(C.WithLabelValues("resolveRelationships")))
+	// assert.Equal(float64(1), testutil.ToFloat64(C.WithLabelValues("resolveCountFunc")))
+	// assert.Equal(float64(1), testutil.ToFloat64(C.WithLabelValues("resolveItemsFunc")))
+
 }

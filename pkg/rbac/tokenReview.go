@@ -55,9 +55,11 @@ func (trc *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
 	// This ensures that only 1 process is updating the TokenReview data from API request.
 	trc.meta.lock.Lock()
 	defer trc.meta.lock.Unlock()
+	// var timer *prometheus.Timer
 
 	// Check if cached TokenReview data is valid. Update if needed.
 	if time.Now().After(trc.meta.updatedAt.Add(time.Duration(config.Cfg.AuthCacheTTL) * time.Millisecond)) {
+		// defer timer.ObserveDuration() // record time passed since timer created - in our case recording time until new token session (or total time of user session before renew)
 		klog.V(6).Infof("Starting TokenReview. tokenReviewCache expired or never updated. UpdatedAt %s", trc.meta.updatedAt)
 
 		tr := authv1.TokenReview{
@@ -75,8 +77,12 @@ func (trc *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
 		trc.meta.updatedAt = time.Now()
 		trc.meta.err = err
 		trc.tokenReview = result
+		// timer = prometheus.NewTimer(metric.HttpDuration.WithLabelValues("totalUserSessionDuration"))
+
 	} else {
 		klog.V(6).Info("Using cached TokenReview.")
+		// timer = prometheus.NewTimer(metric.HttpDuration.WithLabelValues("totalUserSessionDuration"))
+
 	}
 
 	return trc.tokenReview, trc.meta.err

@@ -98,12 +98,14 @@ func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
 	}
 	var start time.Time
 	var numUIDs int
-
+	var timer *prometheus.Timer
 	s.wg.Wait()
 	var r []SearchRelatedResult
 
 	if len(s.uids) > 0 {
 		start = time.Now()
+		timer = prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveRelationships"))
+
 		numUIDs = len(s.uids)
 		r = s.getRelationResolvers(ctx)
 	} else {
@@ -117,6 +119,7 @@ func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
 					numUIDs, s.level, time.Since(start))
 				return
 			}
+			defer timer.ObserveDuration()
 			klog.V(1).Infof("Finding relationships for %d uids and %d level(s) took %s.",
 				numUIDs, s.level, time.Since(start))
 		} else {
@@ -153,7 +156,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	var sql string
 	var err error
 
-	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("buildSearchQuery"))
+	timer := prometheus.NewTimer(metric.DBQueryBuildDuration.WithLabelValues("buildSearchQuery"))
 
 	// define schema table:
 	schemaTable := goqu.S("search").Table("resources")
@@ -187,10 +190,10 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		_, userInfo := rbac.GetCache().GetUserUID(ctx)
 		// RBAC CLAUSE
 		if s.userData != nil {
-			timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("buildRbacClause"))
+			timer2 := prometheus.NewTimer(metric.DBQueryBuildDuration.WithLabelValues("buildRbacClause"))
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
-			defer timer.ObserveDuration()
+			defer timer2.ObserveDuration()
 			if len(whereDs) == 0 {
 				s.checkErrorBuildingQuery(fmt.Errorf("search query must contain a whereClause"),
 					ErrorMsg)

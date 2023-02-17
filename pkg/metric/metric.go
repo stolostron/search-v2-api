@@ -53,3 +53,17 @@ var (
 		Help: "Latency of DB requests in seconds.",
 	}, []string{"query"})
 )
+
+var (
+	DBQueryBuildDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "search_dbquery_build_duration_seconds",
+		Help: "Latency of DB query build in seconds.",
+	}, []string{"query"})
+)
+
+// var (
+// 	UserSessionDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+// 		Name: "search_user_session_duration_seconds",
+// 		Help: "Latency of of HTTP requests in seconds.",
+// 	}, []string{"userid"})
+// )
