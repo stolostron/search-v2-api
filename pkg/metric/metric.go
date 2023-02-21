@@ -9,7 +9,7 @@ import (
 var (
 	HttpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "search_http_duration_seconds",
-		Help: "Latency of of HTTP requests in seconds.",
+		Help: "Latency of single HTTP request in (milli)seconds.",
 	}, []string{"path", "method"})
 )
 
@@ -47,6 +47,7 @@ var (
 		Help: "The total number of DB connection that has succeeded",
 	}, []string{"route"})
 )
+
 var (
 	DBQueryDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "search_dbquery_duration_seconds",
@@ -64,6 +65,6 @@ var (
 // var (
 // 	UserSessionDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 // 		Name: "search_user_session_duration_seconds",
-// 		Help: "Latency of of HTTP requests in seconds.",
+// 		Help: "Total time of session partitioned by user.",
 // 	}, []string{"userid"})
 // )

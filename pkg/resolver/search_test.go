@@ -5,10 +5,12 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/golang/mock/gomock"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
@@ -731,32 +733,65 @@ func Test_buildSearchQuery_EmptyQueryNoFilter(t *testing.T) {
 }
 
 func TestMetricT(t *testing.T) {
-	// assert := assert.New(t)
+	assert := assert.New(t)
 
-	// DBQueryDuration
-	var Duration = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "duration_query_in_seconds",
-		Help:    "Latency of DB requests in seconds.",
-		Buckets: prometheus.DefBuckets,
-	})
+	//create histogram
+	// var histogram1 = promauto.NewHistogram(prometheus.HistogramOpts{
+	// 	Name:    "query_1",
+	// 	Help:    "help",
+	// 	Buckets: prometheus.DefBuckets,
+	// })
 
-	prometheus.MustRegister(Duration)
+	//define HistogramVec - collector that bundles a set of Histograms that share Desc but have different values for their variable labels
+	//Used when we want to count the same thing partitioned by some dimension(s) ex. http request latencies broken up by status code and method.
+	var H = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "query_duration",
+		Help: "help",
+	}, []string{"query"})
 
-	timer := prometheus.NewTimer(Duration)
+	//note: promauto auto registers metrics
+
+	//after we register we can just collect simple metric histogram1 with
+	//CountAndCollect - returns number of metrics collected (not value of metric):
+	// assert.Equal(1, testutil.CollectAndCount(histogram1))
+
+	//metric H is a collection of histograms - until we add a metric to it should be 0:
+	assert.Equal(0, testutil.CollectAndCount(H))
+
+	// simulate some observations for histrogram1.
+	// for i := 0; i < 1000; i++ {
+	// 	histogram1.Observe(30 + math.Floor(120*math.Sin(float64(i)*0.1))/10)
+	// }
+
+	// useful to view the state of histogram using write method (this used by prometheus internally)
+	// metric := &dto.Metric{}
+	// histogram1.Write(metric)
+	// print(proto.MarshalTextString(metric))
+
+	// //assert we have captured observation:
+	// observations := testutil.CollectAndCount(histogram1)
+	// if observations != 1 {
+	// 	t.Error("not 1 observations but", observations)
+	// }
+
+	//now we can make some observations for HistogramVec:
+	timer := prometheus.NewTimer(H.WithLabelValues("label1"))
+	time.Sleep(5 * time.Second)
 	timer.ObserveDuration()
 
-	observations := testutil.CollectAndCount(Duration)
-	if observations != 1 {
-		t.Error("not 1 observations but", observations)
-	}
-	// C.WithLabelValues("resolveRelationships")
-	// C.WithLabelValues("resolveCountFunc")
-	// C.WithLabelValues("resolveItemsFunc")
-	// // collected three metrics
-	// assert.Equal(3, testutil.CollectAndCount(C))
+	timer = prometheus.NewTimer(H.WithLabelValues("label2"))
+	time.Sleep(2 * time.Second)
+	timer.ObserveDuration()
+
+	timer = prometheus.NewTimer(H.WithLabelValues("label3"))
+	time.Sleep(1 * time.Second)
+	timer.ObserveDuration()
+
+	// collected three metrics
+	assert.Equal(3, testutil.CollectAndCount(H))
 	// // check the expected values using the ToFloat64 function
-	// assert.Equal(float64(1), testutil.ToFloat64(C.WithLabelValues("resolveRelationships")))
-	// assert.Equal(float64(1), testutil.ToFloat64(C.WithLabelValues("resolveCountFunc")))
-	// assert.Equal(float64(1), testutil.ToFloat64(C.WithLabelValues("resolveItemsFunc")))
+	// assert.Equal(float64(1), testutil.ToFloat64(H.WithLabelValues("label1")))
+	// assert.Equal(float64(1), testutil.ToFloat64(H.WithLabelValues("label2")))
+	// assert.Equal(float64(1), testutil.ToFloat64(H.WithLabelValues("label3")))
 
 }
