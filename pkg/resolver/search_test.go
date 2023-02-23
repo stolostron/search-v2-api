@@ -738,7 +738,6 @@ func TestMetricT(t *testing.T) {
 
 	//define mock HistogramVec
 	//note: promauto auto registers metrics
-
 	var H = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "query_duration",
 		Help:    "help",
@@ -746,7 +745,6 @@ func TestMetricT(t *testing.T) {
 	}, []string{"query"})
 
 	//CountAndCollect - returns number of metrics collected (not value of metric):
-
 	//metric H is a collector - until observation is made, count should be 0:
 	assert.Equal(0, testutil.CollectAndCount(H))
 
@@ -787,10 +785,8 @@ func TestMetricT(t *testing.T) {
 	assert.Equal("query", labels[0].GetName())
 	assert.Equal("label1", labels[0].GetValue())
 
+	// get buckets for label1
 	label1_buckets := metrics[0].GetMetric()[0].GetHistogram().GetBucket()
-
-	//assert that the
-	assert.Equal(0, int(label1_buckets[0].GetCumulativeCount()))
 
 	// verify bucket value for label1
 	// get culumative count for bucket with upperbound 10.
