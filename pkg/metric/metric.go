@@ -6,6 +6,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+// HistogramVec - collector that bundles a set of observations that share Desc but have different values for their variable labels
+// Used when we want to count the same thing partitioned by some dimension(s) ex. http request latencies broken up by status code and method.
 var (
 	HttpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "search_http_duration_seconds",
@@ -24,14 +26,14 @@ var (
 	AuthnFailed = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "search_authn_failed_total",
 		Help: "The total number of authentication requests that has failed",
-	}, []string{"reason"})
+	}, []string{"code"})
 )
 
 var (
 	AuthzFailed = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "search_authz_failed_total",
 		Help: "The total number of authorization requests that has failed",
-	}, []string{"reason"})
+	}, []string{"code"})
 )
 
 var (

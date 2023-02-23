@@ -65,8 +65,6 @@ func StartAndListen() {
 	apiSubrouter.Handle("/graphql", handler.NewDefaultServer(generated.NewExecutableSchema(
 		generated.Config{Resolvers: &graph.Resolver{}})))
 
-	// apiSubrouter.Handle("/metrics", middleware.New(registry, nil).WrapHandler("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{})))
-
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
 		Handler:           router,

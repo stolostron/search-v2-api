@@ -15,6 +15,7 @@ import (
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_SearchResolver_Count(t *testing.T) {
@@ -735,63 +736,76 @@ func Test_buildSearchQuery_EmptyQueryNoFilter(t *testing.T) {
 func TestMetricT(t *testing.T) {
 	assert := assert.New(t)
 
-	//create histogram
-	// var histogram1 = promauto.NewHistogram(prometheus.HistogramOpts{
-	// 	Name:    "query_1",
-	// 	Help:    "help",
-	// 	Buckets: prometheus.DefBuckets,
-	// })
-
-	//define HistogramVec - collector that bundles a set of Histograms that share Desc but have different values for their variable labels
-	//Used when we want to count the same thing partitioned by some dimension(s) ex. http request latencies broken up by status code and method.
-	var H = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "query_duration",
-		Help: "help",
-	}, []string{"query"})
-
+	//define mock HistogramVec
 	//note: promauto auto registers metrics
 
-	//after we register we can just collect simple metric histogram1 with
-	//CountAndCollect - returns number of metrics collected (not value of metric):
-	// assert.Equal(1, testutil.CollectAndCount(histogram1))
+	var H = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "query_duration",
+		Help:    "help",
+		Buckets: prometheus.DefBuckets,
+	}, []string{"query"})
 
-	//metric H is a collection of histograms - until we add a metric to it should be 0:
+	//CountAndCollect - returns number of metrics collected (not value of metric):
+
+	//metric H is a collector - until observation is made, count should be 0:
 	assert.Equal(0, testutil.CollectAndCount(H))
 
-	// simulate some observations for histrogram1.
-	// for i := 0; i < 1000; i++ {
-	// 	histogram1.Observe(30 + math.Floor(120*math.Sin(float64(i)*0.1))/10)
-	// }
+	//create first observation:
+	H.With(prometheus.Labels{"query": "label1"}).Observe(9.5)
 
-	// useful to view the state of histogram using write method (this used by prometheus internally)
-	// metric := &dto.Metric{}
-	// histogram1.Write(metric)
-	// print(proto.MarshalTextString(metric))
+	//confirm collected observation:
+	assert.Equal(1, testutil.CollectAndCount(H))
 
-	// //assert we have captured observation:
-	// observations := testutil.CollectAndCount(histogram1)
-	// if observations != 1 {
-	// 	t.Error("not 1 observations but", observations)
-	// }
-
-	//now we can make some observations for HistogramVec:
-	timer := prometheus.NewTimer(H.WithLabelValues("label1"))
+	// now we can make some observations for HistogramVec:
+	timer := prometheus.NewTimer(H.WithLabelValues("label2"))
 	time.Sleep(5 * time.Second)
 	timer.ObserveDuration()
 
-	timer = prometheus.NewTimer(H.WithLabelValues("label2"))
+	timer = prometheus.NewTimer(H.WithLabelValues("label3"))
 	time.Sleep(2 * time.Second)
 	timer.ObserveDuration()
 
-	timer = prometheus.NewTimer(H.WithLabelValues("label3"))
+	timer = prometheus.NewTimer(H.WithLabelValues("label4"))
 	time.Sleep(1 * time.Second)
 	timer.ObserveDuration()
 
-	// collected three metrics
-	assert.Equal(3, testutil.CollectAndCount(H))
-	// // check the expected values using the ToFloat64 function
-	// assert.Equal(float64(1), testutil.ToFloat64(H.WithLabelValues("label1")))
-	// assert.Equal(float64(1), testutil.ToFloat64(H.WithLabelValues("label2")))
-	// assert.Equal(float64(1), testutil.ToFloat64(H.WithLabelValues("label3")))
+	// verify H collected four observations:
+	assert.Equal(4, testutil.CollectAndCount(H))
+
+	// verify labels:
+	reg := prometheus.NewPedanticRegistry()
+	err := reg.Register(H)
+	assert.Nil(err)
+	metrics, err := reg.Gather()
+	require.NoError(t, err)
+
+	assert.Equal("query_duration", metrics[0].GetName())
+	assert.Equal("help", metrics[0].GetHelp())
+
+	// Label verification only required if Observe call above can be omitted.
+	labels := metrics[0].GetMetric()[0].GetLabel()
+	assert.Equal("query", labels[0].GetName())
+	assert.Equal("label1", labels[0].GetValue())
+
+	label1_buckets := metrics[0].GetMetric()[0].GetHistogram().GetBucket()
+
+	//assert that the
+	assert.Equal(0, int(label1_buckets[0].GetCumulativeCount()))
+
+	// verify bucket value for label1
+	// get culumative count for bucket with upperbound 10.
+	// (for label1 our observation was 9.5 so will round up to 10)
+	for _, bucket := range label1_buckets {
+		//note: 9.5 seconds will fall into bucket 10 seconds prometheus rounds up
+
+		if int(*bucket.UpperBound) == 10 {
+			assert.Equal(1, int(*bucket.CumulativeCount))
+		} else if int(*bucket.UpperBound) < 10 {
+			{
+				assert.Equal(0, int(*bucket.CumulativeCount))
+			}
+
+		}
+	}
 
 }

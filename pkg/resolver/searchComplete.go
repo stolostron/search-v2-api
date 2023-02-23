@@ -34,7 +34,7 @@ type SearchCompleteResult struct {
 var arrayProperties = make(map[string]struct{})
 
 func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, error) {
-	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("buildAutoCompleteQuery"))
+	timer := prometheus.NewTimer(metric.DBQueryBuildDuration.WithLabelValues("buildAutoCompleteQuery"))
 	s.searchCompleteQuery(ctx)
 	defer timer.ObserveDuration()
 
