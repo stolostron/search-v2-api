@@ -54,7 +54,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 		for index, in := range input {
 			srchResult[index] = &SearchResult{
 				input:     in,
-				pool:      db.GetConnection(),
+				pool:      db.GetConnPool(ctx),
 				userData:  userData,
 				context:   ctx,
 				propTypes: propTypes,
@@ -68,9 +68,8 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 func (s *SearchResult) Count() int {
 	klog.V(2).Info("Resolving SearchResult:Count()")
 	s.buildSearchQuery(s.context, true, false)
-	count := s.resolveCount()
 
-	return count
+	return s.resolveCount()
 }
 
 func (s *SearchResult) Items() []map[string]interface{} {

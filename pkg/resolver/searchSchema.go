@@ -26,7 +26,7 @@ func SearchSchemaResolver(ctx context.Context) (map[string]interface{}, error) {
 	}
 	// Proceed if user's rbac data exists
 	searchSchemaResult := &SearchSchema{
-		pool:     db.GetConnection(),
+		pool:     db.GetConnPool(ctx),
 		userData: userData,
 	}
 	searchSchemaResult.buildSearchSchemaQuery(ctx)
@@ -109,19 +109,19 @@ func (s *SearchSchema) searchSchemaResults(ctx context.Context) (map[string]inte
 		return srchSchema, err
 	}
 	defer rows.Close()
-	if rows != nil {
-		for rows.Next() {
-			prop := ""
-			_ = rows.Scan(&prop)
-			// Skip properties that start with _ because those are used internally and aren't intended to be exposed.
-			if prop[0:1] == "_" {
-				continue
-			}
-			if _, present := schemaMap[prop]; !present {
-				schema = append(schema, prop)
-			}
+
+	for rows.Next() {
+		prop := ""
+		_ = rows.Scan(&prop)
+		// Skip properties that start with _ because those are used internally and aren't intended to be exposed.
+		if prop[0:1] == "_" {
+			continue
+		}
+		if _, present := schemaMap[prop]; !present {
+			schema = append(schema, prop)
 		}
 	}
+
 	srchSchema["allProperties"] = schema
 	return srchSchema, nil
 }
