@@ -228,6 +228,7 @@ func (s *SearchResult) checkErrorBuildingQuery(err error, logMessage string) {
 
 func (s *SearchResult) resolveCount() int {
 	rows := s.pool.QueryRow(context.TODO(), s.query, s.params...)
+	defer rows.Close()
 
 	var count int
 	err := rows.Scan(&count)
