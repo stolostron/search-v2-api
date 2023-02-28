@@ -227,13 +227,12 @@ func (s *SearchResult) checkErrorBuildingQuery(err error, logMessage string) {
 }
 
 func (s *SearchResult) resolveCount() int {
-	rows := s.pool.QueryRow(context.TODO(), s.query, s.params...)
-	defer rows.Close()
+	rows := s.pool.QueryRow(s.context, s.query, s.params...)
 
 	var count int
 	err := rows.Scan(&count)
 	if err != nil {
-		klog.Errorf("Error %s resolving count for query:%s", err.Error(), s.query)
+		klog.Errorf("Error resolving count. Error: %s  Query: %s", err.Error(), s.query)
 	}
 	return count
 }
