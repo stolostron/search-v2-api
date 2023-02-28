@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/metric"
 	authv1 "k8s.io/api/authentication/v1"
@@ -87,6 +88,13 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 
 		return cachedUserData, nil
 	} else {
+		//create metric and set labels
+		HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "create_user_cache"})
+
+		//create timer and return observed duration
+		timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("GET", "200")) //change labels
+		defer timer.ObserveDuration()
+
 		if cache.users == nil {
 			cache.users = map[string]*UserDataCache{}
 		}

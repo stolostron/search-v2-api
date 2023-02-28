@@ -9,6 +9,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stolostron/search-v2-api/pkg/metric"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -138,6 +139,13 @@ func (shared *SharedData) PopulateSharedCache(ctx context.Context) {
 		klog.V(5).Info("Using shared data from cache.")
 		return
 	} else { // get data and add to cache
+
+		//create metric and set labels
+		HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "create_shared_cache"})
+
+		//create timer and return observed duration
+		timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("GET", "200")) //change labels
+		defer timer.ObserveDuration()
 		var wg sync.WaitGroup
 
 		// get hub cluster-scoped resources and cache in shared.csResources

@@ -12,7 +12,7 @@ var (
 	HttpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "search_http_duration_seconds",
 		Help: "Latency of single HTTP request in (milli)seconds.",
-	}, []string{"path", "method"})
+	}, []string{"method", "status_code", "action"})
 )
 
 var (
@@ -22,18 +22,19 @@ var (
 	}, []string{"path", "method"})
 )
 
+//we can use curry with for these two below to slice HttpDuration metric by label authen/author
 var (
 	AuthnFailed = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "search_authn_failed_total",
 		Help: "The total number of authentication requests that has failed",
-	}, []string{"code"})
+	}, []string{"status_code"})
 )
 
 var (
 	AuthzFailed = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "search_authz_failed_total",
 		Help: "The total number of authorization requests that has failed",
-	}, []string{"code"})
+	}, []string{"status_code"})
 )
 
 var (
@@ -43,30 +44,7 @@ var (
 	}, []string{"route"})
 )
 
-var (
-	DBConnectionSuccess = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "search_db_connection_success_total",
-		Help: "The total number of DB connection that has succeeded",
-	}, []string{"route"})
-)
-
-var (
-	DBQueryDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "search_dbquery_duration_seconds",
-		Help: "Latency of DB requests in seconds.",
-	}, []string{"query"})
-)
-
-var (
-	DBQueryBuildDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "search_dbquery_build_duration_seconds",
-		Help: "Latency of DB query build in seconds.",
-	}, []string{"query"})
-)
-
-// var (
-// 	UserSessionDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
-// 		Name: "search_user_session_duration_seconds",
-// 		Help: "Total time of session partitioned by user.",
-// 	}, []string{"userid"})
-// )
+// Helper function to curry a metric with pre-defined labels
+func HttpDurationByLabels(labels prometheus.Labels) *prometheus.HistogramVec {
+	return HttpDuration.MustCurryWith(labels).(*prometheus.HistogramVec)
+}

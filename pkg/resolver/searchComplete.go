@@ -34,13 +34,16 @@ type SearchCompleteResult struct {
 var arrayProperties = make(map[string]struct{})
 
 func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, error) {
-	timer := prometheus.NewTimer(metric.DBQueryBuildDuration.WithLabelValues("buildAutoCompleteQuery"))
-	s.searchCompleteQuery(ctx)
-	defer timer.ObserveDuration()
 
-	timer2 := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveAutoComplete"))
+	//create metric and set labels
+	HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "auto_complete_query"})
+
+	//create timer and return observed duration
+	timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("GET", "200")) //change labels
+	defer timer.ObserveDuration()
+	s.searchCompleteQuery(ctx)
+
 	res, autoCompleteErr := s.searchCompleteResults(ctx)
-	defer timer2.ObserveDuration()
 	if autoCompleteErr != nil {
 		klog.Error("Error resolving properties in autoComplete. ", autoCompleteErr)
 	}

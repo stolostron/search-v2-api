@@ -104,7 +104,12 @@ func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
 
 	if len(s.uids) > 0 {
 		start = time.Now()
-		timer = prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveRelationships"))
+		//create metric and set labels
+		HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "related_query"})
+
+		//create timer and return observed duration
+		timer = prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("GET", "200")) //change labels
+		defer timer.ObserveDuration()
 
 		numUIDs = len(s.uids)
 		r = s.getRelationResolvers(ctx)
@@ -119,7 +124,6 @@ func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
 					numUIDs, s.level, time.Since(start))
 				return
 			}
-			defer timer.ObserveDuration()
 			klog.V(1).Infof("Finding relationships for %d uids and %d level(s) took %s.",
 				numUIDs, s.level, time.Since(start))
 		} else {
@@ -156,7 +160,12 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	var sql string
 	var err error
 
-	timer := prometheus.NewTimer(metric.DBQueryBuildDuration.WithLabelValues("buildSearchQuery"))
+	//create metric and set labels
+	HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "build_search_query"})
+
+	//create timer and return observed duration
+	timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("GET", "200")) //change labels
+	defer timer.ObserveDuration()
 
 	// define schema table:
 	schemaTable := goqu.S("search").Table("resources")
@@ -190,10 +199,14 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		_, userInfo := rbac.GetCache().GetUserUID(ctx)
 		// RBAC CLAUSE
 		if s.userData != nil {
-			timer2 := prometheus.NewTimer(metric.DBQueryBuildDuration.WithLabelValues("buildRbacClause"))
+			//create metric and set labels
+			HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "build_rbac_query"})
+
+			//create timer and return observed duration
+			timer = prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("GET", "200")) //change labels
+			defer timer.ObserveDuration()
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
-			defer timer2.ObserveDuration()
 			if len(whereDs) == 0 {
 				s.checkErrorBuildingQuery(fmt.Errorf("search query must contain a whereClause"),
 					ErrorMsg)
@@ -222,7 +235,6 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	} else {
 		sql, params, err = selectDs.Where(whereDs...).ToSQL()
 	}
-	defer timer.ObserveDuration()
 	if err != nil {
 		klog.Errorf("Error building Search query: %s", err.Error())
 	}
@@ -240,8 +252,12 @@ func (s *SearchResult) checkErrorBuildingQuery(err error, logMessage string) {
 }
 
 func (s *SearchResult) resolveCount() int {
-	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveCountFunc"))
 	rows := s.pool.QueryRow(context.TODO(), s.query, s.params...)
+	//create metric and set labels
+	HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "count_query"})
+
+	//create timer and return observed duration
+	timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("GET", "200")) //change labels
 	defer timer.ObserveDuration()
 	var count int
 	err := rows.Scan(&count)
@@ -270,11 +286,17 @@ func (s *SearchResult) resolveUids() {
 }
 func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	items := []map[string]interface{}{}
-	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveItemsFunc"))
+
+	//create metric and set labels
+	HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "items_query"})
+
+	//create timer and return observed duration
+	timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("GET", "200")) //change labels
+	defer timer.ObserveDuration()
+
 	klog.V(5).Infof("Query issued by resolver [%s] ", s.query)
 	rows, err := s.pool.Query(s.context, s.query, s.params...)
 
-	defer timer.ObserveDuration()
 	if err != nil {
 		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
 		return items, err

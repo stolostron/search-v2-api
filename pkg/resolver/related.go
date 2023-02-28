@@ -65,7 +65,11 @@ func (s *SearchResult) buildRelationsQuery() {
 	-- union -- This is added if `kind:Cluster` is present in search term
 	-- select uid as uid, data->>'kind' as kind, 1 AS "level" FROM search.resources where cluster IN ('local-cluster')
 	*/
-	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("buildRelationshipQuery"))
+	//create metric and set labels
+	HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "build_related_query"})
+
+	//create timer and return observed duration
+	timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("GET", "200")) //change labels
 	defer timer.ObserveDuration()
 	s.setDepth()
 	whereDs := []exp.Expression{

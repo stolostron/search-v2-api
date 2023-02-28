@@ -99,14 +99,20 @@ Search-v2-api also monitors and exports various metrics to Prometheus. Below is 
 Histograms:
 
 * `search_http_duration_seconds` - Latency of of HTTP requests in seconds.
-* `search_dbquery_duration_seconds` - Latency of DB requests in seconds.
-   * `resolveItemsFunc`- time it takes to resolve search query
-   * `resolveAutoComplete` - time it takes to resolve search complete
-   * `resolveCountFunc` - time it takes to resolve count
-* `search_dbquery_build_duration_seconds` - Latency of DB query build in seconds.
-   * `buildRbacClause` - time takes to build RBAC clause
-   * `buildRelationshipQuery` - time is takes to build relationship query
+  * Labels:
+    * **actions**: Actions performed by Search Api.
+    * **method**: HTTP method
+    * **status_code**: Status code generated from request
 
+Example: The following metric will record all search queries created in under or equal to 0.1 seconds
+```
+http_request_duration_seconds_bucket{
+    action="create_search_query",
+    method="GET",
+    status_code="200",
+    le="0.1"
+}
+```
 
 Counters:
 
@@ -114,7 +120,6 @@ Counters:
 * `search_authn_failed_total` - The total number of authentication requests that has failed
 * `search_authz_failed_total` - The total number of authorization requests that has failed
 * `search_db_connection_failed_total` - The total number of DB connection that has failed
-* `search_db_connection_success_total` - The total number of DB connection that has succeeded
 
 
 To view these metrics, with the search api pod and database running, run the following command:
