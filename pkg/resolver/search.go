@@ -227,10 +227,8 @@ func (s *SearchResult) checkErrorBuildingQuery(err error, logMessage string) {
 }
 
 func (s *SearchResult) resolveCount() int {
-	rows := s.pool.QueryRow(s.context, s.query, s.params...)
-
 	var count int
-	err := rows.Scan(&count)
+	err := s.pool.QueryRow(s.context, s.query, s.params...).Scan(&count)
 	if err != nil {
 		klog.Errorf("Error resolving count. Error: %s  Query: %s", err.Error(), s.query)
 	}
@@ -240,7 +238,7 @@ func (s *SearchResult) resolveCount() int {
 func (s *SearchResult) resolveUids() {
 	rows, err := s.pool.Query(s.context, s.query, s.params...)
 	if err != nil {
-		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
+		klog.Errorf("Error resolving UIDs. Query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
 		return
 	}
 	defer rows.Close()
