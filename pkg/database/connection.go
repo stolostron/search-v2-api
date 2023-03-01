@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	pgx "github.com/jackc/pgx/v4"
 	pgxpool "github.com/jackc/pgx/v4/pgxpool"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/metric"
@@ -36,7 +37,22 @@ func initializePool(ctx context.Context) {
 		klog.Error("Error parsing database connection configuration.", configErr)
 	}
 
+	config.ConnConfig.BuildStatementCache = nil
+
+	// config.MaxConnIdleTime = 1 * time.Minute
+	// config.MinConns = 2
 	config.MaxConns = int32(cfg.DBMaxConns)
+
+	config.AfterRelease = func(conn *pgx.Conn) bool {
+		klog.Infof(">>> Releasing connection.  %+v", conn)
+		_, err := conn.Exec(ctx, "DISCARD ALL")
+		if err != nil {
+			klog.Infof("Error during DISCARD ALL.  %s", err)
+			return false
+		}
+		return true
+	}
+
 	conn, err := pgxpool.ConnectConfig(ctx, config)
 	if err != nil {
 		klog.Errorf("Unable to connect to database: %+v\n", err)
