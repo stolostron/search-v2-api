@@ -54,7 +54,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 		for index, in := range input {
 			srchResult[index] = &SearchResult{
 				input:     in,
-				pool:      db.GetConnection(),
+				pool:      db.GetConnPool(ctx),
 				userData:  userData,
 				context:   ctx,
 				propTypes: propTypes,
@@ -68,9 +68,8 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 func (s *SearchResult) Count() int {
 	klog.V(2).Info("Resolving SearchResult:Count()")
 	s.buildSearchQuery(s.context, true, false)
-	count := s.resolveCount()
 
-	return count
+	return s.resolveCount()
 }
 
 func (s *SearchResult) Items() []map[string]interface{} {
@@ -232,7 +231,7 @@ func (s *SearchResult) resolveCount() int {
 	var count int
 	err := rows.Scan(&count)
 	if err != nil {
-		klog.Errorf("Error %s resolving count for query:%s", err.Error(), s.query)
+		klog.Errorf("Error resolving count. Error: %s  Query: %s", err.Error(), s.query)
 	}
 	return count
 }
@@ -240,7 +239,7 @@ func (s *SearchResult) resolveCount() int {
 func (s *SearchResult) resolveUids() {
 	rows, err := s.pool.Query(s.context, s.query, s.params...)
 	if err != nil {
-		klog.Errorf("Error resolving query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
+		klog.Errorf("Error resolving UIDs. Query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
 		return
 	}
 	defer rows.Close()

@@ -57,7 +57,7 @@ func SearchComplete(ctx context.Context, property string, srchInput *model.Searc
 	// Proceed if user's rbac data exists
 	searchCompleteResult := &SearchCompleteResult{
 		input:     srchInput,
-		pool:      db.GetConnection(),
+		pool:      db.GetConnPool(ctx),
 		property:  property,
 		limit:     limit,
 		userData:  userData,

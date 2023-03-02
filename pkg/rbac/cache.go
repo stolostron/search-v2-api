@@ -2,6 +2,7 @@
 package rbac
 
 import (
+	"context"
 	"sync"
 
 	"github.com/driftprogramming/pgxpoolmock"
@@ -35,20 +36,21 @@ var cacheInst = Cache{
 		disabledClusters: map[string]struct{}{},
 		managedClusters:  map[string]struct{}{},
 		namespaces:       []string{},
-		pool:             db.GetConnection(),
+		pool:             db.GetConnPool(context.TODO()),
 		dynamicClient:    config.GetDynamicClient(),
 	},
 	users:      map[string]*UserDataCache{},
 	restConfig: config.GetClientConfig(),
-	pool:       db.GetConnection(),
+	pool:       db.GetConnPool(context.TODO()),
 }
 
 // Get a reference to the cache instance.
 func GetCache() *Cache {
+	ctx := context.TODO()
 	// Workaround. Update cache connection with every request.
 	// We need a better way to maintain this connection.
-	cacheInst.pool = db.GetConnection()
-	cacheInst.shared.pool = db.GetConnection()
+	cacheInst.pool = db.GetConnPool(ctx)
+	cacheInst.shared.pool = db.GetConnPool(ctx)
 
 	return &cacheInst
 }
