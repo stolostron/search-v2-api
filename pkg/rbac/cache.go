@@ -35,20 +35,20 @@ var cacheInst = Cache{
 		disabledClusters: map[string]struct{}{},
 		managedClusters:  map[string]struct{}{},
 		namespaces:       []string{},
-		pool:             db.GetConnection(),
+		pool:             db.GetConnPool(),
 		dynamicClient:    config.GetDynamicClient(),
 	},
 	users:      map[string]*UserDataCache{},
 	restConfig: config.GetClientConfig(),
-	pool:       db.GetConnection(),
+	pool:       db.GetConnPool(),
 }
 
 // Get a reference to the cache instance.
 func GetCache() *Cache {
 	// Workaround. Update cache connection with every request.
 	// We need a better way to maintain this connection.
-	cacheInst.pool = db.GetConnection()
-	cacheInst.shared.pool = db.GetConnection()
+	cacheInst.pool = db.GetConnPool()
+	cacheInst.shared.pool = db.GetConnPool()
 
 	return &cacheInst
 }

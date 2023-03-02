@@ -28,7 +28,7 @@ func main() {
 	}
 
 	// Establish the database connection.
-	database.GetConnection()
+	database.GetConnPool()
 
 	// Start process to watch the RBAC config andd update the cache.
 	ctx := context.Background()

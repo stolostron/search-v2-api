@@ -46,7 +46,7 @@ func initializePool(ctx context.Context) {
 	pool = conn
 }
 
-func GetConnection() *pgxpool.Pool {
+func GetConnPool() *pgxpool.Pool {
 	ctx := context.TODO()
 	if pool == nil {
 		initializePool(ctx)
