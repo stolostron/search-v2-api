@@ -109,7 +109,6 @@ func (s *SearchSchema) searchSchemaResults(ctx context.Context) (map[string]inte
 		return srchSchema, err
 	}
 	defer rows.Close()
-
 	for rows.Next() {
 		prop := ""
 		_ = rows.Scan(&prop)
