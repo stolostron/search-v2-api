@@ -54,7 +54,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 		for index, in := range input {
 			srchResult[index] = &SearchResult{
 				input:     in,
-				pool:      db.GetConnPool(),
+				pool:      db.GetConnPool(ctx),
 				userData:  userData,
 				context:   ctx,
 				propTypes: propTypes,

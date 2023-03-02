@@ -46,8 +46,7 @@ func initializePool(ctx context.Context) {
 	pool = conn
 }
 
-func GetConnPool() *pgxpool.Pool {
-	ctx := context.TODO()
+func GetConnPool(ctx context.Context) *pgxpool.Pool {
 	if pool == nil {
 		initializePool(ctx)
 		metric.DBConnectionSuccess.WithLabelValues("DBConnect").Inc()

@@ -26,7 +26,7 @@ func SearchSchemaResolver(ctx context.Context) (map[string]interface{}, error) {
 	}
 	// Proceed if user's rbac data exists
 	searchSchemaResult := &SearchSchema{
-		pool:     db.GetConnPool(),
+		pool:     db.GetConnPool(ctx),
 		userData: userData,
 	}
 	searchSchemaResult.buildSearchSchemaQuery(ctx)
