@@ -19,7 +19,7 @@ func ExposeMetrics(next http.Handler) http.Handler {
 		klog.V(4).Infof("URL Referrer: %s", r.Referer())
 		klog.V(4).Infof("User Agent: %s", r.UserAgent())
 
-		rr := NewResponseRecorder(w)
+		rr := NewResponseRecorder(w, r)
 		status := rr.statusCode
 
 		timer := prometheus.NewTimer(HttpDuration.WithLabelValues(strconv.Itoa(status), "serve_http_request"))

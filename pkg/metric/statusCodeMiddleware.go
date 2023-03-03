@@ -11,8 +11,8 @@ type responseRecorder struct {
 	statusCode int
 }
 
-func NewResponseRecorder(w http.ResponseWriter) *responseRecorder {
-	return &responseRecorder{w, http.StatusOK}
+func NewResponseRecorder(w http.ResponseWriter, r *http.Request) *responseRecorder {
+	return &responseRecorder{w, r.Response.StatusCode}
 }
 
 func (rr *responseRecorder) WriteHeader(status int) {
@@ -23,7 +23,7 @@ func (rr *responseRecorder) WriteHeader(status int) {
 func InitializeMetrics(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		rr := NewResponseRecorder(w)
+		rr := NewResponseRecorder(w, r)
 		next.ServeHTTP(rr, r)
 
 		statusCode := rr.statusCode
