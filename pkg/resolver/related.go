@@ -69,7 +69,7 @@ func (s *SearchResult) buildRelationsQuery() {
 	HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "build_related_query"})
 
 	//create timer and return observed duration
-	timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("GET", "200")) //change labels
+	timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
 	defer timer.ObserveDuration()
 	s.setDepth()
 	whereDs := []exp.Expression{

@@ -144,7 +144,7 @@ func (shared *SharedData) PopulateSharedCache(ctx context.Context) {
 		HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "create_shared_cache"})
 
 		//create timer and return observed duration
-		timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("GET", "200")) //change labels
+		timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
 		defer timer.ObserveDuration()
 		var wg sync.WaitGroup
 

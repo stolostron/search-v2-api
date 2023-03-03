@@ -39,7 +39,7 @@ func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, err
 	HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "auto_complete_query"})
 
 	//create timer and return observed duration
-	timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("GET", "200")) //change labels
+	timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
 	defer timer.ObserveDuration()
 	s.searchCompleteQuery(ctx)
 

@@ -12,7 +12,7 @@ var (
 	HttpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "search_http_duration_seconds",
 		Help: "Latency of single HTTP request in (milli)seconds.",
-	}, []string{"method", "status_code", "action"})
+	}, []string{"status_code", "action"})
 )
 
 var (

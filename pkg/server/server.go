@@ -66,6 +66,9 @@ func StartAndListen() {
 	apiSubrouter.Handle("/graphql", handler.NewDefaultServer(generated.NewExecutableSchema(
 		generated.Config{Resolvers: &graph.Resolver{}})))
 
+	// apiSubrouter.Use(metric.StatusCodeMiddleware)
+	http.ListenAndServe(fmt.Sprintf("://localhost:%d%s/graphql`", port, config.Cfg.ContextPath), metric.InitializeMetrics(metric.ExposeMetrics(router)))
+
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
 		Handler:           router,

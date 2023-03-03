@@ -92,7 +92,8 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 		HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "create_user_cache"})
 
 		//create timer and return observed duration
-		timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("GET", "200")) //change labels
+
+		timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
 		defer timer.ObserveDuration()
 
 		if cache.users == nil {

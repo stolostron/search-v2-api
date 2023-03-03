@@ -805,3 +805,25 @@ func TestMetricT(t *testing.T) {
 	}
 
 }
+
+// func TestHttpDurationByLabels(t *testing.T) {
+// 	httpDurationTest := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+// 		Name:    "search_http_duration_seconds_test",
+// 		Help:    "Latency of single request",
+// 		Buckets: []float64{0.1, 0.5, 1, 2, 5, 10},
+// 	}, []string{"method", "status_code", "action"})
+
+// 	httpDurationTestByLabels := func(labels prometheus.Labels) *prometheus.HistogramVec {
+// 		return httpDurationTest.MustCurryWith(labels).(*prometheus.HistogramVec)
+// 	}
+
+// 	// Test with label test_query
+// 	actionLabel := prometheus.Labels{"action": "test_query"}
+// 	metric := httpDurationTestByLabels(actionLabel)
+// 	metric.WithLabelValues("GET", "200").Observe(0.5)
+
+// 	// Test the metric value
+// 	metricValue, _ := metric.MetricVec.GetMetricWithLabelValues("GET", "200", "test_query")
+// 	assert.Equal(t, metricValue, 0.5)
+
+// }
