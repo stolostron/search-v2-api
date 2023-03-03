@@ -6,9 +6,18 @@ import (
 	"k8s.io/klog"
 )
 
-type ResponseRecorder struct {
+type responseRecorder struct {
 	http.ResponseWriter
-	Status int
+	statusCode int
+}
+
+func NewResponseRecorder(w http.ResponseWriter) *responseRecorder {
+	return &responseRecorder{w, http.StatusOK}
+}
+
+func (rr *responseRecorder) WriteHeader(status int) {
+	rr.statusCode = status
+	rr.ResponseWriter.WriteHeader(status)
 }
 
 func InitializeMetrics(next http.Handler) http.Handler {
@@ -17,17 +26,8 @@ func InitializeMetrics(next http.Handler) http.Handler {
 		rr := NewResponseRecorder(w)
 		next.ServeHTTP(rr, r)
 
-		statusCode := rr.Status
+		statusCode := rr.statusCode
 		klog.Info("%d %s", statusCode, http.StatusText(statusCode))
 
 	})
-}
-
-func NewResponseRecorder(w http.ResponseWriter) *ResponseRecorder {
-	return &ResponseRecorder{w, http.StatusOK}
-}
-
-func (rr *ResponseRecorder) WriteHeader(statusCode int) {
-	rr.Status = statusCode
-	rr.ResponseWriter.WriteHeader(statusCode)
 }

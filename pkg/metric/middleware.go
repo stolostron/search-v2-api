@@ -19,29 +19,15 @@ func ExposeMetrics(next http.Handler) http.Handler {
 		klog.V(4).Infof("URL Referrer: %s", r.Referer())
 		klog.V(4).Infof("User Agent: %s", r.UserAgent())
 
-		// Use middleware to get HTTP response status code
-		// rr := NewresponseRecorder(w)
+		rr := NewResponseRecorder(w)
+		status := rr.statusCode
 
-		timer := prometheus.NewTimer(HttpDuration.WithLabelValues(strconv.Itoa(r.Response.StatusCode), "serve_http_request"))
+		timer := prometheus.NewTimer(HttpDuration.WithLabelValues(strconv.Itoa(status), "serve_http_request"))
 		defer timer.ObserveDuration()
 
 		HttpRequestTotal.WithLabelValues(path, r.Method).Inc()
 
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(rr, r)
 
 	})
 }
-
-// type ResponseRecorder struct {
-// 	http.ResponseWriter
-// 	Status int
-// }
-
-// func NewresponseRecorder(w http.ResponseWriter) *ResponseRecorder {
-// 	return &ResponseRecorder{w, http.StatusOK}
-// }
-
-// func (rr *ResponseRecorder) WriteHeader(statusCode int) {
-// 	rr.Status = statusCode
-// 	rr.ResponseWriter.WriteHeader(statusCode)
-// }
