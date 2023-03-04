@@ -91,15 +91,40 @@ func matchNamespacedResources(nsResources map[string][]rbac.Resource, userInfo v
 		return goqu.Or() // return empty clause
 
 	} else {
-		whereNsDs = make([]exp.Expression, len(nsResources))
-		for nsCount, namespace := range namespaces {
+		count := 0
+		consolidateNsList := consolidateNsResources(nsResources)
+		whereNsDs = make([]exp.Expression, len(consolidateNsList))
 
-			whereNsDs[nsCount] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
-				goqu.Literal("?"), namespace),
-				matchApigroupKind(nsResources[namespace]))
+		for resources, namespace := range consolidateNsList {
+			klog.Info("len namespace: ", len(namespace), "count:", count, "len(resources:)", len(*resources))
+			whereNsDs[count] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
+				goqu.Literal("?|"), pq.Array(namespace)),
+				matchApigroupKind(*resources))
+			count++
 		}
+		// for nsCount, namespace := range namespaces {
+		// 	whereNsDs[nsCount] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
+		// 		goqu.Literal("?"), namespace),
+		// 		matchApigroupKind(nsResources[namespace]))
+		// }
 		return goqu.Or(whereNsDs...)
 	}
+}
+
+func consolidateNsResources(nsResources map[string][]rbac.Resource) map[*[]rbac.Resource][]string {
+	m := map[*[]rbac.Resource][]string{}
+
+	for key, val := range nsResources {
+		if list, found := m[&val]; found {
+			list = append(list, key)
+			m[&val] = list
+		} else {
+			m[&val] = list
+		}
+	}
+	klog.Info("Before consolidation, ", len(nsResources), " namespaces of ", len(nsResources["default"]), " resources each present")
+	klog.Info("** After consolidation, there are ", len(m), " groups of namespaces present")
+	return m
 }
 
 // Match cluster scoped and namespace scoped resources from the hub.

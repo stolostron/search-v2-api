@@ -290,7 +290,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 
 	lock.Lock()
 	defer lock.Unlock()
-
+	trackResources := map[Resource]struct{}{}
 	// Process the SSRR result and add to this UserDataCache object.
 	for _, rules := range result.Status.ResourceRules {
 		for _, verb := range rules.Verbs {
@@ -313,10 +313,15 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 								user.updateUserManagedClusterList(cache, ns)
 								return
 							}
-							user.NsResources[ns] = append(user.NsResources[ns],
-								Resource{Apigroup: api, Kind: res})
+							currRes := Resource{Apigroup: api, Kind: res}
+							//to avoid duplicates, check before appending to nsResources
+							if _, found := trackResources[currRes]; !found {
+								user.NsResources[ns] = append(user.NsResources[ns], currRes)
+								trackResources[currRes] = struct{}{}
+							}
+
 						} else if cache.shared.isClusterScoped(res, api) {
-							klog.V(5).Info("Got clusterscoped resource", api, "/",
+							klog.V(6).Info("Got clusterscoped resource ", api, "/",
 								res, " from SelfSubjectRulesReviews. Excluding it from ns scoped resoures.")
 						} else if len(rules.ResourceNames) > 0 && rules.ResourceNames[0] != "*" {
 							klog.V(5).Info("Got whitelist in resourcenames. Excluding resource", api, "/", res,
