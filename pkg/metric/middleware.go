@@ -3,10 +3,7 @@ package metric
 import (
 	"net/http"
 
-	klog "k8s.io/klog/v2"
-
-	"github.com/gorilla/mux"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type metricsResponseWriter struct {
@@ -15,7 +12,7 @@ type metricsResponseWriter struct {
 }
 
 func NewMetricsResponseWriter(w http.ResponseWriter) *metricsResponseWriter {
-	return &metricsResponseWriter{w, http.StatusOK}
+	return &metricsResponseWriter{w, 0}
 }
 
 func (lrw *metricsResponseWriter) WriteHeader(code int) {
@@ -25,22 +22,7 @@ func (lrw *metricsResponseWriter) WriteHeader(code int) {
 
 // prometheusMiddleware implements mux.MiddlewareFunc.
 func PrometheusMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		klog.Info("At PrometheusMiddleware BEFORE processing the request.")
-		route := mux.CurrentRoute(r)
-		path, _ := route.GetPathTemplate()
 
-		timer := prometheus.NewTimer(HttpDuration.WithLabelValues(path, r.Method))
-		HttpRequestTotal.WithLabelValues(path, r.Method).Inc()
-
-		metricsRespWriter := NewMetricsResponseWriter(w)
-
-		// This will run at the end of the middleware chain.
-		defer func() {
-			klog.Infof("At prom middleware AFTER processing the request. response_code  %+v", metricsRespWriter.statusCode)
-			timer.ObserveDuration()
-		}()
-
-		next.ServeHTTP(metricsRespWriter, r)
-	})
+	return promhttp.InstrumentHandlerDuration(HttpDuration,
+		promhttp.InstrumentHandlerCounter(HttpRequestTotal, next))
 }

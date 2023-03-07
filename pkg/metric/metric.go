@@ -10,14 +10,14 @@ var (
 	HttpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "search_http_duration_seconds",
 		Help: "Latency of of HTTP requests in seconds.",
-	}, []string{"path", "method"})
+	}, []string{"code"})
 )
 
 var (
 	HttpRequestTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "search_http_total",
 		Help: "Total number HTTP requests.",
-	}, []string{"path", "method"})
+	}, []string{"code"})
 )
 
 var (
