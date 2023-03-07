@@ -3,7 +3,7 @@ package metric
 import (
 	"net/http"
 
-	"k8s.io/klog"
+	klog "k8s.io/klog/v2"
 )
 
 type responseRecorder struct {

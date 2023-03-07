@@ -11,9 +11,23 @@ import (
 var (
 	HttpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "search_http_duration_seconds",
-		Help: "Latency of single HTTP request in (milli)seconds.",
+		Help: "Latency of single HTTP request",
 	}, []string{"status_code", "action"})
 )
+
+// http := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+// 	Namespace: "http",
+// 	Name:      "request_duration_seconds",
+// 	Help:      "The latency of the HTTP requests.",
+// 	Buckets:   prometheus.DefBuckets,
+// }, []string{"handler", "method", "code"})
+
+// var (
+// 	ResponseStatus = promauto.NewCounterVec(prometheus.CounterOpts{
+// 		Name: "response_status",
+// 		Help: "Status of HTTP response",
+// 	}, []string{"status"})
+// )
 
 var (
 	HttpRequestTotal = promauto.NewCounterVec(prometheus.CounterOpts{

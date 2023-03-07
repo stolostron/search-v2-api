@@ -8,7 +8,7 @@ import (
 
 	klog "k8s.io/klog/v2"
 
-	"github.com/99designs/gqlgen/graphql/handler"
+	graphqlHandler "github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
@@ -17,8 +17,8 @@ import (
 	"github.com/stolostron/search-v2-api/graph"
 	"github.com/stolostron/search-v2-api/graph/generated"
 	"github.com/stolostron/search-v2-api/pkg/config"
-
 	"github.com/stolostron/search-v2-api/pkg/metric"
+
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 )
 
@@ -59,16 +59,15 @@ func StartAndListen() {
 	// Add authentication middleware to the /searchapi (ContextPath) subroute.
 	apiSubrouter := router.PathPrefix(config.Cfg.ContextPath).Subrouter()
 
-	apiSubrouter.Use(metric.ExposeMetrics)
 	apiSubrouter.Use(rbac.AuthenticateUser)
 	apiSubrouter.Use(rbac.AuthorizeUser)
 
-	apiSubrouter.Handle("/graphql", handler.NewDefaultServer(generated.NewExecutableSchema(
+	apiSubrouter.Handle("/graphql", graphqlHandler.NewDefaultServer(generated.NewExecutableSchema(
 		generated.Config{Resolvers: &graph.Resolver{}})))
 
-	// apiSubrouter.Use(metric.StatusCodeMiddleware)
 	http.ListenAndServe(fmt.Sprintf("://localhost:%d%s/graphql`", port, config.Cfg.ContextPath), metric.ExposeMetrics(metric.InitializeMetrics(router)))
 
+	apiSubrouter.Use(metric.ExposeMetrics)
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
 		Handler:           router,
