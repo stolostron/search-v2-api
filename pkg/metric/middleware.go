@@ -3,12 +3,15 @@ package metric
 import (
 	"net/http"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// prometheusMiddleware implements mux.MiddlewareFunc.
+// Instrument with prom middleware to capture request metrics.
 func PrometheusMiddleware(next http.Handler) http.Handler {
 
-	return promhttp.InstrumentHandlerDuration(HttpDuration,
+	queryType := "searchWithRelationship" // TODO: Need to extract this from the request.
+	duration, _ := HttpDuration.CurryWith(prometheus.Labels{"query_type": queryType})
+	return promhttp.InstrumentHandlerDuration(duration,
 		promhttp.InstrumentHandlerCounter(HttpRequestTotal, next))
 }
