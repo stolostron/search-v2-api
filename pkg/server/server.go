@@ -58,16 +58,15 @@ func StartAndListen() {
 
 	// Add authentication middleware to the /searchapi (ContextPath) subroute.
 	apiSubrouter := router.PathPrefix(config.Cfg.ContextPath).Subrouter()
-
+	apiSubrouter.Use(metric.ExposeMetrics)
 	apiSubrouter.Use(rbac.AuthenticateUser)
 	apiSubrouter.Use(rbac.AuthorizeUser)
 
 	apiSubrouter.Handle("/graphql", graphqlHandler.NewDefaultServer(generated.NewExecutableSchema(
 		generated.Config{Resolvers: &graph.Resolver{}})))
 
-	http.ListenAndServe(fmt.Sprintf("://localhost:%d%s/graphql`", port, config.Cfg.ContextPath), metric.ExposeMetrics(metric.InitializeMetrics(router)))
+	// http.ListenAndServe(fmt.Sprintf("://localhost:%d%s/graphql`", port, config.Cfg.ContextPath), metric.ExposeMetrics(metric.InitializeMetrics(router)))
 
-	apiSubrouter.Use(metric.ExposeMetrics)
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
 		Handler:           router,

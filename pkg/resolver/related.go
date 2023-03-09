@@ -9,9 +9,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stolostron/search-v2-api/pkg/config"
-	"github.com/stolostron/search-v2-api/pkg/metric"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	klog "k8s.io/klog/v2"
 )
@@ -66,11 +64,11 @@ func (s *SearchResult) buildRelationsQuery() {
 	-- select uid as uid, data->>'kind' as kind, 1 AS "level" FROM search.resources where cluster IN ('local-cluster')
 	*/
 	//create metric and set labels
-	HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "build_related_query"})
+	// HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "build_related_query"})
 
-	//create timer and return observed duration
-	timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
-	defer timer.ObserveDuration()
+	// //create timer and return observed duration
+	// timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
+	// defer timer.ObserveDuration()
 	s.setDepth()
 	whereDs := []exp.Expression{
 		goqu.C("level").Lte(s.level), // Add filter to select up to level (default 3) relationships

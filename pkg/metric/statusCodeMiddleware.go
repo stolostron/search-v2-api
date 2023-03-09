@@ -2,8 +2,6 @@ package metric
 
 import (
 	"net/http"
-
-	klog "k8s.io/klog/v2"
 )
 
 type responseRecorder struct {
@@ -11,8 +9,8 @@ type responseRecorder struct {
 	statusCode int
 }
 
-func NewResponseRecorder(w http.ResponseWriter, r *http.Request) *responseRecorder {
-	return &responseRecorder{w, r.Response.StatusCode}
+func NewResponseRecorder(w http.ResponseWriter) *responseRecorder {
+	return &responseRecorder{w, 0}
 }
 
 func (rr *responseRecorder) WriteHeader(status int) {
@@ -20,14 +18,14 @@ func (rr *responseRecorder) WriteHeader(status int) {
 	rr.ResponseWriter.WriteHeader(status)
 }
 
-func InitializeMetrics(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// func InitializeMetrics(next http.Handler) http.Handler {
+// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		rr := NewResponseRecorder(w, r)
-		next.ServeHTTP(rr, r)
+// 		rr := NewResponseRecorder(w)
+// 		next.ServeHTTP(rr, r)
 
-		statusCode := rr.statusCode
-		klog.Info("%d %s", statusCode, http.StatusText(statusCode))
+// 		statusCode := rr.statusCode
+// 		klog.Info("%d %s", statusCode, http.StatusText(statusCode))
 
-	})
-}
+// 	})
+// }

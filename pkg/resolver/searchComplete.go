@@ -11,7 +11,6 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
@@ -35,12 +34,12 @@ var arrayProperties = make(map[string]struct{})
 
 func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, error) {
 
-	//create metric and set labels
-	HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "auto_complete_query"})
+	// //create metric and set labels
+	// HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "auto_complete_query"})
 
-	//create timer and return observed duration
-	timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
-	defer timer.ObserveDuration()
+	// //create timer and return observed duration
+	// timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
+	// defer timer.ObserveDuration()
 	s.searchCompleteQuery(ctx)
 
 	res, autoCompleteErr := s.searchCompleteResults(ctx)

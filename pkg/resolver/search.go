@@ -98,18 +98,18 @@ func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
 	}
 	var start time.Time
 	var numUIDs int
-	var timer *prometheus.Timer
+	// var timer *prometheus.Timer
 	s.wg.Wait()
 	var r []SearchRelatedResult
 
 	if len(s.uids) > 0 {
 		start = time.Now()
 		//create metric and set labels
-		HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "related_query"})
+		// HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "related_query"})
 
-		//create timer and return observed duration
-		timer = prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
-		defer timer.ObserveDuration()
+		// //create timer and return observed duration
+		// timer = prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
+		// defer timer.ObserveDuration()
 
 		numUIDs = len(s.uids)
 		r = s.getRelationResolvers(ctx)
@@ -160,12 +160,12 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	var sql string
 	var err error
 
-	//create metric and set labels
-	HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "build_search_query"})
+	// //create metric and set labels
+	// HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "build_search_query"})
 
-	//create timer and return observed duration
-	timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
-	defer timer.ObserveDuration()
+	// //create timer and return observed duration
+	// timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
+	// defer timer.ObserveDuration()
 
 	// define schema table:
 	schemaTable := goqu.S("search").Table("resources")
@@ -199,12 +199,12 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		_, userInfo := rbac.GetCache().GetUserUID(ctx)
 		// RBAC CLAUSE
 		if s.userData != nil {
-			//create metric and set labels
-			HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "build_rbac_query"})
+			// //create metric and set labels
+			// HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "build_rbac_query"})
 
-			//create timer and return observed duration
-			timer = prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
-			defer timer.ObserveDuration()
+			// //create timer and return observed duration
+			// timer = prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
+			// defer timer.ObserveDuration()
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
 			if len(whereDs) == 0 {
@@ -253,12 +253,12 @@ func (s *SearchResult) checkErrorBuildingQuery(err error, logMessage string) {
 
 func (s *SearchResult) resolveCount() int {
 	rows := s.pool.QueryRow(context.TODO(), s.query, s.params...)
-	//create metric and set labels
-	HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "count_query"})
+	// //create metric and set labels
+	// HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "count_query"})
 
-	//create timer and return observed duration
-	timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
-	defer timer.ObserveDuration()
+	// //create timer and return observed duration
+	// timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
+	// defer timer.ObserveDuration()
 	var count int
 	err := rows.Scan(&count)
 	if err != nil {
@@ -288,11 +288,15 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	items := []map[string]interface{}{}
 
 	//create metric and set labels
-	HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "items_query"})
-
+	itemsLabel := "itemsDuration"
+	itemsDuration, err := metric.HttpDuration.CurryWith(prometheus.Labels{"query_type": itemsLabel})
+	if err != nil {
+		klog.Errorf("Error currying with http duriation metric with lables: %s", itemsLabel)
+	}
 	//create timer and return observed duration
-	timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
-	defer timer.ObserveDuration()
+
+	// timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
+	// defer timer.ObserveDuration()
 
 	klog.V(5).Infof("Query issued by resolver [%s] ", s.query)
 	rows, err := s.pool.Query(s.context, s.query, s.params...)

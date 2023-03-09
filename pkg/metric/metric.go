@@ -12,7 +12,7 @@ var (
 	HttpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "search_http_duration_seconds",
 		Help: "Latency of single HTTP request",
-	}, []string{"status_code", "action"})
+	}, []string{"code", "query_type"})
 )
 
 // http := prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -33,7 +33,7 @@ var (
 	HttpRequestTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "search_http_total",
 		Help: "Total number HTTP requests.",
-	}, []string{"path", "method"})
+	}, []string{"code", "query_type"})
 )
 
 //we can use curry with for these two below to slice HttpDuration metric by label authen/author

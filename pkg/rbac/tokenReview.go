@@ -6,9 +6,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stolostron/search-v2-api/pkg/config"
-	"github.com/stolostron/search-v2-api/pkg/metric"
 	authv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/client-go/kubernetes/typed/authentication/v1"
@@ -42,11 +40,11 @@ func (c *Cache) GetTokenReview(ctx context.Context, token string) (*authv1.Token
 	if !tokenExists {
 		//create observation for cache being created with label authentication
 		//create metric and set labels
-		HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "create_token_review"})
+		// HttpDurationByQuery := metric.HttpDurationByLabels(prometheus.Labels{"action": "create_token_review"})
 
-		//create timer and return observed duration
-		timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
-		defer timer.ObserveDuration()
+		// //create timer and return observed duration
+		// timer := prometheus.NewTimer(HttpDurationByQuery.WithLabelValues("200")) //change labels
+		// defer timer.ObserveDuration()
 
 		cachedTR = &tokenReviewCache{
 			authClient: c.getAuthClient(),
