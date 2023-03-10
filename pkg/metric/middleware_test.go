@@ -8,7 +8,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gotest.tools/assert"
 )
 
@@ -25,20 +24,11 @@ func TestDurationCode(t *testing.T) {
 			Name: "http_request_duration_seconds_test",
 			Help: "Duration of my request in seconds.",
 		},
-		[]string{"code", "query_type"},
+		[]string{"code"},
 	)
 	registry.MustRegister(durationHistogram)
 
-	//add mock label
-	duration, _ := durationHistogram.CurryWith(prometheus.Labels{"query_type": "mock_query"})
-
-	// mock instrumentHandlerDuration with mock observervec
-	instrumentedHandler := promhttp.InstrumentHandlerDuration(
-		duration,
-		httpHandler,
-	)
-
-	promMiddle := PrometheusMiddleware(instrumentedHandler)
+	promMiddle := PrometheusMiddleware(httpHandler)
 
 	//create a mock resquest to pass to handler:
 	r, err := http.NewRequest("GET", "https://localhost:4010/searchapi/graphql", nil)
@@ -67,11 +57,6 @@ func TestDurationCode(t *testing.T) {
 			if *v.Name == "code" {
 				val := *v.Value
 				assert.Equal(t, strconv.Itoa(resp.Code), val)
-			}
-			//assert label query_type is mock_query
-			if *v.Name == "query_type" {
-				val := *v.Value
-				assert.Equal(t, "mock_query", val)
 			}
 
 		}

@@ -10,13 +10,6 @@ var (
 	HttpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "search_http_duration_seconds",
 		Help: "Latency of of HTTP requests in seconds.",
-	}, []string{"code", "query_type"})
-)
-
-var (
-	HttpRequestTotal = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "search_http_total",
-		Help: "Total number HTTP requests.",
 	}, []string{"code"})
 )
 
@@ -31,5 +24,5 @@ var (
 	DBQueryDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "search_dbquery_duration_seconds",
 		Help: "Latency of DB requests in seconds.",
-	}, []string{"query"})
+	}, []string{"query_name"})
 )
