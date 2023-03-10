@@ -90,4 +90,43 @@ spec:
       - name: multiclusterhub-operator-pull-secret
 ```
 
+
+
+Metrics
+==================
+
+Search-v2-api also monitors and exports various metrics to Prometheus. Below are the metrics currently exported from search-v2-api.
+
+**Histograms**:
+
+* `search_http_duration_seconds` - Latency of of HTTP requests in seconds.
+  * Labels:
+    * **code**: Status code generated from request
+    * TODO: **query_type**: Type of query requested 
+
+* `search_dbquery_duration_seconds` - Latency of DB requests in seconds.
+  * Labels:
+    * TODO: **query_name**: Name of database query
+
+Example: The following metric will record all search queries created in under or equal to 0.1 seconds
+```
+http_request_duration_seconds_bucket{
+    query_type="searchComplete",
+    code="200",
+    le="0.1"
+}
+```
+**Counters**:
+
+* `search_db_connection_failed_total` - The total number of DB connection that has failed
+  * Labels:
+    * TODO:**route**: Route associated with DB connection failure.
+
+
+To view these metrics, with the search api pod and database running, run the following command:
+
+`curl https://localhost:4010/metrics -k | grep search_`
+
+
+
 Rebuild Date: 2022-08-16
