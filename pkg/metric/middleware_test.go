@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
-	// "github.com/prometheus/client_golang/prometheus/promauto"
 	"gotest.tools/assert"
 )
 
@@ -16,9 +15,9 @@ func Test_DurationCode(t *testing.T) {
 
 	// mock http handler
 	httpHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
-	// create a mock resquest to pass to handler
+	// Create a mock resquest to pass to handler.
 	r := httptest.NewRequest("POST", "https://localhost:4010/searchapi/graphql", nil)
-	// create response recorder so we can get status code and serve mock request
+	// Create response recorder so we can get status code and serve mock request.
 	resp := httptest.NewRecorder()
 
 	// Execute middleware function.
@@ -26,10 +25,10 @@ func Test_DurationCode(t *testing.T) {
 	promMiddle.ServeHTTP(resp, r)
 
 	// Validate result.
-	// use the prometheus registry to confirm metrics have been scraped:
+	// use the prometheus registry to confirm metrics have been scraped.
 	metricFamilies, _ := registry.Gather()
 	for _, mf := range metricFamilies {
-		//assert our metric got collected:
+		// assert our metric got collected:
 		assert.Equal(t, mf.GetName(), "http_request_duration_seconds_test")
 
 		for _, v := range mf.Metric[0].GetLabel() {
@@ -45,5 +44,4 @@ func Test_DurationCode(t *testing.T) {
 			assert.Equal(t, uint64(1), m.GetHistogram().GetSampleCount())
 		}
 	}
-
 }
