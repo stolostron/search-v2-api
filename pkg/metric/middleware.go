@@ -12,6 +12,8 @@ func PrometheusMiddleware(next http.Handler) http.Handler {
 
 	queryType := "searchWithRelationship" // TODO: Need to extract this from the request.
 	duration, _ := HttpDuration.CurryWith(prometheus.Labels{"query_type": queryType})
+	// InstrumentHandlerDuration is a middleware that wraps the provided http.Handler to observe the
+	// request duration with the provided ObserverVec.
 	return promhttp.InstrumentHandlerDuration(duration,
 		promhttp.InstrumentHandlerCounter(HttpRequestTotal, next))
 }

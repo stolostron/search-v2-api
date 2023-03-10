@@ -21,32 +21,12 @@ var (
 )
 
 var (
-	AuthnFailed = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "search_authn_failed_total",
-		Help: "The total number of authentication requests that has failed",
-	}, []string{"reason"})
-)
-
-var (
-	AuthzFailed = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "search_authz_failed_total",
-		Help: "The total number of authorization requests that has failed",
-	}, []string{"reason"})
-)
-
-var (
 	DBConnectionFailed = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "search_db_connection_failed_total",
 		Help: "The total number of DB connection that has failed",
 	}, []string{"route"})
 )
 
-var (
-	DBConnectionSuccess = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "search_db_connection_success_total",
-		Help: "The total number of DB connection that has succeeded",
-	}, []string{"route"})
-)
 var (
 	DBQueryDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "search_dbquery_duration_seconds",
