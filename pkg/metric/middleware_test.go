@@ -38,6 +38,8 @@ func TestDurationCode(t *testing.T) {
 		httpHandler,
 	)
 
+	promMiddle := PrometheusMiddleware(instrumentedHandler)
+
 	//create a mock resquest to pass to handler:
 	r, err := http.NewRequest("GET", "https://localhost:4010/searchapi/graphql", nil)
 	if err != nil {
@@ -46,7 +48,7 @@ func TestDurationCode(t *testing.T) {
 	}
 	// create response recorder so we can get status code and serve mock request
 	resp := httptest.NewRecorder()
-	instrumentedHandler.ServeHTTP(resp, r)
+	promMiddle.ServeHTTP(resp, r)
 
 	// use the prometheus registry to confirm metrics have been scraped:
 	metricFamilies, _ := registry.Gather()
