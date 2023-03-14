@@ -65,7 +65,6 @@ func initializePool(ctx context.Context) {
 func GetConnPool(ctx context.Context) *pgxpool.Pool {
 	if pool == nil {
 		initializePool(ctx)
-		metric.DBConnectionSuccess.WithLabelValues("DBConnect").Inc()
 	}
 
 	if pool != nil {
@@ -79,7 +78,6 @@ func GetConnPool(ctx context.Context) *pgxpool.Pool {
 			metric.DBConnectionFailed.WithLabelValues("DBPing").Inc()
 			return nil
 		}
-		metric.DBConnectionSuccess.WithLabelValues("DBPing").Inc()
 		timeLastPing = time.Now()
 		klog.Info("Successfully connected to database!")
 	}
