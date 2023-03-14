@@ -118,7 +118,7 @@ search_api_requests_bucket{
 ```
 **Counters**:
 
-* `search_db_connection_failed_total` - The total number of DB connection that has failed
+* `search_api_db_connection_failed_total` - The total number of DB connection that has failed
   * Labels:
     * TODO:**route**: Route associated with DB connection failure.
 
