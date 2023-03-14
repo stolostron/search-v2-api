@@ -9,6 +9,16 @@ help:
 setup: ## Generate ssl certificate for development.
 	cd sslcert; openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout tls.key -out tls.crt -config req.conf -extensions 'v3_req'
 
+setup-dev: ## Configure local environment to use the postgres instance on the dev cluster.
+	@echo "Using current target cluster.\\n"
+	@echo "$(shell oc cluster-info)"
+	@echo "\\n1. [MANUAL STEP] Set these environment variables.\\n"
+	export DB_NAME=$(shell oc get secret search-postgres -n open-cluster-management -o jsonpath='{.data.database-name}'|base64 -D)
+	export DB_USER=$(shell oc get secret search-postgres -n open-cluster-management -o jsonpath='{.data.database-user}'|base64 -D)
+	export DB_PASS=$(shell oc get secret search-postgres -n open-cluster-management -o jsonpath='{.data.database-password}'|base64 -D)
+	@echo "\\n2. [MANUAL STEP] Start port forwarding.\\n"
+	@echo "oc port-forward service/search-postgres -n open-cluster-management 5432:5432 \\n"
+
 gqlgen: ## Generate graphql model. See: https://gqlgen.com/
 	go run github.com/99designs/gqlgen generate
 

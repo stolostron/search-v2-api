@@ -36,7 +36,7 @@ func StartAndListen() {
 	router := mux.NewRouter()
 	router.HandleFunc("/liveness", livenessProbe).Methods("GET")
 	router.HandleFunc("/readiness", readinessProbe).Methods("GET")
-	router.Path("/metrics").Handler(promhttp.Handler())
+	router.Handle("/metrics", promhttp.HandlerFor(metric.GetPromRegistry(), promhttp.HandlerOpts{}))
 
 	if config.Cfg.PlaygroundMode {
 		router.Handle("/playground",
