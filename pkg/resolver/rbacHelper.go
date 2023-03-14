@@ -146,7 +146,7 @@ func consolidateNsResources(nsResources map[string][]rbac.Resource) (map[string]
 		}
 	}
 
-	klog.V(2).Info("Before consolidation, ", len(nsResources), " namespaces of ", len(nsResources["default"]), " resources each present")
+	klog.V(2).Info("Before consolidation, there is/are ", len(nsResources), " namespace/s present")
 	klog.V(2).Info("** After consolidation, there is/are ", len(m), " namespace group/s  present")
 	return m, getKeys(m), nil
 }
