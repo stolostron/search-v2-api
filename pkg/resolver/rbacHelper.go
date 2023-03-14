@@ -2,6 +2,8 @@
 package resolver
 
 import (
+	"encoding/json"
+
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/lib/pq"
@@ -92,39 +94,61 @@ func matchNamespacedResources(nsResources map[string][]rbac.Resource, userInfo v
 
 	} else {
 		count := 0
-		consolidateNsList := consolidateNsResources(nsResources)
+		var unMarshalErr error
+		consolidateNsList, keys, jsonMarshalErr := consolidateNsResources(nsResources)
 		whereNsDs = make([]exp.Expression, len(consolidateNsList))
+		if jsonMarshalErr == nil {
+			klog.V(2).Info("Using consolidated namespace list")
 
-		for resources, namespace := range consolidateNsList {
-			klog.Info("len namespace: ", len(namespace), "count:", count, "len(resources:)", len(*resources))
-			whereNsDs[count] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
-				goqu.Literal("?|"), pq.Array(namespace)),
-				matchApigroupKind(*resources))
-			count++
+			for _, resources := range keys {
+				namespaces := consolidateNsList[resources]
+				resList := []rbac.Resource{}
+				unMarshalErr = json.Unmarshal([]byte(resources), &resList)
+				if unMarshalErr == nil {
+					whereNsDs[count] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
+						goqu.Literal("?|"), pq.Array(namespaces)),
+						matchApigroupKind(resList))
+					count++
+				} else {
+					break // use non-consolidated namespace list
+				}
+			}
 		}
-		// for nsCount, namespace := range namespaces {
-		// 	whereNsDs[nsCount] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
-		// 		goqu.Literal("?"), namespace),
-		// 		matchApigroupKind(nsResources[namespace]))
-		// }
+
+		if jsonMarshalErr != nil || unMarshalErr != nil {
+			klog.V(2).Info("Using non-consolidated namespace list")
+			whereNsDs = make([]exp.Expression, len(nsResources))
+			for nsCount, namespace := range namespaces {
+				whereNsDs[nsCount] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
+					goqu.Literal("?"), namespace),
+					matchApigroupKind(nsResources[namespace]))
+			}
+		}
+
 		return goqu.Or(whereNsDs...)
 	}
 }
 
-func consolidateNsResources(nsResources map[string][]rbac.Resource) map[*[]rbac.Resource][]string {
-	m := map[*[]rbac.Resource][]string{}
+func consolidateNsResources(nsResources map[string][]rbac.Resource) (map[string][]string, []string, error) {
+	m := map[string][]string{}
 
-	for key, val := range nsResources {
-		if list, found := m[&val]; found {
-			list = append(list, key)
-			m[&val] = list
+	for ns, resources := range nsResources {
+		b, err := json.Marshal(resources)
+		if err == nil {
+			if _, found := m[string(b)]; found {
+				m[string(b)] = append(m[string(b)], ns)
+			} else {
+				m[string(b)] = []string{ns}
+			}
 		} else {
-			m[&val] = list
+			klog.Info("Error marshaling resources:", err)
+			return nil, nil, err
 		}
 	}
-	klog.Info("Before consolidation, ", len(nsResources), " namespaces of ", len(nsResources["default"]), " resources each present")
-	klog.Info("** After consolidation, there are ", len(m), " groups of namespaces present")
-	return m
+
+	klog.V(2).Info("Before consolidation, ", len(nsResources), " namespaces of ", len(nsResources["default"]), " resources each present")
+	klog.V(2).Info("** After consolidation, there is/are ", len(m), " namespace group/s  present")
+	return m, getKeys(m), nil
 }
 
 // Match cluster scoped and namespace scoped resources from the hub.

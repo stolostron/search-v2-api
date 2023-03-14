@@ -27,7 +27,7 @@ func initMockCache() Cache {
 			dynamicClient:    fakedynclient.NewSimpleDynamicClient(testScheme, mockns),
 		},
 		users: map[string]*UserDataCache{
-			"usr1": &UserDataCache{UserData: UserData{NsResources: map[string][]Resource{}}},
+			"usr1": {UserData: UserData{NsResources: map[string][]Resource{}}},
 		},
 	}
 }

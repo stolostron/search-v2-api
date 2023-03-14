@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -341,6 +342,18 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 			}
 		}
 	}
+	//Sort the user's namespace resources so that it is easier to consolidate them
+	sort.Slice(user.NsResources[ns][:], func(i, j int) bool {
+		resAKind := user.NsResources[ns][i].Kind
+		resBKind := user.NsResources[ns][j].Kind
+		resAApiGrp := user.NsResources[ns][i].Apigroup
+		resBApiGrp := user.NsResources[ns][j].Apigroup
+		if resAKind != resBKind {
+			return resAKind < resBKind
+		} else {
+			return resAApiGrp < resBApiGrp
+		}
+	})
 }
 
 // Equivalent to: oc auth can-i --list -n <iterate-each-namespace>
