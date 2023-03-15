@@ -93,14 +93,14 @@ func matchNamespacedResources(nsResources map[string][]rbac.Resource, userInfo v
 		return goqu.Or() // return empty clause
 
 	} else {
-		count := 0
 		var unMarshalErr error
+
+		//consolidate namespace resources
 		consolidateNsList, keys, jsonMarshalErr := consolidateNsResources(nsResources)
 		whereNsDs = make([]exp.Expression, len(consolidateNsList))
 		if jsonMarshalErr == nil {
 			klog.V(2).Info("Using consolidated namespace list")
-
-			for _, resources := range keys {
+			for count, resources := range keys {
 				namespaces := consolidateNsList[resources]
 				resList := []rbac.Resource{}
 				unMarshalErr = json.Unmarshal([]byte(resources), &resList)
@@ -108,13 +108,12 @@ func matchNamespacedResources(nsResources map[string][]rbac.Resource, userInfo v
 					whereNsDs[count] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
 						goqu.Literal("?|"), pq.Array(namespaces)),
 						matchApigroupKind(resList))
-					count++
 				} else {
 					break // use non-consolidated namespace list
 				}
 			}
 		}
-
+		// if consolidating namespaces, doesn't work, proceed as usual without consolidation
 		if jsonMarshalErr != nil || unMarshalErr != nil {
 			klog.V(2).Info("Using non-consolidated namespace list")
 			whereNsDs = make([]exp.Expression, len(nsResources))
@@ -129,6 +128,10 @@ func matchNamespacedResources(nsResources map[string][]rbac.Resource, userInfo v
 	}
 }
 
+// Consolidate namespace resources by resource groups as key and namespaces as values
+// Returns map with resource groups
+// array with keys of the map - to preserve order for testing
+// error if any, while marshaling the resource groups
 func consolidateNsResources(nsResources map[string][]rbac.Resource) (map[string][]string, []string, error) {
 	m := map[string][]string{}
 
@@ -146,8 +149,7 @@ func consolidateNsResources(nsResources map[string][]rbac.Resource) (map[string]
 		}
 	}
 
-	klog.V(2).Info("Before consolidation, there is/are ", len(nsResources), " namespace/s present")
-	klog.V(2).Info("** After consolidation, there is/are ", len(m), " namespace group/s  present")
+	klog.V(4).Infof("RBAC consolidation reduced from %d namespaces/s to %d namespace group/s.", len(nsResources), len(m))
 	return m, getKeys(m), nil
 }
 
