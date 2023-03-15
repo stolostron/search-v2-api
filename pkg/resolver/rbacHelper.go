@@ -2,6 +2,8 @@
 package resolver
 
 import (
+	"encoding/json"
+
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/lib/pq"
@@ -91,15 +93,64 @@ func matchNamespacedResources(nsResources map[string][]rbac.Resource, userInfo v
 		return goqu.Or() // return empty clause
 
 	} else {
-		whereNsDs = make([]exp.Expression, len(nsResources))
-		for nsCount, namespace := range namespaces {
+		var unMarshalErr error
 
-			whereNsDs[nsCount] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
-				goqu.Literal("?"), namespace),
-				matchApigroupKind(nsResources[namespace]))
+		//consolidate namespace resources
+		consolidateNsList, keys, jsonMarshalErr := consolidateNsResources(nsResources)
+		whereNsDs = make([]exp.Expression, len(consolidateNsList))
+		if jsonMarshalErr == nil {
+			klog.V(2).Info("Using consolidated namespace list")
+			for count, resources := range keys {
+				namespaces := consolidateNsList[resources]
+				resList := []rbac.Resource{}
+				unMarshalErr = json.Unmarshal([]byte(resources), &resList)
+				if unMarshalErr == nil {
+					whereNsDs[count] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
+						goqu.Literal("?|"), pq.Array(namespaces)),
+						matchApigroupKind(resList))
+				} else {
+					break // use non-consolidated namespace list
+				}
+			}
 		}
+		// if consolidating namespaces, doesn't work, proceed as usual without consolidation
+		if jsonMarshalErr != nil || unMarshalErr != nil {
+			klog.V(2).Info("Using non-consolidated namespace list")
+			whereNsDs = make([]exp.Expression, len(nsResources))
+			for nsCount, namespace := range namespaces {
+				whereNsDs[nsCount] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
+					goqu.Literal("?"), namespace),
+					matchApigroupKind(nsResources[namespace]))
+			}
+		}
+
 		return goqu.Or(whereNsDs...)
 	}
+}
+
+// Consolidate namespace resources by resource groups as key and namespaces as values
+// Returns map with resource groups
+// array with keys of the map - to preserve order for testing
+// error if any, while marshaling the resource groups
+func consolidateNsResources(nsResources map[string][]rbac.Resource) (map[string][]string, []string, error) {
+	m := map[string][]string{}
+
+	for ns, resources := range nsResources {
+		b, err := json.Marshal(resources)
+		if err == nil {
+			if _, found := m[string(b)]; found {
+				m[string(b)] = append(m[string(b)], ns)
+			} else {
+				m[string(b)] = []string{ns}
+			}
+		} else {
+			klog.Info("Error marshaling resources:", err)
+			return nil, nil, err
+		}
+	}
+
+	klog.V(4).Infof("RBAC consolidation reduced from %d namespaces/s to %d namespace group/s.", len(nsResources), len(m))
+	return m, getKeys(m), nil
 }
 
 // Match cluster scoped and namespace scoped resources from the hub.

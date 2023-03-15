@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -19,7 +20,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const impersonationConfigCreationerror = "Error creating clientset with impersonation config"
+const impersonationConfigCreationerror = "error creating clientset with impersonation config"
 
 // Contains data about the resources the user is allowed to access.
 type UserDataCache struct {
@@ -290,7 +291,8 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 
 	lock.Lock()
 	defer lock.Unlock()
-
+	// Keep track of processed resources (apigroup + kind). Used to remove duplicates.
+	trackResources := map[Resource]struct{}{}
 	// Process the SSRR result and add to this UserDataCache object.
 	for _, rules := range result.Status.ResourceRules {
 		for _, verb := range rules.Verbs {
@@ -313,10 +315,15 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 								user.updateUserManagedClusterList(cache, ns)
 								return
 							}
-							user.NsResources[ns] = append(user.NsResources[ns],
-								Resource{Apigroup: api, Kind: res})
+							currRes := Resource{Apigroup: api, Kind: res}
+							//to avoid duplicates, check before appending to nsResources
+							if _, found := trackResources[currRes]; !found {
+								user.NsResources[ns] = append(user.NsResources[ns], currRes)
+								trackResources[currRes] = struct{}{}
+							}
+
 						} else if cache.shared.isClusterScoped(res, api) {
-							klog.V(5).Info("Got clusterscoped resource", api, "/",
+							klog.V(6).Info("Got clusterscoped resource ", api, "/",
 								res, " from SelfSubjectRulesReviews. Excluding it from ns scoped resoures.")
 						} else if len(rules.ResourceNames) > 0 && rules.ResourceNames[0] != "*" {
 							klog.V(5).Info("Got whitelist in resourcenames. Excluding resource", api, "/", res,
@@ -336,6 +343,18 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 			}
 		}
 	}
+	//Sort the user's namespace resources so that it is easier to consolidate them
+	sort.Slice(user.NsResources[ns][:], func(i, j int) bool {
+		resAKind := user.NsResources[ns][i].Kind
+		resBKind := user.NsResources[ns][j].Kind
+		resAApiGrp := user.NsResources[ns][i].Apigroup
+		resBApiGrp := user.NsResources[ns][j].Apigroup
+		if resAKind != resBKind {
+			return resAKind < resBKind
+		} else {
+			return resAApiGrp < resBApiGrp
+		}
+	})
 }
 
 // Equivalent to: oc auth can-i --list -n <iterate-each-namespace>
@@ -383,18 +402,6 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	user.clustersCache.updatedAt = time.Now()
 
 	return user, user.nsrCache.err
-}
-
-// SSRR has resources that are clusterscoped too
-func (shared *SharedData) isClusterScoped(kindPlural, apigroup string) bool {
-	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
-	shared.csrCache.lock.Lock()
-	defer shared.csrCache.lock.Unlock()
-	_, ok := shared.csResourcesMap[Resource{Apigroup: apigroup, Kind: kindPlural}]
-	if ok {
-		klog.V(9).Info("resource is ClusterScoped ", kindPlural, " ", apigroup, ": ", ok)
-	}
-	return ok
 }
 
 func setImpersonationUserInfo(userInfo authv1.UserInfo) *rest.ImpersonationConfig {
