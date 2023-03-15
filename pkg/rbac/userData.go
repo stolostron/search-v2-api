@@ -20,7 +20,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const impersonationConfigCreationerror = "Error creating clientset with impersonation config"
+const impersonationConfigCreationerror = "error creating clientset with impersonation config"
 
 // Contains data about the resources the user is allowed to access.
 type UserDataCache struct {
@@ -402,39 +402,6 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	user.clustersCache.updatedAt = time.Now()
 
 	return user, user.nsrCache.err
-}
-
-// SSRR has resources that are clusterscoped too
-func (shared *SharedData) isClusterScoped(kindPlural, apigroup string) bool {
-	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
-	shared.csrCache.lock.Lock()
-	defer shared.csrCache.lock.Unlock()
-	var ok bool
-	resource := Resource{Apigroup: apigroup, Kind: kindPlural}
-	_, ok = shared.csResourcesMap[resource]
-	if ok {
-		klog.V(9).Info("resource is ClusterScoped ", kindPlural, " ", apigroup, ": ", ok)
-	} else {
-		// check if it is a cluster-scoped resource in this list
-		openshiftClusterScopedRes := map[Resource]struct{}{
-			{Apigroup: "authorization.openshift.io", Kind: "clusterroles"}:      {},
-			{Apigroup: "", Kind: "clusterroles"}:                                {},
-			{Apigroup: "console.openshift.io", Kind: "consoleexternalloglinks"}: {},
-			{Apigroup: "console.openshift.io", Kind: "consolelinks"}:            {},
-			{Apigroup: "console.openshift.io", Kind: "consolenotifications"}:    {},
-			{Apigroup: "console.openshift.io", Kind: "consoleyamlsamples"}:      {},
-			{Apigroup: "project.openshift.io", Kind: "projects"}:                {},
-			{Apigroup: "", Kind: "projects"}:                                    {},
-			{Apigroup: "project.openshift.io", Kind: "projectrequests"}:         {},
-			{Apigroup: "", Kind: "projectrequests"}:                             {},
-			{Apigroup: "oauth.openshift.io", Kind: "useroauthaccesstokens"}:     {},
-		}
-		if _, ok = openshiftClusterScopedRes[resource]; ok {
-			klog.V(9).Info("resource is openshiftClusterScoped ", kindPlural, " ", apigroup, ": ", ok)
-
-		}
-	}
-	return ok
 }
 
 func setImpersonationUserInfo(userInfo authv1.UserInfo) *rest.ImpersonationConfig {
