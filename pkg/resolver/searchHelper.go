@@ -55,31 +55,40 @@ func getOperator(values []string) map[string][]string {
 
 func getWhereClauseExpression(prop, operator string, values []string) []exp.Expression {
 	exps := []exp.Expression{}
+	var lhsExp interface{}
+
+	// check if the property is cluster
+	if prop == "cluster" {
+		lhsExp = goqu.C(prop)
+	} else {
+		lhsExp = goqu.L(`"data"->>?`, prop)
+	}
 
 	switch operator {
 	case "<=":
 		for _, val := range values {
-			exps = append(exps, goqu.L(`"data"->>?`, prop).Lte(val))
+			exps = append(exps, goqu.L(`?`, lhsExp).Lte(val))
 		}
 	case ">=":
 		for _, val := range values {
-			exps = append(exps, goqu.L(`"data"->>?`, prop).Gte(val))
+			exps = append(exps, goqu.L(`?`, lhsExp).Gte(val))
 		}
 	case "!=":
-		exps = append(exps, goqu.L(`"data"->>?`, prop).Neq(values))
+		exps = append(exps, goqu.L(`?`, lhsExp).Neq(values))
 
 	case "!":
-		exps = append(exps, goqu.L(`"data"->>?`, prop).NotIn(values))
+		exps = append(exps, goqu.L(`?`, lhsExp).NotIn(values))
+
 	case "<":
 		for _, val := range values {
-			exps = append(exps, goqu.L(`"data"->>?`, prop).Lt(val))
+			exps = append(exps, goqu.L(`?`, lhsExp).Lt(val))
 		}
 	case ">":
 		for _, val := range values {
-			exps = append(exps, goqu.L(`"data"->>?`, prop).Gt(val))
+			exps = append(exps, goqu.L(`?`, lhsExp).Gt(val))
 		}
 	case "=":
-		exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
+		exps = append(exps, goqu.L(`?`, lhsExp).In(values))
 
 	case "@>":
 		for _, val := range values {
@@ -254,8 +263,7 @@ func pointerToStringArray(pointerArray []*string) []string {
 	return values
 }
 
-func decodePropertyTypes(values []string, dataTypeFromMap string) ([]string, string) {
-	dataType := dataTypeFromMap
+func decodePropertyTypes(values []string, dataType string) []string {
 	cleanedVal := make([]string, len(values))
 
 	for i, val := range values {
@@ -264,14 +272,13 @@ func decodePropertyTypes(values []string, dataTypeFromMap string) ([]string, str
 			cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
 		} else if dataType == "array" {
 			cleanedVal[i] = fmt.Sprintf(`["%s"]`, val)
-
 		} else {
 			cleanedVal[i] = val
 		}
 
 		values = cleanedVal
 	}
-	return values, dataType
+	return values
 
 }
 
