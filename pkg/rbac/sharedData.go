@@ -442,3 +442,36 @@ func (shared *SharedData) findSrchAddonDisabledClusters(ctx context.Context) (*m
 	}
 	return &disabledClusters, err
 }
+
+// SSRR has resources that are clusterscoped too - check if a resource is clusterscoped
+func (shared *SharedData) isClusterScoped(kindPlural, apigroup string) bool {
+	// lock to prevent checking more than one at a time
+	shared.csrCache.lock.Lock()
+	defer shared.csrCache.lock.Unlock()
+	var ok bool
+	resource := Resource{Apigroup: apigroup, Kind: kindPlural}
+	_, ok = shared.csResourcesMap[resource]
+	if ok {
+		klog.V(9).Infof("resource is ClusterScoped %+v", resource)
+	} else {
+		consoleApiGrp := "console.openshift.io"
+		// check if it is a cluster-scoped resource in this list
+		openshiftClusterScopedRes := map[Resource]struct{}{
+			{Apigroup: "authorization.openshift.io", Kind: "clusterroles"}:  {},
+			{Apigroup: "", Kind: "clusterroles"}:                            {},
+			{Apigroup: consoleApiGrp, Kind: "consoleexternalloglinks"}:      {},
+			{Apigroup: consoleApiGrp, Kind: "consolelinks"}:                 {},
+			{Apigroup: consoleApiGrp, Kind: "consolenotifications"}:         {},
+			{Apigroup: consoleApiGrp, Kind: "consoleyamlsamples"}:           {},
+			{Apigroup: "project.openshift.io", Kind: "projects"}:            {},
+			{Apigroup: "", Kind: "projects"}:                                {},
+			{Apigroup: "project.openshift.io", Kind: "projectrequests"}:     {},
+			{Apigroup: "", Kind: "projectrequests"}:                         {},
+			{Apigroup: "oauth.openshift.io", Kind: "useroauthaccesstokens"}: {},
+		}
+		if _, ok = openshiftClusterScopedRes[resource]; ok {
+			klog.V(9).Infof("resource is openshiftClusterScoped %+v", resource)
+		}
+	}
+	return ok
+}
