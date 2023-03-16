@@ -99,7 +99,7 @@ Search-v2-api also monitors and exports various metrics to Prometheus. Below are
 
 **Histograms**:
 
-* `search_http_duration_seconds` - Latency of of HTTP requests in seconds.
+* `search_api_requests` - Histogram of HTTP requests duration (seconds).
   * Labels:
     * **code**: Status code generated from request
     * TODO: **query_type**: Type of query requested 
@@ -110,7 +110,7 @@ Search-v2-api also monitors and exports various metrics to Prometheus. Below are
 
 Example: The following metric will record all search queries created in under or equal to 0.1 seconds
 ```
-http_request_duration_seconds_bucket{
+search_api_requests_bucket{
     query_type="searchComplete",
     code="200",
     le="0.1"
@@ -118,7 +118,7 @@ http_request_duration_seconds_bucket{
 ```
 **Counters**:
 
-* `search_db_connection_failed_total` - The total number of DB connection that has failed
+* `search_api_db_connection_failed_total` - The total number of DB connection that has failed
   * Labels:
     * TODO:**route**: Route associated with DB connection failure.
 
