@@ -74,13 +74,10 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 			exps = append(exps, goqu.L(`?`, lhsExp).Gte(val))
 		}
 	case "!=":
-		klog.Info("!=")
 		exps = append(exps, goqu.L(`?`, lhsExp).Neq(values))
-		klog.Info("!=", exps)
 
 	case "!":
 		exps = append(exps, goqu.L(`?`, lhsExp).NotIn(values))
-		klog.Info("!", exps)
 
 	case "<":
 		for _, val := range values {
