@@ -294,7 +294,6 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 	var opDateValueMap map[string][]string
 
 	var whereDs []exp.Expression
-	var dataTypeFromMap string
 	var err error
 
 	if input.Keywords != nil && len(input.Keywords) > 0 {
@@ -336,9 +335,9 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 				klog.V(5).Infof("For filter prop: %s, datatype is :%s\n", filter.Property, dataType)
 
 				// if property matches then call decode function:
-				values, dataTypeFromMap = decodePropertyTypes(values, dataType)
+				values = decodePropertyTypes(values, dataType)
 				// Check if value is a number or date and get the cleaned up value
-				opDateValueMap = getOperatorAndNumDateFilter(filter.Property, values, dataTypeFromMap)
+				opDateValueMap = getOperatorAndNumDateFilter(filter.Property, values, dataType)
 			} else {
 				klog.Error("Error with property type list is empty.")
 				values = decodePropertyTypesNoPropMap(values, filter)
