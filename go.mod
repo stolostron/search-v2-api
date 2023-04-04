@@ -12,7 +12,6 @@ require (
 	github.com/jackc/pgx/v4 v4.17.0
 	github.com/prometheus/client_golang v1.12.2
 	github.com/vektah/gqlparser/v2 v2.5.1
-	gotest.tools/v3 v3.4.0
 	k8s.io/klog/v2 v2.70.1
 )
 
@@ -28,7 +27,6 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/gnostic v0.6.9 // indirect
-	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
