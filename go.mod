@@ -12,6 +12,7 @@ require (
 	github.com/jackc/pgx/v4 v4.17.0
 	github.com/prometheus/client_golang v1.12.2
 	github.com/vektah/gqlparser/v2 v2.5.1
+	gotest.tools/v3 v3.4.0
 	k8s.io/klog/v2 v2.70.1
 )
 
@@ -83,7 +84,6 @@ require (
 	golang.org/x/text v0.4.0 // indirect
 	golang.org/x/tools v0.1.12 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.24.3
 	k8s.io/apimachinery v0.24.3
 	k8s.io/client-go v0.24.3
