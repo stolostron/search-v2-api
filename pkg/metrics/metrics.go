@@ -1,5 +1,5 @@
 // Copyright Contributors to the Open Cluster Management project
-package metric
+package metrics
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
@@ -9,18 +9,18 @@ import (
 var (
 	PromRegistry = prometheus.NewRegistry()
 
-	HttpRequestsHistogram = promauto.With(PromRegistry).NewHistogramVec(prometheus.HistogramOpts{
-		Name: "search_api_requests",
-		Help: "Histogram of HTTP requests duration (seconds).",
+	RequestDuration = promauto.With(PromRegistry).NewHistogramVec(prometheus.HistogramOpts{
+		Name: "search_api_request_duration",
+		Help: "Time (seconds) the search api took to process the request",
 	}, []string{"code"})
 
 	DBConnectionFailed = promauto.With(PromRegistry).NewCounterVec(prometheus.CounterOpts{
-		Name: "search_api_db_connection_failed_total",
-		Help: "The total number of DB connections that has failed.",
-	}, []string{"route"})
+		Name: "search_api_db_connection_failed",
+		Help: "The number of failed database connection attempts.",
+	}, []string{})
 
 	DBQueryDuration = promauto.With(PromRegistry).NewHistogramVec(prometheus.HistogramOpts{
-		Name: "search_api_dbquery_duration",
-		Help: "Histogram of outbound DB query latency (seconds).",
+		Name: "search_api_db_query_duration",
+		Help: "Latency (seconds) for database queries.",
 	}, []string{"query_name"})
 )

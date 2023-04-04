@@ -9,7 +9,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
-	"github.com/stolostron/search-v2-api/pkg/metric"
+	"github.com/stolostron/search-v2-api/pkg/metrics"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -133,7 +133,7 @@ func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[str
 }
 
 func (shared *SharedData) PopulateSharedCache(ctx context.Context) {
-	defer metric.SlowLog("PopulateSharedCache", 200*time.Millisecond)()
+	defer metrics.SlowLog("PopulateSharedCache", 200*time.Millisecond)()
 	if shared.isValid() { // if all cache is valid we use cache data
 		klog.V(5).Info("Using shared data from cache.")
 		return
@@ -186,7 +186,7 @@ func (shared *SharedData) isValid() bool {
 // Get the list of resources in the database where namespace field is null.
 // Equivalent to: `oc api-resources -o wide | grep false | grep watch | grep list`
 func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
-	defer metric.SlowLog("SharedData::getClusterScopedResources", 100*time.Millisecond)()
+	defer metrics.SlowLog("SharedData::getClusterScopedResources", 100*time.Millisecond)()
 	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
 	shared.csrCache.lock.Lock()
 	defer shared.csrCache.lock.Unlock()
@@ -241,7 +241,7 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 // Obtain all the namespaces in the hub cluster.
 // Equivalent to `oc get namespaces`
 func (shared *SharedData) getNamespaces(ctx context.Context) ([]string, error) {
-	defer metric.SlowLog("getSharedNamespaces", 100*time.Millisecond)()
+	defer metrics.SlowLog("getSharedNamespaces", 100*time.Millisecond)()
 	shared.nsCache.lock.Lock()
 	defer shared.nsCache.lock.Unlock()
 
@@ -278,7 +278,7 @@ func (shared *SharedData) getNamespaces(ctx context.Context) ([]string, error) {
 // Obtain all the managedclusters.
 // Equivalent to `oc get managedclusters`
 func (shared *SharedData) getManagedClusters(ctx context.Context) error {
-	defer metric.SlowLog("getManagedClusters", 100*time.Millisecond)()
+	defer metrics.SlowLog("getManagedClusters", 100*time.Millisecond)()
 
 	shared.mcCache.lock.Lock()
 	defer shared.mcCache.lock.Unlock()

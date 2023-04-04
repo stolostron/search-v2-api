@@ -14,7 +14,7 @@ import (
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
-	"github.com/stolostron/search-v2-api/pkg/metric"
+	"github.com/stolostron/search-v2-api/pkg/metrics"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	klog "k8s.io/klog/v2"
 )
@@ -42,7 +42,7 @@ func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, err
 }
 
 func SearchComplete(ctx context.Context, property string, srchInput *model.SearchInput, limit *int) ([]*string, error) {
-	defer metric.SlowLog("SearchCompleteResolver", 0)()
+	defer metrics.SlowLog("SearchCompleteResolver", 0)()
 	userData, userDataErr := rbac.GetCache().GetUserData(ctx)
 	if userDataErr != nil {
 		return []*string{}, userDataErr
