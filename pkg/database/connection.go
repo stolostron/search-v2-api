@@ -40,7 +40,7 @@ func initializePool(ctx context.Context) {
 	conn, err := pgxpool.ConnectConfig(ctx, config)
 	if err != nil {
 		klog.Errorf("Unable to connect to database: %+v\n", err)
-		metrics.DBConnectionFailed.WithLabelValues("DBConnect").Inc()
+		metrics.DBConnectionFailed.Inc()
 	}
 
 	pool = conn
@@ -59,7 +59,7 @@ func GetConnPool(ctx context.Context) *pgxpool.Pool {
 		err := pool.Ping(ctx)
 		if err != nil {
 			klog.Error("Unable to get a database connection. ", err)
-			metrics.DBConnectionFailed.WithLabelValues("DBPing").Inc()
+			metrics.DBConnectionFailed.Inc()
 			return nil
 		}
 		timeLastPing = time.Now()

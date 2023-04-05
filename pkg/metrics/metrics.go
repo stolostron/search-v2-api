@@ -14,10 +14,10 @@ var (
 		Help: "Time (seconds) the search api took to process the request",
 	}, []string{"code"})
 
-	DBConnectionFailed = promauto.With(PromRegistry).NewCounterVec(prometheus.CounterOpts{
+	DBConnectionFailed = promauto.With(PromRegistry).NewCounter(prometheus.CounterOpts{
 		Name: "search_api_db_connection_failed",
 		Help: "The number of failed database connection attempts.",
-	}, []string{})
+	})
 
 	DBQueryDuration = promauto.With(PromRegistry).NewHistogramVec(prometheus.HistogramOpts{
 		Name: "search_api_db_query_duration",

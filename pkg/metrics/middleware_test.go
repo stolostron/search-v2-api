@@ -21,18 +21,19 @@ func Test_PrometheusInstrumentation(t *testing.T) {
 	// Validate the collected metrics.
 
 	collectedMetrics, _ := PromRegistry.Gather() // use the prometheus registry to confirm metrics have been scraped.
-	assert.Equal(t, 1, len(collectedMetrics))    // Validate total metrics collected.
+	assert.Equal(t, 2, len(collectedMetrics))    // Validate total metrics collected.
 
-	// METRIC 1:  search_api_request_duration
-	assert.Equal(t, "search_api_request_duration", collectedMetrics[0].GetName())
-	assert.Equal(t, 1, len(collectedMetrics[0].Metric[0].GetLabel()))
-	assert.Equal(t, "code", *collectedMetrics[0].Metric[0].GetLabel()[0].Name)
-	assert.Equal(t, "200", *collectedMetrics[0].Metric[0].GetLabel()[0].Value)
-	assert.Equal(t, uint64(1), collectedMetrics[0].Metric[0].GetHistogram().GetSampleCount())
+	// METRIC 1: search_api_db_connection_failed
+	assert.Equal(t, "search_api_db_connection_failed", collectedMetrics[0].GetName())
+	assert.Equal(t, float64(0), collectedMetrics[1].Metric[0].GetCounter().GetValue())
 
-	// METRIC 2: search_api_db_connection_failed
-	// Not generated in this scenario because there's no database connection for unit tests.
+	// METRIC 2:  search_api_request_duration
+	assert.Equal(t, "search_api_request_duration", collectedMetrics[1].GetName())
+	assert.Equal(t, 1, len(collectedMetrics[1].Metric[0].GetLabel()))
+	assert.Equal(t, "code", *collectedMetrics[1].Metric[0].GetLabel()[0].Name)
+	assert.Equal(t, "200", *collectedMetrics[1].Metric[0].GetLabel()[0].Value)
+	assert.Equal(t, uint64(1), collectedMetrics[1].Metric[0].GetHistogram().GetSampleCount())
 
 	// METRIC 3: search_api_db_query_duration
-	// Not generated in this scenario because there's no database connection for unit tests.
+	// Not generated in this scenario because there's no queries triggered by this test.
 }
