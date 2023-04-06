@@ -145,7 +145,8 @@ func (s *SearchResult) buildRelationsQuery() {
 	//get user info for logging
 	_, userInfo := rbac.GetCache().GetUserUID(s.context)
 
-	if s.userData != nil {
+	// if one of them is not nil, userData is not empty
+	if s.userData.CsResources != nil || s.userData.NsResources != nil || s.userData.ManagedClusters != nil {
 		// add rbac
 		relQueryWithRbac = relQueryInnerJoin.Where(buildRbacWhereClause(s.context, s.userData, userInfo))
 	} else {
