@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
-	"github.com/stolostron/search-v2-api/pkg/metric"
+	"github.com/stolostron/search-v2-api/pkg/metrics"
 	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -187,7 +187,7 @@ func (user *UserDataCache) isValid() bool {
 // Get cluster-scoped resources the user is authorized to list.
 // Equivalent to: oc auth can-i list <resource> --as=<user>
 func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache *Cache) (*UserDataCache, error) {
-	defer metric.SlowLog("UserDataCache::getClusterScopedResources", 150*time.Millisecond)()
+	defer metrics.SlowLog("UserDataCache::getClusterScopedResources", 150*time.Millisecond)()
 
 	user.csrCache.err = nil
 	user.csrCache.lock.Lock()
@@ -360,7 +360,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 // Equivalent to: oc auth can-i --list -n <iterate-each-namespace>
 func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Context,
 	clientToken string) (*UserDataCache, error) {
-	defer metric.SlowLog("UserDataCache::getNamespacedResources", 250*time.Millisecond)()
+	defer metrics.SlowLog("UserDataCache::getNamespacedResources", 250*time.Millisecond)()
 
 	// Lock the cache
 	user.nsrCache.lock.Lock()

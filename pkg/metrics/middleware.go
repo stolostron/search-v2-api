@@ -1,4 +1,4 @@
-package metric
+package metrics
 
 import (
 	"net/http"
@@ -11,5 +11,5 @@ func PrometheusMiddleware(next http.Handler) http.Handler {
 
 	// InstrumentHandlerDuration is a middleware that wraps the provided http.Handler to observe the
 	// request duration with the provided ObserverVec.
-	return promhttp.InstrumentHandlerDuration(HttpRequestsHistogram, next)
+	return promhttp.InstrumentHandlerDuration(RequestDuration, next)
 }

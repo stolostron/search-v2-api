@@ -13,7 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stolostron/search-v2-api/graph/model"
 	db "github.com/stolostron/search-v2-api/pkg/database"
-	"github.com/stolostron/search-v2-api/pkg/metric"
+	"github.com/stolostron/search-v2-api/pkg/metrics"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	v1 "k8s.io/api/authentication/v1"
 	"k8s.io/klog/v2"
@@ -35,7 +35,7 @@ type SearchResult struct {
 const ErrorMsg string = "Error building Search query"
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
-	defer metric.SlowLog("SearchResolver", 0)()
+	defer metrics.SlowLog("SearchResolver", 0)()
 	// For each input, create a SearchResult resolver.
 	srchResult := make([]*SearchResult, len(input))
 	userData, userDataErr := rbac.GetCache().GetUserData(ctx)
@@ -255,7 +255,7 @@ func (s *SearchResult) resolveUids() {
 }
 func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	items := []map[string]interface{}{}
-	timer := prometheus.NewTimer(metric.DBQueryDuration.WithLabelValues("resolveItemsFunc"))
+	timer := prometheus.NewTimer(metrics.DBQueryDuration.WithLabelValues("resolveItemsFunc"))
 	klog.V(5).Infof("Query issued by resolver [%s] ", s.query)
 	rows, err := s.pool.Query(s.context, s.query, s.params...)
 

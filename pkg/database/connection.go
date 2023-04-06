@@ -9,8 +9,8 @@ import (
 
 	pgxpool "github.com/jackc/pgx/v4/pgxpool"
 	"github.com/stolostron/search-v2-api/pkg/config"
-	"github.com/stolostron/search-v2-api/pkg/metric"
-	klog "k8s.io/klog/v2"
+	"github.com/stolostron/search-v2-api/pkg/metrics"
+	"k8s.io/klog/v2"
 )
 
 var pool *pgxpool.Pool
@@ -40,7 +40,7 @@ func initializePool(ctx context.Context) {
 	conn, err := pgxpool.ConnectConfig(ctx, config)
 	if err != nil {
 		klog.Errorf("Unable to connect to database: %+v\n", err)
-		metric.DBConnectionFailed.WithLabelValues("DBConnect").Inc()
+		metrics.DBConnectionFailed.Inc()
 	}
 
 	pool = conn
@@ -59,7 +59,7 @@ func GetConnPool(ctx context.Context) *pgxpool.Pool {
 		err := pool.Ping(ctx)
 		if err != nil {
 			klog.Error("Unable to get a database connection. ", err)
-			metric.DBConnectionFailed.WithLabelValues("DBPing").Inc()
+			metrics.DBConnectionFailed.Inc()
 			return nil
 		}
 		timeLastPing = time.Now()
