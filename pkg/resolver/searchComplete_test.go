@@ -287,7 +287,7 @@ func Test_SearchComplete_EmptyQueryWithoutRbac(t *testing.T) {
 	// Create a SearchCompleteResolver instance with a mock connection pool.
 	prop1 := "kind"
 	searchInput := &model.SearchInput{}
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, rbac.UserData{CsResources: []rbac.Resource{}}, nil)
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, rbac.UserData{}, nil)
 
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),

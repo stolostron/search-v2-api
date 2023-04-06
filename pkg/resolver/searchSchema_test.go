@@ -59,7 +59,7 @@ func Test_SearchSchema_EmptyQueryNoUserData(t *testing.T) {
 	// Create a SearchSchemaResolver instance with a mock connection pool.
 	resolver, _ := newMockSearchSchema(t)
 
-	resolver.userData = rbac.UserData{CsResources: []rbac.Resource{}}
+	resolver.userData = rbac.UserData{}
 	resolver.query = "mock Query"
 	// Execute function
 	resolver.buildSearchSchemaQuery(context.TODO())
