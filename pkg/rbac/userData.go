@@ -162,16 +162,16 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 }
 
 // Get a static copy of the current user data. It will use cached data if valid or refresh if needed.
-func (cache *Cache) GetUserData(ctx context.Context) (*UserData, error) {
+func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 	userDataCache, userDataErr := cache.GetUserDataCache(ctx, nil)
 
 	if userDataErr != nil {
 		klog.Error("Error fetching UserAccessData: ", userDataErr)
-		return nil, errors.New("unable to resolve query because of error while resolving user's access")
+		return UserData{}, errors.New("unable to resolve query because of error while resolving user's access")
 	}
 	// Proceed if user's rbac data exists
 	// Get a copy of the current user access if user data exists
-	userAccess := &UserData{
+	userAccess := UserData{
 		CsResources:     userDataCache.GetCsResources(),
 		NsResources:     userDataCache.GetNsResources(),
 		ManagedClusters: userDataCache.GetManagedClusters(),
@@ -307,7 +307,9 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 							// No need to loop through all resources. Save the wildcard *
 							// exit the resourceRulesLoop
 							if res == "*" && api == "*" {
+								user.nsrCache.lock.Lock()
 								user.NsResources[ns] = []Resource{{Apigroup: api, Kind: res}}
+								user.nsrCache.lock.Unlock()
 								klog.V(5).Infof("User %s with uid: %s has access to everything in the namespace %s",
 									user.userInfo.Username, user.userInfo.UID, ns)
 
@@ -318,7 +320,9 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 							currRes := Resource{Apigroup: api, Kind: res}
 							//to avoid duplicates, check before appending to nsResources
 							if _, found := trackResources[currRes]; !found {
+								user.nsrCache.lock.Lock()
 								user.NsResources[ns] = append(user.NsResources[ns], currRes)
+								user.nsrCache.lock.Unlock()
 								trackResources[currRes] = struct{}{}
 							}
 
@@ -343,6 +347,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 			}
 		}
 	}
+	user.nsrCache.lock.Lock()
 	//Sort the user's namespace resources so that it is easier to consolidate them
 	sort.Slice(user.NsResources[ns][:], func(i, j int) bool {
 		resAKind := user.NsResources[ns][i].Kind
@@ -355,6 +360,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 			return resAApiGrp < resBApiGrp
 		}
 	})
+	user.nsrCache.lock.Unlock()
 }
 
 // Equivalent to: oc auth can-i --list -n <iterate-each-namespace>

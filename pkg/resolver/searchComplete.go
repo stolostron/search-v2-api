@@ -27,7 +27,7 @@ type SearchCompleteResult struct {
 	query     string
 	params    []interface{}
 	propTypes map[string]string
-	userData  *rbac.UserData
+	userData  rbac.UserData
 }
 
 var arrayProperties = make(map[string]struct{})
@@ -104,7 +104,8 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		_, userInfo := rbac.GetCache().GetUserUID(ctx)
 
 		// RBAC CLAUSE
-		if s.userData != nil {
+		// if one of them is not nil, userData is not empty
+		if s.userData.CsResources != nil || s.userData.NsResources != nil || s.userData.ManagedClusters != nil {
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
 		} else {
