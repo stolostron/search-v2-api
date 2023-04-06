@@ -3,7 +3,6 @@ package resolver
 
 import (
 	"encoding/json"
-	"sync"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
@@ -135,23 +134,18 @@ func matchNamespacedResources(nsResources map[string][]rbac.Resource, userInfo v
 // error if any, while marshaling the resource groups
 func consolidateNsResources(nsResources map[string][]rbac.Resource) (map[string][]string, []string, error) {
 	m := map[string][]string{}
-	mMutex := sync.RWMutex{}
 
 	for ns, resources := range nsResources {
 		b, err := json.Marshal(resources)
 		if err == nil {
-			mMutex.RLock()
 			_, found := m[string(b)]
-			mMutex.RUnlock()
 
 			// Lock map before write
-			mMutex.Lock()
 			if found {
 				m[string(b)] = append(m[string(b)], ns)
 			} else {
 				m[string(b)] = []string{ns}
 			}
-			mMutex.Unlock()
 		} else {
 			klog.Info("Error marshaling resources:", err)
 			return nil, nil, err

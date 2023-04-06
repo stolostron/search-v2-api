@@ -244,7 +244,7 @@ func Test_SearchResolver_Relationships_NoUserData(t *testing.T) {
 	uid2 := "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b"
 	resultList := []*string{&uid1, &uid2}
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "uid", Values: resultList}}}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, resultList, rbac.UserData{CsResources: []rbac.Resource{}}, nil)
+	resolver, mockPool := newMockSearchResolver(t, searchInput, resultList, rbac.UserData{}, nil)
 
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(``), //query will be empty as user data for rbac is not provided
