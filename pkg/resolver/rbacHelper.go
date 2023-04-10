@@ -138,10 +138,7 @@ func consolidateNsResources(nsResources map[string][]rbac.Resource) (map[string]
 	for ns, resources := range nsResources {
 		b, err := json.Marshal(resources)
 		if err == nil {
-			_, found := m[string(b)]
-
-			// Lock map before write
-			if found {
+			if _, found := m[string(b)]; found {
 				m[string(b)] = append(m[string(b)], ns)
 			} else {
 				m[string(b)] = []string{ns}
