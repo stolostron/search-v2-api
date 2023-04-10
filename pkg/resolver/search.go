@@ -28,7 +28,7 @@ type SearchResult struct {
 	propTypes map[string]string
 	query     string
 	uids      []*string // List of uids from search result to be used to get relatioinships.
-	userData  *rbac.UserData
+	userData  rbac.UserData
 	wg        sync.WaitGroup // Used to serialize search query and relatioinships query.
 }
 
@@ -131,7 +131,7 @@ func (s *SearchResult) Uids() {
 }
 
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
-func buildRbacWhereClause(ctx context.Context, userrbac *rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
+func buildRbacWhereClause(ctx context.Context, userrbac rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
 	return goqu.Or(
 		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
 		matchHubCluster(userrbac, userInfo),
@@ -179,7 +179,9 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 
 		_, userInfo := rbac.GetCache().GetUserUID(ctx)
 		// RBAC CLAUSE
-		if s.userData != nil {
+
+		// if one of them is not nil, userData is not empty
+		if s.userData.CsResources != nil || s.userData.NsResources != nil || s.userData.ManagedClusters != nil {
 			whereDs = append(whereDs,
 				buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
 			if len(whereDs) == 0 {

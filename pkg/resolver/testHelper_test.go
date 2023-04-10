@@ -39,7 +39,7 @@ func getUserInfo() authv1.UserInfo {
 		Username: "unique-username",
 	}
 }
-func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*string, ud *rbac.UserData, propTypes map[string]string) (*SearchResult, *pgxpoolmock.MockPgxPool) {
+func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*string, ud rbac.UserData, propTypes map[string]string) (*SearchResult, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
@@ -56,7 +56,7 @@ func newMockSearchResolver(t *testing.T, input *model.SearchInput, uids []*strin
 
 	return mockResolver, mockPool
 }
-func newMockSearchComplete(t *testing.T, input *model.SearchInput, property string, ud *rbac.UserData, PropTypes map[string]string) (*SearchCompleteResult, *pgxpoolmock.MockPgxPool) {
+func newMockSearchComplete(t *testing.T, input *model.SearchInput, property string, ud rbac.UserData, PropTypes map[string]string) (*SearchCompleteResult, *pgxpoolmock.MockPgxPool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
