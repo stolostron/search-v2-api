@@ -86,41 +86,23 @@ func (s *SearchResult) Items() []map[string]interface{} {
 }
 
 func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
-	klog.V(2).Info("Resolving SearchResult:Related()")
 	if s.context == nil {
 		s.context = ctx
 	}
 	if s.uids == nil {
 		s.Uids()
 	}
-	var start time.Time
-	var numUIDs int
 
-	s.wg.Wait()
+	s.wg.Wait() // Wait for search to complete before resolving relationships.
+	defer metrics.SlowLog(fmt.Sprintf("SearchResult::Related() - uid(s): %d level(s): %d", len(s.uids), s.level), 500*time.Millisecond)()
 	var r []SearchRelatedResult
 
 	if len(s.uids) > 0 {
-		start = time.Now()
-		numUIDs = len(s.uids)
 		r = s.getRelationResolvers(ctx)
 	} else {
-		klog.Warning("No uids selected for query:Related()")
+		klog.V(1).Info("No uids selected for query:Related()")
 	}
-	defer func() {
-		if len(s.uids) > 0 { // Log a warning if finding relationships is too slow.
-			// Note the 500ms is just an initial guess, we should adjust based on normal execution time.
-			if time.Since(start) > 500*time.Millisecond {
-				klog.Warningf("Finding relationships for %d uids and %d level(s) took %s.",
-					numUIDs, s.level, time.Since(start))
-				return
-			}
-			klog.V(4).Infof("Finding relationships for %d uids and %d level(s) took %s.",
-				numUIDs, s.level, time.Since(start))
-		} else {
-			klog.V(4).Infof("Not finding relationships as there are %d uids and %d level(s).",
-				len(s.uids), s.level)
-		}
-	}()
+
 	return r
 }
 

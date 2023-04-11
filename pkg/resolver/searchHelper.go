@@ -329,7 +329,7 @@ func (s *SearchResult) setLimit() int {
 	if s.input != nil && s.input.Limit != nil && *s.input.Limit > 0 {
 		limit = *s.input.Limit
 	} else if s.input != nil && s.input.Limit != nil && *s.input.Limit == -1 {
-		klog.Warning("No limit set. Fetching all results.")
+		klog.V(2).Info("No limit set on query. Fetching all results.")
 	} else {
 		limit = config.Cfg.QueryLimit
 	}
