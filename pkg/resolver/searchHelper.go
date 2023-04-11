@@ -54,7 +54,6 @@ func getOperator(values []string) map[string][]string {
 }
 
 func getWhereClauseExpression(prop, operator string, values []string) []exp.Expression {
-	klog.Info("In getWhereClauseExpression")
 	exps := []exp.Expression{}
 	var lhsExp interface{}
 
@@ -103,7 +102,6 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 		exps = append(exps, goqu.L(`"data"->? ? ?`, prop, "?|", values))
 
 	default:
-		klog.Info("*** In default")
 		if prop == "cluster" {
 			exps = append(exps, goqu.C(prop).In(values))
 		} else if prop == "kind" && isLower(values) { //ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
@@ -130,7 +128,7 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 func isString(values []string) bool {
 	for _, v := range values {
 		if _, err := strconv.ParseInt(v, 10, 64); err == nil {
-			fmt.Printf("%q looks like a number.\n", v)
+			klog.V(6).Infof("value array contains a number %q .\n", v)
 			return false
 		}
 	}
