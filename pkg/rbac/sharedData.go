@@ -177,8 +177,10 @@ func (shared *SharedData) PopulateSharedCache(ctx context.Context) {
 
 func (shared *SharedData) isValid() bool {
 	if shared.csrCache.isValid() && shared.nsCache.isValid() && shared.mcCache.isValid() {
+		klog.Info("Shared cache is valid. Using shared cache")
 		return true
 	}
+	klog.Info("Shared cache is invalid. Populating shared cache")
 	return false
 }
 

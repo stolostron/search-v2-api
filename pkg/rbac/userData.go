@@ -84,10 +84,13 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 
 	// UserDataExists and its valid
 	if userDataExists && cachedUserData.isValid() {
+		klog.Info("UserData cache is valid. Using cache")
 		klog.V(5).Info("Using user data from cache.")
 
 		return cachedUserData, nil
 	} else {
+		klog.Info("UserData cache is invalid. Populating user cache")
+
 		if cache.users == nil {
 			cache.users = map[string]*UserDataCache{}
 		}
