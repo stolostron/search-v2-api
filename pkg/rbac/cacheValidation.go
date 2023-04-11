@@ -109,7 +109,7 @@ func (w watchResource) start(ctx context.Context) {
 					}
 
 				default:
-					klog.V(2).Infof("Unexpected event, waiting 5 seconds and restarting watch for %s", w.gvr.String())
+					klog.V(2).Infof("Unexpected event: %v, waiting 5 seconds and restarting watch for %s", event, w.gvr.String())
 					watch.Stop()
 					time.Sleep(5 * time.Second)
 				}
