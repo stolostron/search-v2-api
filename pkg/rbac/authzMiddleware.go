@@ -19,6 +19,7 @@ func AuthorizeUser(next http.Handler) http.Handler {
 		}
 
 		klog.V(6).Info("User authorization successful!")
+		klog.Info("** Request from: ", r.URL.Path, " URL details: ", r.URL)
 		next.ServeHTTP(w, r.WithContext(r.Context()))
 
 	})
