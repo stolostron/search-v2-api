@@ -13,7 +13,7 @@ import (
 func PrometheusMiddleware(next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		klog.Infof("Received request. User-Agent: %s RemoteAddr: %s", r.UserAgent(), r.RemoteAddr)
+		klog.V(5).Infof("Received request. User-Agent: %s RemoteAddr: %s", r.UserAgent(), r.RemoteAddr)
 
 		curriedRequestDuration, err := RequestDuration.CurryWith(prometheus.Labels{
 			"remoteAddr": r.RemoteAddr[0:strings.LastIndex(r.RemoteAddr, ":")], // Remove port
