@@ -12,7 +12,7 @@ var (
 	RequestDuration = promauto.With(PromRegistry).NewHistogramVec(prometheus.HistogramOpts{
 		Name: "search_api_request_duration",
 		Help: "Time (seconds) the search api took to process the request",
-	}, []string{"code"})
+	}, []string{"code", "remoteAddr", "userAgent"})
 
 	DBConnectionFailed = promauto.With(PromRegistry).NewCounter(prometheus.CounterOpts{
 		Name: "search_api_db_connection_failed",
