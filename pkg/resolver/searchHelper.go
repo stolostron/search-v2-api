@@ -88,6 +88,8 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 			exps = append(exps, goqu.L(`?`, lhsExp).Gt(val))
 		}
 	case "=":
+		// use jsonb operator if prop is not cluster
+		// Refer to https://www.postgresql.org/docs/9.5/functions-json.html#FUNCTIONS-JSONB-OP-TABLE
 		if prop != "cluster" && isString(values) {
 			lhsExp = goqu.L(`"data"->?`, prop)
 			exps = append(exps, goqu.L("???", lhsExp, goqu.Literal("?"), values))
@@ -104,7 +106,8 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 	default:
 		if prop == "cluster" {
 			exps = append(exps, goqu.C(prop).In(values))
-		} else if prop == "kind" && isLower(values) { //ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
+		} else if prop == "kind" && isLower(values) {
+			//ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
 			exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
 			klog.Warning("Using ILIKE for lower case KIND string comparison.",
 				"- This behavior is needed for V1 compatibility and will be deprecated with Search V2.")
@@ -125,6 +128,7 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 
 }
 
+// Check if the values contain numerical values
 func isString(values []string) bool {
 	for _, v := range values {
 		if _, err := strconv.ParseInt(v, 10, 64); err == nil {

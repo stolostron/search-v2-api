@@ -82,6 +82,50 @@ func Test_SearchResolver_CountWithOperator(t *testing.T) {
 	}
 }
 
+func Test_SearchResolver_CountWithOperatorNum(t *testing.T) {
+	// Create a SearchResolver instance with a mock connection pool.
+	val1 := "1"
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val1}}}}
+	ud := rbac.UserData{CsResources: []rbac.Resource{}}
+	propTypesMock := map[string]string{"current": "number"}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, ud, propTypesMock)
+
+	// Mock the database query
+	mockRow := &Row{MockValue: 1}
+	mockPool.EXPECT().QueryRow(gomock.Any(),
+		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE (("data"->>'current' IN ('1')) AND ("cluster" = ANY ('{}')))`),
+		gomock.Eq([]interface{}{})).Return(mockRow)
+
+	// Execute function
+	r := resolver.Count()
+	// Verify response
+	if r != mockRow.MockValue {
+		t.Errorf("Incorrect Count() expected [%d] got [%d]", mockRow.MockValue, r)
+	}
+}
+
+func Test_SearchResolver_CountWithOperatorString(t *testing.T) {
+	// Create a SearchResolver instance with a mock connection pool.
+	val1 := "=Template"
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
+	ud := rbac.UserData{CsResources: []rbac.Resource{}}
+	propTypesMock := map[string]string{"kind": "string"}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, ud, propTypesMock)
+
+	// Mock the database query
+	mockRow := &Row{MockValue: 1}
+	mockPool.EXPECT().QueryRow(gomock.Any(),
+		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->'kind'?('Template') AND ("cluster" = ANY ('{}')))`),
+		gomock.Eq([]interface{}{})).Return(mockRow)
+
+	// Execute function
+	r := resolver.Count()
+	// Verify response
+	if r != mockRow.MockValue {
+		t.Errorf("Incorrect Count() expected [%d] got [%d]", mockRow.MockValue, r)
+	}
+}
+
 func Test_SearchResolver_Items(t *testing.T) {
 	// Create a SearchResolver instance with a mock connection pool.
 	val1 := "template"
