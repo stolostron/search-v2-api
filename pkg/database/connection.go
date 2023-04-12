@@ -63,7 +63,7 @@ func GetConnPool(ctx context.Context) *pgxpool.Pool {
 			return nil
 		}
 		timeLastPing = time.Now()
-		klog.Info("Successfully connected to database!")
+		klog.V(1).Info("Successfully connected to database!")
 	}
 	return pool
 }
