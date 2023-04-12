@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -13,8 +14,12 @@ import (
 func PrometheusMiddleware(next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		klog.Infof("Received request. User-Agent: %s RemoreAddr: %s", r.UserAgent(), r.RemoteAddr)
-		curriedRequestDuration, err := RequestDuration.CurryWith(prometheus.Labels{"remoteAddr": r.RemoteAddr, "userAgent": r.UserAgent()})
+		klog.Infof("Received request. User-Agent: %s RemoteAddr: %s", r.UserAgent(), r.RemoteAddr)
+
+		curriedRequestDuration, err := RequestDuration.CurryWith(prometheus.Labels{
+			"remoteAddr": r.RemoteAddr[0:strings.LastIndex(r.RemoteAddr, ":")], // Remove port
+			// "userAgent":  r.UserAgent(),
+		})
 		if err != nil {
 			klog.Error("Error while curring RequestDuration metric with remoteAddr label. ", err)
 		}

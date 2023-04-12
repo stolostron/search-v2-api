@@ -45,6 +45,9 @@ coverage: test ## Run unit tests and show code coverage.
 docker-build: ## Build the docker image.
 	docker build -f Dockerfile . -t search-v2-api
 
+show-metrics:
+	curl -k https://localhost:4010/metrics
+
 N_USERS ?=2
 HOST ?= $(shell oc get route search-api -o custom-columns=host:.spec.host --no-headers -n open-cluster-management --ignore-not-found=true --request-timeout='1s')
 ifeq ($(strip $(HOST)),)
