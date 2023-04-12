@@ -92,11 +92,13 @@ func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
 	if s.uids == nil {
 		s.Uids()
 	}
+	// Wait for search to complete before resolving relationships.
+	s.wg.Wait()
+	// Log if this function is slow.
+	defer metrics.SlowLog(fmt.Sprintf("SearchResult::Related() - uids: %d levels: %d", len(s.uids), s.level),
+		500*time.Millisecond)()
 
-	s.wg.Wait() // Wait for search to complete before resolving relationships.
-	defer metrics.SlowLog(fmt.Sprintf("SearchResult::Related() - uid(s): %d level(s): %d", len(s.uids), s.level), 500*time.Millisecond)()
 	var r []SearchRelatedResult
-
 	if len(s.uids) > 0 {
 		r = s.getRelationResolvers(ctx)
 	} else {
