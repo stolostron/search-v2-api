@@ -17,10 +17,10 @@ func PrometheusMiddleware(next http.Handler) http.Handler {
 
 		curriedRequestDuration, err := RequestDuration.CurryWith(prometheus.Labels{
 			"remoteAddr": r.RemoteAddr[0:strings.LastIndex(r.RemoteAddr, ":")], // Remove port
-			// "userAgent":  r.UserAgent(),
+			"userAgent":  r.UserAgent(),
 		})
 		if err != nil {
-			klog.Error("Error while curring RequestDuration metric with remoteAddr label. ", err)
+			klog.Error("Error while curring the RequestDuration metric with remoteAddr label. ", err)
 		}
 		h := promhttp.InstrumentHandlerDuration(curriedRequestDuration, next)
 		h.ServeHTTP(w, r)
