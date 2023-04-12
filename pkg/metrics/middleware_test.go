@@ -29,7 +29,7 @@ func Test_PrometheusInstrumentation(t *testing.T) {
 
 	// METRIC 2:  search_api_request_duration
 	assert.Equal(t, "search_api_request_duration", collectedMetrics[1].GetName())
-	assert.Equal(t, 1, len(collectedMetrics[1].Metric[0].GetLabel()))
+	assert.Equal(t, 3, len(collectedMetrics[1].Metric[0].GetLabel()))
 	assert.Equal(t, "code", *collectedMetrics[1].Metric[0].GetLabel()[0].Name)
 	assert.Equal(t, "200", *collectedMetrics[1].Metric[0].GetLabel()[0].Value)
 	assert.Equal(t, uint64(1), collectedMetrics[1].Metric[0].GetHistogram().GetSampleCount())
