@@ -45,6 +45,9 @@ coverage: test ## Run unit tests and show code coverage.
 docker-build: ## Build the docker image.
 	docker build -f Dockerfile . -t search-v2-api
 
+show-metrics:
+	curl -k https://localhost:4010/metrics
+
 N_USERS ?=2
 HOST ?= $(shell oc get route search-api -o custom-columns=host:.spec.host --no-headers -n open-cluster-management --ignore-not-found=true --request-timeout='1s')
 ifeq ($(strip $(HOST)),)
@@ -67,6 +70,14 @@ test-scale-ui: check-locust ## Start Locust and open the web browser to drive sc
 
 test-scale-setup: ## Creates the search-api route in the current target cluster.
 	oc create route passthrough search-api --service=search-search-api -n open-cluster-management
+
+test-send: ## Sends a graphQL query using cURL for development testing.
+	URL=https://localhost:4010/searchapi/graphql \
+	TOKEN=$(shell oc whoami -t) \
+	curl --insecure --location --request POST ${URL} \
+	--header "Authorization: Bearer ${TOKEN}" --header 'Content-Type: application/json' \
+	--data-raw '{"query":"query q($$input: [SearchInput]) { search(input: $$input) { count items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}' | jq
+
 
 check-locust: ## Checks if Locust is installed in the system.
 ifeq (,$(shell which locust))
