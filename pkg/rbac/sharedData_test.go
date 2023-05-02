@@ -168,7 +168,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 	namespaces := []string{"test-namespace"}
 	manClusters := map[string]struct{}{"test-man": {}}
 	//adding expired cache
-	last_cache_time := time.Now().Add(time.Duration(-11) * time.Minute)
+	last_cache_time := time.Now().Add(time.Duration(-6) * time.Minute)
 	csRes := map[Resource]struct{}{}
 	res := Resource{Apigroup: "apigroup1", Kind: "kind1"}
 
