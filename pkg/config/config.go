@@ -43,8 +43,8 @@ func new() *Config {
 	conf := &Config{
 		API_SERVER_URL: getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
 		AuthCacheTTL:   getEnvAsInt("AUTH_CACHE_TTL", int(60000)),    // 1 minute
-		SharedCacheTTL: getEnvAsInt("SHARED_CACHE_TTL", int(120000)), // 2 min (increase to 10min after implementation)
-		UserCacheTTL:   getEnvAsInt("USER_CACHE_TTL", int(120000)),   // 2 min (increase to 10min after implementation)
+		SharedCacheTTL: getEnvAsInt("SHARED_CACHE_TTL", int(300000)), // 5 min (increase to 10min after implementation)
+		UserCacheTTL:   getEnvAsInt("USER_CACHE_TTL", int(300000)),   // 5 min (increase to 10min after implementation)
 		ContextPath:    getEnv("CONTEXT_PATH", "/searchapi"),
 		DBHost:         getEnv("DB_HOST", "localhost"),
 		DBMaxConns:     getEnvAsInt("DB_MAX_CONNS", int(10)), // Postgres has 100 conns. Allow for scaling the indexer.
