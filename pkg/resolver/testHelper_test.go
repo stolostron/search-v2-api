@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -97,7 +97,7 @@ func (r *Row) Scan(dest ...interface{}) error {
 // NOTE: Don't add additional logic to filter or modify the mock data in
 //       this function. If needed, it should be added in a separate function.
 func newMockRows(mockDataFile string) *MockRows {
-	bytes, _ := ioutil.ReadFile(mockDataFile)
+	bytes, _ := os.ReadFile(mockDataFile)
 	var data map[string]interface{}
 	if err := json.Unmarshal(bytes, &data); err != nil {
 		panic(err)
@@ -139,7 +139,7 @@ func newMockRows(mockDataFile string) *MockRows {
 // Prop will be the property input for searchComplete
 func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop string, limit int) *MockRows {
 	// Read json file and build mock data
-	bytes, _ := ioutil.ReadFile(mockDataFile)
+	bytes, _ := os.ReadFile(mockDataFile)
 	var data map[string]interface{}
 	if err := json.Unmarshal(bytes, &data); err != nil {
 		panic(err)
