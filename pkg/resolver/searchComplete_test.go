@@ -16,7 +16,7 @@ func Test_SearchComplete_Query(t *testing.T) {
 	// Create a SearchCompleteResolver instance with a mock connection pool.
 	prop1 := "kind"
 	searchInput := &model.SearchInput{}
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{}, nil)
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, rbac.UserData{CsResources: []rbac.Resource{}}, nil)
 	val1 := "Template"
 	val2 := "ReplicaSet"
 	val3 := "ConfigMap"
@@ -45,7 +45,7 @@ func Test_SearchComplete_Query_WithLimit(t *testing.T) {
 	prop1 := "kind"
 	limit := 2
 	searchInput := &model.SearchInput{}
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{}, nil)
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, rbac.UserData{CsResources: []rbac.Resource{}}, nil)
 	resolver.limit = &limit //Add limit
 	val1 := "ConfigMap"
 	val2 := "ReplicaSet"
@@ -72,7 +72,7 @@ func Test_SearchCompleteNoProp_Query(t *testing.T) {
 	// Create a SearchCompleteResolver instance with a mock connection pool.
 	prop1 := ""
 	searchInput := &model.SearchInput{}
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{}, nil)
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, rbac.UserData{CsResources: []rbac.Resource{}}, nil)
 	expectedProps := []*string{}
 
 	// Mock the database query
@@ -99,7 +99,7 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1, &value2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
 	propTypesMock := map[string]string{"kind": "string", "namespace": "string", "cluster": "string"}
 
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud, propTypesMock)
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, ud, propTypesMock)
 	val1 := "Template"
 	val2 := "ReplicaSet"
 	val3 := "ConfigMap"
@@ -130,7 +130,7 @@ func Test_SearchCompleteWithCluster(t *testing.T) {
 	limit := 10
 	searchInput := &model.SearchInput{}
 
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{}, nil)
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, rbac.UserData{CsResources: []rbac.Resource{}}, nil)
 	resolver.limit = &limit
 	expectedProps := []*string{&cluster}
 
@@ -153,7 +153,7 @@ func Test_SearchCompleteQuery_PropDate(t *testing.T) {
 	// Create a SearchCompleteResolver instance with a mock connection pool.
 	prop1 := "created"
 	searchInput := &model.SearchInput{}
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{}, nil)
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, rbac.UserData{CsResources: []rbac.Resource{}}, nil)
 	val1 := "isDate"
 	expectedProps := []*string{&val1} //, &val2, &val3}
 
@@ -179,7 +179,7 @@ func Test_SearchCompleteQuery_PropNum(t *testing.T) {
 	prop1 := "current"
 	searchInput := &model.SearchInput{}
 	_, _, mc := newUserData()
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &rbac.UserData{ManagedClusters: mc}, nil)
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, rbac.UserData{ManagedClusters: mc}, nil)
 	val1 := "isNumber"
 	val2 := "3"
 	expectedProps := []*string{&val1, &val2} //, &val3}
@@ -221,7 +221,7 @@ func Test_SearchCompleteWithObject_Query(t *testing.T) {
 	propTypesMock := map[string]string{"label": "object", "namespace": "string", "cluster": "string"}
 
 	//mock searchcomplete for searchinput
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud, propTypesMock)
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, ud, propTypesMock)
 
 	val1 := "samples.operator.openshift.io/managed=true"
 	val2 := "pod-template-hash=5f5575c669"
@@ -260,7 +260,7 @@ func Test_SearchCompleteWithContainer_Query(t *testing.T) {
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
 
 	// mock searchcomplete for searchinput
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, &ud, propTypesMock)
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, ud, propTypesMock)
 
 	val1 := "acm-agent"
 	val2 := "acm-agent-1"
@@ -287,7 +287,7 @@ func Test_SearchComplete_EmptyQueryWithoutRbac(t *testing.T) {
 	// Create a SearchCompleteResolver instance with a mock connection pool.
 	prop1 := "kind"
 	searchInput := &model.SearchInput{}
-	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, nil, nil)
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, rbac.UserData{}, nil)
 
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),

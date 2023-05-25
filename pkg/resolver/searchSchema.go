@@ -16,7 +16,7 @@ type SearchSchema struct {
 	pool     pgxpoolmock.PgxPool
 	query    string
 	params   []interface{}
-	userData *rbac.UserData
+	userData rbac.UserData
 }
 
 func SearchSchemaResolver(ctx context.Context) (map[string]interface{}, error) {
@@ -58,7 +58,8 @@ func (s *SearchSchema) buildSearchSchemaQuery(ctx context.Context) {
 	//get user info for logging
 	_, userInfo := rbac.GetCache().GetUserUID(ctx)
 
-	if s.userData != nil {
+	// if one of them is not nil, userData is not empty
+	if s.userData.CsResources != nil || s.userData.NsResources != nil || s.userData.ManagedClusters != nil {
 		whereDs = buildRbacWhereClause(ctx, s.userData, userInfo) // add rbac
 	} else {
 		klog.Errorf("Error building search schema query: RBAC clause is required!"+
