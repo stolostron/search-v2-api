@@ -71,6 +71,7 @@ func initializePool(ctx context.Context) {
 		klog.Errorf("Unable to connect to database: %+v\n", err)
 		metrics.DBConnectionFailed.Inc()
 	}
+	klog.Info("Successfully connected to database!")
 
 	pool = conn
 }
@@ -87,12 +88,12 @@ func GetConnPool(ctx context.Context) *pgxpool.Pool {
 		}
 		err := pool.Ping(ctx)
 		if err != nil {
-			klog.Error("Unable to get a database connection. ", err)
+			klog.Error("Unable to get a healthy database connection. ", err)
 			metrics.DBConnectionFailed.Inc()
 			return nil
 		}
 		timeLastPing = time.Now()
-		klog.V(1).Info("Successfully connected to database!")
+		klog.V(5).Info("Database pool connection is healthy.")
 	}
 	return pool
 }
