@@ -88,8 +88,14 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 			exps = append(exps, goqu.L(`?`, lhsExp).Gt(val))
 		}
 	case "=":
-		exps = append(exps, goqu.L(`?`, lhsExp).In(values))
-
+		// use jsonb operator if prop is not cluster
+		// Refer to https://www.postgresql.org/docs/9.5/functions-json.html#FUNCTIONS-JSONB-OP-TABLE
+		if prop != "cluster" && isString(values) {
+			lhsExp = goqu.L(`"data"->?`, prop)
+			exps = append(exps, goqu.L("???", lhsExp, goqu.Literal("?"), values))
+		} else {
+			exps = append(exps, goqu.L(`?`, lhsExp).In(values))
+		}
 	case "@>":
 		for _, val := range values {
 			exps = append(exps, goqu.L(`"data"->? @> ?`, prop, val))
@@ -100,13 +106,19 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 	default:
 		if prop == "cluster" {
 			exps = append(exps, goqu.C(prop).In(values))
-		} else if prop == "kind" { //ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
-			if isLower(values) {
-				exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
-				klog.Warning("Using ILIKE for lower case KIND string comparison.",
-					"- This behavior is needed for V1 compatibility and will be deprecated with Search V2.")
-			} else {
-				exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
+		} else if prop == "kind" && isLower(values) {
+			//ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
+			exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
+			klog.Warning("Using ILIKE for lower case KIND string comparison.",
+				"- This behavior is needed for V1 compatibility and will be deprecated with Search V2.")
+		} else if isString(values) {
+			if len(values) == 1 { // for single value, use "?" operator
+				// Refer to https://www.postgresql.org/docs/9.5/functions-json.html#FUNCTIONS-JSONB-OP-TABLE
+				lhsExp = goqu.L(`"data"->?`, prop)
+				exps = append(exps, goqu.L("???", lhsExp, goqu.Literal("?"), values))
+			} else { // if there are many values, use "?|" operator
+				lhsExp = goqu.L(`"data"->?`, prop)
+				exps = append(exps, goqu.L("???", lhsExp, goqu.Literal("?|"), pq.Array(values)))
 			}
 		} else {
 			exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
@@ -114,6 +126,17 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 	}
 	return exps
 
+}
+
+// Check if the values contain numerical values
+func isString(values []string) bool {
+	for _, v := range values {
+		if _, err := strconv.ParseInt(v, 10, 64); err == nil {
+			klog.V(6).Infof("value array contains a number %q .\n", v)
+			return false
+		}
+	}
+	return true
 }
 
 //if any string values starts with lower case letters, return true
