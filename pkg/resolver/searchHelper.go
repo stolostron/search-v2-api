@@ -330,22 +330,6 @@ func decodePropertyTypesNoPropMap(values []string, filter *model.SearchFilter) [
 	return values
 }
 
-func getKeys(stringKeyMap interface{}) []string {
-	v := reflect.ValueOf(stringKeyMap)
-	if v.Kind() != reflect.Map {
-		klog.Error("input in getKeys is not a map")
-	}
-	if v.Type().Key().Kind() != reflect.String {
-		klog.Error("input map in getKeys does not have string keys")
-	}
-	keys := make([]string, 0, v.Len())
-	for _, key := range v.MapKeys() {
-		keys = append(keys, key.String())
-	}
-	sort.Strings(keys)
-	return keys
-}
-
 // Set limit for queries
 func (s *SearchResult) setLimit() int {
 	var limit int

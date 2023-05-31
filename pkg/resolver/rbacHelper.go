@@ -3,10 +3,10 @@ package resolver
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
-	"github.com/lib/pq"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	v1 "k8s.io/api/authentication/v1"
 	"k8s.io/klog/v2"
@@ -79,15 +79,15 @@ func matchClusterScopedResources(csRes []rbac.Resource, userInfo v1.UserInfo) ex
 // Resolves to some similar to:
 //    (namespace = 'a' AND ((apigroup='' AND kind='') OR (apigroup='' AND kind='') OR ... ) OR
 //    (namespace = 'b' AND ( ... ) OR (namespace = 'c' AND ( ... ) OR ...
-func matchNamespacedResources(nsResources map[string][]rbac.Resource, userInfo v1.UserInfo) exp.ExpressionList {
+func matchNamespacedResources(userData rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
 	var whereNsDs []exp.Expression
-	namespaces := getKeys(nsResources)
-	if len(nsResources) < 1 { // no namespace scoped resources for user
+	namespaces := rbac.GetKeys(userData.NsResources)
+	if len(userData.NsResources) < 1 { // no namespace scoped resources for user
 		klog.V(5).Infof("User %s with UID %s has no access to namespace scoped resources.",
 			userInfo.Username, userInfo.UID)
 		return goqu.Or(whereNsDs...)
 
-	} else if len(nsResources) == 1 && namespaces[0] == "*" { // user has access to all namespaces
+	} else if len(userData.NsResources) == 1 && namespaces[0] == "*" { // user has access to all namespaces
 		klog.V(5).Infof("User %s with UID %s has access to all namespaces. Excluding individual namespace filters",
 			userInfo.Username, userInfo.UID)
 		return goqu.Or() // return empty clause
@@ -95,32 +95,35 @@ func matchNamespacedResources(nsResources map[string][]rbac.Resource, userInfo v
 	} else {
 		var unMarshalErr error
 
+		consolidateNsList := userData.ConsolidatedNsResources
+		keys := rbac.GetKeys(userData.ConsolidatedNsResources)
 		//consolidate namespace resources
-		consolidateNsList, keys, jsonMarshalErr := consolidateNsResources(nsResources)
+		// consolidateNsList, keys, jsonMarshalErr := consolidateNsResources(nsResources)
 		whereNsDs = make([]exp.Expression, len(consolidateNsList))
-		if jsonMarshalErr == nil {
-			klog.V(2).Info("Using consolidated namespace list")
-			for count, resources := range keys {
-				namespaces := consolidateNsList[resources]
-				resList := []rbac.Resource{}
-				unMarshalErr = json.Unmarshal([]byte(resources), &resList)
-				if unMarshalErr == nil {
-					whereNsDs[count] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
-						goqu.Literal("?|"), pq.Array(namespaces)),
-						matchApigroupKind(resList))
-				} else {
-					break // use non-consolidated namespace list
-				}
+		klog.V(2).Info("Using consolidated namespace list")
+		for count, resources := range keys {
+			groupName := userData.NsResourceGroups[resources]
+			tableName := "lookup_" + strings.ReplaceAll(userInfo.UID, "-", "_")
+			resList := []rbac.Resource{}
+
+			unMarshalErr = json.Unmarshal([]byte(resources), &resList)
+			if unMarshalErr == nil {
+				whereNsDs[count] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
+					goqu.Literal("?|"), goqu.From(tableName).Select(goqu.C("resList")).Where(goqu.C("type").Eq(groupName))),
+					matchApigroupKind(resList))
+			} else {
+				break // use non-consolidated namespace list
 			}
 		}
+		// }
 		// if consolidating namespaces, doesn't work, proceed as usual without consolidation
-		if jsonMarshalErr != nil || unMarshalErr != nil {
+		if unMarshalErr != nil {
 			klog.V(2).Info("Using non-consolidated namespace list")
-			whereNsDs = make([]exp.Expression, len(nsResources))
+			whereNsDs = make([]exp.Expression, len(userData.NsResources))
 			for nsCount, namespace := range namespaces {
 				whereNsDs[nsCount] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
 					goqu.Literal("?"), namespace),
-					matchApigroupKind(nsResources[namespace]))
+					matchApigroupKind(userData.NsResources[namespace]))
 			}
 		}
 
@@ -150,7 +153,7 @@ func consolidateNsResources(nsResources map[string][]rbac.Resource) (map[string]
 	}
 
 	klog.V(4).Infof("RBAC consolidation reduced from %d namespaces/s to %d namespace group/s.", len(nsResources), len(m))
-	return m, getKeys(m), nil
+	return m, rbac.GetKeys(m), nil
 }
 
 // Match cluster scoped and namespace scoped resources from the hub.
@@ -169,7 +172,7 @@ func matchHubCluster(userrbac rbac.UserData, userInfo v1.UserInfo) exp.Expressio
 			goqu.L("???", goqu.C("data"), goqu.Literal("?"), "_hubClusterResource"), // "data"?'_hubClusterResource'
 			goqu.Or(
 				matchClusterScopedResources(userrbac.CsResources, userInfo), // (namespace=null AND apigroup AND kind)
-				matchNamespacedResources(userrbac.NsResources, userInfo),    // (namespace AND apiproup AND kind)
+				matchNamespacedResources(userrbac, userInfo),                // (namespace AND apiproup AND kind)
 			),
 		)
 	}
@@ -178,7 +181,17 @@ func matchHubCluster(userrbac rbac.UserData, userInfo v1.UserInfo) exp.Expressio
 // Match resources from the managed clusters.
 // Resolves to:
 //    ( cluster IN ['a', 'b', ...] )
-func matchManagedCluster(managedClusters []string) exp.BooleanExpression {
+func matchManagedCluster(managedClusters []string, managedClusterAllAccess bool, userId string) exp.BooleanExpression {
+	// if user has access to all managed clusters
+	if managedClusterAllAccess {
+		klog.Info("*** Has all access to managed clusters")
+		return goqu.L("???", goqu.C("data"), goqu.Literal("?"), "_hubClusterResource").IsNotTrue()
+	}
+
 	//managed clusters
-	return goqu.C("cluster").Eq(goqu.Any(pq.Array(managedClusters)))
+	tableName := "lookup_" + strings.ReplaceAll(userId, "-", "_")
+	return goqu.C("cluster").Eq(goqu.Any(goqu.From(tableName).Select(goqu.L("unnest(resList)")).
+		Where(goqu.C("type").Eq("cluster"))))
+	// return goqu.C("cluster").Eq(goqu.Any(pq.Array(managedClusters)))
+	// return goqu.L("unnest(array[sourceid, destid, concat('cluster__',cluster)])")
 }

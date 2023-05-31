@@ -298,7 +298,7 @@ func (s *SearchResult) filterRelatedUIDs(levelsMap map[string][]string) {
 		}
 	} else {
 		// Only include UIDs of related items that match the relatedKinds filter.
-		kinds := getKeys(levelsMap)
+		kinds := rbac.GetKeys(levelsMap)
 		for _, kindFilter := range s.input.RelatedKinds {
 			for _, kind := range kinds {
 				if strings.EqualFold(kind, *kindFilter) {

@@ -3,9 +3,13 @@ package rbac
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,9 +42,12 @@ type UserDataCache struct {
 
 // Stuct to keep a copy of users access
 type UserData struct {
-	CsResources     []Resource            // Cluster-scoped resources on hub the user has list access.
-	NsResources     map[string][]Resource // Namespaced resources on hub the user has list access.
-	ManagedClusters map[string]struct{}   // Managed clusters where the user has view access.
+	CsResources             []Resource            // Cluster-scoped resources on hub the user has list access.
+	NsResources             map[string][]Resource // Namespaced resources on hub the user has list access.
+	ConsolidatedNsResources map[string][]string   // consolidated view of the hub namespaced resources.
+	NsResourceGroups        map[string]string     // identify namespace groups by group name.
+	ManagedClusters         map[string]struct{}   // Managed clusters where the user has view access.
+	ManagedClusterAllAccess bool
 }
 
 // Get user's UID
@@ -128,9 +135,42 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	if err == nil {
 		klog.V(5).Info("No errors on namespacedresources present for: ",
 			cache.tokenReviews[clientToken].tokenReview.Status.User.Username)
+		// create Managedclusters view
+		cache.createManagedClustersView(clientToken, userDataCache)
 		userDataCache, err = user.getClusterScopedResources(ctx, cache)
+	} else {
+		klog.Warning("Encountered error while checking user's namespacedresources access", err)
 	}
 	return userDataCache, err
+}
+
+func (cache *Cache) createManagedClustersView(clientToken string, userDataCache *UserDataCache) {
+	userName := cache.tokenReviews[clientToken].tokenReview.Status.User.Username
+	userId := cache.tokenReviews[clientToken].tokenReview.Status.User.UID
+
+	// store the users managedcluster list
+	mcsStr := ""
+	for mc := range userDataCache.ManagedClusters {
+		if mcsStr != "" {
+			mcsStr = fmt.Sprintf("%s, ('%s')", mcsStr, mc)
+		} else {
+			mcsStr = fmt.Sprintf("('%s')", mc)
+		}
+	}
+	values := fmt.Sprintf("('cluster',ARRAY['%s'])", strings.Join(GetKeys(userDataCache.ManagedClusters), "','"))
+	for res, groupNum := range userDataCache.NsResourceGroups {
+		values = values + "," + fmt.Sprintf("('%s',ARRAY['%s'])", groupNum, strings.Join(userDataCache.ConsolidatedNsResources[res], "','"))
+	}
+	tableName := "lookup_" + strings.ReplaceAll(userId, "-", "_")
+	lkpTable := fmt.Sprintf("drop view %s; create or replace view %s as with t (type, resList) as (values %s) select * from t;", tableName, tableName, values)
+	klog.Info("create table script: ", lkpTable)
+	_, createLkpErr := cache.pool.Exec(context.Background(), lkpTable)
+
+	if createLkpErr != nil {
+		klog.Errorf("Error creating lookup view %s: %s\n", tableName, createLkpErr)
+	} else {
+		klog.Infof("***** Created lookup view %s for user %s\n", tableName, userName)
+	}
 }
 
 func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (bool, error) {
@@ -154,6 +194,8 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		cache.shared.mcCache.lock.Lock()
 		defer cache.shared.mcCache.lock.Unlock()
 		user.ManagedClusters = cache.shared.managedClusters
+		user.ManagedClusterAllAccess = true
+		klog.V(5).Info("User has access to all managed clusters. Updating ManagedClusterAllAccess to true")
 		user.clustersCache.updatedAt = time.Now()
 		user.csrCache.err, user.nsrCache.err, user.clustersCache.err = nil, nil, nil
 		return true, nil
@@ -172,9 +214,10 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 	// Proceed if user's rbac data exists
 	// Get a copy of the current user access if user data exists
 	userAccess := UserData{
-		CsResources:     userDataCache.GetCsResources(),
-		NsResources:     userDataCache.GetNsResources(),
-		ManagedClusters: userDataCache.GetManagedClusters(),
+		CsResources:             userDataCache.GetCsResources(),
+		NsResources:             userDataCache.GetNsResources(),
+		ManagedClusters:         userDataCache.GetManagedClusters(),
+		ManagedClusterAllAccess: userDataCache.ManagedClusterAllAccess,
 	}
 	return userAccess, nil
 }
@@ -398,6 +441,7 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	klog.V(7).Infof("User %s with uid: %s has access to these ManagedClusters: %+v \n", userInfo.Username, uid,
 		user.ManagedClusters)
 
+	user.ConsolidatedNsResources, user.NsResourceGroups, err = consolidateNsResources(user.NsResources)
 	user.nsrCache.updatedAt = time.Now()
 	user.clustersCache.updatedAt = time.Now()
 
@@ -465,4 +509,48 @@ func (user *UserDataCache) GetManagedClusters() map[string]struct{} {
 	user.clustersCache.lock.Lock()
 	defer user.clustersCache.lock.Unlock()
 	return user.ManagedClusters
+}
+
+// Consolidate namespace resources by resource groups as key and namespaces as values
+// Returns map with resource groups
+// array with keys of the map - to preserve order for testing
+// error if any, while marshaling the resource groups
+func consolidateNsResources(nsResources map[string][]Resource) (map[string][]string, map[string]string, error) {
+	m := map[string][]string{}
+	nsGroups := map[string]string{}
+	i := 1
+	for ns, resources := range nsResources {
+		b, err := json.Marshal(resources)
+		if err == nil {
+			if _, found := m[string(b)]; found {
+				m[string(b)] = append(m[string(b)], ns)
+			} else {
+				m[string(b)] = []string{ns}
+				nsGroups[string(b)] = "group" + strconv.Itoa(i)
+				i++
+			}
+		} else {
+			klog.Info("Error marshaling resources:", err)
+			return nil, nil, err
+		}
+	}
+
+	klog.V(4).Infof("RBAC consolidation reduced from %d namespaces/s to %d namespace group/s.", len(nsResources), len(m))
+	return m, nsGroups, nil
+}
+
+func GetKeys(stringKeyMap interface{}) []string {
+	v := reflect.ValueOf(stringKeyMap)
+	if v.Kind() != reflect.Map {
+		klog.Error("input in getKeys is not a map")
+	}
+	if v.Type().Key().Kind() != reflect.String {
+		klog.Error("input map in getKeys does not have string keys")
+	}
+	keys := make([]string, 0, v.Len())
+	for _, key := range v.MapKeys() {
+		keys = append(keys, key.String())
+	}
+	sort.Strings(keys)
+	return keys
 }

@@ -117,7 +117,7 @@ func (s *SearchResult) Uids() {
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
 	return goqu.Or(
-		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
+		matchManagedCluster(rbac.GetKeys(userrbac.ManagedClusters), userrbac.ManagedClusterAllAccess, userInfo.UID), // goqu.I("cluster").In([]string{"clusterNames", ....})
 		matchHubCluster(userrbac, userInfo),
 	)
 }
@@ -331,7 +331,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 
 			}
 			//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
-			keys := getKeys(opDateValueMap)
+			keys := rbac.GetKeys(opDateValueMap)
 			var operatorWhereDs []exp.Expression //store all the clauses for this filter together
 			for _, operator := range keys {
 				operatorWhereDs = append(operatorWhereDs,
