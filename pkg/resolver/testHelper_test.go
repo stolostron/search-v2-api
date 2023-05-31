@@ -4,7 +4,7 @@ package resolver
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -88,7 +88,7 @@ func (r *Row) Scan(dest ...interface{}) error {
 //Prop will be the property input for searchComplete
 func newMockRows(mockDataFile string, input *model.SearchInput, prop string, limit int) *MockRows {
 	// Read json file and build mock data
-	bytes, _ := ioutil.ReadFile(mockDataFile)
+	bytes, _ := os.ReadFile(mockDataFile)
 	var data map[string]interface{}
 	if err := json.Unmarshal(bytes, &data); err != nil {
 		panic(err)
