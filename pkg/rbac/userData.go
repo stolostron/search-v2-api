@@ -162,7 +162,7 @@ func (cache *Cache) createManagedClustersView(clientToken string, userDataCache 
 		values = values + "," + fmt.Sprintf("('%s',ARRAY['%s'])", groupNum, strings.Join(userDataCache.ConsolidatedNsResources[res], "','"))
 	}
 	tableName := "lookup_" + strings.ReplaceAll(userId, "-", "_")
-	lkpTable := fmt.Sprintf("drop view %s; create or replace view %s as with t (type, resList) as (values %s) select * from t;", tableName, tableName, values)
+	lkpTable := fmt.Sprintf("drop view if exists %s; create or replace view %s as with t (type, resList) as (values %s) select * from t;", tableName, tableName, values)
 	klog.Info("create table script: ", lkpTable)
 	_, createLkpErr := cache.pool.Exec(context.Background(), lkpTable)
 
