@@ -93,6 +93,9 @@ func matchNamespacedResources(userData rbac.UserData, userInfo v1.UserInfo) exp.
 		return goqu.Or() // return empty clause
 
 	} else {
+		klog.V(5).Infof("User %s with UID %s has access to some namespace scoped resources.",
+			userInfo.Username, userInfo.UID)
+
 		var unMarshalErr error
 
 		consolidateNsList := userData.ConsolidatedNsResources
@@ -100,7 +103,7 @@ func matchNamespacedResources(userData rbac.UserData, userInfo v1.UserInfo) exp.
 		//consolidate namespace resources
 		// consolidateNsList, keys, jsonMarshalErr := consolidateNsResources(nsResources)
 		whereNsDs = make([]exp.Expression, len(consolidateNsList))
-		klog.V(2).Info("Using consolidated namespace list")
+		klog.V(2).Info("Using consolidated namespace list - ", len(consolidateNsList))
 		for count, resources := range keys {
 			groupName := userData.NsResourceGroups[resources]
 			tableName := "lookup_" + strings.ReplaceAll(userInfo.UID, "-", "_")
@@ -109,9 +112,10 @@ func matchNamespacedResources(userData rbac.UserData, userInfo v1.UserInfo) exp.
 			unMarshalErr = json.Unmarshal([]byte(resources), &resList)
 			if unMarshalErr == nil {
 				whereNsDs[count] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
-					goqu.Literal("?|"), goqu.From(tableName).Select(goqu.C("resList")).Where(goqu.C("type").Eq(groupName))),
+					goqu.Literal("?|"), goqu.From(tableName).Select(goqu.L("resList")).Where(goqu.C("type").Eq(groupName))),
 					matchApigroupKind(resList))
 			} else {
+				klog.Error("Error unmarshaling consolidated resources", unMarshalErr)
 				break // use non-consolidated namespace list
 			}
 		}

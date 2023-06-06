@@ -216,6 +216,8 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 	userAccess := UserData{
 		CsResources:             userDataCache.GetCsResources(),
 		NsResources:             userDataCache.GetNsResources(),
+		ConsolidatedNsResources: userDataCache.ConsolidatedNsResources,
+		NsResourceGroups:        userDataCache.NsResourceGroups,
 		ManagedClusters:         userDataCache.GetManagedClusters(),
 		ManagedClusterAllAccess: userDataCache.ManagedClusterAllAccess,
 	}
