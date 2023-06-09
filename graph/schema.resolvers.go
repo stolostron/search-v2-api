@@ -20,7 +20,11 @@ func (r *queryResolver) Search(ctx context.Context, input []*model.SearchInput) 
 
 // SearchComplete is the resolver for the searchComplete field.
 func (r *queryResolver) SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error) {
-	klog.V(3).Infof("Received SearchComplete query with input property **%s** and limit %d", property, limit)
+	if limit != nil {
+		klog.V(3).Infof("Received SearchComplete query with input property **%s** and limit %d", property, *limit)
+	} else {
+		klog.V(3).Infof("Received SearchComplete query with input property **%s**", property)
+	}
 	return resolver.SearchComplete(ctx, property, query, limit)
 }
 

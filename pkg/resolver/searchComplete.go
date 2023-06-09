@@ -88,14 +88,14 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 
 		// SELECT CLAUSE
 		if s.property == "cluster" {
-			selectDs = ds.SelectDistinct(goqu.C(s.property).As("prop"))
+			selectDs = ds.SelectDistinct(goqu.C(s.property))
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
 			whereDs = append(whereDs, goqu.C(s.property).IsNotNull(),
 				goqu.C(s.property).Neq("")) // remove empty strings from results
 		} else {
 			// "->" - get data as json object
 			// "->>" - get data as string
-			selectDs = ds.Select(goqu.L(`"data"->?`, s.property).As("prop"))
+			selectDs = ds.SelectDistinct(goqu.L(`"data"->?`, s.property))
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
 			whereDs = append(whereDs, goqu.L(`"data"->?`, s.property).IsNotNull())
 		}
@@ -117,23 +117,27 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			s.params = nil
 			return
 		}
-		// Adding an arbitrarily high number 100000 as limit here in the inner query
-		// Adding a LIMIT helps to speed up the query
-		// Adding a high number so as to get almost all the distinct properties from the database
-		selectDs = selectDs.Where(whereDs...).Limit(uint(config.Cfg.QueryLimit) * 100).As("searchComplete")
 
 		// LIMIT CLAUSE
 		if s.limit != nil && *s.limit > 0 {
 			limit = *s.limit
 		} else if s.limit != nil && *s.limit == -1 {
-			klog.Warning("No limit set. Fetching all results.")
+			klog.Warning("Limit set to -1. Fetching all results.")
 		} else {
 			limit = config.Cfg.QueryLimit
 		}
 
+		var params []interface{}
+		var sql string
+		var err error
+
 		// Get the query
-		sql, params, err := ds.SelectDistinct("prop").From(selectDs).Order(goqu.L("prop").Asc()).
-			Limit(uint(limit)).ToSQL()
+		if limit != 0 {
+			sql, params, err = selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
+		} else {
+			sql, params, err = selectDs.Where(whereDs...).ToSQL()
+		}
+
 		if err != nil {
 			klog.Errorf("Error building SearchComplete query: %s", err.Error())
 		}
