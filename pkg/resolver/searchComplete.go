@@ -122,7 +122,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		if s.limit != nil && *s.limit > 0 {
 			limit = *s.limit
 		} else if s.limit != nil && *s.limit == -1 {
-			klog.Warning("Limit set to -1. Fetching all results.")
+			klog.Warning("Limit set to -1. Fetching all results. This may affect performance.")
 		} else {
 			limit = config.Cfg.QueryLimit
 		}
@@ -132,7 +132,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		var err error
 
 		// Get the query
-		if limit != 0 {
+		if limit > 0 {
 			sql, params, err = selectDs.Where(whereDs...).Order(goqu.L(`"data"->?`, s.property).Asc()).Limit(uint(limit)).ToSQL()
 		} else {
 			sql, params, err = selectDs.Where(whereDs...).Order(goqu.L(`"data"->?`, s.property).Asc()).ToSQL()
