@@ -133,9 +133,9 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 
 		// Get the query
 		if limit != 0 {
-			sql, params, err = selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
+			sql, params, err = selectDs.Where(whereDs...).Order(goqu.L(`"data"->?`, s.property).Asc()).Limit(uint(limit)).ToSQL()
 		} else {
-			sql, params, err = selectDs.Where(whereDs...).ToSQL()
+			sql, params, err = selectDs.Where(whereDs...).Order(goqu.L(`"data"->?`, s.property).Asc()).ToSQL()
 		}
 
 		if err != nil {
