@@ -68,6 +68,34 @@ func Test_SearchComplete_Query_WithLimit(t *testing.T) {
 	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchComplete_Query_WithLimit")
 }
 
+func Test_SearchComplete_Query_WithNegativeLimit(t *testing.T) {
+	// Create a SearchCompleteResolver instance with a mock connection pool.
+	prop1 := "kind"
+	limit := -1
+	searchInput := &model.SearchInput{}
+	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, rbac.UserData{CsResources: []rbac.Resource{}}, nil)
+	resolver.limit = &limit //Add limit
+	val1 := "ConfigMap"
+	val2 := "ReplicaSet"
+	expectedProps := []*string{&val1, &val2}
+
+	// Mock the database queries.
+	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, prop1, limit)
+	// Mock the database query
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT "data"->'kind' FROM "search"."resources" WHERE (("data"->'kind' IS NOT NULL) AND ("cluster" = ANY ('{}'))) ORDER BY "data"->'kind' ASC`),
+		gomock.Eq([]interface{}{})).Return(mockRows, nil)
+
+	// Execute function
+	result, err := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
+	if err != nil {
+		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
+
+	}
+	// Verify response
+	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchComplete_Query_WithNegativeLimit")
+}
+
 func Test_SearchCompleteNoProp_Query(t *testing.T) {
 	// Create a SearchCompleteResolver instance with a mock connection pool.
 	prop1 := ""
