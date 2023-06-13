@@ -164,8 +164,7 @@ func (cache *Cache) createManagedClustersView(clientToken string, userDataCache 
 	tableName := "lookup_" + strings.ReplaceAll(userId, "-", "_")
 	lkpTable := fmt.Sprintf("CREATE OR REPLACE VIEW %s as with t (type, resList) as (values %s) select * from t;", tableName, values)
 	klog.Info("create table script: ", lkpTable)
-	var createLkpErr error
-	_, createLkpErr = cache.pool.Exec(context.Background(), lkpTable)
+	_, createLkpErr := cache.pool.Exec(context.Background(), lkpTable)
 
 	if createLkpErr != nil {
 		klog.Errorf("Error creating lookup view %s: %s for user %s\n", tableName, createLkpErr, userName)
