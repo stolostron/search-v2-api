@@ -7,6 +7,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
+	"github.com/lib/pq"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	v1 "k8s.io/api/authentication/v1"
 	"k8s.io/klog/v2"
@@ -135,31 +136,6 @@ func matchNamespacedResources(userData rbac.UserData, userInfo v1.UserInfo) exp.
 	}
 }
 
-// Consolidate namespace resources by resource groups as key and namespaces as values
-// Returns map with resource groups
-// array with keys of the map - to preserve order for testing
-// error if any, while marshaling the resource groups
-func consolidateNsResources(nsResources map[string][]rbac.Resource) (map[string][]string, []string, error) {
-	m := map[string][]string{}
-
-	for ns, resources := range nsResources {
-		b, err := json.Marshal(resources)
-		if err == nil {
-			if _, found := m[string(b)]; found {
-				m[string(b)] = append(m[string(b)], ns)
-			} else {
-				m[string(b)] = []string{ns}
-			}
-		} else {
-			klog.Info("Error marshaling resources:", err)
-			return nil, nil, err
-		}
-	}
-
-	klog.V(4).Infof("RBAC consolidation reduced from %d namespaces/s to %d namespace group/s.", len(nsResources), len(m))
-	return m, rbac.GetKeys(m), nil
-}
-
 // Match cluster scoped and namespace scoped resources from the hub.
 // These are identified by containing the property _hubClusterResource=true
 // Resolves to:
@@ -193,9 +169,12 @@ func matchManagedCluster(managedClusters []string, managedClusterAllAccess bool,
 	}
 
 	//managed clusters
-	tableName := "lookup_" + strings.ReplaceAll(userId, "-", "_")
-	return goqu.C("cluster").Eq(goqu.Any(goqu.From(tableName).Select(goqu.L("unnest(resList)")).
-		Where(goqu.C("type").Eq("cluster"))))
-	// return goqu.C("cluster").Eq(goqu.Any(pq.Array(managedClusters)))
+	if len(managedClusters) > 0 {
+		tableName := "lookup_" + strings.ReplaceAll(userId, "-", "_")
+		return goqu.C("cluster").Eq(goqu.Any(goqu.From(tableName).Select(goqu.L("unnest(resList)")).
+			Where(goqu.C("type").Eq("cluster"))))
+	}
+
+	return goqu.C("cluster").Eq(goqu.Any(pq.Array(managedClusters)))
 	// return goqu.L("unnest(array[sourceid, destid, concat('cluster__',cluster)])")
 }

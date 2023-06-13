@@ -443,7 +443,7 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 	klog.V(7).Infof("User %s with uid: %s has access to these ManagedClusters: %+v \n", userInfo.Username, uid,
 		user.ManagedClusters)
 
-	user.ConsolidatedNsResources, user.NsResourceGroups, err = consolidateNsResources(user.NsResources)
+	user.ConsolidatedNsResources, user.NsResourceGroups, err = ConsolidateNsResources(user.NsResources)
 	user.nsrCache.updatedAt = time.Now()
 	user.clustersCache.updatedAt = time.Now()
 
@@ -517,7 +517,7 @@ func (user *UserDataCache) GetManagedClusters() map[string]struct{} {
 // Returns map with resource groups
 // array with keys of the map - to preserve order for testing
 // error if any, while marshaling the resource groups
-func consolidateNsResources(nsResources map[string][]Resource) (map[string][]string, map[string]string, error) {
+func ConsolidateNsResources(nsResources map[string][]Resource) (map[string][]string, map[string]string, error) {
 	m := map[string][]string{}
 	nsGroups := map[string]string{}
 	i := 1
