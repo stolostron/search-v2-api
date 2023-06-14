@@ -167,7 +167,7 @@ func Test_SearchCompleteWithCluster(t *testing.T) {
 	// Mock the database query
 	// SELECT DISTINCT "prop" FROM (SELECT DISTINCT "cluster" AS "prop" FROM "search"."resources" WHERE (("cluster" IS NOT NULL) AND ("cluster" != '')) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 10
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "cluster" FROM "search"."resources" WHERE (("cluster" IS NOT NULL) AND ("cluster" != '') AND ("cluster" = ANY ('{}'))) ORDER BY "data"->'cluster' ASC LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "cluster" FROM "search"."resources" WHERE (("cluster" IS NOT NULL) AND ("cluster" != '') AND ("cluster" = ANY ('{}'))) ORDER BY "cluster" ASC LIMIT 10`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
