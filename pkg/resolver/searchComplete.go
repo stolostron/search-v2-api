@@ -88,14 +88,14 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 
 		// SELECT CLAUSE
 		if s.property == "cluster" {
-			selectDs = ds.SelectDistinct(goqu.C(s.property))
+			selectDs = ds.SelectDistinct(goqu.C(s.property)).Order(goqu.C(s.property).Asc())
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
 			whereDs = append(whereDs, goqu.C(s.property).IsNotNull(),
 				goqu.C(s.property).Neq("")) // remove empty strings from results
 		} else {
 			// "->" - get data as json object
 			// "->>" - get data as string
-			selectDs = ds.SelectDistinct(goqu.L(`"data"->?`, s.property))
+			selectDs = ds.SelectDistinct(goqu.L(`"data"->?`, s.property)).Order(goqu.L(`"data"->?`, s.property).Asc())
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
 			whereDs = append(whereDs, goqu.L(`"data"->?`, s.property).IsNotNull())
 		}
@@ -133,9 +133,9 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 
 		// Get the query
 		if limit > 0 {
-			sql, params, err = selectDs.Where(whereDs...).Order(goqu.L(`"data"->?`, s.property).Asc()).Limit(uint(limit)).ToSQL()
+			sql, params, err = selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
 		} else {
-			sql, params, err = selectDs.Where(whereDs...).Order(goqu.L(`"data"->?`, s.property).Asc()).ToSQL()
+			sql, params, err = selectDs.Where(whereDs...).ToSQL()
 		}
 
 		if err != nil {
