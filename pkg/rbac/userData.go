@@ -444,8 +444,12 @@ func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Cont
 		user.NsResources)
 	klog.V(7).Infof("User %s with uid: %s has access to these ManagedClusters: %+v \n", userInfo.Username, uid,
 		user.ManagedClusters)
+	var consolidateErr error
+	user.ConsolidatedNsResources, user.NsResourceGroups, consolidateErr = ConsolidateNsResources(user.NsResources)
+	if consolidateErr != nil {
+		klog.Warning("Error consolidating namespace resources: %s", err)
+	}
 
-	user.ConsolidatedNsResources, user.NsResourceGroups, err = ConsolidateNsResources(user.NsResources)
 	user.nsrCache.updatedAt = time.Now()
 	user.clustersCache.updatedAt = time.Now()
 
