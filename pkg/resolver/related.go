@@ -142,16 +142,13 @@ func (s *SearchResult) buildRelationsQuery() {
 	withoutRBACSql, _, withoutRBACSqlErr := relQueryInnerJoin.ToSQL()
 	klog.V(5).Info("Relations query before RBAC:", withoutRBACSql, withoutRBACSqlErr)
 
-	//get user info for logging
-	_, userInfo := rbac.GetCache().GetUserUID(s.context)
-
 	// if one of them is not nil, userData is not empty
 	if s.userData.CsResources != nil || s.userData.NsResources != nil || s.userData.ManagedClusters != nil {
 		// add rbac
-		relQueryWithRbac = relQueryInnerJoin.Where(buildRbacWhereClause(s.context, s.userData, userInfo))
+		relQueryWithRbac = relQueryInnerJoin.Where(buildRbacWhereClause(s.context, s.userData, s.userInfo))
 	} else {
 		errorStr := fmt.Sprintf("RBAC clause is required! None found for relations query %+v for user %s with uid %s ",
-			s.input, userInfo.Username, userInfo.UID)
+			s.input, s.userInfo.Username, s.userInfo.UID)
 		s.checkErrorBuildingQuery(fmt.Errorf(errorStr), "Error building search relations query")
 		return
 	}

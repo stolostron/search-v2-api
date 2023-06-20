@@ -16,6 +16,7 @@ import (
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/metrics"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
+	v1 "k8s.io/api/authentication/v1"
 	klog "k8s.io/klog/v2"
 )
 
@@ -28,6 +29,7 @@ type SearchCompleteResult struct {
 	params    []interface{}
 	propTypes map[string]string
 	userData  rbac.UserData
+	userInfo  v1.UserInfo
 }
 
 var arrayProperties = make(map[string]struct{})
@@ -47,7 +49,11 @@ func SearchComplete(ctx context.Context, property string, srchInput *model.Searc
 	if userDataErr != nil {
 		return []*string{}, userDataErr
 	}
-
+	//get user info for logging
+	uid, userInfo := rbac.GetCache().GetUserUID(ctx)
+	if uid == "noUidFound" {
+		return []*string{}, fmt.Errorf("Search complete query cannot be resolved. Cannot find user with uid: %s", uid)
+	}
 	// Check that shared cache has property types:
 	propTypes, err := rbac.GetCache().GetPropertyTypes(ctx, false)
 	if err != nil {
@@ -61,6 +67,7 @@ func SearchComplete(ctx context.Context, property string, srchInput *model.Searc
 		property:  property,
 		limit:     limit,
 		userData:  userData,
+		userInfo:  userInfo,
 		propTypes: propTypes,
 	}
 	return searchCompleteResult.autoComplete(ctx)
@@ -100,18 +107,15 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 			whereDs = append(whereDs, goqu.L(`"data"->?`, s.property).IsNotNull())
 		}
 
-		// get user info for logging
-		_, userInfo := rbac.GetCache().GetUserUID(ctx)
-
 		// RBAC CLAUSE
 		// if one of them is not nil, userData is not empty
 		if s.userData.CsResources != nil || s.userData.NsResources != nil || s.userData.ManagedClusters != nil {
 			whereDs = append(whereDs,
-				buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
+				buildRbacWhereClause(ctx, s.userData, s.userInfo)) // add rbac
 		} else {
 			klog.Errorf("Error building searchComplete query: RBAC clause is required!"+
 				" None found for searchComplete query %+v for user %s with uid %s ",
-				s.input, userInfo.Username, userInfo.UID)
+				s.input, s.userInfo.Username, s.userInfo.UID)
 
 			s.query = ""
 			s.params = nil

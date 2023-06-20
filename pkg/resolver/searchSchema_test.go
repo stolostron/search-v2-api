@@ -25,14 +25,13 @@ func Test_SearchSchema_Query(t *testing.T) {
 		t.Errorf("Expected sql query: %s but got %s", sql, resolver.query)
 	}
 }
-
 func Test_SearchSchema_Results(t *testing.T) {
 	// Create a SearchSchemaResolver instance with a mock connection pool.
 	searchInput := &model.SearchInput{}
 	resolver, mockPool := newMockSearchSchema(t)
 	csRes, nsRes, managedClusters := newUserData()
 	resolver.userData = rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
-
+	resolver.userData.ConsolidatedNsResources, resolver.userData.NsResourceGroups, _ = rbac.ConsolidateNsResources(resolver.userData.NsResources)
 	expectedList := []string{"cluster", "kind", "label", "name", "namespace", "status"}
 
 	expectedRes := map[string]interface{}{
@@ -44,7 +43,36 @@ func Test_SearchSchema_Results(t *testing.T) {
 	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, " ", 0)
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments'))))))) LIMIT 100000) AS "schema"`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?'default' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?'ocm' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments'))))))) LIMIT 100000) AS "schema"`),
+	).Return(mockRows, nil)
+	resolver.buildSearchSchemaQuery(context.TODO())
+	res, _ := resolver.searchSchemaResults(context.TODO())
+
+	result := stringArrayToPointer(res["allProperties"].([]string))
+	expectedResult := stringArrayToPointer(expectedRes["allProperties"].([]string))
+
+	AssertStringArrayEqual(t, result, expectedResult, "Search schema results doesn't match.")
+}
+func Test_SearchSchema_ResultsWithUserInfo(t *testing.T) {
+	// Create a SearchSchemaResolver instance with a mock connection pool.
+	searchInput := &model.SearchInput{}
+	resolver, mockPool := newMockSearchSchema(t)
+	csRes, nsRes, managedClusters := newUserData()
+	resolver.userData = rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
+	resolver.userData.ConsolidatedNsResources, resolver.userData.NsResourceGroups, _ = rbac.ConsolidateNsResources(resolver.userData.NsResources)
+	resolver.userInfo = getUserInfo()
+	expectedList := []string{"cluster", "kind", "label", "name", "namespace", "status"}
+
+	expectedRes := map[string]interface{}{
+		"allProperties": expectedList,
+	}
+
+	// Mock the database queries.
+	//SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" LIMIT 100000) AS "schema"
+	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, " ", 0)
+	// Mock the database query
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" WHERE (("cluster" = ANY ((SELECT unnest(resList) FROM "lookup_unique_user_id" WHERE ("type" = 'cluster')))) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group1')) AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group2')) AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments'))))))) LIMIT 100000) AS "schema"`),
 	).Return(mockRows, nil)
 	resolver.buildSearchSchemaQuery(context.TODO())
 	res, _ := resolver.searchSchemaResults(context.TODO())

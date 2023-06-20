@@ -11,6 +11,7 @@ import (
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/authentication/v1"
 )
 
 func Test_SearchResolver_Count(t *testing.T) {
@@ -48,7 +49,32 @@ func Test_SearchResolver_Count_WithRBAC(t *testing.T) {
 	// Mock the database query
 	mockRow := &Row{MockValue: 10}
 	mockPool.EXPECT().QueryRow(gomock.Any(),
-		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->'kind'?('Pod') AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments'))))))))`),
+		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->'kind'?('Pod') AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?'default' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?'ocm' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments'))))))))`),
+		gomock.Eq([]interface{}{})).Return(mockRow)
+
+	// Execute function
+	r := resolver.Count()
+
+	// Verify response
+	if r != mockRow.MockValue {
+		t.Errorf("Incorrect Count() expected [%d] got [%d]", mockRow.MockValue, r)
+	}
+}
+
+func Test_SearchResolver_Count_WithRBACWithUserInfo(t *testing.T) {
+	csRes, nsRes, managedClusters := newUserData()
+	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
+	ud.ConsolidatedNsResources, ud.NsResourceGroups, _ = rbac.ConsolidateNsResources(ud.NsResources)
+	// Create a SearchResolver instance with a mock connection pool.
+	val1 := "Pod"
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
+	propTypesMock := map[string]string{"kind": "string"}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, ud, propTypesMock)
+	resolver.userInfo = getUserInfo()
+	// Mock the database query
+	mockRow := &Row{MockValue: 10}
+	mockPool.EXPECT().QueryRow(gomock.Any(),
+		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->'kind'?('Pod') AND (("cluster" = ANY ((SELECT unnest(resList) FROM "lookup_unique_user_id" WHERE ("type" = 'cluster')))) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group1')) AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group2')) AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments'))))))))`),
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
@@ -179,45 +205,45 @@ func Test_SearchResolver_ItemsWithNumOperator(t *testing.T) {
 	val1 := ">1"
 	testOperatorGreater := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val1}}}},
-		mockQuery:   `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'current' > '1') AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 1000`,
+		mockQuery:   `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'current' > '1') AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?'default' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?'ocm' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 1000`,
 	}
 	val2 := "<4"
 	testOperatorLesser := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val2}}}},
-		mockQuery:   `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'current' < '4') AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 1000`,
+		mockQuery:   `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'current' < '4') AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?'default' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?'ocm' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 1000`,
 	}
 	val3 := ">=1"
 	testOperatorGreaterorEqual := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val3}}}},
-		mockQuery:   `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'current' >= '1') AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 1000`,
+		mockQuery:   `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'current' >= '1') AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?'default' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?'ocm' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 1000`,
 	}
 	val4 := "<=3"
 	testOperatorLesserorEqual := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val4}}}},
-		mockQuery:   `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'current' <= '3') AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 1000`,
+		mockQuery:   `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'current' <= '3') AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?'default' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?'ocm' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 1000`,
 	}
 
 	val5 := "!4"
 	testOperatorNot := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val5}}}},
-		mockQuery:   `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'current' NOT IN ('4')) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 1000`,
+		mockQuery:   `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'current' NOT IN ('4')) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?'default' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?'ocm' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 1000`,
 	}
 
 	val6 := "!=4"
 	testOperatorNotEqual := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val6}}}},
-		mockQuery:   `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'current' NOT IN ('4')) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 1000`,
+		mockQuery:   `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'current' NOT IN ('4')) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?'default' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?'ocm' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 1000`,
 	}
 
 	val7 := "=3"
 	testOperatorEqual := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val7}}}},
-		mockQuery:   `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'current' IN ('3')) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 1000`,
+		mockQuery:   `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'current' IN ('3')) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?'default' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?'ocm' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 1000`,
 	}
 
 	testOperatorMultiple := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val1, &val2}}}},
-		mockQuery:   `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ((("data"->>'current' < '4') OR ("data"->>'current' > '1')) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 1000`,
+		mockQuery:   `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ((("data"->>'current' < '4') OR ("data"->>'current' > '1')) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?'default' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?'ocm' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 1000`,
 	}
 
 	testOperators := []TestOperatorItem{
@@ -227,6 +253,7 @@ func Test_SearchResolver_ItemsWithNumOperator(t *testing.T) {
 	}
 	testAllOperators(t, testOperators)
 }
+
 func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	//define schema table:
 	schemaTable := goqu.S("search").Table("resources")
@@ -237,9 +264,12 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	opValMap := getOperatorAndNumDateFilter(prop, []string{val8}, nil)
 	csres, nsres, mc := newUserData()
 
+	ud := rbac.UserData{CsResources: csres, NsResources: nsres, ManagedClusters: mc}
+	ud.ConsolidatedNsResources, ud.NsResourceGroups, _ = rbac.ConsolidateNsResources(ud.NsResources)
+
 	rbac := buildRbacWhereClause(context.TODO(),
-		rbac.UserData{CsResources: csres, NsResources: nsres, ManagedClusters: mc},
-		getUserInfo())
+		ud,
+		v1.UserInfo{})
 	mockQueryYear, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0]), rbac).Limit(1000).ToSQL()
 
 	testOperatorYear := TestOperatorItem{
@@ -299,10 +329,12 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 
 }
 
+//TODO: rewrite
 func testAllOperators(t *testing.T, testOperators []TestOperatorItem) {
 	for _, currTest := range testOperators {
 		csRes, nsRes, mc := newUserData()
 		ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: mc}
+		ud.ConsolidatedNsResources, ud.NsResourceGroups, _ = rbac.ConsolidateNsResources(ud.NsResources)
 		propTypesMock := map[string]string{"current": "number", "created": "string"}
 		// Create a SearchResolver instance with a mock connection pool.
 		resolver, mockPool := newMockSearchResolver(t, currTest.searchInput, nil, ud, propTypesMock)
@@ -314,6 +346,7 @@ func testAllOperators(t *testing.T, testOperators []TestOperatorItem) {
 			gomock.Eq([]interface{}{}),
 		).Return(mockRows, nil)
 
+		resolver.context = context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456")
 		// Execute the function
 		result := resolver.Items()
 		// Verify returned items.
@@ -523,10 +556,10 @@ func Test_buildRbacWhereClauseCs(t *testing.T) {
 func Test_buildRbacWhereClauseNs(t *testing.T) {
 	_, nsScopeAccess, _ := newUserData()
 	ud := rbac.UserData{NsResources: nsScopeAccess}
-
+	ud.ConsolidatedNsResources, ud.NsResourceGroups, _ = rbac.ConsolidateNsResources(ud.NsResources)
 	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
 		ud, getUserInfo())
-	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{}')) OR ("data"?'_hubClusterResource' AND ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments'))))))`
+	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{}')) OR ("data"?'_hubClusterResource' AND ((data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group1')) AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group2')) AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments'))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
 
@@ -535,9 +568,10 @@ func Test_buildRbacWhereClauseNs(t *testing.T) {
 func Test_buildRbacWhereClauseCsAndNs(t *testing.T) {
 	res, nsScopeAccess, _ := newUserData()
 	ud := rbac.UserData{CsResources: res, NsResources: nsScopeAccess}
+	ud.ConsolidatedNsResources, ud.NsResourceGroups, _ = rbac.ConsolidateNsResources(ud.NsResources)
 	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
 		ud, getUserInfo())
-	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))`
+	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group1')) AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group2')) AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
 
@@ -546,9 +580,10 @@ func Test_buildRbacWhereClauseCsAndNs(t *testing.T) {
 func Test_buildRbacWhereClauseCsNsAndMc(t *testing.T) {
 	csres, nsScopeAccess, managedClusters := newUserData()
 	ud := rbac.UserData{CsResources: csres, NsResources: nsScopeAccess, ManagedClusters: managedClusters}
+	ud.ConsolidatedNsResources, ud.NsResourceGroups, _ = rbac.ConsolidateNsResources(ud.NsResources)
 	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
 		ud, getUserInfo())
-	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))`
+	expectedSql := `SELECT * WHERE (("cluster" = ANY ((SELECT unnest(resList) FROM "lookup_unique_user_id" WHERE ("type" = 'cluster')))) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group1')) AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group2')) AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
 }
@@ -651,9 +686,10 @@ func Test_buildRbacWhereClauseHandleStars(t *testing.T) {
 		CsResources:     []rbac.Resource{{Apigroup: "", Kind: "nodes"}, {Apigroup: "*", Kind: "csinodes"}},
 		NsResources:     map[string][]rbac.Resource{"ocm": {{Apigroup: "*", Kind: "pods"}, {Apigroup: "*", Kind: "deployments"}}},
 		ManagedClusters: map[string]struct{}{"managed1": {}, "managed2": {}}}
+	ud.ConsolidatedNsResources, ud.NsResourceGroups, _ = rbac.ConsolidateNsResources(ud.NsResources)
 	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
 		ud, getUserInfo())
-	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR data->'kind_plural'?'csinodes')) OR (data->'namespace'?|'{"ocm"}' AND (data->'kind_plural'?'pods' OR data->'kind_plural'?'deployments')))))`
+	expectedSql := `SELECT * WHERE (("cluster" = ANY ((SELECT unnest(resList) FROM "lookup_unique_user_id" WHERE ("type" = 'cluster')))) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR data->'kind_plural'?'csinodes')) OR (data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group1')) AND (data->'kind_plural'?'pods' OR data->'kind_plural'?'deployments')))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
 }
@@ -663,9 +699,11 @@ func Test_buildRbacWhereClauseHandleAllStars(t *testing.T) {
 		CsResources:     []rbac.Resource{{Apigroup: "", Kind: "nodes"}, {Apigroup: "*", Kind: "*"}},
 		NsResources:     map[string][]rbac.Resource{"ocm": {{Apigroup: "*", Kind: "pods"}, {Apigroup: "*", Kind: "*"}}},
 		ManagedClusters: map[string]struct{}{"managed1": {}, "managed2": {}}}
+	ud.ConsolidatedNsResources, ud.NsResourceGroups, _ = rbac.ConsolidateNsResources(ud.NsResources)
 	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
 		ud, getUserInfo())
-	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND (NOT("data"?'namespace') OR data->'namespace'?|'{"ocm"}')))`
+	// expectedSql := `SELECT * WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND (NOT("data"?'namespace') OR data->'namespace'?|'{"ocm"}')))`
+	expectedSql := `SELECT * WHERE (("cluster" = ANY ((SELECT unnest(resList) FROM "lookup_unique_user_id" WHERE ("type" = 'cluster')))) OR ("data"?'_hubClusterResource' AND (NOT("data"?'namespace') OR data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group1')))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
 }
@@ -675,17 +713,21 @@ func Test_SearchResolver_UidsAllAccess(t *testing.T) {
 	val1 := "template"
 	propTypesMock := map[string]string{"kind": "string"}
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, rbac.UserData{
+	ud := rbac.UserData{
 		CsResources:     []rbac.Resource{{Apigroup: "*", Kind: "*"}},
 		NsResources:     map[string][]rbac.Resource{"*": {{Apigroup: "*", Kind: "*"}}},
 		ManagedClusters: map[string]struct{}{"managed-cluster1": {}},
-	},
+	}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, ud,
 		propTypesMock)
+	resolver.userInfo = getUserInfo()
+	ud.ConsolidatedNsResources, ud.NsResourceGroups, _ = rbac.ConsolidateNsResources(ud.NsResources)
+
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", 0)
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT "uid" FROM "search"."resources" WHERE (("data"->>'kind' ILIKE ANY ('{"template"}')) AND (("cluster" = ANY ('{"managed-cluster1"}')) OR "data"?'_hubClusterResource')) LIMIT 1000`),
+		gomock.Eq(`SELECT "uid" FROM "search"."resources" WHERE (("data"->>'kind' ILIKE ANY ('{"template"}')) AND (("cluster" = ANY ((SELECT unnest(resList) FROM "lookup_unique_user_id" WHERE ("type" = 'cluster')))) OR "data"?'_hubClusterResource')) LIMIT 1000`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 

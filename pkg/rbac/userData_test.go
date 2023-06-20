@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/driftprogramming/pgxpoolmock"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
@@ -19,15 +21,18 @@ import (
 )
 
 // Initialize cache object to use tests.
-func mockNamespaceCache() *Cache {
-
+func mockNamespaceCache(t *testing.T) (*Cache, *pgxpoolmock.MockPgxPool) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockPool := pgxpoolmock.NewMockPgxPool(ctrl)
 	return &Cache{
 		users:            map[string]*UserDataCache{},
 		shared:           SharedData{},
 		restConfig:       &rest.Config{},
 		tokenReviews:     map[string]*tokenReviewCache{},
+		pool:             mockPool,
 		tokenReviewsLock: sync.Mutex{},
-	}
+	}, mockPool
 }
 
 func setupToken(cache *Cache) *Cache {
@@ -63,7 +68,7 @@ func addCSResources(cache *Cache, res []Resource) *Cache {
 }
 
 func Test_getNamespaces_emptyCache(t *testing.T) {
-	mock_cache := mockNamespaceCache()
+	mock_cache, mockPool := mockNamespaceCache(t)
 	mock_cache = setupToken(mock_cache)
 
 	var namespaces []string
@@ -99,6 +104,9 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 		return true, rulesCheck, nil
 	})
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
+	mockPool.EXPECT().Exec(gomock.Any(),
+		gomock.Eq("CREATE OR REPLACE VIEW lookup_unique_user_id as with t (type, resList) as (values ('cluster',ARRAY['']),('group1',ARRAY['some-namespace'])) select * from t;")).
+		Return(nil, nil)
 	result, err := mock_cache.GetUserDataCache(ctx, fs.AuthorizationV1())
 
 	if len(result.NsResources) != 1 ||
@@ -118,7 +126,7 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 func Test_getNamespaces_usingCache(t *testing.T) {
 	var namespaces []string
 	nsresources := make(map[string][]Resource)
-	mock_cache := mockNamespaceCache()
+	mock_cache, _ := mockNamespaceCache(t)
 	//mock cache for token review to get user data:
 	mock_cache = setupToken(mock_cache)
 
@@ -186,7 +194,7 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 	var namespaces []string
 	nsresources := make(map[string][]Resource)
 
-	mock_cache := mockNamespaceCache()
+	mock_cache, mockPool := mockNamespaceCache(t)
 
 	//mock cache for token review to get user data:
 	mock_cache = setupToken(mock_cache)
@@ -206,6 +214,10 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 		UserData: UserData{NsResources: nsresources},
 		nsrCache: cacheMetadata{updatedAt: last_cache_time},
 	}
+	mock_cache.users["unique-user-id"].ConsolidatedNsResources,
+		mock_cache.users["unique-user-id"].NsResourceGroups, _ =
+		ConsolidateNsResources(mock_cache.users["unique-user-id"].NsResources)
+
 	rulesCheck := &authz.SelfSubjectRulesReview{
 		Spec: authz.SelfSubjectRulesReviewSpec{
 			Namespace: "some-namespace",
@@ -234,6 +246,9 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 		return true, rulesCheck, nil
 	})
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
+	mockPool.EXPECT().Exec(gomock.Any(),
+		gomock.Eq("CREATE OR REPLACE VIEW lookup_unique_user_id as with t (type, resList) as (values ('cluster',ARRAY['']),('group1',ARRAY['some-namespace'])) select * from t;")).
+		Return(nil, nil)
 	result, err := mock_cache.GetUserDataCache(ctx, fs.AuthorizationV1())
 
 	if len(result.NsResources) != 1 || len(result.NsResources["some-namespace"]) != 2 ||
@@ -257,7 +272,7 @@ func Test_getNamespaces_expiredCache(t *testing.T) {
 
 func Test_clusterScoped_usingCache(t *testing.T) {
 
-	mock_cache := mockNamespaceCache()
+	mock_cache, _ := mockNamespaceCache(t)
 	mock_cache = setupToken(mock_cache)
 	res := []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}}
 	mock_cache = addCSResources(mock_cache, res)
@@ -285,7 +300,7 @@ func Test_clusterScoped_usingCache(t *testing.T) {
 }
 func Test_clusterScoped_expiredCache(t *testing.T) {
 
-	mock_cache := mockNamespaceCache()
+	mock_cache, mockPool := mockNamespaceCache(t)
 	mock_cache = setupToken(mock_cache)
 	mock_cache.shared.nsCache.updatedAt = time.Now()
 
@@ -346,6 +361,10 @@ func Test_clusterScoped_expiredCache(t *testing.T) {
 		authzClient: fs.AuthorizationV1(),
 	}
 
+	mockPool.EXPECT().Exec(gomock.Any(),
+		gomock.Eq("CREATE OR REPLACE VIEW lookup_unique_user_id as with t (type, resList) as (values ('cluster',ARRAY[''])) select * from t;")).
+		Return(nil, nil)
+
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 	result, err := mock_cache.GetUserDataCache(ctx, fs.AuthorizationV1())
 
@@ -365,7 +384,7 @@ func Test_clusterScoped_expiredCache(t *testing.T) {
 }
 func Test_managedClusters_emptyCache(t *testing.T) {
 
-	mock_cache := mockNamespaceCache()
+	mock_cache, mockPool := mockNamespaceCache(t)
 	mock_cache = setupToken(mock_cache)
 
 	var namespaces []string
@@ -425,6 +444,10 @@ func Test_managedClusters_emptyCache(t *testing.T) {
 		return true, notCreateRule, nil
 
 	})
+	mockPool.EXPECT().Exec(gomock.Any(),
+		gomock.Eq("CREATE OR REPLACE VIEW lookup_unique_user_id as with t (type, resList) as (values ('cluster',ARRAY['some-managed-cluster']),('group1',ARRAY['some-managed-cluster1'])) select * from t;")).
+		Return(nil, nil)
+
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 	result, err := mock_cache.GetUserDataCache(ctx, fs.AuthorizationV1())
 
@@ -440,7 +463,7 @@ func Test_managedClusters_emptyCache(t *testing.T) {
 
 func Test_managedClusters_usingCache(t *testing.T) {
 
-	mock_cache := mockNamespaceCache()
+	mock_cache, _ := mockNamespaceCache(t)
 	mock_cache = setupToken(mock_cache)
 
 	res := []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}}
@@ -474,7 +497,7 @@ func Test_managedClusters_usingCache(t *testing.T) {
 }
 
 func Test_managedCluster_expiredCache(t *testing.T) {
-	mock_cache := mockNamespaceCache()
+	mock_cache, mockPool := mockNamespaceCache(t)
 	mock_cache = setupToken(mock_cache)
 
 	managedClusters := map[string]struct{}{"some-managed-cluster": {}, "some-other-managed-cluster": {}}
@@ -548,6 +571,9 @@ func Test_managedCluster_expiredCache(t *testing.T) {
 		clustersCache: cacheMetadata{updatedAt: last_cache_time},
 		authzClient:   fs.AuthorizationV1(),
 	}
+	mockPool.EXPECT().Exec(gomock.Any(),
+		gomock.Eq("CREATE OR REPLACE VIEW lookup_unique_user_id as with t (type, resList) as (values ('cluster',ARRAY['some-managed-cluster']),('group1',ARRAY['some-managed-cluster1'])) select * from t;")).
+		Return(nil, nil)
 
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 	result, err := mock_cache.GetUserDataCache(ctx, fs.AuthorizationV1())
@@ -567,7 +593,7 @@ func Test_managedCluster_expiredCache(t *testing.T) {
 }
 
 func Test_managedCluster_GetUserData(t *testing.T) {
-	mock_cache := mockNamespaceCache()
+	mock_cache, _ := mockNamespaceCache(t)
 	mock_cache = setupToken(mock_cache)
 
 	managedClusters := map[string]struct{}{"managed-cluster1": {}}
@@ -599,7 +625,7 @@ func Test_managedCluster_GetUserData(t *testing.T) {
 
 func Test_getUserData(t *testing.T) {
 
-	mock_cache := mockNamespaceCache()
+	mock_cache, _ := mockNamespaceCache(t)
 	mock_cache = setupToken(mock_cache)
 	mock_cache.users["unique-user-id"] = &UserDataCache{
 		UserData: UserData{
@@ -660,7 +686,7 @@ func Test_getImpersonationClientSet(t *testing.T) {
 }
 
 func Test_hasAccessToAllResourcesInNamespace(t *testing.T) {
-	mock_cache := mockNamespaceCache()
+	mock_cache, mockPool := mockNamespaceCache(t)
 	mock_cache = setupToken(mock_cache)
 
 	var namespaces []string
@@ -696,6 +722,9 @@ func Test_hasAccessToAllResourcesInNamespace(t *testing.T) {
 		return true, rulesCheck, nil
 	})
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
+	mockPool.EXPECT().Exec(gomock.Any(),
+		gomock.Eq("CREATE OR REPLACE VIEW lookup_unique_user_id as with t (type, resList) as (values ('cluster',ARRAY['']),('group1',ARRAY['some-namespace'])) select * from t;")).
+		Return(nil, nil)
 	result, err := mock_cache.GetUserDataCache(ctx, fs.AuthorizationV1())
 
 	if len(result.NsResources) != 1 ||
@@ -711,7 +740,7 @@ func Test_hasAccessToAllResourcesInNamespace(t *testing.T) {
 }
 
 func Test_hasAccessToAllResources(t *testing.T) {
-	mock_cache := mockNamespaceCache()
+	mock_cache, _ := mockNamespaceCache(t)
 	mock_cache = setupToken(mock_cache)
 
 	var namespaces []string
@@ -760,7 +789,7 @@ func Test_hasAccessToAllResources(t *testing.T) {
 
 //User should have access to ManagedClusters
 func Test_updateUserManagedClusterList(t *testing.T) {
-	mock_cache := mockNamespaceCache()
+	mock_cache, _ := mockNamespaceCache(t)
 	mock_cache = setupToken(mock_cache)
 
 	udc := &UserDataCache{

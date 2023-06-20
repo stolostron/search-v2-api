@@ -158,11 +158,13 @@ func (cache *Cache) createManagedClustersView(clientToken string, userDataCache 
 		}
 	}
 	values := fmt.Sprintf("('cluster',ARRAY['%s'])", strings.Join(GetKeys(userDataCache.ManagedClusters), "','"))
-	for res, groupNum := range userDataCache.NsResourceGroups {
-		values = values + "," + fmt.Sprintf("('%s',ARRAY['%s'])", groupNum, strings.Join(userDataCache.ConsolidatedNsResources[res], "','"))
+	for _, res := range GetKeys(userDataCache.NsResourceGroups) {
+		values = values + "," + fmt.Sprintf("('%s',ARRAY['%s'])", userDataCache.NsResourceGroups[res],
+			strings.Join(userDataCache.ConsolidatedNsResources[res], "','"))
 	}
 	tableName := "lookup_" + strings.ReplaceAll(userId, "-", "_")
-	lkpTable := fmt.Sprintf("CREATE OR REPLACE VIEW %s as with t (type, resList) as (values %s) select * from t;", tableName, values)
+	lkpTable := fmt.Sprintf("CREATE OR REPLACE VIEW %s as with t (type, resList) as (values %s) select * from t;",
+		tableName, values)
 	klog.Info("create table script: ", lkpTable)
 	_, createLkpErr := cache.pool.Exec(context.Background(), lkpTable)
 
@@ -518,17 +520,18 @@ func (user *UserDataCache) GetManagedClusters() map[string]struct{} {
 // array with keys of the map - to preserve order for testing
 // error if any, while marshaling the resource groups
 func ConsolidateNsResources(nsResources map[string][]Resource) (map[string][]string, map[string]string, error) {
-	m := map[string][]string{}
-	nsGroups := map[string]string{}
+	consolidatedNsbyResources := map[string][]string{}
+	nsResourcesToGroupNames := map[string]string{}
 	i := 1
-	for ns, resources := range nsResources {
+	for _, ns := range GetKeys(nsResources) {
+		resources := nsResources[ns]
 		b, err := json.Marshal(resources)
 		if err == nil {
-			if _, found := m[string(b)]; found {
-				m[string(b)] = append(m[string(b)], ns)
+			if _, found := consolidatedNsbyResources[string(b)]; found {
+				consolidatedNsbyResources[string(b)] = append(consolidatedNsbyResources[string(b)], ns)
 			} else {
-				m[string(b)] = []string{ns}
-				nsGroups[string(b)] = "group" + strconv.Itoa(i)
+				consolidatedNsbyResources[string(b)] = []string{ns}
+				nsResourcesToGroupNames[string(b)] = "group" + strconv.Itoa(i)
 				i++
 			}
 		} else {
@@ -537,8 +540,8 @@ func ConsolidateNsResources(nsResources map[string][]Resource) (map[string][]str
 		}
 	}
 
-	klog.V(4).Infof("RBAC consolidation reduced from %d namespaces/s to %d namespace group/s.", len(nsResources), len(m))
-	return m, nsGroups, nil
+	klog.V(4).Infof("RBAC consolidation reduced from %d namespaces/s to %d namespace group/s.", len(nsResources), len(consolidatedNsbyResources))
+	return consolidatedNsbyResources, nsResourcesToGroupNames, nil
 }
 
 func GetKeys(stringKeyMap interface{}) []string {

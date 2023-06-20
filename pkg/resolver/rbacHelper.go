@@ -83,6 +83,8 @@ func matchClusterScopedResources(csRes []rbac.Resource, userInfo v1.UserInfo) ex
 func matchNamespacedResources(userData rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
 	var whereNsDs []exp.Expression
 	namespaces := rbac.GetKeys(userData.NsResources)
+	klog.Info("userId in matchNamespacedResources: ", userInfo.UID)
+
 	if len(userData.NsResources) < 1 { // no namespace scoped resources for user
 		klog.V(5).Infof("User %s with UID %s has no access to namespace scoped resources.",
 			userInfo.Username, userInfo.UID)
@@ -98,32 +100,33 @@ func matchNamespacedResources(userData rbac.UserData, userInfo v1.UserInfo) exp.
 			userInfo.Username, userInfo.UID)
 
 		var unMarshalErr error
+		// if userid is known, use consolidated namespace resources
+		if userInfo.UID != "" {
+			consolidateNsList := userData.ConsolidatedNsResources
+			keys := rbac.GetKeys(userData.ConsolidatedNsResources)
+			//use consolidated namespace resources
+			whereNsDs = make([]exp.Expression, len(consolidateNsList))
+			klog.V(2).Info("Using consolidated namespace list - ", len(consolidateNsList))
 
-		consolidateNsList := userData.ConsolidatedNsResources
-		keys := rbac.GetKeys(userData.ConsolidatedNsResources)
-		//consolidate namespace resources
-		// consolidateNsList, keys, jsonMarshalErr := consolidateNsResources(nsResources)
-		whereNsDs = make([]exp.Expression, len(consolidateNsList))
-		klog.V(2).Info("Using consolidated namespace list - ", len(consolidateNsList))
-		for count, resources := range keys {
-			groupName := userData.NsResourceGroups[resources]
-			tableName := "lookup_" + strings.ReplaceAll(userInfo.UID, "-", "_")
-			resList := []rbac.Resource{}
+			for count, resources := range keys {
+				groupName := userData.NsResourceGroups[resources]
+				tableName := "lookup_" + strings.ReplaceAll(userInfo.UID, "-", "_")
+				resList := []rbac.Resource{}
 
-			unMarshalErr = json.Unmarshal([]byte(resources), &resList)
-			if unMarshalErr == nil {
-				whereNsDs[count] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
-					goqu.Literal("?|"), goqu.From(tableName).Select(goqu.L("resList")).Where(goqu.C("type").Eq(groupName))),
-					matchApigroupKind(resList))
-			} else {
-				klog.Error("Error unmarshaling consolidated resources", unMarshalErr)
-				break // use non-consolidated namespace list
+				unMarshalErr = json.Unmarshal([]byte(resources), &resList)
+				if unMarshalErr == nil {
+					whereNsDs[count] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
+						goqu.Literal("?|"), goqu.From(tableName).Select(goqu.L("resList")).Where(goqu.C("type").Eq(groupName))),
+						matchApigroupKind(resList))
+				} else {
+					klog.Error("Error unmarshaling consolidated resources", unMarshalErr)
+					break // use non-consolidated namespace list
+				}
 			}
 		}
-		// }
-		// if consolidating namespaces, doesn't work, proceed as usual without consolidation
-		if unMarshalErr != nil {
-			klog.V(2).Info("Using non-consolidated namespace list")
+		// if consolidating namespaces doesn't work, proceed as usual without consolidation
+		if unMarshalErr != nil || userInfo.UID == "" {
+			klog.Info("Using non-consolidated namespace list")
 			whereNsDs = make([]exp.Expression, len(userData.NsResources))
 			for nsCount, namespace := range namespaces {
 				whereNsDs[nsCount] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),
@@ -164,17 +167,17 @@ func matchHubCluster(userrbac rbac.UserData, userInfo v1.UserInfo) exp.Expressio
 func matchManagedCluster(managedClusters []string, managedClusterAllAccess bool, userId string) exp.BooleanExpression {
 	// if user has access to all managed clusters
 	if managedClusterAllAccess {
-		klog.Info("*** Has all access to managed clusters")
+		klog.V(2).Infof("%s has access to all managed clusters", userId)
 		return goqu.L("???", goqu.C("data"), goqu.Literal("?"), "_hubClusterResource").IsNotTrue()
 	}
 
-	//managed clusters
-	if len(managedClusters) > 0 {
+	// if userid is known, get managed clusters from view
+	if userId != "" && len(managedClusters) > 0 {
 		tableName := "lookup_" + strings.ReplaceAll(userId, "-", "_")
 		return goqu.C("cluster").Eq(goqu.Any(goqu.From(tableName).Select(goqu.L("unnest(resList)")).
 			Where(goqu.C("type").Eq("cluster"))))
 	}
 
+	// if userid is empty, use the managedClusters list
 	return goqu.C("cluster").Eq(goqu.Any(pq.Array(managedClusters)))
-	// return goqu.L("unnest(array[sourceid, destid, concat('cluster__',cluster)])")
 }

@@ -96,6 +96,7 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 	limit := 10
 	csRes, nsRes, managedClusters := newUserData()
 	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
+	ud.ConsolidatedNsResources, ud.NsResourceGroups, _ = rbac.ConsolidateNsResources(ud.NsResources)
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1, &value2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
 	propTypesMock := map[string]string{"kind": "string", "namespace": "string", "cluster": "string"}
 
@@ -104,6 +105,7 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 	val2 := "ReplicaSet"
 	val3 := "ConfigMap"
 	resolver.limit = &limit
+	resolver.userInfo = getUserInfo()
 	expectedProps := []*string{&val1, &val2, &val3}
 
 	// Mock the database queries.
@@ -112,7 +114,7 @@ func Test_SearchCompleteWithFilter_Query(t *testing.T) {
 	// Mock the database query
 	// check if cluster
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'kind' AS "prop" FROM "search"."resources" WHERE ("data"->'namespace'?|'{"openshift","openshift-monitoring"}' AND ("cluster" IN ('local-cluster')) AND ("data"->'kind' IS NOT NULL) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'kind' AS "prop" FROM "search"."resources" WHERE ("data"->'namespace'?|'{"openshift","openshift-monitoring"}' AND ("cluster" IN ('local-cluster')) AND ("data"->'kind' IS NOT NULL) AND (("cluster" = ANY ((SELECT unnest(resList) FROM "lookup_unique_user_id" WHERE ("type" = 'cluster')))) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group1')) AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group2')) AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 10`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
@@ -213,6 +215,7 @@ func Test_SearchCompleteWithObject_Query(t *testing.T) {
 	limit := 10
 	csRes, nsRes, managedClusters := newUserData()
 	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
+	ud.ConsolidatedNsResources, ud.NsResourceGroups, _ = rbac.ConsolidateNsResources(ud.NsResources)
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1, &value2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
 
 	// Mock the database queries.
@@ -222,7 +225,7 @@ func Test_SearchCompleteWithObject_Query(t *testing.T) {
 
 	//mock searchcomplete for searchinput
 	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, ud, propTypesMock)
-
+	resolver.userInfo = getUserInfo()
 	val1 := "samples.operator.openshift.io/managed=true"
 	val2 := "pod-template-hash=5f5575c669"
 	val3 := "app.kubernetes.io/name=prometheus-operator"
@@ -230,7 +233,7 @@ func Test_SearchCompleteWithObject_Query(t *testing.T) {
 
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'label' AS "prop" FROM "search"."resources" WHERE ("data"->'namespace'?|'{"openshift","openshift-monitoring"}' AND ("cluster" IN ('local-cluster')) AND ("data"->'label' IS NOT NULL) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'label' AS "prop" FROM "search"."resources" WHERE ("data"->'namespace'?|'{"openshift","openshift-monitoring"}' AND ("cluster" IN ('local-cluster')) AND ("data"->'label' IS NOT NULL) AND (("cluster" = ANY ((SELECT unnest(resList) FROM "lookup_unique_user_id" WHERE ("type" = 'cluster')))) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group1')) AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group2')) AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 	// Execute function
 	result, err := resolver.autoComplete(context.TODO())
@@ -252,6 +255,7 @@ func Test_SearchCompleteWithContainer_Query(t *testing.T) {
 	limit := 10
 	csRes, nsRes, managedClusters := newUserData()
 	ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
+	ud.ConsolidatedNsResources, ud.NsResourceGroups, _ = rbac.ConsolidateNsResources(ud.NsResources)
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1, &value2}}, {Property: "cluster", Values: []*string{&cluster}}}, Limit: &limit}
 
 	propTypesMock := map[string]string{"container": "array", "namespace": "string", "cluster": "string"}
@@ -261,7 +265,7 @@ func Test_SearchCompleteWithContainer_Query(t *testing.T) {
 
 	// mock searchcomplete for searchinput
 	resolver, mockPool := newMockSearchComplete(t, searchInput, prop1, ud, propTypesMock)
-
+	resolver.userInfo = getUserInfo()
 	val1 := "acm-agent"
 	val2 := "acm-agent-1"
 	val3 := "acm-agent-2"
@@ -269,7 +273,7 @@ func Test_SearchCompleteWithContainer_Query(t *testing.T) {
 	expectedProps := []*string{&val1, &val2, &val3}
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'container' AS "prop" FROM "search"."resources" WHERE ("data"->'namespace'?|'{"openshift","openshift-monitoring"}' AND ("cluster" IN ('local-cluster')) AND ("data"->'container' IS NOT NULL) AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT "data"->'container' AS "prop" FROM "search"."resources" WHERE ("data"->'namespace'?|'{"openshift","openshift-monitoring"}' AND ("cluster" IN ('local-cluster')) AND ("data"->'container' IS NOT NULL) AND (("cluster" = ANY ((SELECT unnest(resList) FROM "lookup_unique_user_id" WHERE ("type" = 'cluster')))) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group1')) AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|(SELECT resList FROM "lookup_unique_user_id" WHERE ("type" = 'group2')) AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 100000) AS "searchComplete" ORDER BY prop ASC LIMIT 1000`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function

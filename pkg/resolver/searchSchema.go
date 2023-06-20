@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
@@ -9,6 +10,7 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
+	v1 "k8s.io/api/authentication/v1"
 	klog "k8s.io/klog/v2"
 )
 
@@ -17,6 +19,7 @@ type SearchSchema struct {
 	query    string
 	params   []interface{}
 	userData rbac.UserData
+	userInfo v1.UserInfo
 }
 
 func SearchSchemaResolver(ctx context.Context) (map[string]interface{}, error) {
@@ -24,10 +27,16 @@ func SearchSchemaResolver(ctx context.Context) (map[string]interface{}, error) {
 	if userDataErr != nil {
 		return nil, userDataErr
 	}
+	//get user info for logging
+	uid, userInfo := rbac.GetCache().GetUserUID(ctx)
+	if uid == "noUidFound" {
+		return nil, fmt.Errorf("Search schema query cannot be resolved. Cannot find user with uid: %s", uid)
+	}
 	// Proceed if user's rbac data exists
 	searchSchemaResult := &SearchSchema{
 		pool:     db.GetConnPool(ctx),
 		userData: userData,
+		userInfo: userInfo,
 	}
 	searchSchemaResult.buildSearchSchemaQuery(ctx)
 	return searchSchemaResult.searchSchemaResults(ctx)
@@ -55,16 +64,13 @@ func (s *SearchSchema) buildSearchSchemaQuery(ctx context.Context) {
 	//WHERE CLAUSE
 	var whereDs exp.ExpressionList
 
-	//get user info for logging
-	_, userInfo := rbac.GetCache().GetUserUID(ctx)
-
 	// if one of them is not nil, userData is not empty
 	if s.userData.CsResources != nil || s.userData.NsResources != nil || s.userData.ManagedClusters != nil {
-		whereDs = buildRbacWhereClause(ctx, s.userData, userInfo) // add rbac
+		whereDs = buildRbacWhereClause(ctx, s.userData, s.userInfo) // add rbac
 	} else {
 		klog.Errorf("Error building search schema query: RBAC clause is required!"+
 			" None found for search schema query for user %s with uid %s ",
-			userInfo.Username, userInfo.UID)
+			s.userInfo.Username, s.userInfo.UID)
 
 		s.query = ""
 		s.params = nil

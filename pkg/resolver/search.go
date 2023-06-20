@@ -29,6 +29,7 @@ type SearchResult struct {
 	query     string
 	uids      []*string // List of uids from search result to be used to get relatioinships.
 	userData  rbac.UserData
+	userInfo  v1.UserInfo
 	wg        sync.WaitGroup // Used to serialize search query and relatioinships query.
 }
 
@@ -42,7 +43,11 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 	if userDataErr != nil {
 		return srchResult, userDataErr
 	}
-
+	//get user info for logging
+	uid, userInfo := rbac.GetCache().GetUserUID(ctx)
+	if uid == "noUidFound" {
+		return srchResult, fmt.Errorf("Search complete query cannot be resolved. Cannot find user with uid: %s", uid)
+	}
 	// check that shared cache has resource datatypes
 	propTypes, err := getPropertyType(ctx, false)
 	if err != nil {
@@ -56,6 +61,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 				input:     in,
 				pool:      db.GetConnPool(ctx),
 				userData:  userData,
+				userInfo:  userInfo,
 				context:   ctx,
 				propTypes: propTypes,
 			}
@@ -161,13 +167,12 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		sql, _, err = selectDs.Where(whereDs...).ToSQL() // use original query
 		klog.V(3).Info("Search query before adding RBAC clause:", sql, " error:", err)
 
-		_, userInfo := rbac.GetCache().GetUserUID(ctx)
 		// RBAC CLAUSE
 
 		// if one of them is not nil, userData is not empty
 		if s.userData.CsResources != nil || s.userData.NsResources != nil || s.userData.ManagedClusters != nil {
 			whereDs = append(whereDs,
-				buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
+				buildRbacWhereClause(ctx, s.userData, s.userInfo)) // add rbac
 			if len(whereDs) == 0 {
 				s.checkErrorBuildingQuery(fmt.Errorf("search query must contain a whereClause"),
 					ErrorMsg)
@@ -175,7 +180,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 			}
 		} else {
 			errorStr := fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s with uid %s ",
-				s.input, userInfo.Username, userInfo.UID)
+				s.input, s.userInfo.Username, s.userInfo.UID)
 			s.checkErrorBuildingQuery(fmt.Errorf(errorStr), ErrorMsg)
 			return
 		}
