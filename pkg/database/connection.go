@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v4"
 	pgxpool "github.com/jackc/pgx/v4/pgxpool"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/metrics"
@@ -15,6 +16,24 @@ import (
 
 var pool *pgxpool.Pool
 var timeLastPing time.Time
+
+// Checks new connection is healthy before using it.
+func afterConnect(ctx context.Context, c *pgx.Conn) error {
+	if err := c.Ping(ctx); err != nil {
+		klog.V(7).Info("New DB connection from pool was unhealthy. ", err)
+		return err
+	}
+	return nil
+}
+
+// Checks idle connection is healthy before using it.
+func beforeAcquire(ctx context.Context, c *pgx.Conn) bool {
+	if err := c.Ping(ctx); err != nil {
+		klog.V(7).Info("Idle DB connection from pool is unhealthy, destroying it. ", err)
+		return false
+	}
+	return true
+}
 
 func initializePool(ctx context.Context) {
 	cfg := config.Cfg
@@ -36,12 +55,23 @@ func initializePool(ctx context.Context) {
 		klog.Error("Error parsing database connection configuration.", configErr)
 	}
 
+	config.AfterConnect = afterConnect   // Checks new connection health before using it.
+	config.BeforeAcquire = beforeAcquire // Checks idle connection health before using it.
+	// Add jitter to prevent all connections from being closed at same time.
+	config.MaxConnLifetimeJitter = time.Duration(cfg.DBMaxConnLifeJitter) * time.Millisecond
 	config.MaxConns = int32(cfg.DBMaxConns)
+	config.MaxConnIdleTime = time.Duration(cfg.DBMaxConnIdleTime) * time.Millisecond
+	config.MaxConnLifetime = time.Duration(cfg.DBMaxConnLifeTime) * time.Millisecond
+	config.MinConns = int32(cfg.DBMinConns)
+
+	klog.Infof("Using pgxpool.Config %+v", config)
+
 	conn, err := pgxpool.ConnectConfig(ctx, config)
 	if err != nil {
 		klog.Errorf("Unable to connect to database: %+v\n", err)
 		metrics.DBConnectionFailed.Inc()
 	}
+	klog.Info("Successfully connected to database!")
 
 	pool = conn
 }
@@ -58,12 +88,12 @@ func GetConnPool(ctx context.Context) *pgxpool.Pool {
 		}
 		err := pool.Ping(ctx)
 		if err != nil {
-			klog.Error("Unable to get a database connection. ", err)
+			klog.Error("Unable to get a healthy database connection. ", err)
 			metrics.DBConnectionFailed.Inc()
 			return nil
 		}
 		timeLastPing = time.Now()
-		klog.V(1).Info("Successfully connected to database!")
+		klog.V(5).Info("Database pool connection is healthy.")
 	}
 	return pool
 }
