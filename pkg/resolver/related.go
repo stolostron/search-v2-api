@@ -70,22 +70,22 @@ func (s *SearchResult) buildRelationsQuery() {
 
 	//Non-recursive term SELECT CLAUSE
 	schema := goqu.S("search")
-	selectBase := []interface{}{goqu.L("1").As("level"), "sourceid", "destid", "sourcekind", "destkind", "cluster"}
+	selectBase := []interface{}{goqu.L("1").As("level"), "sourceid", "destid", "sourcekind", "destkind", "cluster", goqu.L("array[sourceid, destid]").As("path")}
 
 	//Recursive term SELECT CLAUSE
 	selectNext := []interface{}{goqu.L("level+1").As("level"), "e.sourceid", "e.destid", "e.sourcekind",
-		"e.destkind", "e.cluster"}
+		"e.destkind", "e.cluster", "path"}
 
 	//Combine both source and dest ids and source and dest kinds into one column using UNNEST function
 	selectCombineIds := []interface{}{goqu.C("level"),
 		goqu.L("unnest(array[sourceid, destid, concat('cluster__',cluster)])").As("uid"),
-		goqu.L("unnest(array[sourcekind, destkind, 'Cluster'])").As("kind")}
+		goqu.L("unnest(array[sourcekind, destkind, 'Cluster'])").As("kind"), "path"}
 
 	//Final select statement
-	selectFinal := []interface{}{goqu.C("uid"), goqu.C("kind"), goqu.MIN("level").As("level")}
+	selectFinal := []interface{}{goqu.C("uid"), goqu.C("kind"), goqu.MIN("level").As("level"), goqu.C("path")}
 
 	//GROUPBY CLAUSE
-	groupBy := []interface{}{goqu.C("uid"), goqu.C("kind")}
+	groupBy := []interface{}{goqu.C("uid"), goqu.C("kind"), goqu.C("path")}
 
 	srcDestIds := []interface{}{goqu.I("e.sourceid"), goqu.I("e.destid")}
 	excludeResources := []interface{}{"Node", "Channel"}
@@ -111,10 +111,10 @@ func (s *SearchResult) buildRelationsQuery() {
 		klog.V(5).Infof("Search term includes applications or level set by user. Level: %d", s.level)
 		// Recursive query. Refer: https://www.postgresqltutorial.com/postgresql-tutorial/postgresql-recursive-query/
 		searchGraphQ = goqu.From("search_graph").
-			WithRecursive("search_graph(level, sourceid, destid,  sourcekind, destkind, cluster)",
+			WithRecursive("search_graph(level, sourceid, destid,  sourcekind, destkind, cluster, path)",
 				baseTerm.
 					Union(recursiveTerm)).
-			SelectDistinct("level", "sourceid", "destid", "sourcekind", "destkind", "cluster")
+			SelectDistinct("level", "sourceid", "destid", "sourcekind", "destkind", "cluster", "path")
 	} else {
 		searchGraphQ = baseTerm // Query without recursion since it is only level 1
 	}
@@ -134,7 +134,7 @@ func (s *SearchResult) buildRelationsQuery() {
 		relQuery = relQuery.Union(clusterSelectTerm).As("related")
 	}
 	relQuery = goqu.From(relQuery.As("related")).Select("related.uid", "related.kind",
-		"related.level")
+		"related.level", "related.path")
 	relQueryInnerJoin := relQuery.InnerJoin(goqu.S("search").Table("resources"),
 		goqu.On(goqu.Ex{"related.uid": goqu.L(`"resources".uid`)}))
 	//RBAC CLAUSE
@@ -236,6 +236,12 @@ func (s *SearchResult) getRelationResolvers(ctx context.Context) []SearchRelated
 
 	// defining variables
 	relatedMap := map[string][]string{} // Map to store relations
+	parentUidMap := map[string]struct{}{}
+	for _, uid := range pointerToStringArray(s.uids) {
+		parentUidMap[uid] = struct{}{}
+	}
+	klog.Info("len(s.uids)", len(s.uids), " len(parentUidMap): ", len(parentUidMap))
+	childToParentsMap := map[string][]string{} // Map to store parent-child relations
 	if s.context == nil {
 		s.context = ctx
 	}
@@ -252,14 +258,16 @@ func (s *SearchResult) getRelationResolvers(ctx context.Context) []SearchRelated
 		// iterating through resulting rows and scaning data, destid  and destkind
 		for relations.Next() {
 			var kind, uid string
+			var path [2]string
 			var level int
-			relatedResultError := relations.Scan(&uid, &kind, &level)
+			relatedResultError := relations.Scan(&uid, &kind, &level, &path)
 
 			if relatedResultError != nil {
 				klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
 				continue
 			}
-			s.updateKindMap(uid, kind, relatedMap) // Store result in a map
+			s.updateKindMap(uid, kind, relatedMap)                       // Store result in a map
+			s.updateChildMap(uid, parentUidMap, childToParentsMap, path) // Store child->parent relation
 		}
 	}
 	// get uids for related items that match the relatedKind filter.
@@ -276,7 +284,7 @@ func (s *SearchResult) getRelationResolvers(ctx context.Context) []SearchRelated
 		}
 
 		// Convert to format of the relationships resolver []SearchRelatedResult{kind, count, items}
-		relatedSearch = s.searchRelatedResultKindItems(items)
+		relatedSearch = s.searchRelatedResultKindItems(items, childToParentsMap)
 
 		klog.V(5).Info("RelatedSearch Result: ", relatedSearch)
 	} else {
@@ -317,11 +325,15 @@ func (s *SearchResult) filterRelatedUIDs(levelsMap map[string][]string) {
 	klog.V(6).Info("Number of related UIDs after filtering relatedKinds: ", len(s.uids))
 }
 
-func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface{}) []SearchRelatedResult {
+func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface{},
+	childParentMap map[string][]string) []SearchRelatedResult {
 	// Organize the related items by kind.
 	relatedItemsByKind := map[string][]map[string]interface{}{}
 	for _, currItem := range items {
 		kind := currItem["kind"].(string)
+		parentUids := childParentMap[currItem["_uid"].(string)]
+		// Add the parent ids to the currently processing item
+		currItem["_parentUids"] = parentUids
 		kindItemList := relatedItemsByKind[kind]
 		relatedItemsByKind[kind] = append(kindItemList, currItem)
 	}
@@ -340,6 +352,38 @@ func (s *SearchResult) updateKindMap(uid string, kind string, levelMap map[strin
 	uids = append(uids, uid)
 
 	levelMap[kind] = uids
+}
+
+// map the child uid to its parents
+func (s *SearchResult) updateChildMap(childUid string, parentUidMap map[string]struct{},
+	childToParentsMap map[string][]string, path [2]string) {
+
+	for _, parentUid := range path {
+		if _, ok := parentUidMap[parentUid]; ok {
+			klog.Info("parentUid ", parentUid, " is a real parent - proceeding ", len(childToParentsMap[childUid]))
+			if _, found := childToParentsMap[childUid]; !found {
+				childToParentsMap[childUid] = []string{parentUid}
+			} else {
+				// if the parentUid is not already added, append it
+				if !checkIfInArray(childToParentsMap[childUid], parentUid) {
+					childToParentsMap[childUid] = append(childToParentsMap[childUid], parentUid)
+					klog.Infof("child %s is newly  mapped to parents %+v", childUid, childToParentsMap[childUid])
+				}
+			}
+			klog.Infof("child %s is  mapped to parents %+v.", childUid, childToParentsMap[childUid])
+			// Need to process only one uid in the path as it is either the sourceid or the destid that can be a parent
+			break
+		}
+	}
+}
+
+func checkIfInArray(lookupMap []string, uid string) bool {
+	for _, id := range lookupMap {
+		if id == uid {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *SearchResult) setDepth() {
