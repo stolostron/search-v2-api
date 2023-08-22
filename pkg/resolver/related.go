@@ -241,7 +241,6 @@ func (s *SearchResult) getRelationResolvers(ctx context.Context) []SearchRelated
 	for _, uid := range pointerToStringArray(s.uids) {
 		currSearchUidsMap[uid] = struct{}{}
 	}
-	klog.Info("len(s.uids)", len(s.uids), " len(currSearchUidsMap): ", len(currSearchUidsMap))
 	// Maps what each result is related to
 	resultToCurrSearchUidsMap := map[string][]string{} // Map to store related results to current search UIDs
 	if s.context == nil {
@@ -336,7 +335,7 @@ func (s *SearchResult) searchRelatedResultKindItems(items []map[string]interface
 	for _, currItem := range items {
 		kind := currItem["kind"].(string)
 		relatedUids := resultToCurrSearchMap[currItem["_uid"].(string)]
-		// Add the parent ids to the currently processing item
+		// Add the related ids to the currently processing item
 		currItem["_relatedUids"] = relatedUids
 		kindItemList := relatedItemsByKind[kind]
 		relatedItemsByKind[kind] = append(kindItemList, currItem)
@@ -358,24 +357,25 @@ func (s *SearchResult) updateKindMap(uid string, kind string, levelMap map[strin
 	levelMap[kind] = uids
 }
 
-// map the child uid to its parents
-func (s *SearchResult) updResultToCurrSearchUidsMap(childUid string, currSearchUidsMap map[string]struct{},
+// map the related result uids to the uids in the search input
+func (s *SearchResult) updResultToCurrSearchUidsMap(resultUid string, currSearchUidsMap map[string]struct{},
 	resultToCurrSearchUidsMap map[string][]string, path [2]string) {
 
 	for _, relatedUid := range path {
 		if _, ok := currSearchUidsMap[relatedUid]; ok {
-			klog.Info("parentUid ", relatedUid, " is a real parent - proceeding ", len(resultToCurrSearchUidsMap[childUid]))
-			if _, found := resultToCurrSearchUidsMap[childUid]; !found {
-				resultToCurrSearchUidsMap[childUid] = []string{relatedUid}
+			klog.V(9).Infof("uid %s is valid and part of the current search. Number of relatedUids: %d",
+				relatedUid, len(resultToCurrSearchUidsMap[resultUid]))
+			if _, found := resultToCurrSearchUidsMap[resultUid]; !found {
+				resultToCurrSearchUidsMap[resultUid] = []string{relatedUid}
 			} else {
-				// if the parentUid is not already added, append it
-				if !checkIfInArray(resultToCurrSearchUidsMap[childUid], relatedUid) {
-					resultToCurrSearchUidsMap[childUid] = append(resultToCurrSearchUidsMap[childUid], relatedUid)
-					klog.Infof("child %s is newly  mapped to parents %+v", childUid, resultToCurrSearchUidsMap[childUid])
+				// if the relatedUid is not already added, append it
+				if !checkIfInArray(resultToCurrSearchUidsMap[resultUid], relatedUid) {
+					resultToCurrSearchUidsMap[resultUid] = append(resultToCurrSearchUidsMap[resultUid], relatedUid)
+					klog.V(9).Infof("uid %s is newly mapped to uids %+v", resultUid, resultToCurrSearchUidsMap[resultUid])
 				}
 			}
-			klog.Infof("child %s is  mapped to parents %+v.", childUid, resultToCurrSearchUidsMap[childUid])
-			// Need to process only one uid in the path as it is either the sourceid or the destid that can be a parent
+			klog.V(9).Infof("uid %s is  related to uids %+v.", resultUid, resultToCurrSearchUidsMap[resultUid])
+			// Need to process only one uid in the path as it is either the sourceid or the destid that can be related
 			break
 		}
 	}
