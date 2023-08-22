@@ -260,3 +260,54 @@ func Test_SearchResolver_Relationships_NoUserData(t *testing.T) {
 	assert.Equal(t, resolver.query, "", "query should be empty as user data is not provided")
 
 }
+
+func TestCheckIfInArray(t *testing.T) {
+	shouldbeTrue := checkIfInArray([]string{"uid123", "uid234"}, "uid123")
+	shouldbeFalse := checkIfInArray([]string{"uid123", "uid234"}, "uid123")
+	// Verify expected result
+	assert.True(t, shouldbeTrue, "uid uid123 is present in the list. Expected true, got %t", shouldbeTrue)
+	// Verify expected result
+	assert.Falsef(t, shouldbeFalse, "uid uid456 is not present in the list. Expected false, got %t", shouldbeFalse)
+}
+
+func TestUpdResultToCurrSearchUidsMap(t *testing.T) {
+	// Build a mock SearchResolver{} using uids as filter input.
+	uid1 := "local-cluster/e12c2ddd-4ac5-499d-b0e0-20242f508afd"
+	uid2 := "local-cluster/13250bc4-865c-41db-a8f2-05bec0bd042b"
+	resultList := []*string{&uid1, &uid2}
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "uid", Values: resultList}}}
+	resolver, _ := newMockSearchResolver(t, searchInput, resultList, rbac.UserData{}, nil)
+	resultMap := map[string][]string{}
+	//uid123 should get newly mapped to uid234
+	resolver.updResultToCurrSearchUidsMap("uid123", map[string]struct{}{"uid234": {}, "uid345": {}},
+		resultMap, [2]string{"uid234", "uid123"})
+	assert.Equal(t, len(resultMap), 1, "There should be one related uid in the map")
+	assert.Equal(t, resultMap["uid123"], []string{"uid234"}, "There should be one related uid in the map")
+
+	//uid123 should get newly mapped to uid567
+	resolver.updResultToCurrSearchUidsMap("uid123", map[string]struct{}{"uid567": {}, "uid678": {}},
+		resultMap, [2]string{"uid123", "uid567"})
+	assert.Equal(t, len(resultMap["uid123"]), 2, "There should be two related uids in the map")
+	assert.Equal(t, resultMap["uid123"], []string{"uid234", "uid567"}, "There should be 2 related uids in the map")
+
+	//uid123 should get newly mapped to uid567
+	resolver.updResultToCurrSearchUidsMap("uid678", map[string]struct{}{"uid567": {}, "uid789": {}},
+		resultMap, [2]string{"uid567", "uid678"})
+	assert.Equal(t, len(resultMap), 2, "There should be two uids in the map")
+	assert.Equal(t, len(resultMap["uid678"]), 1, "There should be two related uids in the map")
+	assert.Equal(t, resultMap["uid678"], []string{"uid567"}, "There should be 1 related uid in the map")
+
+	//resultMap shouldn't get changed as uid123 is already mapped to uid567
+	resolver.updResultToCurrSearchUidsMap("uid678", map[string]struct{}{"uid567": {}, "uid789": {}},
+		resultMap, [2]string{"uid567", "uid678"})
+	assert.Equal(t, len(resultMap), 2, "There should be two uids in the map")
+	assert.Equal(t, len(resultMap["uid678"]), 1, "There should be two related uids in the map")
+	assert.Equal(t, resultMap["uid678"], []string{"uid567"}, "There should be 1 related uid in the map")
+
+	//uid123 should not get newly mapped to any other uids as the currSearchUidsMap and path don't intersect
+	resolver.updResultToCurrSearchUidsMap("uid678", map[string]struct{}{"uid567": {}, "uid789": {}},
+		resultMap, [2]string{"uid234", "uid678"})
+	assert.Equal(t, len(resultMap), 2, "There should be two uids in the map")
+	assert.Equal(t, len(resultMap["uid678"]), 1, "There should be two related uids in the map")
+	assert.Equal(t, resultMap["uid678"], []string{"uid567"}, "There should be 1 related uid in the map")
+}
