@@ -357,7 +357,7 @@ func (s *SearchResult) updateKindMap(uid string, kind string, levelMap map[strin
 	levelMap[kind] = uids
 }
 
-// map the related result uids to the uids in the search input
+// Maps the related result uids to the uids in the search result set.
 func (s *SearchResult) updResultToCurrSearchUidsMap(resultUid string, currSearchUidsMap map[string]struct{},
 	resultToCurrSearchUidsMap map[string][]string, path [2]string) {
 
