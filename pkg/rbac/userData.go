@@ -140,7 +140,7 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		return false, errors.New(impersonationConfigCreationerror)
 	}
 	//If we have a new set of authorized list for the user reset the previous one
-	if user.userAuthorizedListSSAR(ctx, impersClientSet, "*", "*") {
+	if user.userAuthorizedListSSAR(ctx, impersClientSet, "list", "*", "*") {
 		user.csrCache.lock.Lock()
 		defer user.csrCache.lock.Unlock()
 		user.CsResources = []Resource{{Apigroup: "*", Kind: "*"}}
@@ -149,6 +149,24 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		user.nsrCache.lock.Lock()
 		defer user.nsrCache.lock.Unlock()
 		user.NsResources = map[string][]Resource{"*": {{Apigroup: "*", Kind: "*"}}}
+		user.nsrCache.updatedAt = time.Now()
+
+		cache.shared.mcCache.lock.Lock()
+		defer cache.shared.mcCache.lock.Unlock()
+		user.ManagedClusters = cache.shared.managedClusters
+		user.clustersCache.updatedAt = time.Now()
+		user.csrCache.err, user.nsrCache.err, user.clustersCache.err = nil, nil, nil
+		return true, nil
+	} else if user.userAuthorizedListSSAR(ctx, impersClientSet,
+		"get", "search.open-cluster-management.io", "search.search.open-cluster-management.io/unrestricted") {
+		user.csrCache.lock.Lock()
+		defer user.csrCache.lock.Unlock()
+		user.CsResources = []Resource{{}}
+		user.csrCache.updatedAt = time.Now()
+
+		user.nsrCache.lock.Lock()
+		defer user.nsrCache.lock.Unlock()
+		user.NsResources = map[string][]Resource{}
 		user.nsrCache.updatedAt = time.Now()
 
 		cache.shared.mcCache.lock.Lock()
@@ -216,7 +234,7 @@ func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache 
 		wg.Add(1)
 		go func(group, kind string) {
 			defer wg.Done()
-			if user.userAuthorizedListSSAR(ctx, impersClientSet, group, kind) {
+			if user.userAuthorizedListSSAR(ctx, impersClientSet, "list", group, kind) {
 				lock.Lock()
 				defer lock.Unlock()
 				user.CsResources = append(user.CsResources,
@@ -234,11 +252,11 @@ func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache 
 }
 
 func (user *UserDataCache) userAuthorizedListSSAR(ctx context.Context, authzClient v1.AuthorizationV1Interface,
-	apigroup string, kind_plural string) bool {
+	verb string, apigroup string, kind_plural string) bool {
 	accessCheck := &authz.SelfSubjectAccessReview{
 		Spec: authz.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authz.ResourceAttributes{
-				Verb:     "list",
+				Verb:     verb,
 				Group:    apigroup,
 				Resource: kind_plural,
 			},
