@@ -153,15 +153,18 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 
 		cache.shared.mcCache.lock.Lock()
 		defer cache.shared.mcCache.lock.Unlock()
-		user.ManagedClusters = cache.shared.managedClusters
+		user.ManagedClusters = map[string]struct{}{"*": {}}
 		user.clustersCache.updatedAt = time.Now()
 		user.csrCache.err, user.nsrCache.err, user.clustersCache.err = nil, nil, nil
+		klog.V(5).Infof("User %s with uid %s has *list* access to all managed cluster resources.",
+			user.userInfo.Username, user.userInfo.UID)
+
 		return true, nil
 	} else if user.userAuthorizedListSSAR(ctx, impersClientSet,
 		"get", "search.open-cluster-management.io", "search.search.open-cluster-management.io/unrestricted") {
 		user.csrCache.lock.Lock()
 		defer user.csrCache.lock.Unlock()
-		user.CsResources = []Resource{{}}
+		user.CsResources = []Resource{}
 		user.csrCache.updatedAt = time.Now()
 
 		user.nsrCache.lock.Lock()
@@ -171,9 +174,11 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 
 		cache.shared.mcCache.lock.Lock()
 		defer cache.shared.mcCache.lock.Unlock()
-		user.ManagedClusters = cache.shared.managedClusters
+		user.ManagedClusters = map[string]struct{}{"*": {}}
 		user.clustersCache.updatedAt = time.Now()
 		user.csrCache.err, user.nsrCache.err, user.clustersCache.err = nil, nil, nil
+		klog.V(5).Infof("User %s with uid %s has *get* access to all managed cluster resources.",
+			user.userInfo.Username, user.userInfo.UID)
 		return true, nil
 	}
 	return false, nil
