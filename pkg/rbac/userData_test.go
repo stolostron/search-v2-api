@@ -747,7 +747,7 @@ func Test_hasAccessToAllResources(t *testing.T) {
 		t.Errorf("Cache does not have expected cluster-scoped resources ")
 
 	}
-	_, mcPresent := result.ManagedClusters["managed-cluster1"]
+	_, mcPresent := result.ManagedClusters["*"]
 	if len(result.ManagedClusters) != 1 ||
 		!mcPresent {
 		t.Errorf("Cache does not have expected managed cluster resources ")
@@ -758,7 +758,7 @@ func Test_hasAccessToAllResources(t *testing.T) {
 	}
 }
 
-//User should have access to ManagedClusters
+// User should have access to ManagedClusters
 func Test_updateUserManagedClusterList(t *testing.T) {
 	mock_cache := mockNamespaceCache()
 	mock_cache = setupToken(mock_cache)
