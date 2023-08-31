@@ -161,7 +161,7 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 
 		return true, nil
 	} else if user.userAuthorizedListSSAR(ctx, impersClientSet,
-		"get", "search.open-cluster-management.io", "search.search.open-cluster-management.io/allManagedData") {
+		"get", "searches", "searches/allManagedData") {
 		user.csrCache.lock.Lock()
 		defer user.csrCache.lock.Unlock()
 		user.CsResources = []Resource{}
