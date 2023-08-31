@@ -771,3 +771,42 @@ func Test_buildSearchQuery_EmptyQueryNoFilter(t *testing.T) {
 
 	assert.Equal(t, resolver.query, "", "query should be empty as search filter is not provided")
 }
+
+func Test_SearchResolver_SearchUserAllAccess(t *testing.T) {
+	// Create a SearchResolver instance with a mock connection pool.
+	val1 := "template"
+	propTypesMock := map[string]string{"kind": "string"}
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}}}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, rbac.UserData{
+		CsResources:     []rbac.Resource{},
+		NsResources:     map[string][]rbac.Resource{},
+		ManagedClusters: map[string]struct{}{"*": {}},
+	},
+		propTypesMock)
+	// Mock the database queries.
+	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", 0)
+
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT "uid" FROM "search"."resources" WHERE (("data"->>'kind' ILIKE ANY ('{"template"}')) AND ("data"?'_hubClusterResource' IS FALSE)) LIMIT 1000`),
+		gomock.Eq([]interface{}{}),
+	).Return(mockRows, nil)
+
+	// Execute the function
+	resolver.Uids()
+
+	// Verify returned items.
+	if len(resolver.uids) != len(mockRows.mockData) {
+		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(resolver.uids))
+	}
+
+	// Verify properties for each returned item.
+	for i, item := range resolver.uids {
+		mockRow := mockRows.mockData[i]
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow["_uid"] = mockRow["uid"]
+
+		if *item != mockRow["uid"].(string) {
+			t.Errorf("Value of key [uid] does not match for item [%d].\nExpected: %s\nGot: %s", i, expectedRow["_uid"], *item)
+		}
+	}
+}

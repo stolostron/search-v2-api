@@ -257,13 +257,13 @@ func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache 
 }
 
 func (user *UserDataCache) userAuthorizedListSSAR(ctx context.Context, authzClient v1.AuthorizationV1Interface,
-	verb string, apigroup string, kind_plural string) bool {
+	verb string, apigroup string, kindPlural string) bool {
 	accessCheck := &authz.SelfSubjectAccessReview{
 		Spec: authz.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authz.ResourceAttributes{
 				Verb:     verb,
 				Group:    apigroup,
-				Resource: kind_plural,
+				Resource: kindPlural,
 			},
 		},
 	}
@@ -273,7 +273,7 @@ func (user *UserDataCache) userAuthorizedListSSAR(ctx context.Context, authzClie
 		klog.Error("Error creating SelfSubjectAccessReviews.", err)
 	} else {
 		klog.V(6).Infof("SelfSubjectAccessReviews API result for resource %s group %s : %v\n",
-			kind_plural, apigroup, prettyPrint(result.Status.String()))
+			kindPlural, apigroup, prettyPrint(result.Status.String()))
 		if result.Status.Allowed {
 			return true
 		}
