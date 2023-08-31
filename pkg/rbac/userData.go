@@ -156,7 +156,7 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		user.ManagedClusters = map[string]struct{}{"*": {}}
 		user.clustersCache.updatedAt = time.Now()
 		user.csrCache.err, user.nsrCache.err, user.clustersCache.err = nil, nil, nil
-		klog.V(5).Infof("User %s with uid %s has *list* access to all managed cluster resources.",
+		klog.V(5).Infof("User %s with uid %s has access to all resources.",
 			user.userInfo.Username, user.userInfo.UID)
 
 		return true, nil
@@ -177,7 +177,7 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		user.ManagedClusters = map[string]struct{}{"*": {}}
 		user.clustersCache.updatedAt = time.Now()
 		user.csrCache.err, user.nsrCache.err, user.clustersCache.err = nil, nil, nil
-		klog.V(5).Infof("User %s with uid %s has *get* access to all managed cluster resources.",
+		klog.V(5).Infof("User %s with uid %s is authorized to search/allManagedData which gives access to all managed cluster resources.",
 			user.userInfo.Username, user.userInfo.UID)
 		return true, nil
 	}
