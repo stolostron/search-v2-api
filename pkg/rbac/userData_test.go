@@ -772,7 +772,7 @@ func Test_SearchUserAccessToResources(t *testing.T) {
 			Reason:  "Service account doesn't allow it",
 		},
 	}
-	superUserAccessCheck := &authz.SelfSubjectAccessReview{
+	globalSearchUserAccessCheck := &authz.SelfSubjectAccessReview{
 		Spec: authz.SelfSubjectAccessReviewSpec{},
 		Status: authz.SubjectAccessReviewStatus{
 			Allowed: true,
@@ -792,7 +792,7 @@ func Test_SearchUserAccessToResources(t *testing.T) {
 		case 1:
 			// Second call, return response 2
 			callSequence++
-			return true, superUserAccessCheck, nil
+			return true, globalSearchUserAccessCheck, nil
 		default:
 			// Any subsequent calls, return an error
 			return true, nil, fmt.Errorf("unexpected call")
