@@ -61,7 +61,7 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 	pgxRows1 := pgxpoolmock.NewRows(columns1).AddRow("kind", "string").AddRow("apigroup", "string").ToPgxRows()
 
 	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"->>'_hubClusterResource'='true' AND ("data"->>'namespace' IS NULL))`),
+		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"?'_hubClusterResource' AND ("data"?'namespace' IS FALSE))`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
@@ -102,7 +102,7 @@ func Test_getResouces_usingCache(t *testing.T) {
 	pgxRows1 := pgxpoolmock.NewRows(columns1).AddRow("kind", "string").AddRow("apigroup", "string").ToPgxRows()
 
 	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"->>'_hubClusterResource'='true' AND ("data"->>'namespace' IS NULL))`),
+		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"?'_hubClusterResource' AND ("data"?'namespace' IS FALSE))`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
@@ -156,7 +156,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 	pgxRows1 := pgxpoolmock.NewRows(columns1).AddRow("kind", "string").AddRow("apigroup", "string").ToPgxRows()
 
 	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"->>'_hubClusterResource'='true' AND ("data"->>'namespace' IS NULL))`),
+		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"?'_hubClusterResource' AND ("data"?'namespace' IS FALSE))`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
@@ -245,7 +245,7 @@ func Test_setDisabledClusters(t *testing.T) {
 	}
 }
 
-//ContextAuthTokenKey is not set - so session info cannot be found
+// ContextAuthTokenKey is not set - so session info cannot be found
 func Test_getDisabledClusters_UserNotFound(t *testing.T) {
 	disabledClusters := map[string]struct{}{}
 	disabledClusters["disabled1"] = struct{}{}
@@ -272,7 +272,7 @@ func Test_getDisabledClusters_UserNotFound(t *testing.T) {
 	}
 }
 
-//disabled cluster cache is valid
+// disabled cluster cache is valid
 func Test_getDisabledClustersValid(t *testing.T) {
 	disabledClusters := map[string]struct{}{}
 	disabledClusters["disabled1"] = struct{}{}
@@ -300,7 +300,7 @@ func Test_getDisabledClustersValid(t *testing.T) {
 	}
 }
 
-//user does not have access to disabled managed clusters
+// user does not have access to disabled managed clusters
 func Test_getDisabledClustersValid_User_NoAccess(t *testing.T) {
 	disabledClusters := map[string]struct{}{}
 	disabledClusters["disabled1"] = struct{}{}
@@ -328,7 +328,7 @@ func Test_getDisabledClustersValid_User_NoAccess(t *testing.T) {
 	}
 }
 
-//cache is invalid. So, run the db query and get results
+// cache is invalid. So, run the db query and get results
 func Test_getDisabledClustersCacheInValid_RunQuery(t *testing.T) {
 	disabledClusters := map[string]struct{}{}
 	disabledClusters["disabled1"] = struct{}{}
@@ -368,7 +368,7 @@ func Test_getDisabledClustersCacheInValid_RunQuery(t *testing.T) {
 	}
 }
 
-//cache is invalid. So, run the db query - error while running the query
+// cache is invalid. So, run the db query - error while running the query
 func Test_getDisabledClustersCacheInValid_RunQueryError(t *testing.T) {
 	disabledClusters := map[string]struct{}{}
 	disabledClusters["disabled1"] = struct{}{}

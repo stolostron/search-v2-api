@@ -56,7 +56,8 @@ var namespacesGvr = schema.GroupVersionResource{
 
 // Query the database to get all properties and their types.
 // Sample query:
-//   select distinct key, jsonb_typeof(value) as datatype FROM search.resources,jsonb_each(data);
+//
+//	select distinct key, jsonb_typeof(value) as datatype FROM search.resources,jsonb_each(data);
 func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]string, error) {
 	propTypeMap := make(map[string]string)
 	var selectDs *goqu.SelectDataset
@@ -110,7 +111,8 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 }
 
 // Get all available properties and their types. Will use cached data if available.
-//   refresh - forces cached data to refresh from database.
+//
+//	refresh - forces cached data to refresh from database.
 func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[string]string, error) {
 	// check if propTypes data in cache and not nil and return
 	if len(cache.shared.propTypes) > 0 && cache.shared.propTypeErr == nil && !refresh {
@@ -197,12 +199,13 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 
 	// Building query to get cluster scoped resources
 	// Original query: "SELECT DISTINCT data->>'apigroup', data->>'kind_plural' FROM search.resources WHERE
-	// data->>'_hubClusterResource'='true' AND data->>'namespace' is NULL"
+	// data?'_hubClusterResource' AND data?'namespace' is FALSE"
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 	query, _, err := ds.SelectDistinct(goqu.COALESCE(goqu.L(`"data"->>'apigroup'`), "").As("apigroup"),
 		goqu.COALESCE(goqu.L(`"data"->>'kind_plural'`), "").As("kind")).
-		Where(goqu.L(`"data"->>'_hubClusterResource'='true'`), goqu.L(`"data"->>'namespace'`).IsNull()).ToSQL()
+		Where(goqu.L("???", goqu.C("data"), goqu.Literal("?"), "_hubClusterResource"),
+			goqu.L("???", goqu.C("data"), goqu.Literal("?"), "namespace").IsFalse()).ToSQL()
 	if err != nil {
 		klog.Errorf("Error creating query [%s]. Error: [%+v]", query, err)
 		shared.csrCache.err = err
