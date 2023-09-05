@@ -199,7 +199,7 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 
 	// Building query to get cluster scoped resources
 	// Original query: "SELECT DISTINCT data->>'apigroup', data->>'kind_plural' FROM search.resources WHERE
-	// data->>'_hubClusterResource'='true' AND data->>'namespace' is NULL"
+	// data?'_hubClusterResource' AND data?'namespace' is FALSE"
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 	query, _, err := ds.SelectDistinct(goqu.COALESCE(goqu.L(`"data"->>'apigroup'`), "").As("apigroup"),
