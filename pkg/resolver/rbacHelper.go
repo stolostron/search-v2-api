@@ -14,7 +14,8 @@ import (
 
 // function to loop through resources and build the where clause
 // Resolves to something similar to:
-//    ((apigroup='' AND kind='') OR (apigroup='' AND kind='') OR ... )
+//	((apigroup='' AND kind='') OR (apigroup='' AND kind='') OR ... )
+
 func matchApigroupKind(resources []rbac.Resource) exp.ExpressionList {
 	var whereCsDs exp.ExpressionList // Stores the where clause for cluster scoped resources
 
@@ -56,7 +57,8 @@ func matchApigroupKind(resources []rbac.Resource) exp.ExpressionList {
 
 // Match cluster-scoped resources, which are identified by not having the namespace property.
 // Resolves to something like:
-//   (AND data->>'namespace' = '')
+//	(AND data->>'namespace' = '')
+
 func matchClusterScopedResources(csRes []rbac.Resource, userInfo v1.UserInfo) exp.ExpressionList {
 	if len(csRes) == 0 {
 		return goqu.Or() // return empty clause
@@ -77,8 +79,9 @@ func matchClusterScopedResources(csRes []rbac.Resource, userInfo v1.UserInfo) ex
 
 // For each namespace, match the authorized resources (apigroup + kind)
 // Resolves to some similar to:
-//    (namespace = 'a' AND ((apigroup='' AND kind='') OR (apigroup='' AND kind='') OR ... ) OR
-//    (namespace = 'b' AND ( ... ) OR (namespace = 'c' AND ( ... ) OR ...
+//	(namespace = 'a' AND ((apigroup='' AND kind='') OR (apigroup='' AND kind='') OR ... ) OR
+//	(namespace = 'b' AND ( ... ) OR (namespace = 'c' AND ( ... ) OR ...
+
 func matchNamespacedResources(nsResources map[string][]rbac.Resource, userInfo v1.UserInfo) exp.ExpressionList {
 	var whereNsDs []exp.Expression
 	namespaces := getKeys(nsResources)
@@ -158,7 +161,8 @@ func consolidateNsResources(nsResources map[string][]rbac.Resource) (map[string]
 // Resolves to:
 // (data->>'_hubClusterResource' = true)
 // AND ((namespace=null AND apigroup AND kind) OR
-// 		(namespace AND apiproup AND kind))
+//	(namespace AND apigroup AND kind))
+
 func matchHubCluster(userrbac rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
 	if len(userrbac.CsResources) == 0 && len(userrbac.NsResources) == 0 {
 		// Do not match hub cluster if user doesn't have access to cluster scoped or namespace scoped resources on hub
@@ -177,8 +181,13 @@ func matchHubCluster(userrbac rbac.UserData, userInfo v1.UserInfo) exp.Expressio
 
 // Match resources from the managed clusters.
 // Resolves to:
-//    ( cluster IN ['a', 'b', ...] )
+//	( cluster IN ['a', 'b', ...] )
+
 func matchManagedCluster(managedClusters []string) exp.BooleanExpression {
+	if len(managedClusters) == 1 && managedClusters[0] == "*" {
+		klog.V(2).Infof("user has access to all managed clusters")
+		return goqu.L("???", goqu.C("data"), goqu.Literal("?"), "_hubClusterResource").IsFalse()
+	}
 	//managed clusters
 	return goqu.C("cluster").Eq(goqu.Any(pq.Array(managedClusters)))
 }

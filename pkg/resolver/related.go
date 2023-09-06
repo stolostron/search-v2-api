@@ -289,7 +289,7 @@ func (s *SearchResult) getRelationResolvers(ctx context.Context) []SearchRelated
 		// Convert to format of the relationships resolver []SearchRelatedResult{kind, count, items}
 		relatedSearch = s.searchRelatedResultKindItems(items, resultToCurrSearchUidsMap)
 
-		klog.V(5).Info("RelatedSearch Result: ", relatedSearch)
+		klog.V(6).Info("RelatedSearch Result: ", relatedSearch)
 	} else {
 		klog.Warning("No UIDs matched for relatedKinds: ", pointerToStringArray(s.input.RelatedKinds))
 	}

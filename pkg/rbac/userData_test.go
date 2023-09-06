@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -747,7 +748,7 @@ func Test_hasAccessToAllResources(t *testing.T) {
 		t.Errorf("Cache does not have expected cluster-scoped resources ")
 
 	}
-	_, mcPresent := result.ManagedClusters["managed-cluster1"]
+	_, mcPresent := result.ManagedClusters["*"]
 	if len(result.ManagedClusters) != 1 ||
 		!mcPresent {
 		t.Errorf("Cache does not have expected managed cluster resources ")
@@ -758,7 +759,65 @@ func Test_hasAccessToAllResources(t *testing.T) {
 	}
 }
 
-//User should have access to ManagedClusters
+func Test_SearchUserAccessToResources(t *testing.T) {
+	mock_cache := mockNamespaceCache()
+	mock_cache = setupToken(mock_cache)
+	mock_cache.shared.managedClusters = map[string]struct{}{"managed-cluster1": {}}
+
+	accessCheck := &authz.SelfSubjectAccessReview{
+		Spec: authz.SelfSubjectAccessReviewSpec{},
+		Status: authz.SubjectAccessReviewStatus{
+			Allowed: false,
+			Denied:  true,
+			Reason:  "Service account doesn't allow it",
+		},
+	}
+	globalSearchUserAccessCheck := &authz.SelfSubjectAccessReview{
+		Spec: authz.SelfSubjectAccessReviewSpec{},
+		Status: authz.SubjectAccessReviewStatus{
+			Allowed: true,
+			Denied:  false,
+			Reason:  "Service account allows it",
+		},
+	}
+	fs := fake.Clientset{}
+	var callSequence int
+	fs.AddReactor("create", "selfsubjectaccessreviews", func(action testingk8s.Action) (handled bool, ret runtime.Object, err error) {
+		// Implement different responses based on the sequence of the call.
+		switch callSequence {
+		case 0:
+			// First call, return response 1
+			callSequence++
+			return false, accessCheck, errors.New("Error creating ssar")
+		case 1:
+			// Second call, return response 2
+			callSequence++
+			return true, globalSearchUserAccessCheck, nil
+		default:
+			// Any subsequent calls, return an error
+			return true, nil, fmt.Errorf("unexpected call")
+		}
+	})
+
+	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
+	result, err := mock_cache.GetUserDataCache(ctx, fs.AuthorizationV1())
+
+	if len(result.NsResources) != 0 {
+		t.Errorf("Cache does not have expected namespace resources %+v", result.NsResources)
+	}
+	if len(result.CsResources) != 0 {
+		t.Errorf("Cache does not have expected cluster-scoped resources ")
+	}
+	_, mcPresent := result.ManagedClusters["*"]
+	if len(result.ManagedClusters) != 1 || !mcPresent {
+		t.Errorf("Cache does not have expected managed cluster resources ")
+	}
+	if err != nil {
+		t.Error("Unexpected error while obtaining SSAR.", err)
+	}
+}
+
+// User should have access to ManagedClusters
 func Test_updateUserManagedClusterList(t *testing.T) {
 	mock_cache := mockNamespaceCache()
 	mock_cache = setupToken(mock_cache)

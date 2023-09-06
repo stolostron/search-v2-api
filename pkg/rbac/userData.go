@@ -140,7 +140,7 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		return false, errors.New(impersonationConfigCreationerror)
 	}
 	//If we have a new set of authorized list for the user reset the previous one
-	if user.userAuthorizedListSSAR(ctx, impersClientSet, "*", "*") {
+	if user.userAuthorizedListSSAR(ctx, impersClientSet, "list", "*", "*") {
 		user.csrCache.lock.Lock()
 		defer user.csrCache.lock.Unlock()
 		user.CsResources = []Resource{{Apigroup: "*", Kind: "*"}}
@@ -153,9 +153,32 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 
 		cache.shared.mcCache.lock.Lock()
 		defer cache.shared.mcCache.lock.Unlock()
-		user.ManagedClusters = cache.shared.managedClusters
+		user.ManagedClusters = map[string]struct{}{"*": {}}
 		user.clustersCache.updatedAt = time.Now()
 		user.csrCache.err, user.nsrCache.err, user.clustersCache.err = nil, nil, nil
+		klog.V(5).Infof("User %s with uid %s has access to all resources.",
+			user.userInfo.Username, user.userInfo.UID)
+
+		return true, nil
+	} else if user.userAuthorizedListSSAR(ctx, impersClientSet,
+		"get", "searches", "searches/allManagedData") {
+		user.csrCache.lock.Lock()
+		defer user.csrCache.lock.Unlock()
+		user.CsResources = []Resource{}
+		user.csrCache.updatedAt = time.Now()
+
+		user.nsrCache.lock.Lock()
+		defer user.nsrCache.lock.Unlock()
+		user.NsResources = map[string][]Resource{}
+		user.nsrCache.updatedAt = time.Now()
+
+		cache.shared.mcCache.lock.Lock()
+		defer cache.shared.mcCache.lock.Unlock()
+		user.ManagedClusters = map[string]struct{}{"*": {}}
+		user.clustersCache.updatedAt = time.Now()
+		user.csrCache.err, user.nsrCache.err, user.clustersCache.err = nil, nil, nil
+		klog.V(5).Infof("User %s with uid %s is authorized to search/allManagedData which gives access to all managed cluster resources.",
+			user.userInfo.Username, user.userInfo.UID)
 		return true, nil
 	}
 	return false, nil
@@ -216,7 +239,7 @@ func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache 
 		wg.Add(1)
 		go func(group, kind string) {
 			defer wg.Done()
-			if user.userAuthorizedListSSAR(ctx, impersClientSet, group, kind) {
+			if user.userAuthorizedListSSAR(ctx, impersClientSet, "list", group, kind) {
 				lock.Lock()
 				defer lock.Unlock()
 				user.CsResources = append(user.CsResources,
@@ -234,13 +257,13 @@ func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache 
 }
 
 func (user *UserDataCache) userAuthorizedListSSAR(ctx context.Context, authzClient v1.AuthorizationV1Interface,
-	apigroup string, kind_plural string) bool {
+	verb string, apigroup string, kindPlural string) bool {
 	accessCheck := &authz.SelfSubjectAccessReview{
 		Spec: authz.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authz.ResourceAttributes{
-				Verb:     "list",
+				Verb:     verb,
 				Group:    apigroup,
-				Resource: kind_plural,
+				Resource: kindPlural,
 			},
 		},
 	}
@@ -250,7 +273,7 @@ func (user *UserDataCache) userAuthorizedListSSAR(ctx context.Context, authzClie
 		klog.Error("Error creating SelfSubjectAccessReviews.", err)
 	} else {
 		klog.V(6).Infof("SelfSubjectAccessReviews API result for resource %s group %s : %v\n",
-			kind_plural, apigroup, prettyPrint(result.Status.String()))
+			kindPlural, apigroup, prettyPrint(result.Status.String()))
 		if result.Status.Allowed {
 			return true
 		}
