@@ -70,9 +70,9 @@ func initializePool(ctx context.Context) {
 	if err != nil {
 		klog.Errorf("Unable to connect to database: %+v\n", err)
 		metrics.DBConnectionFailed.Inc()
+	} else {
+		klog.Info("Successfully connected to database!")
 	}
-	klog.Info("Successfully connected to database!")
-
 	pool = conn
 }
 
