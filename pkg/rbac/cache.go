@@ -66,7 +66,7 @@ func GetCache() *Cache {
 		klog.Error("Unable to get a healthy database connection. Setting dbConnInitialized to false.")
 		cacheInst.SetDbConnInitialized(false)
 	} else {
-		klog.Info("Able to get a healthy database connection. Setting dbConnInitialized to true.")
+		klog.V(2).Info("Able to get a healthy database connection. Setting dbConnInitialized to true.")
 		cacheInst.SetDbConnInitialized(true)
 	}
 	return &cacheInst
