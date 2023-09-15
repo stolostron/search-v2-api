@@ -222,9 +222,10 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 				return numA < numB
 			})
 			if len(srchCompleteOut) > 1 {
+				lastElementIndex := len(srchCompleteOut) - 1
 				// Pass only the min and max values of the numbers to show the range in the UI
 				srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut[0],
-					srchCompleteOut[len(srchCompleteOut)-1])
+					srchCompleteOut[lastElementIndex])
 			} else {
 				srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut...)
 			}

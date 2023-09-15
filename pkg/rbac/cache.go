@@ -33,7 +33,7 @@ func (c *Cache) GetDbConnInitialized() bool {
 	return c.dbConnInitialized
 }
 
-func (c *Cache) SetDbConnInitialized(initialized bool) {
+func (c *Cache) setDbConnInitialized(initialized bool) {
 	c.dbConnInitialized = initialized
 }
 
@@ -64,10 +64,10 @@ func GetCache() *Cache {
 
 	if db.GetConnPool(ctx) == nil {
 		klog.Error("Unable to get a healthy database connection. Setting dbConnInitialized to false.")
-		cacheInst.SetDbConnInitialized(false)
+		cacheInst.setDbConnInitialized(false)
 	} else {
 		klog.V(2).Info("Able to get a healthy database connection. Setting dbConnInitialized to true.")
-		cacheInst.SetDbConnInitialized(true)
+		cacheInst.setDbConnInitialized(true)
 	}
 	return &cacheInst
 }

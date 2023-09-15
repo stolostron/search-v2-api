@@ -8,11 +8,6 @@ import (
 
 func AuthorizeUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// if postgres db is not setup, return error
-		if !GetCache().dbConnInitialized {
-			http.Error(w, "Unable to establish connection with Postgres.", 500)
-			return
-		}
 
 		// Trigger initialization of the shared cache. We should move this to a
 		// different place where it's independent of the request.
