@@ -158,6 +158,7 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 	klog.V(2).Info("Resolving searchCompleteResults()")
 	rows, err := s.pool.Query(ctx, s.query, s.params...)
 	srchCompleteOut := make([]*string, 0)
+	srchCompleteOutTemp := make([]*string, 0)
 
 	if err != nil {
 		klog.Error("Error fetching search complete results from db ", err)
@@ -224,8 +225,9 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			if len(srchCompleteOut) > 1 {
 				// Pass only the min and max values of the numbers to show the range in the UI
 
-				srchCompleteOut = []*string{&isNumberStr, srchCompleteOut[0],
-					srchCompleteOut[len(srchCompleteOut)-1]}
+				copy(srchCompleteOut, srchCompleteOutTemp)
+				srchCompleteOut = []*string{&isNumberStr, srchCompleteOutTemp[0],
+					srchCompleteOutTemp[len(srchCompleteOutTemp)-1]}
 			} else {
 				srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut...)
 			}
