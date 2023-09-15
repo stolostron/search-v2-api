@@ -14,10 +14,12 @@ func Test_Cache_GetCache(t *testing.T) {
 }
 
 func Test_Cache_DBConn(t *testing.T) {
-	res := GetCache()
-	assert.Equal(t, res.dbConnInitialized, false)
+	c := GetCache()
+	result := c.GetDbConnInitialized()
 
-	res.setDbConnInitialized(true)
+	assert.Equal(t, result, false)
 
-	assert.Equal(t, res.dbConnInitialized, true)
+	c.setDbConnInitialized(true)
+
+	assert.Equal(t, c.dbConnInitialized, true)
 }
