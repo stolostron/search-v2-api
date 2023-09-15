@@ -223,10 +223,8 @@ func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*st
 			})
 			if len(srchCompleteOut) > 1 {
 				// Pass only the min and max values of the numbers to show the range in the UI
-				// Temporarily disable gosec G602, which produces a false positive.
-				// See https://github.com/securego/gosec/issues/1005.
 				srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut[0],
-					srchCompleteOut[len(srchCompleteOut)-1]) // #nosec G602
+					srchCompleteOut[len(srchCompleteOut)-1])
 			} else {
 				srchCompleteOut = append(srchCompleteOutNum, srchCompleteOut...)
 			}
