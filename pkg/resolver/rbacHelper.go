@@ -186,7 +186,7 @@ func matchHubCluster(userrbac rbac.UserData, userInfo v1.UserInfo) exp.Expressio
 func matchManagedCluster(managedClusters []string) exp.BooleanExpression {
 	if len(managedClusters) == 1 && managedClusters[0] == "*" {
 		klog.V(2).Infof("user has access to all managed clusters")
-		return goqu.L("???", goqu.C("data"), goqu.Literal("?"), "_hubClusterResource").IsFalse()
+		return goqu.C("cluster").Neq("local-cluster")
 	}
 	//managed clusters
 	return goqu.C("cluster").Eq(goqu.Any(pq.Array(managedClusters)))

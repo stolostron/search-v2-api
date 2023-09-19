@@ -184,7 +184,7 @@ func (s *SearchResult) selectIfClusterUIDPresent() *goqu.SelectDataset {
 		ds := goqu.From(schemaTable)
 
 		//SELECT CLAUSE
-		selectDs := ds.Select(goqu.C("uid").As("uid"), goqu.L("data->>'kind'").As("kind"), goqu.L("1").As("level"))
+		selectDs := ds.Select(goqu.C("uid").As("uid"), goqu.L("data->>'kind'").As("kind"), goqu.L("1").As("level"), goqu.L("array[]::text[]").As("path"))
 
 		//WHERE CLAUSE - Do we need to add clauses here?
 
@@ -260,7 +260,7 @@ func (s *SearchResult) getRelationResolvers(ctx context.Context) []SearchRelated
 		// iterating through resulting rows and scaning data, destid  and destkind
 		for relations.Next() {
 			var kind, uid string
-			var path [2]string
+			var path []string
 			var level int
 			relatedResultError := relations.Scan(&uid, &kind, &level, &path)
 
@@ -364,7 +364,7 @@ func (s *SearchResult) updateKindMap(uid string, kind string, levelMap map[strin
 
 // Maps the related result uids to the uids in the search result set.
 func (s *SearchResult) updResultToCurrSearchUidsMap(resultUid string, currSearchUidsMap map[string]struct{},
-	resultToCurrSearchUidsMap map[string][]string, path [2]string) {
+	resultToCurrSearchUidsMap map[string][]string, path []string) {
 
 	for _, relatedUid := range path {
 		if _, ok := currSearchUidsMap[relatedUid]; ok {
