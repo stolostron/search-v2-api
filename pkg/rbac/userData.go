@@ -134,6 +134,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 }
 
 func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (bool, error) {
+	klog.V(6).Infof("Checking if user %s with uid %s has all access", user.userInfo.Username, user.userInfo.UID)
 	impersClientSet := user.getImpersonationClientSet()
 	if impersClientSet == nil {
 		klog.Warning(impersonationConfigCreationerror)
@@ -161,7 +162,7 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 
 		return true, nil
 	} else if user.userAuthorizedListSSAR(ctx, impersClientSet,
-		"get", "searches", "searches/allManagedData") {
+		"get", "search.open-cluster-management.io", "searches/allManagedData") {
 		user.csrCache.lock.Lock()
 		defer user.csrCache.lock.Unlock()
 		user.CsResources = []Resource{}
@@ -181,6 +182,7 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 			user.userInfo.Username, user.userInfo.UID)
 		return true, nil
 	}
+	klog.V(6).Infof("User %s with uid %s does not have all access", user.userInfo.Username, user.userInfo.UID)
 	return false, nil
 }
 
