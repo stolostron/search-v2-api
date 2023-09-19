@@ -48,6 +48,8 @@ func StartAndListen() {
 	apiSubrouter := router.PathPrefix(config.Cfg.ContextPath).Subrouter()
 
 	apiSubrouter.Use(metrics.PrometheusMiddleware)
+	cache := rbac.GetCache()
+	apiSubrouter.Use(cache.CheckDBAvailability)
 	apiSubrouter.Use(rbac.AuthenticateUser)
 	apiSubrouter.Use(rbac.AuthorizeUser)
 

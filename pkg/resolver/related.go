@@ -256,6 +256,7 @@ func (s *SearchResult) getRelationResolvers(ctx context.Context) []SearchRelated
 
 	if relations != nil {
 		defer relations.Close()
+		processedUIDs := map[string]struct{}{}
 		// iterating through resulting rows and scaning data, destid  and destkind
 		for relations.Next() {
 			var kind, uid string
@@ -267,8 +268,12 @@ func (s *SearchResult) getRelationResolvers(ctx context.Context) []SearchRelated
 				klog.Errorf("Error %s retrieving rows for relationships:%s", relatedResultError.Error(), relations)
 				continue
 			}
-			// Store result in a map
-			s.updateKindMap(uid, kind, relatedMap)
+			// Getting path can bring duplicate uids - Avoid duplicates by discarding already processed uids
+			if _, present := processedUIDs[uid]; !present {
+				processedUIDs[uid] = struct{}{}
+				// Store result in a map
+				s.updateKindMap(uid, kind, relatedMap)
+			}
 			// Store result->currentSearchUID relation
 			s.updResultToCurrSearchUidsMap(uid, currSearchUidsMap, resultToCurrSearchUidsMap, path)
 		}
