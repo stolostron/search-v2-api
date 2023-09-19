@@ -10,11 +10,11 @@ func (c *Cache) CheckDBAvailability(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// if postgres db is not setup, return error
 		if !c.dbConnInitialized {
+			klog.Warning("Unable to handle request because we couldn't establish connection with database.")
 			http.Error(w, "Unable to establish connection with database.", http.StatusServiceUnavailable)
 			return
 		}
 
-		klog.V(6).Info("Connection with database successful!")
 		next.ServeHTTP(w, r.WithContext(r.Context()))
 
 	})
