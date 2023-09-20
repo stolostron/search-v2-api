@@ -75,7 +75,7 @@ func Test_SearchResolver_RelationshipsWithCluster(t *testing.T) {
 	resolver, mockPool := newMockSearchResolver(t, searchInput, resultList, ud, nil)
 
 	// Mock FIRST database request.
-	query1 := strings.TrimSpace(`SELECT "related"."uid", "related"."kind", "related"."level", "related"."path" FROM (SELECT "uid", "kind", MIN("level") AS "level", "path" FROM (SELECT "level", unnest(array[sourceid, destid, concat('cluster__',cluster)]) AS "uid", unnest(array[sourcekind, destkind, 'Cluster']) AS "kind", "path" FROM (WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster, path) AS (SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster", array[sourceid, destid] AS "path" FROM "search"."edges" AS "e" WHERE (("destid" IN ('cluster__local-cluster')) OR ("sourceid" IN ('cluster__local-cluster'))) UNION (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster", "path" FROM "search"."edges" AS "e" INNER JOIN "search_graph" AS "sg" ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))) WHERE (("e"."destkind" NOT IN ('Node', 'Channel')) AND ("e"."sourcekind" NOT IN ('Node', 'Channel')) AND ("sg"."level" <= 3)))) SELECT DISTINCT "level", "sourceid", "destid", "sourcekind", "destkind", "cluster", "path" FROM "search_graph") AS "search_graph") AS "combineIds" WHERE (("level" <= 3) AND ("uid" NOT IN ('cluster__local-cluster'))) GROUP BY "uid", "kind", "path" UNION (SELECT "uid" AS "uid", data->>'kind' AS "kind", 1 AS "level" FROM "search"."resources" WHERE ("cluster" IN ('local-cluster')))) AS "related" INNER JOIN "search"."resources" ON ("related"."uid" = "resources".uid) WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))`)
+	query1 := strings.TrimSpace(`SELECT "related"."uid", "related"."kind", "related"."level", "related"."path" FROM (SELECT "uid", "kind", MIN("level") AS "level", "path" FROM (SELECT "level", unnest(array[sourceid, destid, concat('cluster__',cluster)]) AS "uid", unnest(array[sourcekind, destkind, 'Cluster']) AS "kind", "path" FROM (WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster, path) AS (SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster", array[sourceid, destid] AS "path" FROM "search"."edges" AS "e" WHERE (("destid" IN ('cluster__local-cluster')) OR ("sourceid" IN ('cluster__local-cluster'))) UNION (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster", "path" FROM "search"."edges" AS "e" INNER JOIN "search_graph" AS "sg" ON (("sg"."destid" IN ("e"."sourceid", "e"."destid")) OR ("sg"."sourceid" IN ("e"."sourceid", "e"."destid"))) WHERE (("e"."destkind" NOT IN ('Node', 'Channel')) AND ("e"."sourcekind" NOT IN ('Node', 'Channel')) AND ("sg"."level" <= 3)))) SELECT DISTINCT "level", "sourceid", "destid", "sourcekind", "destkind", "cluster", "path" FROM "search_graph") AS "search_graph") AS "combineIds" WHERE (("level" <= 3) AND ("uid" NOT IN ('cluster__local-cluster'))) GROUP BY "uid", "kind", "path" UNION (SELECT "uid" AS "uid", data->>'kind' AS "kind", 1 AS "level", array[]::text[] AS "path" FROM "search"."resources" WHERE ("cluster" IN ('local-cluster')))) AS "related" INNER JOIN "search"."resources" ON ("related"."uid" = "resources".uid) WHERE (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))`)
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock-rel-1.json", searchInput, "", 0)
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(query1),
@@ -280,33 +280,33 @@ func TestUpdResultToCurrSearchUidsMap(t *testing.T) {
 	resultMap := map[string][]string{}
 	//uid123 should get newly mapped to uid234
 	resolver.updResultToCurrSearchUidsMap("uid123", map[string]struct{}{"uid234": {}, "uid345": {}},
-		resultMap, [2]string{"uid234", "uid123"})
+		resultMap, []string{"uid234", "uid123"})
 	assert.Equal(t, len(resultMap), 1, "There should be one related uid in the map")
 	assert.Equal(t, resultMap["uid123"], []string{"uid234"}, "There should be one related uid in the map")
 
 	//uid123 should get newly mapped to uid567
 	resolver.updResultToCurrSearchUidsMap("uid123", map[string]struct{}{"uid567": {}, "uid678": {}},
-		resultMap, [2]string{"uid123", "uid567"})
+		resultMap, []string{"uid123", "uid567"})
 	assert.Equal(t, len(resultMap["uid123"]), 2, "There should be two related uids in the map")
 	assert.Equal(t, resultMap["uid123"], []string{"uid234", "uid567"}, "There should be 2 related uids in the map")
 
 	//uid123 should get newly mapped to uid567
 	resolver.updResultToCurrSearchUidsMap("uid678", map[string]struct{}{"uid567": {}, "uid789": {}},
-		resultMap, [2]string{"uid567", "uid678"})
+		resultMap, []string{"uid567", "uid678"})
 	assert.Equal(t, len(resultMap), 2, "There should be two uids in the map")
 	assert.Equal(t, len(resultMap["uid678"]), 1, "There should be two related uids in the map")
 	assert.Equal(t, resultMap["uid678"], []string{"uid567"}, "There should be 1 related uid in the map")
 
 	//resultMap shouldn't get changed as uid123 is already mapped to uid567
 	resolver.updResultToCurrSearchUidsMap("uid678", map[string]struct{}{"uid567": {}, "uid789": {}},
-		resultMap, [2]string{"uid567", "uid678"})
+		resultMap, []string{"uid567", "uid678"})
 	assert.Equal(t, len(resultMap), 2, "There should be two uids in the map")
 	assert.Equal(t, len(resultMap["uid678"]), 1, "There should be two related uids in the map")
 	assert.Equal(t, resultMap["uid678"], []string{"uid567"}, "There should be 1 related uid in the map")
 
 	//uid123 should not get newly mapped to any other uids as the currSearchUidsMap and path don't intersect
 	resolver.updResultToCurrSearchUidsMap("uid678", map[string]struct{}{"uid567": {}, "uid789": {}},
-		resultMap, [2]string{"uid234", "uid678"})
+		resultMap, []string{"uid234", "uid678"})
 	assert.Equal(t, len(resultMap), 2, "There should be two uids in the map")
 	assert.Equal(t, len(resultMap["uid678"]), 1, "There should be two related uids in the map")
 	assert.Equal(t, resultMap["uid678"], []string{"uid567"}, "There should be 1 related uid in the map")
