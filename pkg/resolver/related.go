@@ -184,7 +184,8 @@ func (s *SearchResult) selectIfClusterUIDPresent() *goqu.SelectDataset {
 		ds := goqu.From(schemaTable)
 
 		//SELECT CLAUSE
-		selectDs := ds.Select(goqu.C("uid").As("uid"), goqu.L("data->>'kind'").As("kind"), goqu.L("1").As("level"), goqu.L("array[]::text[]").As("path"))
+		selectDs := ds.Select(goqu.C("uid").As("uid"), goqu.L("data->>'kind'").As("kind"), goqu.L("1").As("level"),
+			goqu.L("array[]::text[]").As("path"))
 
 		//WHERE CLAUSE - Do we need to add clauses here?
 
@@ -376,7 +377,8 @@ func (s *SearchResult) updResultToCurrSearchUidsMap(resultUid string, currSearch
 				// if the relatedUid is not already added, append it
 				if !checkIfInArray(resultToCurrSearchUidsMap[resultUid], relatedUid) {
 					resultToCurrSearchUidsMap[resultUid] = append(resultToCurrSearchUidsMap[resultUid], relatedUid)
-					klog.V(9).Infof("uid %s is newly mapped to uids %+v", resultUid, resultToCurrSearchUidsMap[resultUid])
+					klog.V(9).Infof("uid %s is newly mapped to uids %+v", resultUid,
+						resultToCurrSearchUidsMap[resultUid])
 				}
 			}
 			klog.V(9).Infof("uid %s is  related to uids %+v.", resultUid, resultToCurrSearchUidsMap[resultUid])
