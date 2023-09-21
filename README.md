@@ -128,5 +128,5 @@ To view these metrics, with the search api pod and database running, run the fol
 `curl https://localhost:4010/metrics -k | grep search_`
 
 
-
+---
 Rebuild Date: 2023-09-21
