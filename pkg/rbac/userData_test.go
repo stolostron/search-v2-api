@@ -583,19 +583,34 @@ func Test_managedCluster_GetUserData(t *testing.T) {
 		UserData:      UserData{ManagedClusters: managedClusters, CsResources: csRes, NsResources: nsRes},
 		clustersCache: cacheMetadata{updatedAt: last_cache_time},
 	}
-	csResResult := mock_cache.users["unique-user-id"].GetCsResources()
+	csResResult := mock_cache.users["unique-user-id"].GetCsResourcesCopy()
 	if len(csResResult) != 2 {
 		t.Errorf("Expected 2 clusterScoped resources but got %d", len(csResResult))
 
 	}
-	nsResResult := mock_cache.users["unique-user-id"].GetNsResources()
+	nsResResult := mock_cache.users["unique-user-id"].GetNsResourcesCopy()
 	if len(nsResResult) != 2 {
 		t.Errorf("Expected 2 namespace Scoped resources but got %d", len(nsResResult))
 	}
-	mcResult := mock_cache.users["unique-user-id"].GetManagedClusters()
+	mcResult := mock_cache.users["unique-user-id"].GetManagedClustersCopy()
 	if len(mcResult) != 1 {
 		t.Errorf("Expected 1 managed cluster but got %d", len(mcResult))
 	}
+
+	// Verify that objects in cache don't change when modifying the object copy.
+	csResResult = append(csResResult, Resource{Kind: "added-by-test", Apigroup: ""}) //nolint
+	if len(csRes) != 2 {
+		t.Errorf("Expected 2 clusterScoped resources but got %d after modifying the object copy.", len(csRes))
+	}
+	nsResResult["ns1"] = append(nsResResult["ns1"], Resource{Kind: "added-by-test", Apigroup: ""})
+	if len(nsRes["ns1"]) != 2 {
+		t.Errorf("Expected 2 namespace Scoped resources but got %d after modifying the object copy.", len(nsRes["ns1"]))
+	}
+	mcResult["added-by-test"] = struct{}{}
+	if len(managedClusters) != 1 {
+		t.Errorf("Expected 1 managed cluster but got %d after modifying the object copy.", len(managedClusters))
+	}
+
 }
 
 func Test_getUserData(t *testing.T) {
