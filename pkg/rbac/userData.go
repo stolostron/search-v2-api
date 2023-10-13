@@ -23,6 +23,13 @@ import (
 const impersonationConfigCreationerror = "error creating clientset with impersonation config"
 
 // Contains data about the resources the user is allowed to access.
+type UserData struct {
+	CsResources     []Resource            // Cluster-scoped resources on hub the user has list access.
+	NsResources     map[string][]Resource // Namespaced resources on hub the user has list access.
+	ManagedClusters map[string]struct{}   // Managed clusters where the user has view access.
+}
+
+// Extend UserData with caching information.
 type UserDataCache struct {
 	UserData
 	userInfo authv1.UserInfo
@@ -34,13 +41,6 @@ type UserDataCache struct {
 
 	// Client to external API to be replaced with a mock by unit tests.
 	authzClient v1.AuthorizationV1Interface
-}
-
-// Stuct to keep a copy of users access
-type UserData struct {
-	CsResources     []Resource            // Cluster-scoped resources on hub the user has list access.
-	NsResources     map[string][]Resource // Namespaced resources on hub the user has list access.
-	ManagedClusters map[string]struct{}   // Managed clusters where the user has view access.
 }
 
 // Get user's UID
@@ -172,9 +172,9 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 	// Proceed if user's rbac data exists
 	// Get a copy of the current user access if user data exists
 	userAccess := UserData{
-		CsResources:     userDataCache.GetCsResources(),
-		NsResources:     userDataCache.GetNsResources(),
-		ManagedClusters: userDataCache.GetManagedClusters(),
+		CsResources:     userDataCache.GetCsResourcesCopy(),
+		NsResources:     userDataCache.GetNsResourcesCopy(),
+		ManagedClusters: userDataCache.GetManagedClustersCopy(),
 	}
 	return userAccess, nil
 }
@@ -449,20 +449,29 @@ func (user *UserDataCache) getImpersonationClientSet() v1.AuthorizationV1Interfa
 	return user.authzClient
 }
 
-func (user *UserDataCache) GetCsResources() []Resource {
+func (user *UserDataCache) GetCsResourcesCopy() []Resource {
 	user.csrCache.lock.Lock()
 	defer user.csrCache.lock.Unlock()
-	return user.CsResources
+	csResourcesCopy := user.CsResources
+	return csResourcesCopy
 }
 
-func (user *UserDataCache) GetNsResources() map[string][]Resource {
+func (user *UserDataCache) GetNsResourcesCopy() map[string][]Resource {
 	user.nsrCache.lock.Lock()
 	defer user.nsrCache.lock.Unlock()
-	return user.NsResources
+	nsResourcesCopy := make(map[string][]Resource)
+	for ns, resources := range user.NsResources {
+		nsResourcesCopy[ns] = resources
+	}
+	return nsResourcesCopy
 }
 
-func (user *UserDataCache) GetManagedClusters() map[string]struct{} {
+func (user *UserDataCache) GetManagedClustersCopy() map[string]struct{} {
 	user.clustersCache.lock.Lock()
 	defer user.clustersCache.lock.Unlock()
-	return user.ManagedClusters
+	mcCopy := make(map[string]struct{})
+	for mc := range user.ManagedClusters {
+		mcCopy[mc] = struct{}{}
+	}
+	return mcCopy
 }
