@@ -11,7 +11,7 @@ import (
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stolostron/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/existingsearch/graph/model"
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/metrics"
 	"github.com/stolostron/search-v2-api/pkg/rbac"

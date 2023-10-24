@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stolostron/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/existingsearch/graph/model"
 )
 
 func Test_Messages_DisabledCluster(t *testing.T) {

@@ -13,7 +13,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/lib/pq"
-	"github.com/stolostron/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/existingsearch/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"k8s.io/klog/v2"
@@ -139,7 +139,7 @@ func isString(values []string) bool {
 	return true
 }
 
-//if any string values starts with lower case letters, return true
+// if any string values starts with lower case letters, return true
 func isLower(values []string) bool {
 	for _, str := range values {
 		firstChar := rune(str[0]) //check if first character of the string is lower case
@@ -226,7 +226,8 @@ func formatLabels(labels map[string]interface{}) string {
 }
 
 // Encode array into a single string with the format.
-//  value1; value2; ...
+//
+//	value1; value2; ...
 func formatArray(itemlist []interface{}) string {
 	keys := make([]string, len(itemlist))
 	for i, k := range itemlist {

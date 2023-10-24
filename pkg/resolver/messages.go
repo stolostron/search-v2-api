@@ -3,7 +3,7 @@ package resolver
 import (
 	"context"
 
-	"github.com/stolostron/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/existingsearch/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	klog "k8s.io/klog/v2"
 )

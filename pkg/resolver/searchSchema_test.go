@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/stolostron/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/existingsearch/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"github.com/stretchr/testify/assert"
 )

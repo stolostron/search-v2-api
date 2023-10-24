@@ -16,7 +16,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgproto3/v2"
-	"github.com/stolostron/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/existingsearch/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	authv1 "k8s.io/api/authentication/v1"
 	"k8s.io/klog/v2"
@@ -95,7 +95,8 @@ func (r *Row) Scan(dest ...interface{}) error {
 
 // Load mock data from a json file.
 // NOTE: Don't add additional logic to filter or modify the mock data in
-//       this function. If needed, it should be added in a separate function.
+//
+//	this function. If needed, it should be added in a separate function.
 func newMockRows(mockDataFile string) *MockRows {
 	bytes, _ := os.ReadFile(mockDataFile)
 	var data map[string]interface{}
@@ -132,9 +133,12 @@ func newMockRows(mockDataFile string) *MockRows {
 }
 
 // TODO: Update this function to load the date with newMockRows()
-//       and then filter or update the mocks as needed.
+//
+//	and then filter or update the mocks as needed.
+//
 // NOTE: Try to keep the mock data as simple as possible. Try creating a new mock data json file
-//       instead of adding special load logic in this function.
+//
+//	instead of adding special load logic in this function.
 //
 // Prop will be the property input for searchComplete
 func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop string, limit int) *MockRows {
@@ -405,7 +409,7 @@ func (r *MockRows) Next() bool {
 	return r.index <= len(r.mockData)
 }
 
-//Mocking the Scan function for rows:
+// Mocking the Scan function for rows:
 func (r *MockRows) Scan(dest ...interface{}) error {
 
 	if len(dest) > 1 { // For search function

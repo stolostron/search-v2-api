@@ -12,8 +12,8 @@ import (
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/stolostron/search-v2-api/graph"
-	"github.com/stolostron/search-v2-api/graph/generated"
+	"github.com/stolostron/search-v2-api/existingsearch/graph"
+	"github.com/stolostron/search-v2-api/existingsearch/graph/generated"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/metrics"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
@@ -54,7 +54,8 @@ func StartAndListen() {
 
 	apiSubrouter.Handle("/graphql", handler.NewDefaultServer(generated.NewExecutableSchema(
 		generated.Config{Resolvers: &graph.Resolver{}})))
-
+	apiSubrouter.Handle("/federated/graphql", handler.NewDefaultServer(generated.NewExecutableSchema(
+		generated.Config{Resolvers: &graph.Resolver{}})))
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
 		Handler:           router,
