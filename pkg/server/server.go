@@ -15,8 +15,6 @@ import (
 	"github.com/stolostron/search-v2-api/existingsearch/graph"
 	"github.com/stolostron/search-v2-api/existingsearch/graph/generated"
 	fed1 "github.com/stolostron/search-v2-api/federatedsearch/graph"
-	gen1 "github.com/stolostron/search-v2-api/federatedsearch/graph/generated"
-
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/metrics"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
@@ -57,8 +55,8 @@ func StartAndListen() {
 
 	apiSubrouter.Handle("/graphql", handler.NewDefaultServer(generated.NewExecutableSchema(
 		generated.Config{Resolvers: &graph.Resolver{}})))
-	apiSubrouter.Handle("/federated/graphql", handler.NewDefaultServer(gen1.NewExecutableSchema(
-		gen1.Config{Resolvers: &fed1.Resolver{}})))
+	apiSubrouter.Handle("/federated/graphql", handler.NewDefaultServer(fed1.NewExecutableSchema(
+		fed1.Config{Resolvers: &fed1.Resolver{}})))
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
 		Handler:           router,
