@@ -8,9 +8,9 @@ type Message struct {
 	ID string `json:"id"`
 	// Message type.
 	// **Values:** information, warning, error.
-	Kind *string `json:"kind"`
+	Kind *string `json:"kind,omitempty"`
 	// Message text.
-	Description *string `json:"description"`
+	Description *string `json:"description,omitempty"`
 }
 
 // Defines a key/value to filter results.
@@ -33,16 +33,16 @@ type SearchInput struct {
 	// Will match resources containing any of the keywords in any text field.
 	// When multiple keywords are provided, it is interpreted as an AND operation.
 	// Matches are case insensitive.
-	Keywords []*string `json:"keywords"`
+	Keywords []*string `json:"keywords,omitempty"`
 	// List of SearchFilter, which is a key(property) and values.
 	// When multiple filters are provided, results will match all filters (AND operation).
-	Filters []*SearchFilter `json:"filters"`
+	Filters []*SearchFilter `json:"filters,omitempty"`
 	// Max number of results returned by the query.
 	// **Default is** 10,000
 	// A value of -1 will remove the limit. Use carefully because it may impact the service.
-	Limit *int `json:"limit"`
+	Limit *int `json:"limit,omitempty"`
 	// Filter relationships to the specified kinds.
 	// If empty, all relationships will be included.
 	// This filter is used with the 'related' field on SearchResult.
-	RelatedKinds []*string `json:"relatedKinds"`
+	RelatedKinds []*string `json:"relatedKinds,omitempty"`
 }

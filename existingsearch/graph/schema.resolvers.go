@@ -10,8 +10,6 @@ import (
 	"github.com/stolostron/search-v2-api/existingsearch/graph/generated"
 	"github.com/stolostron/search-v2-api/existingsearch/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/resolver"
-
-	// "k8s.io/klog"
 	klog "k8s.io/klog/v2"
 )
 
@@ -31,12 +29,6 @@ func (r *queryResolver) SearchComplete(ctx context.Context, property string, que
 	return resolver.SearchComplete(ctx, property, query, limit)
 }
 
-// SearchSchema is the resolver for the searchSchema field.
-func (r *queryResolver) SearchSchema(ctx context.Context) (map[string]interface{}, error) {
-	klog.V(3).Infoln("Received SearchSchema query")
-	return resolver.SearchSchemaResolver(ctx)
-}
-
 // Messages is the resolver for the messages field.
 func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) {
 	klog.V(3).Infoln("Received Messages query")
@@ -47,3 +39,14 @@ func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) 
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 
 type queryResolver struct{ *Resolver }
+
+// !!! WARNING !!!
+// The code below was going to be deleted when updating resolvers. It has been copied here so you have
+// one last chance to move it out of harms way if you want. There are two reasons this happens:
+//   - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//     it when you're done.
+//   - You have helper methods in this file. Move them out to keep these resolver files clean.
+func (r *queryResolver) SearchSchema(ctx context.Context) (map[string]interface{}, error) {
+	klog.V(3).Infoln("Received SearchSchema query")
+	return resolver.SearchSchemaResolver(ctx)
+}
