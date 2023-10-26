@@ -1,20 +1,21 @@
 # Where are all the schema files located? globs are supported eg  src/**/*.graphqls
 schema:
-  - graph/*.graphqls
+  - ../graph/*.graphqls
 
 # Where should the generated server code go?
 exec:
-  filename: graph/generated.go
+  filename: graph/generated/generated.go
   package: graph
 
 # Uncomment to enable federation
 federation:
-  filename: graph/federation.go
+  filename: graph/generated/federation.go
   package: graph
 
 # Where should any generated models go?
 model:
   filename: graph/model/models_gen.go
+  # graph/model/models_gen.go
   package: model
 
 # Where should the resolver implementations go?
@@ -63,7 +64,7 @@ resolver:
 # gqlgen will search for any type names in the schema in these go packages
 # if they match it will use them, otherwise it will generate them.
 autobind:
-#  - "github.com/stolostron/search-v2-api/federatedsearch/graph/model"
+#  - "github.com/stolostron/search-v2-api/graph/model"
 
 # This section declares type mapping between the GraphQL and go type systems
 #
@@ -82,3 +83,7 @@ models:
       - github.com/99designs/gqlgen/graphql.Int
       - github.com/99designs/gqlgen/graphql.Int64
       - github.com/99designs/gqlgen/graphql.Int32
+  SearchResult:
+    model: github.com/stolostron/search-v2-api/pkg/resolver.SearchResult
+  SearchRelatedResult:
+    model: github.com/stolostron/search-v2-api/pkg/resolver.SearchRelatedResult

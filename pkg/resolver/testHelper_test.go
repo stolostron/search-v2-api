@@ -16,7 +16,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgproto3/v2"
-	"github.com/stolostron/search-v2-api/existingsearch/graph/model"
+	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	authv1 "k8s.io/api/authentication/v1"
 	"k8s.io/klog/v2"

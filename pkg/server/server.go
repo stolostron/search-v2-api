@@ -12,9 +12,11 @@ import (
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/stolostron/search-v2-api/existingsearch/graph"
-	"github.com/stolostron/search-v2-api/existingsearch/graph/generated"
-	fed1 "github.com/stolostron/search-v2-api/federatedsearch/graph"
+	fedgraph "github.com/stolostron/search-v2-api/federatedsearch/graph"
+	federated "github.com/stolostron/search-v2-api/federatedsearch/graph/generated"
+	"github.com/stolostron/search-v2-api/graph"
+	"github.com/stolostron/search-v2-api/graph/generated"
+
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/metrics"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
@@ -40,8 +42,11 @@ func StartAndListen() {
 	router.Handle("/metrics", promhttp.HandlerFor(metrics.PromRegistry, promhttp.HandlerOpts{})).Methods("GET")
 
 	if config.Cfg.PlaygroundMode {
+		klog.Info("config.Cfg.ContextPath: ", config.Cfg.ContextPath)
 		router.Handle("/playground",
 			playground.Handler("Search GraphQL playground", fmt.Sprintf("%s/graphql", config.Cfg.ContextPath)))
+		router.Handle("/federated",
+			playground.Handler("Search GraphQL playground", fmt.Sprintf("%s/federated", config.Cfg.ContextPath)))
 		klog.Infof("GraphQL playground is now running on https://localhost:%d/playground", port)
 	}
 
@@ -55,8 +60,8 @@ func StartAndListen() {
 
 	apiSubrouter.Handle("/graphql", handler.NewDefaultServer(generated.NewExecutableSchema(
 		generated.Config{Resolvers: &graph.Resolver{}})))
-	apiSubrouter.Handle("/federated/graphql", handler.NewDefaultServer(fed1.NewExecutableSchema(
-		fed1.Config{Resolvers: &fed1.Resolver{}})))
+	apiSubrouter.Handle("/federated", handler.NewDefaultServer(federated.NewExecutableSchema(
+		federated.Config{Resolvers: &fedgraph.Resolver{}})))
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
 		Handler:           router,

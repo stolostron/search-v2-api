@@ -1,0 +1,80 @@
+# GraphQL schema example
+#
+# https://gqlgen.com/getting-started/
+
+extend type Query {
+  """
+  Search for resources and their relationships. 
+  *[PLACEHOLDER] Results only include kubernetes resources for which the authenticated user has list permission.*
+
+  For more information see the feature spec.
+  """
+  globalSearch(input: [SearchInput]): [SearchResult]
+  # """
+  # Returns all properties from resources currently in the index.
+  # """
+  # searchSchema: Map
+}
+
+
+# """
+# Input options to the search query.
+# """
+# extend input SearchInput {
+#   """
+#     Boolean to check if query is from globalhub
+#     """
+#     globalhub: Boolean
+    # """
+    # List of strings to match resources.  
+    # Will match resources containing any of the keywords in any text field.  
+    # When multiple keywords are provided, it is interpreted as an AND operation.  
+    # Matches are case insensitive.
+    # """
+    # keywords: [String]
+
+    # """
+    # List of SearchFilter, which is a key(property) and values.  
+    # When multiple filters are provided, results will match all filters (AND operation).
+    # """
+    # filters: [SearchFilter] @external
+    
+    # """
+    # Max number of results returned by the query.  
+    # **Default is** 10,000  
+    # A value of -1 will remove the limit. Use carefully because it may impact the service.
+    # """
+    # limit: Int @external
+
+    # """
+    # Filter relationships to the specified kinds.  
+    # If empty, all relationships will be included.  
+    # This filter is used with the 'related' field on SearchResult.
+    # """
+    # relatedKinds: [String] @external
+  # }
+
+
+# """
+# Data returned by the search query.
+# """
+# extend type SearchResult @key(fields: "items"){
+#     # """
+#     # Total number of resources matching the query.  
+#     # **NOTE:** Should not use count in combination with items. If items are requested, the count is simply the size of items.
+#     # """
+#     # count: Int
+#     """
+#     Resources matching the search query.
+#     """
+#     items: [Map] @external
+#     # """
+#     # Resources related to the query results (items).  
+#     # For example, if searching for deployments, this will return the related pod resources.
+#     # """
+#     # related: [SearchRelatedResult]
+#   }
+# """
+# Map of strings. Used to hold data for a result item.
+# """
+# scalar Map

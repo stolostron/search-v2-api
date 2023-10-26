@@ -6,22 +6,30 @@ package graph
 
 import (
 	"context"
+	"fmt"
 
+	graph "github.com/stolostron/search-v2-api/federatedsearch/graph/generated"
 	"github.com/stolostron/search-v2-api/federatedsearch/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/resolver"
-	"k8s.io/klog/v2"
+	klog "k8s.io/klog/v2"
 )
 
-// GlobalSearch is the resolver for the globalSearch field.
-func (r *queryResolver) GlobalSearch(ctx context.Context, input []*model.SearchInput) ([]*model.SearchResult, error) {
-	props := map[string]interface{}{
-		"allProperties": []string{"cluster", "kind", "label", "name", "namespace", "status"},
-	}
-	items := model.SearchResult{Items: []map[string]interface{}{props}}
+// Search is the resolver for the search field.
+func (r *queryResolver) Search(ctx context.Context, input []*model.SearchInput) ([]*resolver.SearchResult, error) {
+	klog.Info(fmt.Errorf("not implemented: Search - search"))
+	klog.V(3).Infof("--------- Received Search query with %d inputs ---------\n", len(input))
+	// props := map[string]interface{}{
+	// 	"allProperties": []string{"cluster", "kind", "label", "name", "namespace", "status"},
+	// }
+	// res := resolver.SearchResult{}
 
-	srchResult := make([]*model.SearchResult, len(input))
-	srchResult = append(srchResult, &items)
-	return srchResult, nil
+	return nil, nil //resolver.Search(ctx, input)
+}
+
+// SearchComplete is the resolver for the searchComplete field.
+func (r *queryResolver) SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error) {
+	klog.Info(fmt.Errorf("not implemented: SearchComplete - searchComplete"))
+	return nil, nil
 }
 
 // SearchSchema is the resolver for the searchSchema field.
@@ -30,8 +38,14 @@ func (r *queryResolver) SearchSchema(ctx context.Context) (map[string]interface{
 	return resolver.SearchSchemaResolver(ctx)
 }
 
-// Query returns QueryResolver implementation.
-func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
+// Messages is the resolver for the messages field.
+func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) {
+	klog.Info(fmt.Errorf("not implemented: Messages - messages"))
+	return nil, nil
+}
+
+// Query returns graph.QueryResolver implementation.
+func (r *Resolver) Query() graph.QueryResolver { return &queryResolver{r} }
 
 type queryResolver struct{ *Resolver }
 

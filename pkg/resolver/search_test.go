@@ -8,7 +8,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/golang/mock/gomock"
-	"github.com/stolostron/search-v2-api/existingsearch/graph/model"
+	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"github.com/stretchr/testify/assert"
 )

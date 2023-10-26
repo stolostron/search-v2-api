@@ -28,7 +28,11 @@ type Query {
   A value of -1 will remove the limit. Use carefully because it may impact the service.
   """
   searchComplete(property: String!, query: SearchInput, limit: Int): [String]
-
+  
+  """
+  Returns all properties from resources currently in the index.
+  """
+  searchSchema: Map
 
   """
   Additional information about the service status or conditions found while processing the query.  

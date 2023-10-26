@@ -21,6 +21,7 @@ setup-dev: ## Configure local environment to use the postgres instance on the de
 
 gqlgen: ## Generate graphql model. See: https://gqlgen.com/
 	go run github.com/99designs/gqlgen generate
+	cd federatedsearch;go run github.com/99designs/gqlgen generate;
 
 .PHONY: run
 run: ## Run the service locally.

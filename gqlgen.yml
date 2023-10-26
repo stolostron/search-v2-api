@@ -1,6 +1,6 @@
 # Where are all the schema files located? globs are supported eg  src/**/*.graphqls
 schema:
-  - graph/*.graphqls
+  - graph/schema.graphqls
 
 # Where should the generated server code go?
 exec:
@@ -37,7 +37,7 @@ resolver:
 # This is only needed for init as per https://github.com/99designs/gqlgen/discussions/2000.
 # Commenting out to prevent error on `make gqlgen`
 # autobind:
-#   - "github.com/stolostron/search-v2-api/existingsearch/graph/model"
+#   - "github.com/stolostron/search-v2-api/graph/model"
 
 # This section declares type mapping between the GraphQL and go type systems
 #
