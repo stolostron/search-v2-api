@@ -10,20 +10,14 @@ import (
 
 	graph "github.com/stolostron/search-v2-api/federatedsearch/graph/generated"
 	"github.com/stolostron/search-v2-api/federatedsearch/graph/model"
-	"github.com/stolostron/search-v2-api/pkg/resolver"
+	resolver "github.com/stolostron/search-v2-api/pkg/fedresolver"
 	klog "k8s.io/klog/v2"
 )
 
 // Search is the resolver for the search field.
 func (r *queryResolver) Search(ctx context.Context, input []*model.SearchInput) ([]*resolver.SearchResult, error) {
-	klog.Info(fmt.Errorf("not implemented: Search - search"))
 	klog.V(3).Infof("--------- Received Search query with %d inputs ---------\n", len(input))
-	// props := map[string]interface{}{
-	// 	"allProperties": []string{"cluster", "kind", "label", "name", "namespace", "status"},
-	// }
-	// res := resolver.SearchResult{}
-
-	return nil, nil //resolver.Search(ctx, input)
+	return resolver.Search(ctx, input)
 }
 
 // SearchComplete is the resolver for the searchComplete field.
@@ -35,7 +29,9 @@ func (r *queryResolver) SearchComplete(ctx context.Context, property string, que
 // SearchSchema is the resolver for the searchSchema field.
 func (r *queryResolver) SearchSchema(ctx context.Context) (map[string]interface{}, error) {
 	klog.V(3).Infoln("Received SearchSchema query")
-	return resolver.SearchSchemaResolver(ctx)
+	klog.Info(fmt.Errorf("not implemented: SearchSchema"))
+
+	return nil, nil //resolver.SearchSchemaResolver(ctx)
 }
 
 // Messages is the resolver for the messages field.
@@ -48,11 +44,3 @@ func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) 
 func (r *Resolver) Query() graph.QueryResolver { return &queryResolver{r} }
 
 type queryResolver struct{ *Resolver }
-
-// !!! WARNING !!!
-// The code below was going to be deleted when updating resolvers. It has been copied here so you have
-// one last chance to move it out of harms way if you want. There are two reasons this happens:
-//   - When renaming or deleting a resolver the old code will be put in here. You can safely delete
-//     it when you're done.
-//   - You have helper methods in this file. Move them out to keep these resolver files clean.
-type mutationResolver struct{ *Resolver }

@@ -84,6 +84,6 @@ models:
       - github.com/99designs/gqlgen/graphql.Int64
       - github.com/99designs/gqlgen/graphql.Int32
   SearchResult:
-    model: github.com/stolostron/search-v2-api/pkg/resolver.SearchResult
+    model: github.com/stolostron/search-v2-api/pkg/fedresolver.SearchResult
   SearchRelatedResult:
-    model: github.com/stolostron/search-v2-api/pkg/resolver.SearchRelatedResult
+    model: github.com/stolostron/search-v2-api/pkg/fedresolver.SearchRelatedResult

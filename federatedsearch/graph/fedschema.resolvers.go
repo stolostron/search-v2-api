@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"github.com/stolostron/search-v2-api/federatedsearch/graph/model"
-	"github.com/stolostron/search-v2-api/pkg/resolver"
+	resolver "github.com/stolostron/search-v2-api/pkg/fedresolver"
 )
 
 // GlobalSearch is the resolver for the globalSearch field.
