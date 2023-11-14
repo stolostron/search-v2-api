@@ -12,8 +12,8 @@ import (
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	fedgraph "github.com/stolostron/search-v2-api/federatedsearch/graph"
-	federated "github.com/stolostron/search-v2-api/federatedsearch/graph/generated"
+	fedgraph "github.com/stolostron/search-v2-api/federatedgraph/graph"
+	federated "github.com/stolostron/search-v2-api/federatedgraph/graph/generated"
 	"github.com/stolostron/search-v2-api/graph"
 	"github.com/stolostron/search-v2-api/graph/generated"
 

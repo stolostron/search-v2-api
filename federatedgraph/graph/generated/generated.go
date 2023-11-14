@@ -14,7 +14,7 @@ import (
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
 	"github.com/99designs/gqlgen/plugin/federation/fedruntime"
-	"github.com/stolostron/search-v2-api/federatedsearch/graph/model"
+	"github.com/stolostron/search-v2-api/federatedgraph/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/fedresolver"
 	gqlparser "github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
@@ -565,7 +565,7 @@ func (ec *executionContext) field_Query_globalSearch_args(ctx context.Context, r
 	var arg0 []*model.SearchInput
 	if tmp, ok := rawArgs["input"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalOSearchInput2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedsearchᚋgraphᚋmodelᚐSearchInput(ctx, tmp)
+		arg0, err = ec.unmarshalOSearchInput2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedgraphᚋgraphᚋmodelᚐSearchInput(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
@@ -589,7 +589,7 @@ func (ec *executionContext) field_Query_searchComplete_args(ctx context.Context,
 	var arg1 *model.SearchInput
 	if tmp, ok := rawArgs["query"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("query"))
-		arg1, err = ec.unmarshalOSearchInput2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedsearchᚋgraphᚋmodelᚐSearchInput(ctx, tmp)
+		arg1, err = ec.unmarshalOSearchInput2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedgraphᚋgraphᚋmodelᚐSearchInput(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
@@ -613,7 +613,7 @@ func (ec *executionContext) field_Query_search_args(ctx context.Context, rawArgs
 	var arg0 []*model.SearchInput
 	if tmp, ok := rawArgs["input"]; ok {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-		arg0, err = ec.unmarshalOSearchInput2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedsearchᚋgraphᚋmodelᚐSearchInput(ctx, tmp)
+		arg0, err = ec.unmarshalOSearchInput2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedgraphᚋgraphᚋmodelᚐSearchInput(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
@@ -964,7 +964,7 @@ func (ec *executionContext) _Query_messages(ctx context.Context, field graphql.C
 	}
 	res := resTmp.([]*model.Message)
 	fc.Result = res
-	return ec.marshalOMessage2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedsearchᚋgraphᚋmodelᚐMessage(ctx, field.Selections, res)
+	return ec.marshalOMessage2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedgraphᚋgraphᚋmodelᚐMessage(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_messages(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -3361,7 +3361,7 @@ func (ec *executionContext) unmarshalInputSearchInput(ctx context.Context, obj i
 			var err error
 
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filters"))
-			data, err := ec.unmarshalOSearchFilter2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedsearchᚋgraphᚋmodelᚐSearchFilter(ctx, v)
+			data, err := ec.unmarshalOSearchFilter2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedgraphᚋgraphᚋmodelᚐSearchFilter(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -4452,7 +4452,7 @@ func (ec *executionContext) marshalOMap2ᚕmap(ctx context.Context, sel ast.Sele
 	return ret
 }
 
-func (ec *executionContext) marshalOMessage2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedsearchᚋgraphᚋmodelᚐMessage(ctx context.Context, sel ast.SelectionSet, v []*model.Message) graphql.Marshaler {
+func (ec *executionContext) marshalOMessage2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedgraphᚋgraphᚋmodelᚐMessage(ctx context.Context, sel ast.SelectionSet, v []*model.Message) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
@@ -4479,7 +4479,7 @@ func (ec *executionContext) marshalOMessage2ᚕᚖgithubᚗcomᚋstolostronᚋse
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalOMessage2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedsearchᚋgraphᚋmodelᚐMessage(ctx, sel, v[i])
+			ret[i] = ec.marshalOMessage2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedgraphᚋgraphᚋmodelᚐMessage(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -4493,14 +4493,14 @@ func (ec *executionContext) marshalOMessage2ᚕᚖgithubᚗcomᚋstolostronᚋse
 	return ret
 }
 
-func (ec *executionContext) marshalOMessage2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedsearchᚋgraphᚋmodelᚐMessage(ctx context.Context, sel ast.SelectionSet, v *model.Message) graphql.Marshaler {
+func (ec *executionContext) marshalOMessage2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedgraphᚋgraphᚋmodelᚐMessage(ctx context.Context, sel ast.SelectionSet, v *model.Message) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}
 	return ec._Message(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalOSearchFilter2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedsearchᚋgraphᚋmodelᚐSearchFilter(ctx context.Context, v interface{}) ([]*model.SearchFilter, error) {
+func (ec *executionContext) unmarshalOSearchFilter2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedgraphᚋgraphᚋmodelᚐSearchFilter(ctx context.Context, v interface{}) ([]*model.SearchFilter, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -4512,7 +4512,7 @@ func (ec *executionContext) unmarshalOSearchFilter2ᚕᚖgithubᚗcomᚋstolostr
 	res := make([]*model.SearchFilter, len(vSlice))
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalOSearchFilter2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedsearchᚋgraphᚋmodelᚐSearchFilter(ctx, vSlice[i])
+		res[i], err = ec.unmarshalOSearchFilter2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedgraphᚋgraphᚋmodelᚐSearchFilter(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}
@@ -4520,7 +4520,7 @@ func (ec *executionContext) unmarshalOSearchFilter2ᚕᚖgithubᚗcomᚋstolostr
 	return res, nil
 }
 
-func (ec *executionContext) unmarshalOSearchFilter2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedsearchᚋgraphᚋmodelᚐSearchFilter(ctx context.Context, v interface{}) (*model.SearchFilter, error) {
+func (ec *executionContext) unmarshalOSearchFilter2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedgraphᚋgraphᚋmodelᚐSearchFilter(ctx context.Context, v interface{}) (*model.SearchFilter, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -4528,7 +4528,7 @@ func (ec *executionContext) unmarshalOSearchFilter2ᚖgithubᚗcomᚋstolostron�
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
-func (ec *executionContext) unmarshalOSearchInput2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedsearchᚋgraphᚋmodelᚐSearchInput(ctx context.Context, v interface{}) ([]*model.SearchInput, error) {
+func (ec *executionContext) unmarshalOSearchInput2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedgraphᚋgraphᚋmodelᚐSearchInput(ctx context.Context, v interface{}) ([]*model.SearchInput, error) {
 	if v == nil {
 		return nil, nil
 	}
@@ -4540,7 +4540,7 @@ func (ec *executionContext) unmarshalOSearchInput2ᚕᚖgithubᚗcomᚋstolostro
 	res := make([]*model.SearchInput, len(vSlice))
 	for i := range vSlice {
 		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
-		res[i], err = ec.unmarshalOSearchInput2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedsearchᚋgraphᚋmodelᚐSearchInput(ctx, vSlice[i])
+		res[i], err = ec.unmarshalOSearchInput2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedgraphᚋgraphᚋmodelᚐSearchInput(ctx, vSlice[i])
 		if err != nil {
 			return nil, err
 		}
@@ -4548,7 +4548,7 @@ func (ec *executionContext) unmarshalOSearchInput2ᚕᚖgithubᚗcomᚋstolostro
 	return res, nil
 }
 
-func (ec *executionContext) unmarshalOSearchInput2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedsearchᚋgraphᚋmodelᚐSearchInput(ctx context.Context, v interface{}) (*model.SearchInput, error) {
+func (ec *executionContext) unmarshalOSearchInput2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋfederatedgraphᚋgraphᚋmodelᚐSearchInput(ctx context.Context, v interface{}) (*model.SearchInput, error) {
 	if v == nil {
 		return nil, nil
 	}

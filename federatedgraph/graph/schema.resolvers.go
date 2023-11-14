@@ -8,8 +8,8 @@ import (
 	"context"
 	"fmt"
 
-	graph "github.com/stolostron/search-v2-api/federatedsearch/graph/generated"
-	"github.com/stolostron/search-v2-api/federatedsearch/graph/model"
+	graph "github.com/stolostron/search-v2-api/federatedgraph/graph/generated"
+	"github.com/stolostron/search-v2-api/federatedgraph/graph/model"
 	resolver "github.com/stolostron/search-v2-api/pkg/fedresolver"
 	klog "k8s.io/klog/v2"
 )

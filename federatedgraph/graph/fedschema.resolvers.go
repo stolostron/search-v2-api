@@ -8,7 +8,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/stolostron/search-v2-api/federatedsearch/graph/model"
+	"github.com/stolostron/search-v2-api/federatedgraph/graph/model"
 	resolver "github.com/stolostron/search-v2-api/pkg/fedresolver"
 )
 

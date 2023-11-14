@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/driftprogramming/pgxpoolmock"
-	"github.com/stolostron/search-v2-api/federatedsearch/graph/model"
+	"github.com/stolostron/search-v2-api/federatedgraph/graph/model"
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/metrics"
 	"k8s.io/klog/v2"
