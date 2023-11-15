@@ -33,8 +33,9 @@ type SearchResult struct {
 type resultPayload struct {
 	Data struct {
 		Search []struct {
-			Count int                      `json:"count"`
-			Items []map[string]interface{} `json:"items"`
+			Count   int                      `json:"count"`
+			Items   []map[string]interface{} `json:"items"`
+			Related []SearchRelatedResult    `json:"related"`
 		} `json:"search"`
 	} `json:"data"`
 }
@@ -44,8 +45,10 @@ const ErrorMsg string = "Error building Search query"
 func getTokenAndRoute() []map[string]string {
 	route1, route1Present := os.LookupEnv("ROUTE1")
 	token1, token1Present := os.LookupEnv("TOKEN1")
-	if route1Present && token1Present {
-		return []map[string]string{{route1: token1}}
+	route2, route2Present := os.LookupEnv("ROUTE2")
+	token2, token2Present := os.LookupEnv("TOKEN2")
+	if route1Present && token1Present && route2Present && token2Present {
+		return []map[string]string{{route1: token1}, {route2: token2}}
 	} else {
 		return []map[string]string{}
 	}
@@ -90,13 +93,14 @@ func callRoute(method string, routeAndToken map[string]string, input model.Searc
 	var returnResult interface{}
 	var count int
 	var items []map[string]interface{}
+	var related []SearchRelatedResult
 
 	if len(routeAndToken) == 0 {
 		klog.Warning("No routes and tokens provided.")
 		return returnResult
 	}
 	for route, token := range routeAndToken {
-		payloadBuffer := strings.NewReader("{\"query\":\"{\\n  search(\\n    input: [{keywords: [], filters: [{property: \\\"kind\\\", values: \\\"Node\\\"}], limit: 1000}]\\n  ) {\\n    count\\n    items\\n  }\\n}\",\"variables\":{}}")
+		payloadBuffer := strings.NewReader("{\"query\":\"{\\n  search(\\n    input: [{keywords: [], filters: [{property: \\\"kind\\\", values: \\\"Node\\\"}], limit: 1000}]\\n  ) {\\n    count\\n    items\\n  related{kind,count,items} \\n}\\n}\",\"variables\":{}}")
 		client, req := createRequest(route, token, payloadBuffer)
 
 		res, err := client.Do(req)
@@ -124,8 +128,11 @@ func callRoute(method string, routeAndToken map[string]string, input model.Searc
 			returnResult = count
 		case "items":
 			items = result.Data.Search[0].Items
-			klog.Info("count: ", count)
+			klog.Info("items: ", items)
 			returnResult = items
+		case "related":
+			related = result.Data.Search[0].Related
+			returnResult = related
 		default:
 			klog.Infof("%s not implemented ", method)
 			klog.Info("res.Body: ", string(resultBytes))
@@ -195,13 +202,47 @@ func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
 	if s.uids == nil {
 		s.Uids()
 	}
+	srchRelMap := map[string]SearchRelatedResult{}
+	searchRelatedRes := []SearchRelatedResult{}
+	var wg sync.WaitGroup
+	// var result int
+	for _, routeAndToken := range s.routeToken {
+		wg.Add(1)
+		routeAndToken := routeAndToken
+		// Wrap the worker call in a closure that makes sure to tell
+		// the WaitGroup that this worker is done.
+		go func() {
+			defer wg.Done()
+			// TODO: Lock map to prevent concurrent write?
+			tmpSearchRelatedRes := callRoute("related", routeAndToken, *s.input)
+			tmpSearchRelatedResArray, _ := tmpSearchRelatedRes.([]SearchRelatedResult)
+			for _, rlRes := range tmpSearchRelatedResArray {
+				if currSrchRel, kindPresent := srchRelMap[rlRes.Kind]; kindPresent {
+					*currSrchRel.Count += *rlRes.Count
+					currSrchRel.Items = append(currSrchRel.Items, rlRes.Items...)
+					srchRelMap[rlRes.Kind] = currSrchRel
+				} else {
+					srchRelMap[rlRes.Kind] = rlRes
+				}
+
+			}
+		}()
+	}
+
+	// Block until the WaitGroup counter goes back to 0;
+	// all the workers notified they're done.
+	wg.Wait()
+
+	for _, res := range srchRelMap {
+		searchRelatedRes = append(searchRelatedRes, res)
+	}
 	// Wait for search to complete before resolving relationships.
 	s.wg.Wait()
 	// Log if this function is slow.
 	defer metrics.SlowLog(fmt.Sprintf("SearchResult::Related() - uids: %d levels: %d", len(s.uids), s.level),
 		500*time.Millisecond)()
 
-	return []SearchRelatedResult{}
+	return searchRelatedRes
 }
 
 func (s *SearchResult) Uids() {
