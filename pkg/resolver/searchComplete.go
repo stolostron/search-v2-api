@@ -67,11 +67,9 @@ func SearchComplete(ctx context.Context, property string, srchInput *model.Searc
 
 }
 
-// Sample query: SELECT DISTINCT name FROM
-// (SELECT "data"->>'name' as name FROM "search"."resources" WHERE ("data"->>'name' IS NOT NULL)
-// LIMIT 100000) as searchComplete
-// ORDER BY name ASC
-// LIMIT 1000
+// Sample query:
+//   SELECT DISTINCT "data"->>'name' as values FROM "search"."resources"
+//      WHERE ("data"->>'name' IS NOT NULL) ORDER BY values ASC LIMIT 10000
 func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 	var limit int
 	var whereDs []exp.Expression
@@ -88,16 +86,28 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 
 		// SELECT CLAUSE
 		if s.property == "cluster" {
+			// Cluster is a special case because it's stored in a separate column.
+			// This query should use the index "data_cluster_idx".
+			// QUERY: SELECT DISTINCT cluster FROM "search"."resources" ORDER BY cluster ASC LIMIT 10000
 			selectDs = ds.SelectDistinct(goqu.C(s.property)).Order(goqu.C(s.property).Asc())
-			//Adding notNull clause to filter out NULL values and ORDER by sort results
-			whereDs = append(whereDs, goqu.C(s.property).IsNotNull(),
-				goqu.C(s.property).Neq("")) // remove empty strings from results
-		} else {
-			// "->" - get data as json object
-			// "->>" - get data as string
+
+		} else if s.propTypes[s.property] == "array" {
+			// Properties with array values must be queried with the "->" operator. To include each individual
+			// value in the result. The operator "->" gets data as json object
+			// QUERY: SELECT DISTINCT "data"->'label' as values FROM "search"."resources"
+			//          WHERE ("data"->'label' IS NOT NULL) ORDER BY values ASC LIMIT 10000
 			selectDs = ds.SelectDistinct(goqu.L(`"data"->?`, s.property)).Order(goqu.L(`"data"->?`, s.property).Asc())
-			//Adding notNull clause to filter out NULL values and ORDER by sort results
+			// Adding NOT NULL clause to filter out NULL values and ORDER by sort results
 			whereDs = append(whereDs, goqu.L(`"data"->?`, s.property).IsNotNull())
+
+		} else {
+			// For strings and numbers, using the "->>" operator is significantly faster than the "->" operator.
+			// The operator "->>" gets data as string.
+			// QUERY: SELECT DISTINCT "data"->>'name' as values FROM "search"."resources"
+			//          WHERE ("data"->>'name' IS NOT NULL) ORDER BY values ASC LIMIT 10000
+			selectDs = ds.SelectDistinct(goqu.L(`"data"->>?`, s.property)).Order(goqu.L(`"data"->>?`, s.property).Asc())
+			// Adding NOT NULL clause to filter out NULL values and ORDER by sort results
+			whereDs = append(whereDs, goqu.L(`"data"->>?`, s.property).IsNotNull())
 		}
 
 		// get user info for logging
@@ -148,10 +158,6 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		s.query = ""
 		s.params = nil
 	}
-	// SELECT DISTINCT "prop" FROM (SELECT "data"->'?'
-	// AS "prop" FROM "search"."resources" WHERE ("data"->'?' IS NOT NULL) LIMIT 100000)
-	// AS "searchComplete" ORDER BY prop ASC LIMIT 1000
-
 }
 
 func (s *SearchCompleteResult) searchCompleteResults(ctx context.Context) ([]*string, error) {

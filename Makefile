@@ -78,6 +78,12 @@ test-send: ## Sends a graphQL query using cURL for development testing.
 	--header "Authorization: Bearer ${TOKEN}" --header 'Content-Type: application/json' \
 	--data-raw '{"query":"query q($$input: [SearchInput]) { search(input: $$input) { count items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}' | jq
 
+test-send-autocomplete: ## Sends a graphQL query using cURL for development testing.
+	curl --insecure --location --request POST ${URL} \
+	--header "Authorization: Bearer ${TOKEN}" --header 'Content-Type: application/json' \
+	--data-raw '{"query":"query q($$property: String!, $$query: SearchInput, $$limit: Int) {\n  searchComplete(property: $$property, query: $$query, limit: $$limit)\n}", "variables":{"property":"name","query":{"keywords":[],"filters":[],"limit":10000},"limit":10000}}'
+
+
 
 check-locust: ## Checks if Locust is installed in the system.
 ifeq (,$(shell which locust))
