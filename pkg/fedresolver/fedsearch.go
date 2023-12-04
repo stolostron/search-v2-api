@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -28,6 +27,7 @@ type SearchResult struct {
 	uids       []*string           // List of uids from search result to be used to get relatioinships.
 	routeToken []map[string]string
 	wg         sync.WaitGroup // Used to serialize search query and relatioinships query.
+	client     http.Client
 }
 
 type resultPayload struct {
@@ -41,18 +41,6 @@ type resultPayload struct {
 }
 
 const ErrorMsg string = "Error building Search query"
-
-func getTokenAndRoute() []map[string]string {
-	route1, route1Present := os.LookupEnv("ROUTE1")
-	token1, token1Present := os.LookupEnv("TOKEN1")
-	route2, route2Present := os.LookupEnv("ROUTE2")
-	token2, token2Present := os.LookupEnv("TOKEN2")
-	if route1Present && token1Present && route2Present && token2Present {
-		return []map[string]string{{route1: token1}, {route2: token2}}
-	} else {
-		return []map[string]string{}
-	}
-}
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
 	defer metrics.SlowLog("SearchResolver", 0)()
@@ -68,42 +56,33 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 				pool:       db.GetConnPool(ctx),
 				routeToken: routeToken,
 				context:    ctx,
+				client: http.Client{
+					Transport: &http.Transport{
+						TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+					},
+					Timeout: 30 * time.Second,
+				},
 			}
 		}
 	}
 	return srchResult, nil
 }
 
-func createRequest(route string, token string, payloadBuffer *strings.Reader) (http.Client, *http.Request) {
-	req, err := http.NewRequest(http.MethodPost, route, payloadBuffer)
-	req.Header.Add("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-	if err != nil {
-		klog.Infof("error making http request: %s\n", err)
-	}
-	client := http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-		Timeout: 30 * time.Second,
-	}
-	return client, req
-}
-func callRoute(method string, routeAndToken map[string]string, input model.SearchInput) interface{} {
+func (s *SearchResult) callRoute(method string, routeAndToken map[string]string, input model.SearchInput) interface{} {
 	var returnResult interface{}
 	var count int
 	var items []map[string]interface{}
 	var related []SearchRelatedResult
 
 	if len(routeAndToken) == 0 {
-		klog.Warning("No routes and tokens provided.")
+		klog.Warning("No  leaf hub routes and tokens provided.")
 		return returnResult
 	}
 	for route, token := range routeAndToken {
 		payloadBuffer := strings.NewReader("{\"query\":\"{\\n  search(\\n    input: [{keywords: [], filters: [{property: \\\"kind\\\", values: \\\"Node\\\"}], limit: 1000}]\\n  ) {\\n    count\\n    items\\n  related{kind,count,items} \\n}\\n}\",\"variables\":{}}")
-		client, req := createRequest(route, token, payloadBuffer)
+		req := createRequest(route, token, payloadBuffer)
 
-		res, err := client.Do(req)
+		res, err := s.client.Do(req)
 		if err != nil {
 			fmt.Printf("client: error making http request: %s\n", err)
 		}
@@ -133,6 +112,7 @@ func callRoute(method string, routeAndToken map[string]string, input model.Searc
 		case "related":
 			related = result.Data.Search[0].Related
 			returnResult = related
+
 		default:
 			klog.Infof("%s not implemented ", method)
 			klog.Info("res.Body: ", string(resultBytes))
@@ -155,7 +135,7 @@ func (s *SearchResult) Count() int {
 		// the WaitGroup that this worker is done.
 		go func() {
 			defer wg.Done()
-			count += callRoute("count", routeAndToken, *s.input).(int)
+			count += s.callRoute("count", routeAndToken, *s.input).(int)
 		}()
 	}
 
@@ -181,7 +161,7 @@ func (s *SearchResult) Items() []map[string]interface{} {
 		// the WaitGroup that this worker is done.
 		go func() {
 			defer wg.Done()
-			tmpItems := callRoute("items", routeAndToken, *s.input)
+			tmpItems := s.callRoute("items", routeAndToken, *s.input)
 			tmpItemsArray, _ := tmpItems.([]map[string]interface{})
 			items = append(items, tmpItemsArray...)
 		}()
@@ -214,7 +194,7 @@ func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
 		go func() {
 			defer wg.Done()
 			// TODO: Lock map to prevent concurrent write?
-			tmpSearchRelatedRes := callRoute("related", routeAndToken, *s.input)
+			tmpSearchRelatedRes := s.callRoute("related", routeAndToken, *s.input)
 			tmpSearchRelatedResArray, _ := tmpSearchRelatedRes.([]SearchRelatedResult)
 			for _, rlRes := range tmpSearchRelatedResArray {
 				if currSrchRel, kindPresent := srchRelMap[rlRes.Kind]; kindPresent {

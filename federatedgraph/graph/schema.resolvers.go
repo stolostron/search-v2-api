@@ -23,15 +23,14 @@ func (r *queryResolver) Search(ctx context.Context, input []*model.SearchInput) 
 // SearchComplete is the resolver for the searchComplete field.
 func (r *queryResolver) SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error) {
 	klog.Info(fmt.Errorf("not implemented: SearchComplete - searchComplete"))
+	// return resolver.SearchComplete(ctx, property, query, limit)
 	return nil, nil
 }
 
 // SearchSchema is the resolver for the searchSchema field.
 func (r *queryResolver) SearchSchema(ctx context.Context) (map[string]interface{}, error) {
 	klog.V(3).Infoln("Received SearchSchema query")
-	klog.Info(fmt.Errorf("not implemented: SearchSchema"))
-
-	return nil, nil //resolver.SearchSchemaResolver(ctx)
+	return resolver.SearchSchemaResolver(ctx)
 }
 
 // Messages is the resolver for the messages field.
