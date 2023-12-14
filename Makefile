@@ -78,6 +78,22 @@ test-send: ## Sends a graphQL query using cURL for development testing.
 	--header "Authorization: Bearer ${TOKEN}" --header 'Content-Type: application/json' \
 	--data-raw '{"query":"query q($$input: [SearchInput]) { search(input: $$input) { count items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}' | jq
 
+test-search-fed: ## Sends a federated graphQL query using cURL for development testing.
+	curl --insecure --location --request POST https://localhost:4010/federated \
+	--header "Authorization: Bearer $(shell oc whoami -t)" --header 'Content-Type: application/json' \
+	--data-raw '{"query":"query q($$input: [SearchInput]) { search(input: $$input) { count items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
+
+test-search-count-fed: ## Sends a federated graphQL query using cURL for development testing.
+	curl --insecure --location --request POST https://localhost:4010/federated \
+	--header "Authorization: Bearer $(shell oc whoami -t)" --header 'Content-Type: application/json' \
+	--data-raw '{"query":"query q($$input: [SearchInput]) { search(input: $$input) { count } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
+
+
+test-searchcomplete-fed: ## Sends a federated graphQL query using cURL for development testing.
+	curl --insecure --location --request POST https://localhost:4010/federated \
+	--header "Authorization: Bearer $(shell oc whoami -t)" --header 'Content-Type: application/json' \
+	--data-raw '{"query":"query SearchComplete { searchComplete(property: \"kind\") }","variables":{} }'
+
 
 check-locust: ## Checks if Locust is installed in the system.
 ifeq (,$(shell which locust))

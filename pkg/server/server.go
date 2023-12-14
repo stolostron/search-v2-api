@@ -15,6 +15,7 @@ import (
 	"github.com/stolostron/search-v2-api/graph"
 	"github.com/stolostron/search-v2-api/graph/generated"
 	"github.com/stolostron/search-v2-api/pkg/config"
+	"github.com/stolostron/search-v2-api/pkg/federated"
 	"github.com/stolostron/search-v2-api/pkg/metrics"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 )
@@ -43,6 +44,8 @@ func StartAndListen() {
 			playground.Handler("Search GraphQL playground", fmt.Sprintf("%s/graphql", config.Cfg.ContextPath)))
 		klog.Infof("GraphQL playground is now running on https://localhost:%d/playground", port)
 	}
+
+	router.HandleFunc("/federated", federated.HandleFederatedRequest).Methods("POST")
 
 	// Add authentication middleware to the /searchapi (ContextPath) subroute.
 	apiSubrouter := router.PathPrefix(config.Cfg.ContextPath).Subrouter()
