@@ -7,18 +7,20 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// Used to parse the incoming GraphQL response.
 type GraphQLResponse struct {
 	Data   map[string]interface{} `json:"data"`
 	Errors []interface{}          `json:"errors"`
 }
 
-func parseResponse(requestContext *RequestContext, body []byte) {
+// Parse the response from a remote search service.
+func parseResponse(fedRequest *FederatedRequest, body []byte) {
 	var response GraphQLResponse
 	err := json.Unmarshal(body, &response)
 
 	if err != nil {
 		klog.Errorf("Error parsing response: %s", err)
-		requestContext.Errors = append(requestContext.Errors, fmt.Errorf("Error parsing response: %s", err))
+		fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("Error parsing response: %s", err))
 		return
 	}
 
@@ -30,20 +32,20 @@ func parseResponse(requestContext *RequestContext, body []byte) {
 		case "searchSchema":
 			klog.Info("Found searchSchema in response.")
 			allProps := value.(map[string]interface{})["allProperties"]
-			requestContext.Data.mergeSearchSchema(allProps.([]interface{}))
+			fedRequest.Response.Data.mergeSearchSchema(allProps.([]interface{}))
 
 		case "searchComplete":
 			klog.Info("Found searchComplete in response.")
-			requestContext.Data.mergeSearchComplete(value.([]interface{}))
+			fedRequest.Response.Data.mergeSearchComplete(value.([]interface{}))
 
 		case "messages":
 			klog.Info("Found messages in response.")
-			// requestContext.Data.Messages = append(requestContext.Data.Messages, value.([]interface{})...)
+			// fedRequest.Data.Messages = append(fedRequest.Data.Messages, value.([]interface{})...)
 
 		case "search":
 			klog.Infof("Found SearchResults in response. %+v", value)
 			searchResults := value.([]interface{})
-			requestContext.Data.mergeSearchResults(searchResults)
+			fedRequest.Response.Data.mergeSearchResults(searchResults)
 
 		default:
 			klog.Infof("Found unknown key in results: %s", key)

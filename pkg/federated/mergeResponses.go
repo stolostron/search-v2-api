@@ -21,11 +21,6 @@ type DataResponse struct {
 	SearchSchema   []string       `json:"searchSchema,omitempty"`
 }
 
-type FederatedResponse struct {
-	Data   DataResponse `json:"data"`
-	Errors []error      `json:"errors"`
-}
-
 func (dr *DataResponse) mergeSearchSchema(s []interface{}) {
 	klog.Info("Merge searchSchema results to federated response.")
 	if dr.SearchSchema == nil {

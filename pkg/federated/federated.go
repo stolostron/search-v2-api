@@ -14,13 +14,18 @@ import (
 )
 
 // Data needed to process a federated request.
-type RequestContext struct {
-	Data     DataResponse `json:"data"`
-	Errors   []error      `json:"errors"`
-	Sent     []string     `json:"sent"`
-	Received []string     `json:"received"`
-	// OutRequests   map[string]OutboundRequestLog
+type FederatedRequest struct {
 	InRequestBody []byte
+	Response      FederatedResponse
+	// Fields below are for future use.
+	// Sent     []string     `json:"sent"`
+	// Received []string     `json:"received"`
+	// OutRequests   map[string]OutboundRequestLog
+}
+
+type FederatedResponse struct {
+	Data   DataResponse `json:"data"`
+	Errors []error      `json:"errors,omitempty"`
 }
 
 // FUTURE: Keep track of outbound requests.
@@ -40,10 +45,12 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	klog.Infof("Received federated search query: %s", string(receivedBody))
 
-	requestContext := RequestContext{
+	fedRequest := FederatedRequest{
 		InRequestBody: receivedBody,
-		Data:          DataResponse{},
-		Errors:        []error{},
+		Response: FederatedResponse{
+			Data:   DataResponse{},
+			Errors: []error{},
+		},
 	}
 
 	fedConfig := getFederationConfig()
@@ -66,7 +73,7 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 			req, err := http.NewRequest("POST", remoteService.URL, bytes.NewBuffer(receivedBody))
 			if err != nil {
 				klog.Errorf("Error creating federated request: %s", err)
-				requestContext.Errors = append(requestContext.Errors, fmt.Errorf("Error creating federated request: %s", err))
+				fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("Error creating federated request: %s", err))
 				return
 			}
 
@@ -78,7 +85,7 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 			resp, err := client.Do(req)
 			if err != nil {
 				klog.Errorf("Error sending federated request: %s", err)
-				requestContext.Errors = append(requestContext.Errors, fmt.Errorf("Error sending federated request: %s", err))
+				fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("Error sending federated request: %s", err))
 				return
 			}
 
@@ -87,12 +94,12 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				klog.Errorf("Error reading federated response body: %s", err)
-				requestContext.Errors = append(requestContext.Errors, fmt.Errorf("Error reading federated response body: %s", err))
+				fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("Error reading federated response body: %s", err))
 				return
 			}
 
 			klog.Infof("Received federated response from %s: \n%s", remoteService.Name, string(body))
-			parseResponse(&requestContext, body)
+			parseResponse(&fedRequest, body)
 
 		}(remoteService)
 	}
@@ -100,14 +107,10 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 	klog.Info("Waiting for all remote services to respond.")
 	wg.Wait()
 
-	klog.Info("Aggregating federated responses.")
+	klog.Info("Merging the federated responses.")
 
-	resp := FederatedResponse{
-		Data:   requestContext.Data,
-		Errors: requestContext.Errors,
-	}
 	klog.Info("Sending federated response to client.")
-	response := json.NewEncoder(w).Encode(resp)
+	response := json.NewEncoder(w).Encode(fedRequest.Response)
 
 	fmt.Fprint(w, response)
 }

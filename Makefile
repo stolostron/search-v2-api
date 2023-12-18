@@ -72,34 +72,41 @@ test-scale-setup: ## Creates the search-api route in the current target cluster.
 	oc create route passthrough search-api --service=search-search-api -n open-cluster-management
 
 test-send: ## Sends a graphQL query using cURL for development testing.
-	URL=https://localhost:4010/searchapi/graphql \
-	TOKEN=$(shell oc whoami -t) \
 	curl --insecure --location --request POST ${URL} \
-	--header "Authorization: Bearer ${TOKEN}" --header 'Content-Type: application/json' \
+	--header "Authorization: Bearer ${API_TOKEN}" --header 'Content-Type: application/json' \
 	--data-raw '{"query":"query q($$input: [SearchInput]) { search(input: $$input) { count items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}' | jq
 
-test-search-schema-fed: ## Sends a federated graphQL query using cURL for development testing.
-	curl --insecure --location --request POST https://localhost:4010/federated \
-	--header "Authorization: Bearer $(shell oc whoami -t)" --header 'Content-Type: application/json' \
-	--data-raw '{"query":"query q() { searchSchema() }","variables":{} }'
+
+URL=https://localhost:4010/searchapi/graphql
+ifeq (${FEDERATED}, true)
+	URL=https://localhost:4010/federated
+endif
+
+Q="{"query":"query Search() { }","variables":{} }"
+ifeq (${QUERY}, schema)
+	Q='{"query":"query Schema() { searchSchema() }","variables":{} }'
+else ifeq (${QUERY}, searchComplete)
+	Q='{"query":"query SearchComplete { searchComplete(property: \"kind\") }","variables":{} }'
+else ifeq (${QUERY}, search)
+	Q='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { count items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
+else ifeq (${QUERY}, searchCount)
+	Q='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { count } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
+endif
 
 
-test-search-fed: ## Sends a federated graphQL query using cURL for development testing.
-	curl --insecure --location --request POST https://localhost:4010/federated \
-	--header "Authorization: Bearer $(shell oc whoami -t)" --header 'Content-Type: application/json' \
-	--data-raw '{"query":"query q($$input: [SearchInput]) { search(input: $$input) { count items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
-
-test-search-count-fed: ## Sends a federated graphQL query using cURL for development testing.
-	curl --insecure --location --request POST https://localhost:4010/federated \
-	--header "Authorization: Bearer $(shell oc whoami -t)" --header 'Content-Type: application/json' \
-	--data-raw '{"query":"query q($$input: [SearchInput]) { search(input: $$input) { count } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
-
-
-test-searchcomplete-fed: ## Sends a federated graphQL query using cURL for development testing.
-	curl --insecure --location --request POST https://localhost:4010/federated \
-	--header "Authorization: Bearer $(shell oc whoami -t)" --header 'Content-Type: application/json' \
-	--data-raw '{"query":"query SearchComplete { searchComplete(property: \"kind\") }","variables":{} }'
-
+send: ## Sends a graphQL request using cURL. For development and testing.
+ifndef QUERY
+	@echo "QUERY is required. Example: make send QUERY=searchComplete"
+	@echo "Valid QUERY values: schema, search, searchComplete, searchCount, messages"
+	exit 1
+endif
+	# Sending query with the following parameters:
+	# - URL           ${URL}
+	# - GRAPHQL QUERY ${Q}
+	#
+	curl --insecure --location --request POST ${URL} \
+	--header "Authorization: Bearer ${API_TOKEN}" --header 'Content-Type: application/json' \
+	--data-raw ${Q} | jq
 
 check-locust: ## Checks if Locust is installed in the system.
 ifeq (,$(shell which locust))
