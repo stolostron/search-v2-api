@@ -70,10 +70,6 @@ test-scale-ui: check-locust ## Start Locust and open the web browser to drive sc
 test-scale-setup: ## Creates the search-api route in the current target cluster.
 	oc create route passthrough search-api --service=search-search-api -n open-cluster-management
 
-test-send: ## Sends a graphQL query using cURL for development testing.
-	curl --insecure --location --request POST ${URL} \
-	--header "Authorization: Bearer ${API_TOKEN}" --header 'Content-Type: application/json' \
-	--data-raw '{"query":"query q($$input: [SearchInput]) { search(input: $$input) { count items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}' | jq
 
 # Target API URL for the test queries.
 SEARCH_API_URL=https://localhost:4010/searchapi/graphql
