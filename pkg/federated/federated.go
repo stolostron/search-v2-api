@@ -16,16 +16,11 @@ import (
 // Data needed to process a federated request.
 type FederatedRequest struct {
 	InRequestBody []byte
-	Response      FederatedResponse
+	Response      GraphQLResponse
 	// Fields below are for future use.
 	// Sent     []string     `json:"sent"`
 	// Received []string     `json:"received"`
 	// OutRequests   map[string]OutboundRequestLog
-}
-
-type FederatedResponse struct {
-	Data   DataResponse `json:"data"`
-	Errors []error      `json:"errors,omitempty"`
 }
 
 // FUTURE: Keep track of outbound requests.
@@ -47,7 +42,7 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 
 	fedRequest := FederatedRequest{
 		InRequestBody: receivedBody,
-		Response: FederatedResponse{
+		Response: GraphQLResponse{
 			Data:   DataResponse{},
 			Errors: []error{},
 		},
@@ -109,8 +104,10 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 
 	klog.Info("Merging the federated responses.")
 
-	klog.Info("Sending federated response to client.")
+	klog.Infof("Sending federated response to client. %+v", fedRequest.Response)
 	response := json.NewEncoder(w).Encode(fedRequest.Response)
+	klog.Infof("Sending federated response to client. JSON Response:  %+v", response)
 
+	fmt.Fprint(w, fedRequest.Response)
 	fmt.Fprint(w, response)
 }

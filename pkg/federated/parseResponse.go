@@ -7,10 +7,29 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// Used to parse the incoming GraphQL response.
+// Used to parse the GraphQL response.
 type GraphQLResponse struct {
-	Data   map[string]interface{} `json:"data"`
-	Errors []interface{}          `json:"errors"`
+	Data   DataResponse `json:"data"`
+	Errors []error      `json:"errors,omitempty"`
+}
+
+type SearchRelatedResult struct {
+	Count int                      `json:"count,omitempty"`
+	Kind  string                   `json:"kind,omitempty"`
+	Items []map[string]interface{} `json:"items,omitempty"`
+}
+
+type SearchResult struct {
+	Count   int                      `json:"count,omitempty"`
+	Items   []map[string]interface{} `json:"items,omitempty"`
+	Related []SearchRelatedResult    `json:"related,omitempty"`
+}
+
+type DataResponse struct {
+	Messages       []string       `json:"messages,omitempty"`
+	Search         []SearchResult `json:"search,omitempty"`
+	SearchComplete []string       `json:"searchComplete,omitempty"`
+	SearchSchema   []string       `json:"searchSchema,omitempty"`
 }
 
 // Parse the response from a remote search service.
@@ -24,33 +43,28 @@ func parseResponse(fedRequest *FederatedRequest, body []byte) {
 		return
 	}
 
-	klog.Infof("Parsing Response: %+v", response)
+	klog.Infof("Parsing Response [errors] field: %+v", response.Errors)
+	if len(response.Errors) > 0 {
+		fedRequest.Response.Errors = append(fedRequest.Response.Errors, response.Errors...)
+	}
 
-	for key, value := range response.Data {
+	klog.Infof("Parsing Response [data] field: %+v", response.Data)
 
-		switch key {
-		case "searchSchema":
-			klog.Info("Found searchSchema in response.")
-			allProps := value.(map[string]interface{})["allProperties"]
-			fedRequest.Response.Data.mergeSearchSchema(allProps.([]interface{}))
-
-		case "searchComplete":
-			klog.Info("Found searchComplete in response.")
-			fedRequest.Response.Data.mergeSearchComplete(value.([]interface{}))
-
-		case "messages":
-			klog.Info("Found messages in response.")
-			// fedRequest.Data.Messages = append(fedRequest.Data.Messages, value.([]interface{})...)
-
-		case "search":
-			klog.Infof("Found SearchResults in response. %+v", value)
-			searchResults := value.([]interface{})
-			fedRequest.Response.Data.mergeSearchResults(searchResults)
-
-		default:
-			klog.Infof("Found unknown key in results: %s", key)
-
-		}
+	if response.Data.SearchSchema != nil {
+		klog.Info("Found searchSchema in response.")
+		fedRequest.Response.Data.mergeSearchSchema(response.Data.SearchSchema)
+	}
+	if response.Data.SearchComplete != nil {
+		klog.Info("Found searchComplete in response.")
+		fedRequest.Response.Data.mergeSearchComplete(response.Data.SearchComplete)
+	}
+	if response.Data.Search != nil {
+		klog.Infof("Found SearchResults in response. %+v", response.Data.Search)
+		fedRequest.Response.Data.mergeSearchResults(response.Data.Search)
+	}
+	if response.Data.Messages != nil {
+		klog.Info("Found messages in response.")
+		fedRequest.Response.Data.Messages = append(fedRequest.Response.Data.Messages, response.Data.Messages...)
 	}
 
 }
