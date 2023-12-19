@@ -335,7 +335,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 			var operatorWhereDs []exp.Expression //store all the clauses for this filter together
 			for _, operator := range keys {
 				operatorWhereDs = append(operatorWhereDs,
-					getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator])...)
+					getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator], propTypeMap[filter.Property])...)
 			}
 
 			whereDs = append(whereDs, goqu.Or(operatorWhereDs...)) //Join all the clauses with OR
