@@ -6,17 +6,16 @@ default::
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
-setup: ## Generate ssl certificate for development.
-	cd sslcert; openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout tls.key -out tls.crt -config req.conf -extensions 'v3_req'
-
-setup-dev: ## Configure local environment to use the postgres instance on the dev cluster.
-	@echo "Using current target cluster.\\n"
-	@echo "$(shell oc cluster-info)"
-	@echo "\\n1. [MANUAL STEP] Set these environment variables.\\n"
+setup: ## Configure local development environment.
+	@echo "Using current OCP target cluster.\\n"
+	@echo "$(shell oc cluster-info|grep 'Kubernetes')"
+	@echo "\\n1. Generating local self-signed certificate.\\n"
+	cd sslcert; openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout tls.key -out tls.crt -config req.conf -extensions 'v3_req' &> /dev/null
+	@echo "\\n2. [MANUAL STEP] Set these environment variables on your terminal.\\n"
 	export DB_NAME=$(shell oc get secret search-postgres -n open-cluster-management -o jsonpath='{.data.database-name}'|base64 -D)
 	export DB_USER=$(shell oc get secret search-postgres -n open-cluster-management -o jsonpath='{.data.database-user}'|base64 -D)
 	export DB_PASS=$(shell oc get secret search-postgres -n open-cluster-management -o jsonpath='{.data.database-password}'|base64 -D)
-	@echo "\\n2. [MANUAL STEP] Start port forwarding.\\n"
+	@echo "\\n3. [MANUAL STEP] Start port forwarding.\\n"
 	@echo "oc port-forward service/search-postgres -n open-cluster-management 5432:5432 \\n"
 
 gqlgen: ## Generate graphql model. See: https://gqlgen.com/
@@ -76,37 +75,39 @@ test-send: ## Sends a graphQL query using cURL for development testing.
 	--header "Authorization: Bearer ${API_TOKEN}" --header 'Content-Type: application/json' \
 	--data-raw '{"query":"query q($$input: [SearchInput]) { search(input: $$input) { count items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}' | jq
 
-
-URL=https://localhost:4010/searchapi/graphql
+# Target API URL for the test queries.
+SEARCH_API_URL=https://localhost:4010/searchapi/graphql
 ifeq (${FEDERATED}, true)
-	URL=https://localhost:4010/federated
+	SEARCH_API_URL=https://localhost:4010/federated
 endif
 
-Q="{"query":"query Search() { }","variables":{} }"
+# Specifies the query to send with the test requests.
+QUERY ?= ${Q}
+QUERY_STR = "{"query":"query Search() { }","variables":{} }"
 ifeq (${QUERY}, schema)
-	Q='{"query":"query Schema() { searchSchema() }","variables":{} }'
+	QUERY_STR='{"query":"query Schema() { searchSchema() }","variables":{} }'
 else ifeq (${QUERY}, searchComplete)
-	Q='{"query":"query SearchComplete { searchComplete(property: \"kind\") }","variables":{} }'
+	QUERY_STR='{"query":"query SearchComplete { searchComplete(property: \"kind\") }","variables":{} }'
 else ifeq (${QUERY}, search)
-	Q='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { count items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
+	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { count items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
 else ifeq (${QUERY}, searchCount)
-	Q='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { count } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
+	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { count } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
 endif
 
-
-send: ## Sends a graphQL request using cURL. For development and testing.
-ifndef QUERY
-	@echo "QUERY is required. Example: make send QUERY=searchComplete"
+.PHONY: send
+send: ## Sends a graphQL request using cURL for development and testing. QUERY (alias Q) is a required parameter, values are: [schema|search|searchComplete|searchCount|messages].
+ifeq (${QUERY},)
+	@echo "QUERY (or Q) is required. Example: make send QUERY=searchComplete"
 	@echo "Valid QUERY values: schema, search, searchComplete, searchCount, messages"
 	exit 1
 endif
 	# Sending query with the following parameters:
 	# - URL           ${URL}
-	# - GRAPHQL QUERY ${Q}
+	# - GRAPHQL QUERY ${QUERY_STR}
 	#
-	curl --insecure --location --request POST ${URL} \
+	curl --insecure --location --request POST ${SEARCH_API_URL} \
 	--header "Authorization: Bearer ${API_TOKEN}" --header 'Content-Type: application/json' \
-	--data-raw ${Q} | jq
+	--data-raw ${QUERY_STR} | jq
 
 check-locust: ## Checks if Locust is installed in the system.
 ifeq (,$(shell which locust))
