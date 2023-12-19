@@ -1,18 +1,15 @@
+// Copyright Contributors to the Open Cluster Management project
 package federated
 
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"k8s.io/klog/v2"
 )
 
-// Used to parse the GraphQL response.
-type GraphQLResponse struct {
-	Data   DataResponse `json:"data"`
-	Errors []error      `json:"errors,omitempty"`
-}
-
+// Used to parse the GraphQL payload.
 type SearchRelatedResult struct {
 	Count int                      `json:"count,omitempty"`
 	Kind  string                   `json:"kind,omitempty"`
@@ -25,17 +22,27 @@ type SearchResult struct {
 	Related []SearchRelatedResult    `json:"related,omitempty"`
 }
 
-type DataResponse struct {
+type SearchSchema struct {
+	AllProperties []string `json:"allProperties,omitempty"`
+}
+
+type Data struct {
 	Messages       []string       `json:"messages,omitempty"`
 	Search         []SearchResult `json:"search,omitempty"`
 	SearchComplete []string       `json:"searchComplete,omitempty"`
-	SearchSchema   []string       `json:"searchSchema,omitempty"`
+	SearchSchema   SearchSchema   `json:"searchSchema,omitempty"`
 	GraphQLSchema  interface{}    `json:"__schema,omitempty"`
+	writeLock      sync.Mutex
+}
+
+type GraphQLPayload struct {
+	Data   Data    `json:"data"`
+	Errors []error `json:"errors,omitempty"`
 }
 
 // Parse the response from a remote search service.
-func parseResponse(fedRequest *FederatedRequest, body []byte) {
-	var response GraphQLResponse
+func parseResponse(fedRequest *FederatedRequest, body []byte, hubName string) {
+	var response GraphQLPayload
 	err := json.Unmarshal(body, &response)
 
 	if err != nil {
@@ -44,26 +51,23 @@ func parseResponse(fedRequest *FederatedRequest, body []byte) {
 		return
 	}
 
-	klog.Infof("Parsing Response [errors] field: %+v", response.Errors)
 	if len(response.Errors) > 0 {
 		fedRequest.Response.Errors = append(fedRequest.Response.Errors, response.Errors...)
 	}
 
-	klog.Infof("Parsing Response [data] field: %+v", response.Data)
-
-	if response.Data.SearchSchema != nil {
+	if len(response.Data.SearchSchema.AllProperties) > 0 {
 		klog.Info("Found searchSchema in response.")
-		fedRequest.Response.Data.mergeSearchSchema(response.Data.SearchSchema)
+		fedRequest.Response.Data.mergeSearchSchema(response.Data.SearchSchema.AllProperties)
 	}
-	if response.Data.SearchComplete != nil {
+	if len(response.Data.SearchComplete) > 0 {
 		klog.Info("Found searchComplete in response.")
 		fedRequest.Response.Data.mergeSearchComplete(response.Data.SearchComplete)
 	}
-	if response.Data.Search != nil {
+	if len(response.Data.Search) > 0 {
 		klog.Infof("Found SearchResults in response. %+v", response.Data.Search)
-		fedRequest.Response.Data.mergeSearchResults(response.Data.Search)
+		fedRequest.Response.Data.mergeSearchResults(hubName, response.Data.Search)
 	}
-	if response.Data.Messages != nil {
+	if len(response.Data.Messages) > 0 {
 		klog.Info("Found messages in response.")
 		fedRequest.Response.Data.Messages = append(fedRequest.Response.Data.Messages, response.Data.Messages...)
 	}

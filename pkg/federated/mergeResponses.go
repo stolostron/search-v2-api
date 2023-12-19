@@ -1,43 +1,50 @@
+// Copyright Contributors to the Open Cluster Management project
 package federated
 
 import "k8s.io/klog/v2"
 
-func (dr *DataResponse) mergeSearchSchema(s []string) {
+func (d *Data) mergeSearchSchema(schemaProps []string) {
 	klog.Info("Merge searchSchema results to federated response.")
-	if dr.SearchSchema == nil {
-		dr.SearchSchema = []string{}
+	d.writeLock.Lock()
+	defer d.writeLock.Unlock()
+	if d.SearchSchema.AllProperties == nil {
+		d.SearchSchema.AllProperties = []string{}
 	}
 	// TODO: Remove duplicates.
-	dr.SearchSchema = append(dr.SearchSchema, s...)
+	d.SearchSchema.AllProperties = append(d.SearchSchema.AllProperties, schemaProps...)
 }
 
-func (dr *DataResponse) mergeSearchComplete(s []string) {
+func (d *Data) mergeSearchComplete(s []string) {
 	klog.Info("Merge searchComplete results to federated response.")
-	if dr.SearchComplete == nil {
-		dr.SearchComplete = []string{}
+	d.writeLock.Lock()
+	defer d.writeLock.Unlock()
+	if d.SearchComplete == nil {
+		d.SearchComplete = []string{}
 	}
 	// TODO: Remove duplicates.
-	dr.SearchComplete = append(dr.SearchComplete, s...)
+	d.SearchComplete = append(d.SearchComplete, s...)
 }
 
-func (dr *DataResponse) mergeSearchResults(results []SearchResult) {
+func (d *Data) mergeSearchResults(hubName string, results []SearchResult) {
 	klog.Info("Merge searchResult to federated response.")
-	if dr.Search == nil {
-		dr.Search = make([]SearchResult, len(results))
+	d.writeLock.Lock()
+	defer d.writeLock.Unlock()
+	if d.Search == nil {
+		d.Search = make([]SearchResult, len(results))
 		klog.Infof("Created SearchResults array with %d elements.", len(results))
 	}
 
 	for index, result := range results {
 		// Count
-		dr.Search[index].Count = dr.Search[index].Count + int(result.Count)
+		d.Search[index].Count = d.Search[index].Count + int(result.Count)
 
 		// Items
 		for _, item := range result.Items {
-			item["managedHub"] = "insert-managed-hub-name" // TODO: Replace with managed hub name.
-			dr.Search[index].Items = append(dr.Search[index].Items, item)
+			item["managedHub"] = hubName
+			d.Search[index].Items = append(d.Search[index].Items, item)
 		}
 
-		// Related
-		// dr.Search[index].Related = append(dr.Search[index].Related, result["related"].([]interface{})...)
+		// TODO: Related
+		// d.Search[index].Related = append(d.Search[index].Related, result["related"].([]interface{})...)
 	}
 }

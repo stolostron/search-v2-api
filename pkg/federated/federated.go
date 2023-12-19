@@ -1,3 +1,4 @@
+// Copyright Contributors to the Open Cluster Management project
 package federated
 
 import (
@@ -16,8 +17,8 @@ import (
 // Data needed to process a federated request.
 type FederatedRequest struct {
 	InRequestBody []byte
-	Response      GraphQLResponse
-	// Fields below are for future use.
+	Response      GraphQLPayload
+	// FUTURE: The fields below are for future use.
 	// Sent     []string     `json:"sent"`
 	// Received []string     `json:"received"`
 	// OutRequests   map[string]OutboundRequestLog
@@ -42,8 +43,8 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 
 	fedRequest := FederatedRequest{
 		InRequestBody: receivedBody,
-		Response: GraphQLResponse{
-			Data:   DataResponse{},
+		Response: GraphQLPayload{
+			Data:   Data{},
 			Errors: []error{},
 		},
 	}
@@ -56,7 +57,8 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(remoteService RemoteSearchService) {
 			defer wg.Done()
-			// Create http client. TODO: move to a pool to share this client.
+			// Create http client.
+			// FUTURE: Use a pool to share this client.
 			client := &http.Client{
 				Transport: &http.Transport{
 					TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // TODO: Use TLS verification.
@@ -71,7 +73,6 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 				fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("Error creating federated request: %s", err))
 				return
 			}
-
 			// Set the request headers.
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", remoteService.Token))
@@ -84,7 +85,7 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			// Process the response.
+			// Read and process the response.
 			defer resp.Body.Close()
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
@@ -94,19 +95,18 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 			}
 
 			klog.Infof("Received federated response from %s: \n%s", remoteService.Name, string(body))
-			parseResponse(&fedRequest, body)
+			parseResponse(&fedRequest, body, remoteService.Name)
 
 		}(remoteService)
 	}
-
 	klog.Info("Waiting for all remote services to respond.")
 	wg.Wait()
 
-	klog.Info("Merging the federated responses.")
-
 	// Send JSON response to client.
 	w.Header().Set("Content-Type", "application/json")
-	response := json.NewEncoder(w).Encode(fedRequest.Response)
+	result := json.NewEncoder(w).Encode(fedRequest.Response)
+	if result != nil {
+		klog.Errorf("Error encoding federated response: %s", result)
+	}
 	klog.Info("Sent federated response to client.")
-	klog.V(8).Infof("JSON Response:  %+v", response)
 }
