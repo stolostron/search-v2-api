@@ -30,7 +30,7 @@ type Data struct {
 	Messages       []string       `json:"messages,omitempty"`
 	Search         []SearchResult `json:"search,omitempty"`
 	SearchComplete []string       `json:"searchComplete,omitempty"`
-	SearchSchema   SearchSchema   `json:"searchSchema,omitempty"`
+	SearchSchema   *SearchSchema  `json:"searchSchema,omitempty"`
 	GraphQLSchema  interface{}    `json:"__schema,omitempty"`
 	writeLock      sync.Mutex
 }
@@ -55,12 +55,12 @@ func parseResponse(fedRequest *FederatedRequest, body []byte, hubName string) {
 		fedRequest.Response.Errors = append(fedRequest.Response.Errors, response.Errors...)
 	}
 
-	if len(response.Data.SearchSchema.AllProperties) > 0 {
-		klog.Info("Found searchSchema in response.")
+	if response.Data.SearchSchema != nil {
+		klog.Info("Found SearchSchema in response.")
 		fedRequest.Response.Data.mergeSearchSchema(response.Data.SearchSchema.AllProperties)
 	}
 	if len(response.Data.SearchComplete) > 0 {
-		klog.Info("Found searchComplete in response.")
+		klog.Info("Found SearchComplete in response.")
 		fedRequest.Response.Data.mergeSearchComplete(response.Data.SearchComplete)
 	}
 	if len(response.Data.Search) > 0 {
@@ -69,7 +69,7 @@ func parseResponse(fedRequest *FederatedRequest, body []byte, hubName string) {
 	}
 	if len(response.Data.Messages) > 0 {
 		klog.Info("Found messages in response.")
-		fedRequest.Response.Data.Messages = append(fedRequest.Response.Data.Messages, response.Data.Messages...)
+		fedRequest.Response.Data.mergeMessages(response.Data.Messages)
 	}
 	// Needed to support GraphQL instrospection for clients like GraphQL Playground and Postman.
 	// FUTURE: Validate that the schema on each search API instance is the same.
