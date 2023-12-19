@@ -77,11 +77,13 @@ test-send: ## Sends a graphQL query using cURL for development testing.
 
 # Target API URL for the test queries.
 SEARCH_API_URL=https://localhost:4010/searchapi/graphql
+FEDERATED ?= ${F}
 ifeq (${FEDERATED}, true)
 	SEARCH_API_URL=https://localhost:4010/federated
 endif
 
-# Specifies the query to send with the test requests.
+# Specifies the query string to send with the test requests.
+# Q is an alias for QUERY.
 QUERY ?= ${Q}
 QUERY_STR = "{"query":"query Search() { }","variables":{} }"
 ifeq (${QUERY}, schema)
@@ -94,7 +96,6 @@ else ifeq (${QUERY}, searchCount)
 	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { count } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
 endif
 
-.PHONY: send
 send: ## Sends a graphQL request using cURL for development and testing. QUERY (alias Q) is a required parameter, values are: [schema|search|searchComplete|searchCount|messages].
 ifeq (${QUERY},)
 	@echo "QUERY (or Q) is required. Example: make send QUERY=searchComplete"

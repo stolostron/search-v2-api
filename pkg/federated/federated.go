@@ -104,10 +104,9 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 
 	klog.Info("Merging the federated responses.")
 
-	klog.Infof("Sending federated response to client. %+v", fedRequest.Response)
+	// Send JSON response to client.
+	w.Header().Set("Content-Type", "application/json")
 	response := json.NewEncoder(w).Encode(fedRequest.Response)
-	klog.Infof("Sending federated response to client. JSON Response:  %+v", response)
-
-	fmt.Fprint(w, fedRequest.Response)
-	fmt.Fprint(w, response)
+	klog.Info("Sent federated response to client.")
+	klog.V(8).Infof("JSON Response:  %+v", response)
 }

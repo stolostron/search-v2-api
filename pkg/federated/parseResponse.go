@@ -30,6 +30,7 @@ type DataResponse struct {
 	Search         []SearchResult `json:"search,omitempty"`
 	SearchComplete []string       `json:"searchComplete,omitempty"`
 	SearchSchema   []string       `json:"searchSchema,omitempty"`
+	GraphQLSchema  interface{}    `json:"__schema,omitempty"`
 }
 
 // Parse the response from a remote search service.
@@ -66,5 +67,10 @@ func parseResponse(fedRequest *FederatedRequest, body []byte) {
 		klog.Info("Found messages in response.")
 		fedRequest.Response.Data.Messages = append(fedRequest.Response.Data.Messages, response.Data.Messages...)
 	}
-
+	// Needed to support GraphQL instrospection for clients like GraphQL Playground and Postman.
+	// FUTURE: Validate that the schema on each search API instance is the same.
+	if response.Data.GraphQLSchema != nil {
+		klog.Info("Found schema in response.")
+		fedRequest.Response.Data.GraphQLSchema = response.Data.GraphQLSchema
+	}
 }
