@@ -20,15 +20,20 @@ type RemoteSearchService struct {
 }
 
 func getFederationConfig() []RemoteSearchService {
-	token1, exists := os.LookupEnv("TOKEN1")
-	if !exists {
-		klog.Errorf("Error reading TOKEN1 from environment. %+v %s", exists, token1)
+	name1, nameExists := os.LookupEnv("NAME1")
+	api1, apiExists := os.LookupEnv("API1")
+	token1, tokenExists := os.LookupEnv("TOKEN1")
+	if !apiExists || !tokenExists {
+		klog.Errorf("Error reading API1 and TOKEN1 from environment. API1: %s TOKEN1:%s", api1, token1)
 		return nil
+	}
+	if !nameExists {
+		name1 = "default-hub-name"
 	}
 	remoteServices := []RemoteSearchService{
 		{
-			Name:  "jorge-mh-a",
-			URL:   "https://search-api-open-cluster-management.apps.sno-413-tnlvk.dev07.red-chesterfield.com/searchapi/graphql",
+			Name:  name1,
+			URL:   api1,
 			Token: token1,
 		},
 	}
