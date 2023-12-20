@@ -63,7 +63,7 @@ func getWhereClauseExpression(prop, operator string, values []string, dataType s
 	} else {
 		lhsExp = goqu.L(`"data"->>?`, prop)
 		if dataType == "number" {
-			lhsExp = goqu.L(`("data"->>?)?`, prop, goqu.L("::numeric"))
+			lhsExp = goqu.L(`("data"->?)?`, prop, goqu.L("::numeric"))
 		}
 	}
 
