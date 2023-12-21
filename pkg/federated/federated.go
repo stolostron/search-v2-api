@@ -57,12 +57,29 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 			defer wg.Done()
 			// Create http client.
 			// FUTURE: Use a pool to share this client.
+
+			tlsConfig := tls.Config{
+				MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
+			}
+			if remoteService.TLSCert != "" && remoteService.TLSKey != "" {
+				tlsConfig.Certificates = []tls.Certificate{
+					{
+						// RootCAs:     nil,
+						Certificate: [][]byte{[]byte(remoteService.TLSCert)},
+						PrivateKey:  []byte(remoteService.TLSKey),
+					},
+				}
+			} else {
+				klog.Warningf("TLS cert and key not provided for %s. Skipping TLS verification.", remoteService.Name)
+				tlsConfig.InsecureSkipVerify = true // #nosec G402 - FIXME: Add TLS verification.
+			}
+
 			client := &http.Client{
 				Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // FIXME: Add TLS verification.
+					TLSClientConfig: &tlsConfig,
 				},
-				Timeout: time.Second * 30,
-			} // #nosec G402 - FIXME: Add TLS verification.
+				Timeout: time.Second * 60, // TODO: Make this configurable.
+			}
 
 			// Create the request.
 			req, err := http.NewRequest("POST", remoteService.URL, bytes.NewBuffer(receivedBody))

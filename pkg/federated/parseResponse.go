@@ -27,12 +27,14 @@ type SearchSchema struct {
 }
 
 type Data struct {
-	Messages       []string       `json:"messages,omitempty"`
-	Search         []SearchResult `json:"searchResult,omitempty"` // FIXME: Hacked to solve aliasing issue from console.
-	SearchComplete []string       `json:"searchComplete,omitempty"`
-	SearchSchema   *SearchSchema  `json:"searchSchema,omitempty"`
-	GraphQLSchema  interface{}    `json:"__schema,omitempty"`
-	writeLock      sync.Mutex
+	Messages             []string       `json:"messages,omitempty"`
+	Search               []SearchResult `json:"searchResult,omitempty"` // FIXME: Hacked to solve aliasing issue from console.
+	SearchComplete       []string       `json:"searchComplete,omitempty"`
+	SearchSchema         *SearchSchema  `json:"searchSchema,omitempty"`
+	GraphQLSchema        interface{}    `json:"__schema,omitempty"`
+	writeLock            sync.Mutex
+	searchSchemaValues   map[string]interface{} // Used to remove duplicates.
+	searchCompleteValues map[string]interface{} // Used to remove duplicates.
 }
 
 type GraphQLPayload struct {

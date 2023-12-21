@@ -9,10 +9,18 @@ func (d *Data) mergeSearchSchema(schemaProps []string) {
 	defer d.writeLock.Unlock()
 
 	if d.SearchSchema == nil {
+		d.searchSchemaValues = make(map[string]interface{})
 		d.SearchSchema = &SearchSchema{AllProperties: make([]string, 0)}
 	}
-	// TODO: Remove duplicates.
-	d.SearchSchema.AllProperties = append(d.SearchSchema.AllProperties, schemaProps...)
+	for _, prop := range schemaProps {
+		if _, exists := d.searchSchemaValues[prop]; !exists {
+			d.searchSchemaValues[prop] = struct{}{}
+			d.SearchSchema.AllProperties = append(d.SearchSchema.AllProperties, prop)
+		}
+		// else {
+		// 	klog.V(9).Infof("SearchSchema - Skipping duplicate value: %s", prop)
+		// }
+	}
 }
 
 func (d *Data) mergeSearchComplete(s []string) {
@@ -21,12 +29,22 @@ func (d *Data) mergeSearchComplete(s []string) {
 	defer d.writeLock.Unlock()
 
 	if d.SearchComplete == nil {
+		d.searchCompleteValues = make(map[string]interface{})
 		d.SearchComplete = make([]string, 0)
 	}
-	// TODO: Remove duplicates.
+
+	for _, prop := range s {
+		if _, exists := d.searchCompleteValues[prop]; !exists {
+			d.searchCompleteValues[prop] = struct{}{}
+			d.SearchComplete = append(d.SearchComplete, prop)
+		}
+		// else {
+		// 	klog.V(9).Infof("SearchComplete - Skipping duplicate value: %s", prop)
+		// }
+	}
+
 	// TODO: How to handle LIMIT ?
 	// TODO: How to handle SORT ?
-	d.SearchComplete = append(d.SearchComplete, s...)
 }
 
 func (d *Data) mergeSearchResults(hubName string, results []SearchResult) {
@@ -43,11 +61,12 @@ func (d *Data) mergeSearchResults(hubName string, results []SearchResult) {
 		d.Search[index].Count = d.Search[index].Count + int(result.Count)
 
 		// Items
-		// TODO: How to handle LIMIT ?
 		for _, item := range result.Items {
 			item["managedhub"] = hubName // TODO: Finalize prop name. Currrently matching console.
 			d.Search[index].Items = append(d.Search[index].Items, item)
 		}
+		// TODO: How to handle LIMIT ?
+		// TODO: How to handle SORT ?
 
 		// Related
 		// TODO: Implement related.
