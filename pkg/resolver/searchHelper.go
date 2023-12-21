@@ -53,7 +53,7 @@ func getOperator(values []string) map[string][]string {
 	return operatorValue
 }
 
-func getWhereClauseExpression(prop, operator string, values []string) []exp.Expression {
+func getWhereClauseExpression(prop, operator string, values []string, dataType string) []exp.Expression {
 	exps := []exp.Expression{}
 	var lhsExp interface{}
 
@@ -62,6 +62,9 @@ func getWhereClauseExpression(prop, operator string, values []string) []exp.Expr
 		lhsExp = goqu.C(prop)
 	} else {
 		lhsExp = goqu.L(`"data"->>?`, prop)
+		if dataType == "number" {
+			lhsExp = goqu.L(`("data"->?)?`, prop, goqu.L("::numeric"))
+		}
 	}
 
 	switch operator {
@@ -139,7 +142,7 @@ func isString(values []string) bool {
 	return true
 }
 
-//if any string values starts with lower case letters, return true
+// if any string values starts with lower case letters, return true
 func isLower(values []string) bool {
 	for _, str := range values {
 		firstChar := rune(str[0]) //check if first character of the string is lower case
@@ -226,7 +229,8 @@ func formatLabels(labels map[string]interface{}) string {
 }
 
 // Encode array into a single string with the format.
-//  value1; value2; ...
+//
+//	value1; value2; ...
 func formatArray(itemlist []interface{}) string {
 	keys := make([]string, len(itemlist))
 	for i, k := range itemlist {
