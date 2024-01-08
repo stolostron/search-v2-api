@@ -73,7 +73,6 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 
 func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSearchService, receivedBody []byte, clientPool HTTPClientPool) {
 	// Get http client from pool.
-	// FUTURE: Use a pool to share this client.
 	client := clientPool.Get()
 	tlsConfig := tls.Config{
 		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.

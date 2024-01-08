@@ -11,13 +11,15 @@ import (
 // godoc: https://cs.opensource.google/go/go/+/go1.21.5:src/net/http/transport.go;l=95 and
 // https://stuartleeks.com/posts/connection-re-use-in-golang-with-http-client/
 var tr = &http.Transport{
-	MaxIdleConns:          10,
-	IdleConnTimeout:       15 * time.Second,
-	ResponseHeaderTimeout: 15 * time.Second,
-	DisableKeepAlives:     false,
+	MaxIdleConns:          10,               // TODO: make it configurable
+	IdleConnTimeout:       15 * time.Second, // TODO: make it configurable, use ms for consistency.
+	ResponseHeaderTimeout: 15 * time.Second, // TODO: make it configurable, use ms for consistency.
+	DisableKeepAlives:     false,            // TODO: make it configurable
 	TLSClientConfig: &tls.Config{
 		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
 	},
+	// MaxIdleConnsPerHost: 1, // TODO: make it configurable
+	// MaxConnsPerHost:     2, // TODO: make it configurable
 }
 
 var httpClientPool = sync.Pool{
