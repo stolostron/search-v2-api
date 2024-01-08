@@ -49,7 +49,7 @@ func parseResponse(fedRequest *FederatedRequest, body []byte, hubName string) {
 
 	if err != nil {
 		klog.Errorf("Error parsing response: %s", err)
-		fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("Error parsing response: %s", err))
+		fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("error parsing response: %s", err))
 		return
 	}
 
