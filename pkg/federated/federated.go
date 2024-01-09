@@ -55,8 +55,10 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 		go func(remoteService RemoteSearchService) {
 			defer wg.Done()
 			clientPool := &RealHTTPClientPool{}
-			fedRequest.getFederatedResponse(remoteService, receivedBody, clientPool)
-
+			// Get http client from pool.
+			client := clientPool.Get()
+			fedRequest.getFederatedResponse(remoteService, receivedBody, client)
+			clientPool.Put(client) // Put the client back into the pool for reuse
 		}(remoteService)
 	}
 	klog.Info("Waiting for all remote services to respond.")
@@ -71,9 +73,9 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 	klog.Info("Sent federated response to client.")
 }
 
-func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSearchService, receivedBody []byte, clientPool HTTPClientPool) {
-	// Get http client from pool.
-	client := clientPool.Get()
+func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSearchService,
+	receivedBody []byte, client HTTPClient) {
+
 	tlsConfig := tls.Config{
 		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
 	}
@@ -89,7 +91,6 @@ func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSea
 		klog.Warningf("TLS cert and key not provided for %s. Skipping TLS verification.", remoteService.Name)
 		tlsConfig.InsecureSkipVerify = true // #nosec G402 - FIXME: Add TLS verification.
 	}
-
 	client.SetTLSClientConfig(&tlsConfig)
 
 	// Create the request.
@@ -112,8 +113,6 @@ func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSea
 
 	// Read and process the response.
 	defer resp.Body.Close()
-	// Put the client back into the pool for reuse
-	clientPool.Put(client)
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		klog.Errorf("Error reading federated response body: %s", err)
