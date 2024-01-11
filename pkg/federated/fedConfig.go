@@ -2,12 +2,14 @@
 package federated
 
 import (
-	"os"
+	"context"
+	"strings"
 
+	"github.com/stolostron/search-v2-api/pkg/config"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	schemav1 "k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 )
-
-// TODO: Read the federation config from secret.
 
 // Holds the data needed to connect to a remote search service.
 type RemoteSearchService struct {
@@ -19,53 +21,66 @@ type RemoteSearchService struct {
 }
 
 func getFederationConfig() []RemoteSearchService {
-	name1, nameExists := os.LookupEnv("NAME1")
-	api1, apiExists := os.LookupEnv("API1")
-	token1, tokenExists := os.LookupEnv("TOKEN1")
-	if !apiExists || !tokenExists {
-		klog.Errorf("Error reading API1 and TOKEN1 from environment. API1: %s TOKEN1:%s", api1, token1)
-		return nil
+	result := getFederationConfigFromSecret()
+	return result
+}
+
+func getFederationConfigFromSecret() []RemoteSearchService {
+	result := []RemoteSearchService{}
+
+	// Add the global-hub
+	// TODO: This needs to be more efficient.
+	client := config.KubeClient()
+	secretList, err := client.CoreV1().Secrets("open-cluster-management").List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		klog.Errorf("Error getting secret list: %s", err)
 	}
-	if !nameExists {
-		name1 = "default-hub-1"
+	for _, secret := range secretList.Items {
+		if strings.HasPrefix(secret.GetName(), "search-global-token") {
+			result = append(result, RemoteSearchService{
+				Name:  "global-hub", // TODO: Should this be configurable?
+				URL:   "https://localhost:4010/searchapi/graphql",
+				Token: string(secret.Data["token"]),
+			})
+		}
 	}
-	remoteServices := []RemoteSearchService{
-		{
-			Name:  name1,
-			URL:   api1,
-			Token: token1,
-			// TLSCert: tlsCert1,
-			// TLSKey: tlsKey1,
-		},
-	}
-	tlsCert1, tlsCertExists := os.LookupEnv("TLS_CRT1")
-	tlsKey1, tlsKeyExists := os.LookupEnv("TLS_KEY1")
-	if tlsCertExists && tlsKeyExists {
-		remoteServices[0].TLSCert = tlsCert1
-		remoteServices[0].TLSKey = tlsKey1
+	if len(result) == 0 {
+		klog.Warningf("Unable to search on global-hub resources. No secret found for search-global-token service account.")
 	}
 
-	name2, name2exists := os.LookupEnv("NAME2")
-	api2, api2exists := os.LookupEnv("API2")
-	token2, token2exists := os.LookupEnv("TOKEN2")
-	if !name2exists {
-		name2 = "default-hub-2"
+	// Add the managed-hubs
+	dynamicClient := config.GetDynamicClient()
+	gvr := schemav1.GroupVersionResource{
+		Group:    "cluster.open-cluster-management.io",
+		Version:  "v1",
+		Resource: "managedclusters",
 	}
-	if api2exists && token2exists {
-		remoteServices = append(remoteServices, RemoteSearchService{
-			Name:  name2,
-			URL:   api2,
-			Token: token2,
-			// TLSCert: tlsCert2,
-			// TLSKey: tlsKey2,
-		})
-	}
-	tlsCert2, tlsCert2Exists := os.LookupEnv("TLS_CRT2")
-	tlsKey2, tlsKey2Exists := os.LookupEnv("TLS_KEY2")
-	if tlsCert2Exists && tlsKey2Exists {
-		remoteServices[1].TLSCert = tlsCert2
-		remoteServices[1].TLSKey = tlsKey2
-	}
+	managedClusters, err := dynamicClient.Resource(gvr).List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		klog.Errorf("Error getting managed clusters list: %s", err)
+	} else {
+		// TODO: Filter managed hubs only.
+		for _, managedCluster := range managedClusters.Items {
+			hubName := managedCluster.GetName()
+			hubUrl := managedCluster.UnstructuredContent()["spec"].(map[string]interface{})["managedClusterClientConfigs"].([]interface{})[0].(map[string]interface{})["url"].(string)
 
-	return remoteServices
+			secret, err := client.CoreV1().Secrets(hubName).Get(context.TODO(), "search-global", metav1.GetOptions{})
+
+			if err != nil {
+				klog.Errorf("Error getting token for managed hub [%s]: %s", hubName, err)
+				continue
+			}
+			url := strings.ReplaceAll(hubUrl, "https://api", "https://search-global-hub-open-cluster-management.apps")
+			url = strings.ReplaceAll(url, ":6443", "/searchapi/graphql")
+			result = append(result, RemoteSearchService{
+				Name:  hubName,
+				URL:   url,
+				Token: string(secret.Data["token"]),
+				// TLSCert: string(secret.Data["ca.crt"]),
+			})
+		}
+	}
+	klog.Infof("Federation config:\n %+v", result)
+
+	return result
 }
