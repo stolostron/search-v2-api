@@ -41,7 +41,7 @@ func TestGetFederatedResponseSuccess(t *testing.T) {
 	},
 	// Errors: []error{errors.New("error fetching results from cluster1")},
 	}
-	responseBody, _ := json.Marshal(payLoad)
+	responseBody, _ := json.Marshal(&payLoad)
 
 	// Create a mock HTTP client
 	mockClient := &MockHTTPClient{
@@ -73,9 +73,10 @@ func TestGetFederatedResponseSuccess(t *testing.T) {
 	// Call the function with the mock client
 	fedRequest.getFederatedResponse(remoteService, receivedBody, mockClient)
 
+	data := &fedRequest.Response.Data
 	// Assertions
 	assert.Empty(t, fedRequest.Response.Errors, "No errors should be recorded")
-	assert.NotNil(t, fedRequest.Response.Data, "Data should be populated in the response")
+	assert.NotNil(t, data, "Data should be populated in the response")
 	assert.Equal(t, 1, len(fedRequest.Response.Data.Messages))
 	assert.Equal(t, 1, len(fedRequest.Response.Data.Search))
 	assert.Equal(t, 2, fedRequest.Response.Data.Search[0].Count)
@@ -95,7 +96,7 @@ func TestGetFederatedResponsePartialErrors(t *testing.T) {
 	},
 		Errors: []error{fmt.Errorf("error fetching response: %s", "partial error")}, // TODO: Verify partial errors are recorded
 	}
-	responseBody, _ := json.Marshal(payLoad)
+	responseBody, _ := json.Marshal(&payLoad)
 
 	// Create a mock HTTP client
 	mockClient := &MockHTTPClient{
