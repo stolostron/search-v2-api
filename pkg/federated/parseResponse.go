@@ -38,8 +38,8 @@ type Data struct {
 }
 
 type GraphQLPayload struct {
-	Data   Data    `json:"data"`
-	Errors []error `json:"errors,omitempty"`
+	Data   Data     `json:"data"`
+	Errors []string `json:"errors,omitempty"`
 }
 
 // Parse the response from a remote search service.
@@ -49,7 +49,7 @@ func parseResponse(fedRequest *FederatedRequest, body []byte, hubName string) {
 
 	if err != nil {
 		klog.Errorf("Error parsing response: %s", err)
-		fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("error parsing response: %s", err))
+		fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("error parsing response: %s", err).Error())
 		return
 	}
 

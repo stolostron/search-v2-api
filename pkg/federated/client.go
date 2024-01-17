@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"k8s.io/klog/v2"
 )
 
 // shared HTTP transport and client for efficient connection reuse as per
@@ -48,20 +50,32 @@ type RealHTTPClientPool struct {
 }
 
 func (p *RealHTTPClientPool) Get() HTTPClient {
-	client := httpClientPool.Get().(HTTPClient)
+	client := &RealHTTPClient{
+		client: httpClientPool.Get().(*http.Client),
+	}
 	return client
 }
 
 func (p *RealHTTPClientPool) Put(client HTTPClient) {
-	httpClientPool.Put(client)
+	realClient, ok := client.(*RealHTTPClient)
+	if !ok {
+		klog.Error("Trying to put an invalid client type into the pool")
+		return
+	}
+	httpClientPool.Put(realClient.client)
 }
 
 // RealHTTPClient is a real implementation of the HTTPClient interface.
 type RealHTTPClient struct {
-	*http.Client
+	client *http.Client
+}
+
+// Do implements the HTTPClient interface for RealHTTPClient.
+func (c *RealHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	return c.client.Do(req)
 }
 
 // SetTLSClientConfig sets the TLS client configuration for the HTTP client.
 func (c *RealHTTPClient) SetTLSClientConfig(config *tls.Config) {
-	c.Transport.(*http.Transport).TLSClientConfig = config
+	c.client.Transport.(*http.Transport).TLSClientConfig = config
 }

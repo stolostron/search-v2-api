@@ -8,10 +8,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"k8s.io/klog/v2"
 )
 
 // MockHTTPClient is a mock implementation of the HTTPClient interface
@@ -28,6 +32,116 @@ func (m *MockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 
 func (m *MockHTTPClient) SetTLSClientConfig(config *tls.Config) {
 	m.Transport.TLSClientConfig = config
+}
+func TestHandleFederatedRequestLogReadBodyErr(t *testing.T) {
+
+	realGetFederationConfig := getFedConfig
+
+	defer func() { getFedConfig = realGetFederationConfig }()
+	// Mock getFederationConfig function
+	getFedConfig = func() []RemoteSearchService {
+		// Replace with your mock data
+		return []RemoteSearchService{
+			{
+				Name: "MockService1",
+				URL:  "http://mockservice1.com",
+			},
+			{
+				Name: "MockService2",
+				URL:  "http://mockservice2.com",
+			},
+		}
+	}
+
+	// Redirect the logger output.
+	var buf bytes.Buffer
+	klog.LogToStderr(false)
+	klog.SetOutput(&buf)
+	defer func() {
+		klog.SetOutput(os.Stderr)
+	}()
+
+	// Setup HTTP request
+	req := httptest.NewRequest("POST", "/federated", io.NopCloser(errorReader{}))
+	// Setup HTTP response recorder
+	w := httptest.NewRecorder()
+
+	// Call the function with mock data
+	HandleFederatedRequest(w, req)
+
+	// Capture the logger output for verification.
+	logMsg := buf.String()
+	if !strings.Contains(logMsg, "Error reading request body:") {
+		t.Error("Expected error reading request body to be logged")
+	}
+}
+
+func TestHandleFederatedRequestNoConfig(t *testing.T) {
+	// Mock data
+	mockResponseData := Data{}
+
+	// Setup HTTP request
+	req := httptest.NewRequest("POST", "/federated", bytes.NewBuffer([]byte("mock request body")))
+
+	// Setup HTTP response recorder
+	w := httptest.NewRecorder()
+
+	// Call the function with mock data
+	HandleFederatedRequest(w, req)
+
+	// Assertions
+	assert.Equal(t, http.StatusOK, w.Code)
+	var respBody GraphQLPayload
+	err := json.NewDecoder(w.Body).Decode(&respBody)
+	data := &respBody.Data
+
+	assert.NoError(t, err)
+	assert.Equal(t, &mockResponseData, data)
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+}
+
+func TestHandleFederatedRequestWithConfig(t *testing.T) {
+	// Mock request body
+	requestBody := []byte(`{"some": "data"}`)
+
+	// Mock HTTP request
+	req := httptest.NewRequest("POST", "/federated", io.NopCloser(bytes.NewBuffer(requestBody)))
+	req.Header.Set("Content-Type", "application/json")
+
+	// Mock HTTP response
+	w := httptest.NewRecorder()
+
+	realGetFederationConfig := getFedConfig
+
+	defer func() { getFedConfig = realGetFederationConfig }()
+	// Mock getFederationConfig function
+	getFedConfig = func() []RemoteSearchService {
+		// Replace with your mock data
+		return []RemoteSearchService{
+			{
+				Name: "MockService1",
+				URL:  "http://mockservice1.com",
+			},
+			{
+				Name: "MockService2",
+				URL:  "http://mockservice2.com",
+			},
+		}
+	}
+
+	// Call the function
+	HandleFederatedRequest(w, req)
+
+	// Assertions
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+	var responseBody GraphQLPayload
+	err := json.Unmarshal(w.Body.Bytes(), &responseBody)
+
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(responseBody.Errors))
+	assert.Equal(t, 0, len(responseBody.Data.Search))
 }
 
 func TestGetFederatedResponseSuccess(t *testing.T) {
@@ -94,7 +208,7 @@ func TestGetFederatedResponsePartialErrors(t *testing.T) {
 		SearchSchema:   &SearchSchema{AllProperties: []string{"kind", "cluster", "namespace"}},
 		GraphQLSchema:  "schema",
 	},
-		Errors: []error{fmt.Errorf("error fetching response: %s", "partial error")}, // TODO: Verify partial errors are recorded
+		Errors: []string{fmt.Errorf("error fetching response: %s", "partial error").Error()}, // TODO: Verify partial errors are recorded
 	}
 	responseBody, _ := json.Marshal(&payLoad)
 
@@ -260,7 +374,7 @@ func TestGetFederatedResponseErrors(t *testing.T) {
 			fedRequest.getFederatedResponse(tc.remoteService, tc.receivedBody, mockClient)
 
 			// Assert that the expected error is present in the response errors
-			assert.Contains(t, fedRequest.Response.Errors[0].Error(), tc.expectedError)
+			assert.Contains(t, fedRequest.Response.Errors[0], tc.expectedError)
 		})
 	}
 }
