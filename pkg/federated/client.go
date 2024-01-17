@@ -12,7 +12,7 @@ import (
 )
 
 // Returns a client to process the federated request.
-func GetHttpClient(remoteService RemoteSearchService) *http.Client {
+func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
 	// Get http client from pool.
 	// clientPool := &RealHTTPClientPool{}
 	// client := httpClientPool.Get()
@@ -35,7 +35,8 @@ func GetHttpClient(remoteService RemoteSearchService) *http.Client {
 	}
 	// client.SetTLSClientConfig(&tlsConfig)
 	client.Transport.(*http.Transport).TLSClientConfig = &tlsConfig
-	return client
+
+	return &RealHTTPClient{client}
 }
 
 // shared HTTP transport and client for efficient connection reuse as per

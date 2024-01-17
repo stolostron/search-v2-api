@@ -74,7 +74,7 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSearchService,
-	receivedBody []byte, client *http.Client) {
+	receivedBody []byte, client HTTPClient) {
 
 	// Create the request.
 	req, err := http.NewRequest("POST", remoteService.URL, bytes.NewBuffer(receivedBody))
