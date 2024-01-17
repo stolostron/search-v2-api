@@ -3,7 +3,6 @@ package federated
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -56,8 +55,9 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 			defer wg.Done()
 			// clientPool := &RealHTTPClientPool{}
 			// Get http client from pool.
-			client := httpClientPool.Get()
-			fedRequest.getFederatedResponse(remoteService, receivedBody, client.(*http.Client))
+			// client := httpClientPool.Get()
+			client := GetHttpClient(remoteService)
+			fedRequest.getFederatedResponse(remoteService, receivedBody, client)
 			httpClientPool.Put(client) // Put the client back into the pool for reuse
 		}(remoteService)
 	}
@@ -75,24 +75,6 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 
 func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSearchService,
 	receivedBody []byte, client *http.Client) {
-
-	tlsConfig := tls.Config{
-		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
-	}
-	if remoteService.TLSCert != "" && remoteService.TLSKey != "" {
-		tlsConfig.Certificates = []tls.Certificate{
-			{
-				// RootCAs:     nil,
-				Certificate: [][]byte{[]byte(remoteService.TLSCert)},
-				PrivateKey:  []byte(remoteService.TLSKey),
-			},
-		}
-	} else {
-		klog.Warningf("TLS cert and key not provided for %s. Skipping TLS verification.", remoteService.Name)
-		tlsConfig.InsecureSkipVerify = true // #nosec G402 - FIXME: Add TLS verification.
-	}
-	// client.SetTLSClientConfig(&tlsConfig)
-	client.Transport.(*http.Transport).TLSClientConfig = &tlsConfig
 
 	// Create the request.
 	req, err := http.NewRequest("POST", remoteService.URL, bytes.NewBuffer(receivedBody))

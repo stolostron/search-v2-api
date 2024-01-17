@@ -8,7 +8,35 @@ import (
 	"time"
 
 	config "github.com/stolostron/search-v2-api/pkg/config"
+	"k8s.io/klog/v2"
 )
+
+// Returns a client to process the federated request.
+func GetHttpClient(remoteService RemoteSearchService) *http.Client {
+	// Get http client from pool.
+	// clientPool := &RealHTTPClientPool{}
+	// client := httpClientPool.Get()
+	client := httpClientPool.Get().(*http.Client)
+
+	tlsConfig := tls.Config{
+		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
+	}
+	if remoteService.TLSCert != "" && remoteService.TLSKey != "" {
+		tlsConfig.Certificates = []tls.Certificate{
+			{
+				// RootCAs:     nil,
+				Certificate: [][]byte{[]byte(remoteService.TLSCert)},
+				PrivateKey:  []byte(remoteService.TLSKey),
+			},
+		}
+	} else {
+		klog.Warningf("TLS cert and key not provided for %s. Skipping TLS verification.", remoteService.Name)
+		tlsConfig.InsecureSkipVerify = true // #nosec G402 - FIXME: Add TLS verification.
+	}
+	// client.SetTLSClientConfig(&tlsConfig)
+	client.Transport.(*http.Transport).TLSClientConfig = &tlsConfig
+	return client
+}
 
 // shared HTTP transport and client for efficient connection reuse as per
 // godoc: https://cs.opensource.google/go/go/+/go1.21.5:src/net/http/transport.go;l=95 and
@@ -34,7 +62,6 @@ var httpClientPool = sync.Pool{
 	},
 }
 
-/**
 // HTTPClientPool represents an interface for an HTTP client pool.
 type HTTPClientPool interface {
 	Get() HTTPClient
@@ -69,4 +96,3 @@ type RealHTTPClient struct {
 func (c *RealHTTPClient) SetTLSClientConfig(config *tls.Config) {
 	c.Transport.(*http.Transport).TLSClientConfig = config
 }
-*/
