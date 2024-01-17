@@ -53,9 +53,7 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(remoteService RemoteSearchService) {
 			defer wg.Done()
-			// clientPool := &RealHTTPClientPool{}
-			// Get http client from pool.
-			// client := httpClientPool.Get()
+			// Get the http client from pool.
 			client := GetHttpClient(remoteService)
 			fedRequest.getFederatedResponse(remoteService, receivedBody, client)
 			httpClientPool.Put(client) // Put the client back into the pool for reuse
