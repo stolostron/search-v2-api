@@ -14,9 +14,9 @@ import (
 // Returns a client to process the federated request.
 func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
 	// Get http client from pool.
-	// clientPool := &RealHTTPClientPool{}
-	// client := httpClientPool.Get()
-	client := httpClientPool.Get().(*http.Client)
+	c := httpClientPool.Get().(*http.Client)
+	// Wrap the client in a RealHTTPClient.
+	client := &RealHTTPClient{c}
 
 	tlsConfig := tls.Config{
 		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
@@ -33,10 +33,10 @@ func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
 		klog.Warningf("TLS cert and key not provided for %s. Skipping TLS verification.", remoteService.Name)
 		tlsConfig.InsecureSkipVerify = true // #nosec G402 - FIXME: Add TLS verification.
 	}
-	// client.SetTLSClientConfig(&tlsConfig)
-	client.Transport.(*http.Transport).TLSClientConfig = &tlsConfig
 
-	return &RealHTTPClient{client}
+	client.SetTLSClientConfig(&tlsConfig)
+
+	return client
 }
 
 // shared HTTP transport and client for efficient connection reuse as per
@@ -64,10 +64,10 @@ var httpClientPool = sync.Pool{
 }
 
 // HTTPClientPool represents an interface for an HTTP client pool.
-type HTTPClientPool interface {
-	Get() HTTPClient
-	Put(HTTPClient)
-}
+// type HTTPClientPool interface {
+// 	Get() HTTPClient
+// 	Put(HTTPClient)
+// }
 
 // HTTPClient is an interface for an HTTP client.
 type HTTPClient interface {
@@ -76,17 +76,17 @@ type HTTPClient interface {
 }
 
 // RealHTTPClientPool is a real implementation of the HTTPClientPool interface.
-type RealHTTPClientPool struct {
-}
+// type RealHTTPClientPool struct {
+// }
 
-func (p *RealHTTPClientPool) Get() HTTPClient {
-	client := httpClientPool.Get().(HTTPClient)
-	return client
-}
+// func (p *RealHTTPClientPool) Get() HTTPClient {
+// 	client := httpClientPool.Get().(HTTPClient)
+// 	return client
+// }
 
-func (p *RealHTTPClientPool) Put(client HTTPClient) {
-	httpClientPool.Put(client)
-}
+// func (p *RealHTTPClientPool) Put(client HTTPClient) {
+// 	httpClientPool.Put(client)
+// }
 
 // RealHTTPClient is a real implementation of the HTTPClient interface.
 type RealHTTPClient struct {
