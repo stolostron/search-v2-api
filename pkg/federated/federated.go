@@ -54,11 +54,11 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(remoteService RemoteSearchService) {
 			defer wg.Done()
-			clientPool := &RealHTTPClientPool{}
+			// clientPool := &RealHTTPClientPool{}
 			// Get http client from pool.
-			client := clientPool.Get()
-			fedRequest.getFederatedResponse(remoteService, receivedBody, client)
-			clientPool.Put(client) // Put the client back into the pool for reuse
+			client := httpClientPool.Get()
+			fedRequest.getFederatedResponse(remoteService, receivedBody, client.(*http.Client))
+			httpClientPool.Put(client) // Put the client back into the pool for reuse
 		}(remoteService)
 	}
 	klog.Info("Waiting for all remote services to respond.")
@@ -74,7 +74,7 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSearchService,
-	receivedBody []byte, client HTTPClient) {
+	receivedBody []byte, client *http.Client) {
 
 	tlsConfig := tls.Config{
 		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
@@ -91,7 +91,8 @@ func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSea
 		klog.Warningf("TLS cert and key not provided for %s. Skipping TLS verification.", remoteService.Name)
 		tlsConfig.InsecureSkipVerify = true // #nosec G402 - FIXME: Add TLS verification.
 	}
-	client.SetTLSClientConfig(&tlsConfig)
+	// client.SetTLSClientConfig(&tlsConfig)
+	client.Transport.(*http.Transport).TLSClientConfig = &tlsConfig
 
 	// Create the request.
 	req, err := http.NewRequest("POST", remoteService.URL, bytes.NewBuffer(receivedBody))

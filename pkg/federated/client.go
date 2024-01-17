@@ -1,3 +1,4 @@
+// Copyright Contributors to the Open Cluster Management project
 package federated
 
 import (
@@ -5,32 +6,35 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	config "github.com/stolostron/search-v2-api/pkg/config"
 )
 
 // shared HTTP transport and client for efficient connection reuse as per
 // godoc: https://cs.opensource.google/go/go/+/go1.21.5:src/net/http/transport.go;l=95 and
 // https://stuartleeks.com/posts/connection-re-use-in-golang-with-http-client/
 var tr = &http.Transport{
-	MaxIdleConns:          10,               // TODO: make it configurable
-	IdleConnTimeout:       15 * time.Second, // TODO: make it configurable, use ms for consistency.
-	ResponseHeaderTimeout: 15 * time.Second, // TODO: make it configurable, use ms for consistency.
-	DisableKeepAlives:     false,            // TODO: make it configurable
+	MaxIdleConns:          config.Cfg.FedClientPool.MaxIdleConns,
+	IdleConnTimeout:       time.Duration(config.Cfg.FedClientPool.MaxIdleConnTimeout) * time.Millisecond,
+	ResponseHeaderTimeout: time.Duration(config.Cfg.FedClientPool.ResponseHeaderTimeout) * time.Millisecond,
+	DisableKeepAlives:     false,
 	TLSClientConfig: &tls.Config{
 		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
 	},
-	// MaxIdleConnsPerHost: 1, // TODO: make it configurable
-	// MaxConnsPerHost:     2, // TODO: make it configurable
+	MaxConnsPerHost:     config.Cfg.FedClientPool.MaxConnsPerHost,
+	MaxIdleConnsPerHost: config.Cfg.FedClientPool.MaxIdleConnPerHost,
 }
 
 var httpClientPool = sync.Pool{
 	New: func() interface{} {
 		return &http.Client{
 			Transport: tr,
-			Timeout:   time.Second * 60, //make it configurable
+			Timeout:   time.Duration(config.Cfg.FedClientPool.RequestTimeout) * time.Millisecond,
 		}
 	},
 }
 
+/**
 // HTTPClientPool represents an interface for an HTTP client pool.
 type HTTPClientPool interface {
 	Get() HTTPClient
@@ -65,3 +69,4 @@ type RealHTTPClient struct {
 func (c *RealHTTPClient) SetTLSClientConfig(config *tls.Config) {
 	c.Transport.(*http.Transport).TLSClientConfig = config
 }
+*/
