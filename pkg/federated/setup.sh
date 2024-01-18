@@ -5,6 +5,23 @@
 
 # TODO: In the future this should be further automated by either Search or Global Hub operator.
 
+echo "Configuring Global Search access to the Managed Hub clusters."
+oc cluster-info | grep "Kubernetes"
+read -p "Are you sure you want to continue? (y/n) " -r $REPLY
+echo ""
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+  echo "Setup cancelled. Exiting."
+  exit 1
+fi
+
+# Validate that MulticlusterGlobalHub is installed.
+oc get multiclusterglobalhub > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+  echo "ERROR: MulticlusterGlobalHub is not installed in the target cluster. Exiting."
+  exit 1
+fi
+
+
 # Enable the Managed Service Account addon in the MultiClusterEngine CR.
 oc get managedserviceaccount > /dev/null 2>&1
 if [ $? -eq 0 ]; then
@@ -40,6 +57,12 @@ if [ ${#MANAGED_HUBS[@]} -eq 0 ]; then
 fi
 for MANAGED_HUB in "${MANAGED_HUBS[@]}"; do
   # TODO: Validate that the Managed Hub is running ACM 2.9.0 or later.
+  # echo "Validating Red Hat Advanced Cluster Management version 2.9 or later..."
+  # ACM_VERSION=$(oc get mch -A -o custom-columns=VERSION:.status.currentVersion --no-headers)
+  # if ! printf '2.9.0\n%s\n' $ACM_VERSION | sort -V -C; then 
+  #   echo "Red Hat Advanced Cluster Management 2.9.0 or later is required. Found version $ACM_VERSION. Please upgrade your RHACM installation."
+  #   exit 1
+  # fi
   echo "Configuring managed hub: ${MANAGED_HUB}"
   oc apply -f ./federation-managed-hub-config.yaml -n "${MANAGED_HUB}"
 done
