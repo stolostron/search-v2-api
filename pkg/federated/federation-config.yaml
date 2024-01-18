@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: ocm-search
+  name: search-global
+  namespace: open-cluster-management
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: search-global-token
+  namespace: open-cluster-management
+  labels:
+    app: ocm-search
+  annotations:
+    kubernetes.io/service-account.name: search-global
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: ocm-search
+  name: search-global-auto
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: global-search-user
+  subjects:
+  - kind: ServiceAccount
+    name: search-global
+    namespace: open-cluster-management
+    subjects:
+    - kind: ServiceAccount
+      name: search-global
+      namespace: open-cluster-management
