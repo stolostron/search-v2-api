@@ -15,7 +15,7 @@ import (
 func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
 	// Get http client from pool.
 	c := httpClientPool.Get().(*http.Client)
-	// Wrap the client in a RealHTTPClient.
+	// Wrap the client in a RealHTTPClient, this is needed to mock the client in unit tests.
 	client := &RealHTTPClient{c}
 
 	tlsConfig := tls.Config{
@@ -43,50 +43,31 @@ func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
 // godoc: https://cs.opensource.google/go/go/+/go1.21.5:src/net/http/transport.go;l=95 and
 // https://stuartleeks.com/posts/connection-re-use-in-golang-with-http-client/
 var tr = &http.Transport{
-	MaxIdleConns:          config.Cfg.FedClientPool.MaxIdleConns,
-	IdleConnTimeout:       time.Duration(config.Cfg.FedClientPool.MaxIdleConnTimeout) * time.Millisecond,
-	ResponseHeaderTimeout: time.Duration(config.Cfg.FedClientPool.ResponseHeaderTimeout) * time.Millisecond,
+	MaxIdleConns:          config.Cfg.HttpPool.MaxIdleConns,
+	IdleConnTimeout:       time.Duration(config.Cfg.HttpPool.MaxIdleConnTimeout) * time.Millisecond,
+	ResponseHeaderTimeout: time.Duration(config.Cfg.HttpPool.ResponseHeaderTimeout) * time.Millisecond,
 	DisableKeepAlives:     false,
 	TLSClientConfig: &tls.Config{
 		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
 	},
-	MaxConnsPerHost:     config.Cfg.FedClientPool.MaxConnsPerHost,
-	MaxIdleConnsPerHost: config.Cfg.FedClientPool.MaxIdleConnPerHost,
+	MaxConnsPerHost:     config.Cfg.HttpPool.MaxConnsPerHost,
+	MaxIdleConnsPerHost: config.Cfg.HttpPool.MaxIdleConnPerHost,
 }
 
 var httpClientPool = sync.Pool{
 	New: func() interface{} {
 		return &http.Client{
 			Transport: tr,
-			Timeout:   time.Duration(config.Cfg.FedClientPool.RequestTimeout) * time.Millisecond,
+			Timeout:   time.Duration(config.Cfg.HttpPool.RequestTimeout) * time.Millisecond,
 		}
 	},
 }
-
-// HTTPClientPool represents an interface for an HTTP client pool.
-// type HTTPClientPool interface {
-// 	Get() HTTPClient
-// 	Put(HTTPClient)
-// }
 
 // HTTPClient is an interface for an HTTP client.
 type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 	SetTLSClientConfig(*tls.Config)
 }
-
-// RealHTTPClientPool is a real implementation of the HTTPClientPool interface.
-// type RealHTTPClientPool struct {
-// }
-
-// func (p *RealHTTPClientPool) Get() HTTPClient {
-// 	client := httpClientPool.Get().(HTTPClient)
-// 	return client
-// }
-
-// func (p *RealHTTPClientPool) Put(client HTTPClient) {
-// 	httpClientPool.Put(client)
-// }
 
 // RealHTTPClient is a real implementation of the HTTPClient interface.
 type RealHTTPClient struct {
