@@ -56,6 +56,7 @@ var tr = &http.Transport{
 
 var httpClientPool = sync.Pool{
 	New: func() interface{} {
+		klog.Infof(">>> Creating new HTTP client from pool.")
 		return &http.Client{
 			Transport: tr,
 			Timeout:   time.Duration(config.Cfg.HttpPool.RequestTimeout) * time.Millisecond,

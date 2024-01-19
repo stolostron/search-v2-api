@@ -3,6 +3,7 @@ package federated
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -97,7 +98,15 @@ func getFederationConfigFromSecret() []RemoteSearchService {
 			})
 		}
 	}
-	klog.Infof("Federation config:\n %+v", result)
+	logFederationConfig(result)
 
 	return result
+}
+
+func logFederationConfig(fedConfig []RemoteSearchService) {
+	configStr := ""
+	for _, service := range fedConfig {
+		configStr += fmt.Sprintf("{ Name: %s URL: %s Token: [yes] TLSCert: [yes/no] }\n", service.Name, service.URL)
+	}
+	klog.Infof("Federation config:\n %s", configStr)
 }
