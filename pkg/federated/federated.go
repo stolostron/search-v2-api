@@ -28,6 +28,8 @@ type FederatedRequest struct {
 // 	ResponseBody  []byte
 // }
 
+var getFedConfig = getFederationConfig
+
 func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 	klog.Info("Resolving federated search query.")
 
@@ -41,11 +43,11 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 		InRequestBody: receivedBody,
 		Response: GraphQLPayload{
 			Data:   Data{},
-			Errors: []error{},
+			Errors: []string{},
 		},
 	}
 
-	fedConfig := getFederationConfig()
+	fedConfig := getFedConfig()
 	klog.Infof("Sending federated query to %d remote services.", len(fedConfig))
 
 	wg := sync.WaitGroup{}
@@ -78,7 +80,7 @@ func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSea
 	req, err := http.NewRequest("POST", remoteService.URL, bytes.NewBuffer(receivedBody))
 	if err != nil {
 		klog.Errorf("Error creating federated request: %s", err)
-		fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("error creating federated request: %s", err))
+		fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("error creating federated request: %s", err).Error())
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -88,7 +90,7 @@ func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSea
 	resp, err := client.Do(req)
 	if err != nil {
 		klog.Errorf("Error sending federated request: %s", err)
-		fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("error sending federated request: %s", err))
+		fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("error sending federated request: %s", err).Error())
 		return
 	}
 
@@ -97,7 +99,7 @@ func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSea
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		klog.Errorf("Error reading federated response body: %s", err)
-		fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("error reading federated response body: %s", err))
+		fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("error reading federated response body: %s", err).Error())
 		return
 	}
 
