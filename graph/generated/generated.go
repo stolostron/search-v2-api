@@ -1190,7 +1190,7 @@ func (ec *executionContext) _SearchResult_related(ctx context.Context, field gra
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Related(ctx), nil
+		return obj.Related(ctx)
 	})
 	if err != nil {
 		ec.Error(ctx, err)

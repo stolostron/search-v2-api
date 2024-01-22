@@ -40,8 +40,8 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	).Return(mockRows2, nil)
 
 	// Execute the function - should return a relatedResults object
-	result := resolver.Related(context.Background())
-
+	result, err := resolver.Related(context.Background())
+	assert.Nil(t, err)
 	// Verify expected and result kinds
 	resultKinds := make([]*string, len(result))
 	for i, data := range result {
@@ -91,7 +91,8 @@ func Test_SearchResolver_RelationshipsWithCluster(t *testing.T) {
 	).Return(mockRows2, nil)
 
 	// Execute the function - should return a relatedResults object
-	result := resolver.Related(context.Background())
+	result, err := resolver.Related(context.Background())
+	assert.Nil(t, err)
 
 	resultKinds := make([]*string, len(result))
 	for i, data := range result {
@@ -143,7 +144,8 @@ func Test_SearchResolver_RelatedKindsRelationships(t *testing.T) {
 	).Return(mockRows2, nil)
 
 	// Execute the function - should return a relatedResults object
-	result := resolver.Related(context.Background())
+	result, err := resolver.Related(context.Background())
+	assert.Nil(t, err)
 
 	// Verify returned items.
 	if !strings.EqualFold(result[0].Kind, strings.ToLower(mockRows2.mockData[0]["destkind"].(string))) {
@@ -183,7 +185,8 @@ func Test_SearchResolver_RelatedKindsRelationships_NegativeLimit(t *testing.T) {
 	).Return(mockRows2, nil)
 
 	// Execute the function - should return a relatedResults object
-	result := resolver.Related(context.Background())
+	result, err := resolver.Related(context.Background())
+	assert.Nil(t, err)
 
 	// Verify returned items.
 	if !strings.EqualFold(result[0].Kind, strings.ToLower(mockRows2.mockData[0]["destkind"].(string))) {
@@ -225,7 +228,8 @@ func Test_SearchResolver_Level1Related(t *testing.T) {
 	).Return(mockRows2, nil)
 
 	// Execute the function - should return a relatedResults object
-	result := resolver.Related(context.Background())
+	result, err := resolver.Related(context.Background())
+	assert.Nil(t, err)
 
 	// Verify returned items.
 	if !strings.EqualFold(result[0].Kind, strings.ToLower(mockRows2.mockData[0]["destkind"].(string))) {

@@ -87,12 +87,16 @@ func (s *SearchResult) Items() ([]map[string]interface{}, error) {
 	return r, err
 }
 
-func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
+func (s *SearchResult) Related(ctx context.Context) ([]SearchRelatedResult, error) {
+	var r []SearchRelatedResult
 	if s.context == nil {
 		s.context = ctx
 	}
 	if s.uids == nil {
-		s.Uids()
+		err := s.Uids()
+		if err != nil {
+			return r, err
+		}
 	}
 	// Wait for search to complete before resolving relationships.
 	s.wg.Wait()
@@ -100,20 +104,22 @@ func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
 	defer metrics.SlowLog(fmt.Sprintf("SearchResult::Related() - uids: %d levels: %d", len(s.uids), s.level),
 		500*time.Millisecond)()
 
-	var r []SearchRelatedResult
 	if len(s.uids) > 0 {
 		r = s.getRelationResolvers(ctx)
 	} else {
 		klog.V(1).Info("No uids selected for query:Related()")
 	}
 
-	return r
+	return r, nil
 }
 
-func (s *SearchResult) Uids() {
+func (s *SearchResult) Uids() error {
 	klog.V(2).Info("Resolving SearchResult:Uids()")
-	s.buildSearchQuery(s.context, false, true)
-	s.resolveUids()
+	err := s.buildSearchQuery(s.context, false, true)
+	if err != nil {
+		return err
+	}
+	return s.resolveUids()
 }
 
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
@@ -226,11 +232,11 @@ func (s *SearchResult) resolveCount() int {
 	return count
 }
 
-func (s *SearchResult) resolveUids() {
+func (s *SearchResult) resolveUids() error {
 	rows, err := s.pool.Query(s.context, s.query, s.params...)
 	if err != nil {
 		klog.Errorf("Error resolving UIDs. Query [%s] with args [%+v]. Error: [%+v]", s.query, s.params, err)
-		return
+		return err
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -241,7 +247,7 @@ func (s *SearchResult) resolveUids() {
 		}
 		s.uids = append(s.uids, &uid)
 	}
-
+	return nil
 }
 func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	items := []map[string]interface{}{}
