@@ -28,7 +28,8 @@ func Test_SearchResolver_Count(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
-	r := resolver.Count()
+	r, err := resolver.Count()
+	assert.Nil(t, err)
 
 	// Verify response
 	if r != mockRow.MockValue {
@@ -52,7 +53,8 @@ func Test_SearchResolver_Count_WithRBAC(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
-	r := resolver.Count()
+	r, err := resolver.Count()
+	assert.Nil(t, err)
 
 	// Verify response
 	if r != mockRow.MockValue {
@@ -75,7 +77,8 @@ func Test_SearchResolver_CountWithOperator(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
-	r := resolver.Count()
+	r, err := resolver.Count()
+	assert.Nil(t, err)
 	// Verify response
 	if r != mockRow.MockValue {
 		t.Errorf("Incorrect Count() expected [%d] got [%d]", mockRow.MockValue, r)
@@ -97,7 +100,8 @@ func Test_SearchResolver_CountWithOperatorNum(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
-	r := resolver.Count()
+	r, err := resolver.Count()
+	assert.Nil(t, err)
 	// Verify response
 	if r != mockRow.MockValue {
 		t.Errorf("Incorrect Count() expected [%d] got [%d]", mockRow.MockValue, r)
@@ -119,7 +123,8 @@ func Test_SearchResolver_CountWithOperatorString(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
-	r := resolver.Count()
+	r, err := resolver.Count()
+	assert.Nil(t, err)
 	// Verify response
 	if r != mockRow.MockValue {
 		t.Errorf("Incorrect Count() expected [%d] got [%d]", mockRow.MockValue, r)
@@ -144,7 +149,8 @@ func Test_SearchResolver_Items(t *testing.T) {
 	).Return(mockRows, nil)
 
 	// Execute the function
-	result := resolver.Items()
+	result, err := resolver.Items()
+	assert.Nil(t, err)
 
 	// Verify returned items.
 	if len(result) != len(mockRows.mockData) {
@@ -315,7 +321,8 @@ func testAllOperators(t *testing.T, testOperators []TestOperatorItem) {
 		).Return(mockRows, nil)
 
 		// Execute the function
-		result := resolver.Items()
+		result, err := resolver.Items()
+		assert.Nil(t, err)
 		// Verify returned items.
 		if len(result) != len(mockRows.mockData) {
 			t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result))
@@ -361,7 +368,8 @@ func Test_SearchResolver_Items_Multiple_Filter(t *testing.T) {
 	).Return(mockRows, nil)
 
 	// Execute the function
-	result := resolver.Items()
+	result, err := resolver.Items()
+	assert.Nil(t, err)
 
 	// Verify returned items.
 	if len(result) != len(mockRows.mockData) {
@@ -408,7 +416,8 @@ func Test_SearchWithMultipleClusterFilter_NegativeLimit_Query(t *testing.T) {
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
-	result := resolver.Items()
+	result, err := resolver.Items()
+	assert.Nil(t, err)
 
 	// Verify returned items.
 	if len(result) != len(mockRows.mockData) {
@@ -453,7 +462,8 @@ func Test_SearchResolver_Keywords(t *testing.T) {
 	).Return(mockRows, nil)
 
 	// Execute the function
-	result := resolver.Items()
+	result, err := resolver.Items()
+	assert.Nil(t, err)
 
 	// Verify properties for each returned item.
 	for i, item := range result {
@@ -575,7 +585,8 @@ func Test_SearchResolver_Items_Labels(t *testing.T) {
 	).Return(mockRows, nil)
 
 	// Execute the function
-	result := resolver.Items()
+	result, err := resolver.Items()
+	assert.Nil(t, err)
 
 	// Verify returned items.
 	if len(result) != len(mockRows.mockData) {
@@ -622,7 +633,8 @@ func Test_SearchResolver_Items_Container(t *testing.T) {
 	).Return(mockRows, nil)
 
 	// Execute the function
-	result := resolver.Items()
+	result, err := resolver.Items()
+	assert.Nil(t, err)
 
 	if len(result) != len(mockRows.mockData) {
 		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result))

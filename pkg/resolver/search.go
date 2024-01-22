@@ -32,7 +32,7 @@ type SearchResult struct {
 	wg        sync.WaitGroup // Used to serialize search query and relatioinships query.
 }
 
-const ErrorMsg string = "Error building Search query"
+const ErrorMsg string = "Error building Search query:"
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
 	defer metrics.SlowLog("SearchResolver", 0)()
@@ -65,24 +65,26 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 
 }
 
-func (s *SearchResult) Count() int {
+func (s *SearchResult) Count() (int, error) {
 	klog.V(2).Info("Resolving SearchResult:Count()")
-	s.buildSearchQuery(s.context, true, false)
+	err := s.buildSearchQuery(s.context, true, false)
 
-	return s.resolveCount()
+	return s.resolveCount(), err
 }
 
-func (s *SearchResult) Items() []map[string]interface{} {
+func (s *SearchResult) Items() ([]map[string]interface{}, error) {
 	s.wg.Add(1)
 	defer s.wg.Done()
 	klog.V(2).Info("Resolving SearchResult:Items()")
-	s.buildSearchQuery(s.context, false, false)
-
+	err := s.buildSearchQuery(s.context, false, false)
+	if err != nil {
+		return nil, err
+	}
 	r, e := s.resolveItems()
-	if e != nil {
+	if err != nil {
 		klog.Error("Error resolving items.", e)
 	}
-	return r
+	return r, err
 }
 
 func (s *SearchResult) Related(ctx context.Context) []SearchRelatedResult {
@@ -124,7 +126,7 @@ func buildRbacWhereClause(ctx context.Context, userrbac rbac.UserData, userInfo 
 
 // Example query: SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN
 // (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 1000
-func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) {
+func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) error {
 	var limit int
 	var selectDs *goqu.SelectDataset
 	var whereDs []exp.Expression
@@ -146,7 +148,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		whereDs, s.propTypes, err = WhereClauseFilter(s.context, s.input, s.propTypes)
 		if err != nil {
 			s.checkErrorBuildingQuery(err, ErrorMsg)
-			return
+			return err
 		}
 
 		// SELECT CLAUSE
@@ -171,18 +173,19 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 			if len(whereDs) == 0 {
 				s.checkErrorBuildingQuery(fmt.Errorf("search query must contain a whereClause"),
 					ErrorMsg)
-				return
+				return err
 			}
 		} else {
 			errorStr := fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s with uid %s ",
 				s.input, userInfo.Username, userInfo.UID)
 			s.checkErrorBuildingQuery(fmt.Errorf(errorStr), ErrorMsg)
-			return
+			return fmt.Errorf(errorStr)
 		}
 	} else {
 		s.checkErrorBuildingQuery(fmt.Errorf("query input must contain a filter or keyword. Received: %+v",
 			s.input), ErrorMsg)
-		return
+		return fmt.Errorf("query input must contain a filter or keyword. Received: %+v",
+			s.input)
 	}
 
 	// LIMIT CLAUSE
@@ -197,11 +200,12 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		sql, params, err = selectDs.Where(whereDs...).ToSQL()
 	}
 	if err != nil {
-		klog.Errorf("Error building Search query: %s", err.Error())
+		s.checkErrorBuildingQuery(err, ErrorMsg)
 	}
 	klog.V(5).Infof("Search query: %s\nargs: %s", sql, params)
 	s.query = sql
 	s.params = params
+	return err
 }
 
 func (s *SearchResult) checkErrorBuildingQuery(err error, logMessage string) {
@@ -320,7 +324,10 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 				klog.V(5).Infof("For filter prop: %s, datatype is :%s\n", filter.Property, dataType)
 
 				// if property matches then call decode function:
-				values = decodePropertyTypes(values, dataType)
+				values, err = decodePropertyTypes(values, dataType)
+				if err != nil {
+					return whereDs, propTypeMap, err
+				}
 				// Check if value is a number or date and get the cleaned up value
 				opDateValueMap = getOperatorAndNumDateFilter(filter.Property, values, dataType)
 			} else {

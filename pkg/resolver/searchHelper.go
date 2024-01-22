@@ -290,13 +290,17 @@ func pointerToStringArray(pointerArray []*string) []string {
 	return values
 }
 
-func decodePropertyTypes(values []string, dataType string) []string {
+func decodePropertyTypes(values []string, dataType string) ([]string, error) {
 	cleanedVal := make([]string, len(values))
 
 	for i, val := range values {
 		if dataType == "object" {
 			labels := strings.Split(val, "=")
-			cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
+			if len(labels) == 2 {
+				cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
+			} else {
+				return cleanedVal, fmt.Errorf("incorrect label format, label filters must have the format key=value")
+			}
 		} else if dataType == "array" {
 			cleanedVal[i] = fmt.Sprintf(`["%s"]`, val)
 		} else {
@@ -305,7 +309,7 @@ func decodePropertyTypes(values []string, dataType string) []string {
 
 		values = cleanedVal
 	}
-	return values
+	return values, nil
 
 }
 
