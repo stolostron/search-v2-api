@@ -14,9 +14,7 @@ import (
 // Returns a client to process the federated request.
 func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
 	// Get http client from pool.
-	c := httpClientPool.Get().(*http.Client)
-	// Wrap the client in a RealHTTPClient, this is needed to mock the client in unit tests.
-	client := &RealHTTPClient{c}
+	client := httpClientPool.Get().(*RealHTTPClient)
 
 	tlsConfig := tls.Config{
 		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
@@ -56,10 +54,12 @@ var tr = &http.Transport{
 
 var httpClientPool = sync.Pool{
 	New: func() interface{} {
-		klog.Infof(">>> Creating new HTTP client from pool.")
-		return &http.Client{
-			Transport: tr,
-			Timeout:   time.Duration(config.Cfg.HttpPool.RequestTimeout) * time.Millisecond,
+		klog.V(6).Infof("Creating new RealHTTPClient from pool.")
+		return &RealHTTPClient{
+			&http.Client{
+				Transport: tr,
+				Timeout:   time.Duration(config.Cfg.HttpPool.RequestTimeout) * time.Millisecond,
+			},
 		}
 	},
 }
