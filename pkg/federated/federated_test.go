@@ -112,19 +112,44 @@ func TestHandleFederatedRequestWithConfig(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	realGetFederationConfig := getFedConfig
+	realGetHttpClient := httpClientGetter
+
+	// Create a mock HTTP client
+	mockClient := &MockHTTPClient{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			// Mock HTTP response
+			return &http.Response{
+				Status:     "200 OK",
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBuffer([]byte("test body"))),
+			}, nil
+		},
+		SetTLSClientConfigFunc: func(config *tls.Config) {
+		},
+	}
+	defer func() { httpClientGetter = realGetHttpClient }()
+
+	// Set httpClientGetter to return the mock client
+	httpClientGetter = func(remoteService RemoteSearchService) HTTPClient {
+		return mockClient
+	}
 
 	defer func() { getFedConfig = realGetFederationConfig }()
 	// Mock getFederationConfig function
 	getFedConfig = func() []RemoteSearchService {
-		// Replace with your mock data
+		// Replace with mock data
 		return []RemoteSearchService{
 			{
-				Name: "MockService1",
-				URL:  "http://mockservice1.com",
+				Name:    "MockService1",
+				URL:     "http://mockservice1.com",
+				TLSCert: "tlscert1",
+				TLSKey:  "tlskey1",
 			},
 			{
-				Name: "MockService2",
-				URL:  "http://mockservice2.com",
+				Name:    "MockService2",
+				URL:     "http://mockservice2.com",
+				TLSCert: "tlscert2",
+				TLSKey:  "tlskey2",
 			},
 		}
 	}

@@ -75,7 +75,12 @@ type RealHTTPClient struct {
 	*http.Client
 }
 
+// Do implements the HTTPClient interface for RealHTTPClient.
+func (c RealHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	return c.Client.Do(req)
+}
+
 // SetTLSClientConfig sets the TLS client configuration for the HTTP client.
-func (c *RealHTTPClient) SetTLSClientConfig(config *tls.Config) {
+func (c RealHTTPClient) SetTLSClientConfig(config *tls.Config) {
 	c.Transport.(*http.Transport).TLSClientConfig = config
 }
