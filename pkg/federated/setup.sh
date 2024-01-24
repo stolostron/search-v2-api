@@ -5,9 +5,16 @@
 
 # TODO: In the future this should be further automated by either Search or Global Hub operator.
 
-echo "Configuring Global Search access to the Managed Hub clusters."
+echo "Configuring Global Search on the following cluster."
 oc cluster-info | grep "Kubernetes"
-read -p "Are you sure you want to continue? (y/n) " -r $REPLY
+echo ""
+echo "This script will execute the following actions:"
+echo "  1. Enable the Managed Service Account add-on in the MulticlusterEngine CR."
+echo "  2. Create a service account and secret to access resources managed from the Global Hub cluster."
+echo "  3. Create a route and managed service acount on each managed hub to access resources managed by each managed hub."
+echo "  4. Configure the Console to use the Global Search API."
+echo ""
+read -p "Do you want to continue? (y/n) " -r $REPLY
 echo ""
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
   echo "Setup cancelled. Exiting."
@@ -20,7 +27,6 @@ if [ $? -ne 0 ]; then
   echo "ERROR: MulticlusterGlobalHub is not installed in the target cluster. Exiting."
   exit 1
 fi
-
 
 # Enable the Managed Service Account addon in the MultiClusterEngine CR.
 oc get managedserviceaccount > /dev/null 2>&1
@@ -43,6 +49,15 @@ else
     fi
   done
 fi
+
+# Configure the Console to use the Global Search API.
+echo "Configuring the Console to use the Global Search API..."
+# TODO: Review these commands after pending console changes are merged. https://github.com/stolostron/console/pull/3211
+oc patch configmap console-config -n open-cluster-management -p '{"data": {"featureGlobalSearch":"true"}}'
+oc patch configmap console-config -n open-cluster-management -p '{"data": {"globalSearchAPIEndpoint":"/federated"}}'
+
+# Enable federated search feature on search-api.
+oc patch search search-v2-operator -n open-cluster-management --type='merge' -p '{"spec":{"deployments":{"queryapi":{"envVar":[{"name":"FEATURE_FEDERATED_SEARCH", "value":"true"}]}}}}'
 
 # Create local config resources for Global Search.
 echo "Creating local config resources for Global Search..."

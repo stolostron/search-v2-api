@@ -45,7 +45,16 @@ func StartAndListen() {
 		klog.Infof("GraphQL playground is now running on https://localhost:%d/playground", port)
 	}
 
-	router.HandleFunc("/federated", federated.HandleFederatedRequest).Methods("POST")
+	if config.Cfg.Features.FederatedSearch {
+		klog.Infof("Federated search is enabled.")
+		fedSubrouter := router.PathPrefix("/federated").Subrouter()
+		fedSubrouter.Use(rbac.AuthenticateUser)
+		// fedSubrouter.Use(metrics.PrometheusMiddleware)  // FUTURE: Add prometheus metric for federated requests.
+		// fedSubrouter.Use(federated.GetConfig)           // TODO: Add a health check for federated services.
+		fedSubrouter.HandleFunc("", federated.HandleFederatedRequest).Methods("POST")
+	} else {
+		klog.Infof("Federated search is disabled. To enable set env variable FEATURES_FEDERATED_SEARCH=true")
+	}
 
 	// Add authentication middleware to the /searchapi (ContextPath) subroute.
 	apiSubrouter := router.PathPrefix(config.Cfg.ContextPath).Subrouter()

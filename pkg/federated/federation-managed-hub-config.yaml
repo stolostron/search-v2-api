@@ -20,7 +20,7 @@ spec:
         subjects:
         - kind: ServiceAccount
           name: search-global
-          namespace: open-cluster-management-managed-serviceaccount
+          namespace: open-cluster-management-agent-addon
     - apiVersion: route.openshift.io/v1
       kind: Route
       metadata:
@@ -37,6 +37,13 @@ spec:
           kind: Service
           name: search-search-api
           weight: 100
+---
+apiVersion: addon.open-cluster-management.io/v1alpha1
+kind: ManagedClusterAddOn
+metadata:
+  name: managed-serviceaccount
+spec:
+  installNamespace: open-cluster-management-agent-addon
 ---
 apiVersion: authentication.open-cluster-management.io/v1beta1
 kind: ManagedServiceAccount

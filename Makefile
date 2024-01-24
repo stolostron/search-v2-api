@@ -90,8 +90,10 @@ else ifeq (${QUERY}, search)
 	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { count items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
 else ifeq (${QUERY}, searchCount)
 	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { count } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
+else ifeq (${QUERY}, searchAlias)
+	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { searchResult: search(input: $$input) { count items __typename } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
 else ifeq (${QUERY}, searchCompleteAlias)
-	QUERY_STR='{"query":"query SearchComplete { myitems: searchComplete(property: \"kind\") }","variables":{} }'
+	QUERY_STR='{"query":"query SearchComplete { aliasedResult: searchComplete(property: \"kind\") }","variables":{} }'
 
 endif
 
