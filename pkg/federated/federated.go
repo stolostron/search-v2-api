@@ -30,6 +30,8 @@ type FederatedRequest struct {
 
 var getFedConfig = getFederationConfig
 
+var httpClientGetter = GetHttpClient
+
 func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 	klog.Info("Resolving federated search query.")
 
@@ -56,7 +58,7 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 		go func(remoteService RemoteSearchService) {
 			defer wg.Done()
 			// Get the http client from pool.
-			client := GetHttpClient(remoteService)
+			client := httpClientGetter(remoteService)
 			fedRequest.getFederatedResponse(remoteService, receivedBody, client)
 			httpClientPool.Put(client) // Put the client back into the pool for reuse
 		}(remoteService)

@@ -62,7 +62,7 @@ func (d *Data) mergeSearchResults(hubName string, results []SearchResult) {
 
 		// Items
 		for _, item := range result.Items {
-			item["managedhub"] = hubName // TODO: Finalize prop name. Currrently matching console.
+			item["managedHub"] = hubName
 			d.Search[index].Items = append(d.Search[index].Items, item)
 		}
 		// TODO: How to handle LIMIT ?
