@@ -32,8 +32,8 @@ type Config struct {
 	DBPort              int
 	DBUser              string
 	HttpPool            httpClientPool // Http client pool transport settings for federated connections.
-	Features            featureFlags // Enable optional features.
-	GlobalHubName       string // Identifies the global hub cluster, similar to local-cluster
+	Features            featureFlags   // Enable optional features.
+	GlobalHubName       string         // Identifies the global hub cluster, similar to local-cluster
 	HttpPort            int
 	PlaygroundMode      bool // Enable the GraphQL Playground client.
 	QueryLimit          int  // The default LIMIT to use on queries. Client can override.
@@ -79,7 +79,7 @@ func new() *Config {
 		DBPort:              getEnvAsInt("DB_PORT", 5432),
 		DBUser:              getEnv("DB_USER", ""),
 		Features: featureFlags{
-			FederatedSearch: getEnvAsBool("FEATURE_FEDERATED_SEARCH", false),
+			FederatedSearch: getEnvAsBool("FEATURE_FEDERATED_SEARCH", false), // In Dev mode default to true.
 		},
 		HttpPool: httpClientPool{ // Default values for federated client pool.
 			MaxConnsPerHost:       getEnvAsInt("MAX_CONNS_PER_HOST", 2),

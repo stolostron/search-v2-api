@@ -7,4 +7,4 @@ MANAGED_HUBS=($(oc get managedcluster -o json | jq -r '.items[] | select(.status
 for MANAGED_HUB in "${MANAGED_HUBS[@]}"; do
   oc delete -n ${MANAGED_HUB} -f ./federation-managed-hub-config.yaml
 done 
-oc delete -f ./federation-config.yaml
+

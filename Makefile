@@ -23,7 +23,7 @@ gqlgen: ## Generate graphql model. See: https://gqlgen.com/
 
 .PHONY: run
 run: ## Run the service locally.
-	PLAYGROUND_MODE=true go run main.go --v=4
+	PLAYGROUND_MODE=true go run -tags development main.go --v=4
 
 .PHONY: lint
 lint: ## Run lint and gosec tools.

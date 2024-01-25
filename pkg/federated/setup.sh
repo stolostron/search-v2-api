@@ -11,8 +11,7 @@ echo ""
 echo "This script will execute the following actions:"
 echo "  1. Enable federated search feature in console and search-api."
 echo "  2. Enable the Managed Service Account add-on in the MulticlusterEngine CR."
-echo "  3. Create a service account and secret to access resources managed from the Global Hub cluster."
-echo "  4. Create a route and managed service acount on each managed hub to access resources managed by each managed hub."
+echo "  3. Create a route and managed service acount on each managed hub to access resources managed by each managed hub."
 echo ""
 read -p "Do you want to continue? (y/n) " -r $REPLY
 echo ""
@@ -57,10 +56,6 @@ else
   done
 fi
 
-# Create local config resources for Global Search.
-echo "Creating local config resources for Global Search..."
-oc apply -f ./federation-config.yaml
-
 # Create config resources for each Managed Hub.
 echo "Creating config resources for each Managed Hub..."
 MANAGED_HUBS=($(oc get managedcluster -o json | jq -r '.items[] | select(.status.clusterClaims[] | .name == "hub.open-cluster-management.io" and .value != "NotInstalled") | .metadata.name'))
@@ -69,7 +64,7 @@ if [ ${#MANAGED_HUBS[@]} -eq 0 ]; then
   exit 1
 fi
 for MANAGED_HUB in "${MANAGED_HUBS[@]}"; do
-  # TODO: Validate that the Managed Hub is running ACM 2.9.0 or later.
+  # FUTURE: Validate that the Managed Hub is running ACM 2.9.0 or later.
   # ACM_VERSION=$(oc get mch -A -o custom-columns=VERSION:.status.currentVersion --no-headers)
   echo "Configuring managed hub: ${MANAGED_HUB}"
   oc apply -f ./federation-managed-hub-config.yaml -n "${MANAGED_HUB}"

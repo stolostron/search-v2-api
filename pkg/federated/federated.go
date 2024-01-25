@@ -34,7 +34,7 @@ var httpClientGetter = GetHttpClient
 
 func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 	klog.Info("Resolving federated search query.")
-
+	ctx := r.Context()
 	receivedBody, err := io.ReadAll(r.Body)
 	if err != nil {
 		klog.Errorf("Error reading request body: %s", err)
@@ -49,7 +49,7 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	fedConfig := getFedConfig()
+	fedConfig := getFedConfig(ctx, r)
 	klog.Infof("Sending federated query to %d remote services.", len(fedConfig))
 
 	wg := sync.WaitGroup{}

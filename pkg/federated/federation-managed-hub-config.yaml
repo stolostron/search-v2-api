@@ -12,15 +12,15 @@ spec:
       metadata:
         labels:
           app: ocm-search
-        name: search-global-auto
+        name: search-global-binding
       roleRef:
         apiGroup: rbac.authorization.k8s.io
         kind: ClusterRole
         name: global-search-user
-        subjects:
-        - kind: ServiceAccount
-          name: search-global
-          namespace: open-cluster-management-agent-addon
+      subjects:
+      - kind: ServiceAccount
+        name: search-global
+        namespace: open-cluster-management-agent-addon
     - apiVersion: route.openshift.io/v1
       kind: Route
       metadata:
@@ -42,6 +42,8 @@ apiVersion: addon.open-cluster-management.io/v1alpha1
 kind: ManagedClusterAddOn
 metadata:
   name: managed-serviceaccount
+  labels:
+    app: ocm-search
 spec:
   installNamespace: open-cluster-management-agent-addon
 ---
