@@ -17,9 +17,6 @@ func (d *Data) mergeSearchSchema(schemaProps []string) {
 			d.searchSchemaValues[prop] = struct{}{}
 			d.SearchSchema.AllProperties = append(d.SearchSchema.AllProperties, prop)
 		}
-		// else {
-		// 	klog.V(9).Infof("SearchSchema - Skipping duplicate value: %s", prop)
-		// }
 	}
 }
 
@@ -38,13 +35,15 @@ func (d *Data) mergeSearchComplete(s []string) {
 			d.searchCompleteValues[prop] = struct{}{}
 			d.SearchComplete = append(d.SearchComplete, prop)
 		}
-		// else {
-		// 	klog.V(9).Infof("SearchComplete - Skipping duplicate value: %s", prop)
-		// }
 	}
 
 	// TODO: How to handle LIMIT ?
+	// 		We would need to parse the incoming graphql query to determine the limit.
+	//      This can be done but adds significant complexity.
+
 	// TODO: How to handle SORT ?
+	//      We would need to wait until all results are in before sorting, which will
+	//      impact response time.
 }
 
 func (d *Data) mergeSearchResults(hubName string, results []SearchResult) {

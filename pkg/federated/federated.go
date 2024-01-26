@@ -16,20 +16,9 @@ import (
 type FederatedRequest struct {
 	InRequestBody []byte
 	Response      GraphQLPayload
-	// FUTURE: The fields below are for future use.
-	// OutRequests   map[string]OutboundRequestLog
 }
 
-// FUTURE: Keep track of outbound requests.
-// type OutboundRequestLog struct {
-// 	RemoteService string
-// 	SentTime      time.Time
-// 	ReceivedTime  time.Time
-// 	ResponseBody  []byte
-// }
-
 var getFedConfig = getFederationConfig
-
 var httpClientGetter = GetHttpClient
 
 func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
