@@ -7,4 +7,10 @@ MANAGED_HUBS=($(oc get managedcluster -o json | jq -r '.items[] | select(.status
 for MANAGED_HUB in "${MANAGED_HUBS[@]}"; do
   oc delete -n ${MANAGED_HUB} -f ./federation-managed-hub-config.yaml
 done 
-oc delete -f ./federation-config.yaml
+
+# Disable global search feature in the console.
+oc patch configmap console-mce-config -n multicluster-engine -p '{"data": {"globalSearchFeatureFlag": "disabled"}}'
+oc patch configmap console-config -n open-cluster-management -p '{"data": {"globalSearchFeatureFlag": "disabled"}}'
+
+# Disable federated search feature in the search-api.
+oc patch search search-v2-operator -n open-cluster-management --type='merge' -p '{"spec":{"deployments":{"queryapi":{"envVar":[{"name":"FEATURE_FEDERATED_SEARCH", "value":"false"}]}}}}'

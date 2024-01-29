@@ -16,25 +16,14 @@ import (
 type FederatedRequest struct {
 	InRequestBody []byte
 	Response      GraphQLPayload
-	// FUTURE: The fields below are for future use.
-	// OutRequests   map[string]OutboundRequestLog
 }
 
-// FUTURE: Keep track of outbound requests.
-// type OutboundRequestLog struct {
-// 	RemoteService string
-// 	SentTime      time.Time
-// 	ReceivedTime  time.Time
-// 	ResponseBody  []byte
-// }
-
 var getFedConfig = getFederationConfig
-
 var httpClientGetter = GetHttpClient
 
 func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 	klog.Info("Resolving federated search query.")
-
+	ctx := r.Context()
 	receivedBody, err := io.ReadAll(r.Body)
 	if err != nil {
 		klog.Errorf("Error reading request body: %s", err)
@@ -49,7 +38,7 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	fedConfig := getFedConfig()
+	fedConfig := getFedConfig(ctx, r)
 	klog.Infof("Sending federated query to %d remote services.", len(fedConfig))
 
 	wg := sync.WaitGroup{}

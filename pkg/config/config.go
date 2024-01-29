@@ -32,6 +32,7 @@ type Config struct {
 	DBPort              int
 	DBUser              string
 	HttpPool            httpClientPool // Http client pool transport settings for federated connections.
+	Features            featureFlags   // Enable optional features.
 	GlobalHubName       string         // Identifies the global hub cluster, similar to local-cluster
 	HttpPort            int
 	PlaygroundMode      bool // Enable the GraphQL Playground client.
@@ -51,6 +52,10 @@ type httpClientPool struct {
 	MaxIdleConnTimeout    int
 	ResponseHeaderTimeout int
 	RequestTimeout        int // Timeout for outbound federated requests.
+}
+
+type featureFlags struct {
+	FederatedSearch bool
 }
 
 func new() *Config {
@@ -73,6 +78,9 @@ func new() *Config {
 		DBPass:              getEnv("DB_PASS", ""),
 		DBPort:              getEnvAsInt("DB_PORT", 5432),
 		DBUser:              getEnv("DB_USER", ""),
+		Features: featureFlags{
+			FederatedSearch: getEnvAsBool("FEATURE_FEDERATED_SEARCH", false), // In Dev mode default to true.
+		},
 		HttpPool: httpClientPool{ // Default values for federated client pool.
 			MaxConnsPerHost:       getEnvAsInt("MAX_CONNS_PER_HOST", 2),
 			MaxIdleConns:          getEnvAsInt("MAX_IDLE_CONNS", 10),
