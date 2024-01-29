@@ -57,7 +57,8 @@ fi
 echo -e "\nEnabling the global search feature in the console and search-api...\n"
 # Enable global search feature in the console.
 oc patch configmap console-mce-config -n multicluster-engine -p '{"data": {"globalSearchFeatureFlag": "enabled"}}'
-oc patch configmap console-mce-config -n multicluster-engine -p '{"data": {"searchApiEndpoint": "/federated"}}'
+oc patch configmap console-config -n open-cluster-management -p '{"data": {"globalSearchFeatureFlag": "enabled"}}'
+
 # Enable federated search feature in the search-api.
 oc patch search search-v2-operator -n open-cluster-management --type='merge' -p '{"spec":{"deployments":{"queryapi":{"envVar":[{"name":"FEATURE_FEDERATED_SEARCH", "value":"true"}]}}}}'
 
@@ -68,11 +69,12 @@ if [ $? -eq 0 ]; then
   echo "Managed Service Account add-on is enabled."
 else
   oc patch multiclusterengine multiclusterengine --type='json' -p='[{"op": "add", "path": "/spec/overrides/components", "value": [{"name": "managedserviceaccount", "enabled": true}]}]'
-  echo "Enabled Managed Service Account add-on in MulticlusterEngine. Waiting up to 60 seconds for the addon to be installed..."
+  echo "Enabled the Managed Service Account add-on in MulticlusterEngine."
   
   # Wait for the Managed Service Account addon to be installed.
+  echo -n "Waiting up to 30 seconds for the add-on to be installed."
   i=0
-  while [ $i -lt 60 ]; do
+  while [ $i -lt 30 ]; do
     echo -n "."
     sleep 1
     i=$((i+1))

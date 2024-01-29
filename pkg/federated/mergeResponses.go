@@ -37,13 +37,13 @@ func (d *Data) mergeSearchComplete(s []string) {
 		}
 	}
 
-	// TODO: How to handle LIMIT ?
-	// 		We would need to parse the incoming graphql query to determine the limit.
-	//      This can be done but adds significant complexity.
-
-	// TODO: How to handle SORT ?
-	//      We would need to wait until all results are in before sorting, which will
-	//      impact response time.
+	// TODO: Handle SORT and LIMIT for SearchComplete.
+	// LIMIT
+	//   We would need to parse the incoming graphql query to determine the limit.
+	//   This can be done but adds significant complexity.
+	// SORT
+	//   SORT function would need to wait until all results are in before sorting,
+	//   which will impact response time.
 }
 
 func (d *Data) mergeSearchResults(hubName string, results []SearchResult) {
@@ -64,12 +64,13 @@ func (d *Data) mergeSearchResults(hubName string, results []SearchResult) {
 			item["managedHub"] = hubName
 			d.Search[index].Items = append(d.Search[index].Items, item)
 		}
-		// TODO: How to handle LIMIT ?
-		// TODO: How to handle SORT ?
+		// TODO: Handle SORT and LIMIT for Items.
 
 		// Related
-		// TODO: Implement related.
-		// d.Search[index].Related = append(d.Search[index].Related, result["related"].([]interface{})...)
+		if d.Search[index].Related == nil {
+			d.Search[index].Related = make([]SearchRelatedResult, 0)
+		}
+		d.mergeRelatedResults(d.Search[index].Related, result.Related)
 	}
 }
 
@@ -83,4 +84,26 @@ func (d *Data) mergeMessages(msgs []string) {
 	}
 
 	d.Messages = append(d.Messages, msgs...)
+}
+
+func (d *Data) mergeRelatedResults(mergedItems, newItems []SearchRelatedResult) {
+	klog.Info("Merge related results to federated response.")
+	d.writeLock.Lock()
+	defer d.writeLock.Unlock()
+
+	// Related results are grouped by kind.
+	for _, newItem := range newItems {
+		kind := newItem.Kind
+		for _, mergedItem := range mergedItems {
+			if mergedItem.Kind == kind {
+				// Merge the new items.
+				mergedItem.Count = mergedItem.Count + newItem.Count
+				for _, item := range newItem.Items {
+					item["managedHub"] = "TODO_ADD_HUB_NAME_HERE" // TODO: Add hub name to related items.
+					mergedItem.Items = append(mergedItem.Items, item)
+				}
+				return
+			}
+		}
+	}
 }
