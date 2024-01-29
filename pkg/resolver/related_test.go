@@ -258,8 +258,8 @@ func Test_SearchResolver_Relationships_NoUserData(t *testing.T) {
 	resolver.query = "mock Query"
 
 	// Execute the function - should return a relatedResults object
-	resolver.Related(context.Background())
-
+	_, err := resolver.Related(context.Background())
+	assert.Nil(t, err)
 	// Verify expected and result kinds
 	assert.Equal(t, resolver.query, "", "query should be empty as user data is not provided")
 

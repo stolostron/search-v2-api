@@ -68,8 +68,10 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 func (s *SearchResult) Count() (int, error) {
 	klog.V(2).Info("Resolving SearchResult:Count()")
 	err := s.buildSearchQuery(s.context, true, false)
-
-	return s.resolveCount(), err
+	if err != nil {
+		return 0, err
+	}
+	return s.resolveCount()
 }
 
 func (s *SearchResult) Items() ([]map[string]interface{}, error) {
@@ -81,10 +83,8 @@ func (s *SearchResult) Items() ([]map[string]interface{}, error) {
 		return nil, err
 	}
 	r, e := s.resolveItems()
-	if err != nil {
-		klog.Error("Error resolving items.", e)
-	}
-	return r, err
+	s.checkErrorBuildingQuery(e, "Error resolving items.")
+	return r, e
 }
 
 func (s *SearchResult) Related(ctx context.Context) ([]SearchRelatedResult, error) {
@@ -221,7 +221,7 @@ func (s *SearchResult) checkErrorBuildingQuery(err error, logMessage string) {
 	s.params = nil
 }
 
-func (s *SearchResult) resolveCount() int {
+func (s *SearchResult) resolveCount() (int, error) {
 	rows := s.pool.QueryRow(context.TODO(), s.query, s.params...)
 
 	var count int
@@ -229,7 +229,7 @@ func (s *SearchResult) resolveCount() int {
 	if err != nil {
 		klog.Errorf("Error resolving count. Error: %s  Query: %s", err.Error(), s.query)
 	}
-	return count
+	return count, err
 }
 
 func (s *SearchResult) resolveUids() error {

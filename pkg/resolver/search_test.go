@@ -4,6 +4,7 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/doug-martin/goqu/v9"
@@ -500,7 +501,8 @@ func Test_SearchResolver_Uids(t *testing.T) {
 	).Return(mockRows, nil)
 
 	// Execute the function
-	resolver.Uids()
+	err := resolver.Uids()
+	assert.Nil(t, err)
 
 	// Verify returned items.
 	if len(resolver.uids) != len(mockRows.mockData) {
@@ -702,7 +704,8 @@ func Test_SearchResolver_UidsAllAccess(t *testing.T) {
 	).Return(mockRows, nil)
 
 	// Execute the function
-	resolver.Uids()
+	err := resolver.Uids()
+	assert.Nil(t, err)
 
 	// Verify returned items.
 	if len(resolver.uids) != len(mockRows.mockData) {
@@ -759,8 +762,10 @@ func Test_buildSearchQuery_EmptyQueryWithoutRbac(t *testing.T) {
 	// This should become empty after function execution
 	resolver.query = "mock Query"
 	// execute function
-	resolver.Count()
-
+	_, err := resolver.Count()
+	if !strings.Contains(err.Error(), "RBAC clause is required!") {
+		t.Errorf("Expected error %s. but got %s", "RBAC clause is required! None found for search query", err.Error())
+	}
 	assert.Equal(t, resolver.query, "", "query should be empty as there is no rbac clause")
 }
 
@@ -779,8 +784,10 @@ func Test_buildSearchQuery_EmptyQueryNoFilter(t *testing.T) {
 	// This should become empty after function execution
 	resolver.query = "mock Query"
 	// execute function
-	resolver.Count()
-
+	_, err := resolver.Count()
+	if !strings.Contains(err.Error(), "query input must contain a filter or keyword") {
+		t.Errorf("Expected error %s. but got %s", "query input must contain a filter or keyword", err.Error())
+	}
 	assert.Equal(t, resolver.query, "", "query should be empty as search filter is not provided")
 }
 
@@ -804,7 +811,8 @@ func Test_SearchResolver_SearchUserAllAccess(t *testing.T) {
 	).Return(mockRows, nil)
 
 	// Execute the function
-	resolver.Uids()
+	err := resolver.Uids()
+	assert.Nil(t, err)
 
 	// Verify returned items.
 	if len(resolver.uids) != len(mockRows.mockData) {
@@ -819,6 +827,54 @@ func Test_SearchResolver_SearchUserAllAccess(t *testing.T) {
 
 		if *item != mockRow["uid"].(string) {
 			t.Errorf("Value of key [uid] does not match for item [%d].\nExpected: %s\nGot: %s", i, expectedRow["_uid"], *item)
+		}
+	}
+}
+
+func Test_SearchResolver_Items_WrongLabelFormat(t *testing.T) {
+	// Create a SearchResolver instance with a mock connection pool.
+	cluster := "local-cluster"
+	val1 := "Template"
+
+	val2 := "samples.operator.openshift.io/managed"
+	limit := 10
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}, {Property: "cluster", Values: []*string{&cluster}}, {Property: "label", Values: []*string{&val2}}}, Limit: &limit}
+	ud := rbac.UserData{CsResources: []rbac.Resource{}}
+	propTypesMock := map[string]string{"cluster": "string", "kind": "string", "label": "object"}
+
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, ud, propTypesMock)
+
+	// Mock the database queries.
+	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", limit)
+
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'kind'?('Template') AND ("cluster" IN ('local-cluster')) AND "data"->'label' @> '{"samples.operator.openshift.io/managed":"true"}' AND ("cluster" = ANY ('{}'))) LIMIT 10`),
+		gomock.Eq([]interface{}{}),
+	).Return(mockRows, nil)
+
+	// Execute the function
+	result, err := resolver.Items()
+	assert.Equal(t, "incorrect label format, label filters must have the format key=value", err.Error())
+	// Verify returned items.
+	if len(result) != len(mockRows.mockData) {
+		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result))
+	}
+
+	// Verify properties for each returned item.
+	for i, item := range result {
+		mockRow := mockRows.mockData[i]
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow["_uid"] = mockRow["uid"]
+		expectedRow["cluster"] = mockRow["cluster"]
+
+		if len(item) != len(expectedRow) {
+			t.Errorf("Number of properties don't match for item[%d]. Expected: %d Got: %d", i, len(expectedRow), len(item))
+		}
+
+		for key, val := range item {
+			if val != expectedRow[key] {
+				t.Errorf("Value of key [%s] does not match for item [%d].\nExpected: %s\nGot: %s", key, i, expectedRow[key], val)
+			}
 		}
 	}
 }
