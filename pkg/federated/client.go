@@ -41,15 +41,15 @@ func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
 // godoc: https://cs.opensource.google/go/go/+/go1.21.5:src/net/http/transport.go;l=95 and
 // https://stuartleeks.com/posts/connection-re-use-in-golang-with-http-client/
 var tr = &http.Transport{
-	MaxIdleConns:          config.Cfg.HttpPool.MaxIdleConns,
-	IdleConnTimeout:       time.Duration(config.Cfg.HttpPool.MaxIdleConnTimeout) * time.Millisecond,
-	ResponseHeaderTimeout: time.Duration(config.Cfg.HttpPool.ResponseHeaderTimeout) * time.Millisecond,
+	MaxIdleConns:          config.Cfg.Federation.HttpPool.MaxIdleConns,
+	IdleConnTimeout:       time.Duration(config.Cfg.Federation.HttpPool.MaxIdleConnTimeout) * time.Millisecond,
+	ResponseHeaderTimeout: time.Duration(config.Cfg.Federation.HttpPool.ResponseHeaderTimeout) * time.Millisecond,
 	DisableKeepAlives:     false,
 	TLSClientConfig: &tls.Config{
 		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
 	},
-	MaxConnsPerHost:     config.Cfg.HttpPool.MaxConnsPerHost,
-	MaxIdleConnsPerHost: config.Cfg.HttpPool.MaxIdleConnPerHost,
+	MaxConnsPerHost:     config.Cfg.Federation.HttpPool.MaxConnsPerHost,
+	MaxIdleConnsPerHost: config.Cfg.Federation.HttpPool.MaxIdleConnPerHost,
 }
 
 var httpClientPool = sync.Pool{
@@ -58,7 +58,7 @@ var httpClientPool = sync.Pool{
 		return &RealHTTPClient{
 			&http.Client{
 				Transport: tr,
-				Timeout:   time.Duration(config.Cfg.HttpPool.RequestTimeout) * time.Millisecond,
+				Timeout:   time.Duration(config.Cfg.Federation.HttpPool.RequestTimeout) * time.Millisecond,
 			},
 		}
 	},

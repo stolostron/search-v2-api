@@ -3,8 +3,9 @@
 Use federated search to query and combine results from multiple Red Hat Advanced Cluster Management.
 
 ## Pre-requisites  
-1. Multicluster Global Hub Operator 1.0 or later.  
-2. Red Hat Advanced Cluster Management 2.10 or later.  
+1. Multicluster Global Hub Operator 1.0.0 or later.  
+2. Red Hat Advanced Cluster Management 2.10.0 or later.  
+    - Managed Hub clusters mu have RHACM 2.9.0 or later
 
 ## Setup
 Execute the script at `./setup.sh` to configure Global Search on the Global Hub cluster.  
@@ -15,6 +16,7 @@ The script automates the following steps:
   3. Create a route and managed service acount on each managed hub to access resources managed by each managed hub.
   4. Configure the Console to use the Global Search API.
 
-> NOTE:    
+> NOTES:
+> Must run using an account with role `open-cluster-management:admin-aggregate` or higher.
 > You must re-run this script when a Managed Hub is added.    
 > This setup is required for Development Preview, it will be fully automated for GA.

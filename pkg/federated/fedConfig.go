@@ -35,7 +35,8 @@ var cachedFedConfig = fedConfigCache{
 }
 
 func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSearchService {
-	if cachedFedConfig.lastUpdated.IsZero() || cachedFedConfig.lastUpdated.Add(60*time.Second).Before(time.Now()) {
+	cacheDuration := time.Duration(config.Cfg.Federation.ConfigCacheTTL) * time.Millisecond
+	if cachedFedConfig.lastUpdated.IsZero() || cachedFedConfig.lastUpdated.Add(cacheDuration).Before(time.Now()) {
 		klog.Infof("Refreshing federation config.")
 		cachedFedConfig.fedConfig = getFederationConfigFromSecret(ctx)
 		cachedFedConfig.lastUpdated = time.Now()
@@ -45,7 +46,7 @@ func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSea
 
 	// Add the global-hub (self) first.
 	local := RemoteSearchService{
-		Name:  config.Cfg.GlobalHubName,
+		Name:  config.Cfg.Federation.GlobalHubName,
 		URL:   "https://localhost:4010/searchapi/graphql",
 		Token: strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
 	}

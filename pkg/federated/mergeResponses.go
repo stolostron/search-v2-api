@@ -70,7 +70,7 @@ func (d *Data) mergeSearchResults(hubName string, results []SearchResult) {
 		if d.Search[index].Related == nil {
 			d.Search[index].Related = make([]SearchRelatedResult, 0)
 		}
-		d.mergeRelatedResults(d.Search[index].Related, result.Related)
+		// d.mergeRelatedResults(d.Search[index].Related, result.Related)
 	}
 }
 

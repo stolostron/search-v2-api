@@ -28,12 +28,12 @@ echo -e "Validating prerequisites...\n"
 REQUIRED_RHACM_VERSION="2.10.0"
 oc get multiclusterhub -o yaml > /dev/null 2>&1
 if [ $? -ne 0 ]; then
-  echo "❌ ERROR: Red Hat Advanced Cluster Management (MulticlusterHub) is not installed in the target cluster. Exiting."
+  echo "❌ ERROR: Red Hat Advanced Cluster Management (MulticlusterHub) is not installed in the target cluster, or user doesn't have the required permissions. Exiting."
   exit 1
 else
   rhacm_version=$(oc get multiclusterhub -A -o yaml | yq '.items[0].status.currentVersion')
   if ! printf "${REQUIRED_RHACM_VERSION}\n%s\n" $rhacm_version | sort -V -C; then
-    echo "❌ ERROR: Red Hat Advanced Cluster Management (MulticlusterHub) version ${rhacm_version} found, but ${REQUIRED_RHACM_VERSION} is required. Exiting."
+    echo "❌ ERROR: Red Hat Advanced Cluster Management (MulticlusterHub) ${REQUIRED_RHACM_VERSION} or later is required. Found version ${rhacm_version}. Exiting."
     exit 1
   fi
   echo "✅ Red Hat Advanced Cluster Management (MulticlusterHub) version ${rhacm_version} found."
@@ -43,12 +43,12 @@ fi
 REQUIRED_MCGH_VERSION="1.0.1"
 oc get multiclusterglobalhub -o yaml > /dev/null 2>&1
 if [ $? -ne 0 ]; then
-  echo "❌ ERROR: Multicluster Global Hub is not installed in the target cluster. Exiting."
+  echo "❌ ERROR: Multicluster Global Hub is not installed in the target cluster, or user doesn't have the required permissions. Exiting."
   exit 1
 else
   mcgh_version=$(oc get multiclusterglobalhub -A -o yaml | yq '.items[0].status.currentVersion')
   if ! printf "${REQUIRED_MCGH_VERSION}\n%s\n" $rhacm_version | sort -V -C; then
-    echo "❌ ERROR: Multicluster Global Hub version ${rhacm_version} found, but ${REQUIRED_MCGH_VERSION} is required. Exiting."
+    echo "❌ ERROR: Multicluster Global Hub ${REQUIRED_MCGH_VERSION} or later is required. Found version ${rhacm_version}. Exiting."
     exit 1
   fi
   echo "✅ Multicluster Global Hub version ${mcgh_version} found."

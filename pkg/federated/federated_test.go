@@ -2,6 +2,7 @@ package federated
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -39,7 +40,7 @@ func TestHandleFederatedRequestLogReadBodyErr(t *testing.T) {
 
 	defer func() { getFedConfig = realGetFederationConfig }()
 	// Mock getFederationConfig function
-	getFedConfig = func() []RemoteSearchService {
+	getFedConfig = func(ctx context.Context, request *http.Request) []RemoteSearchService {
 		// Replace with your mock data
 		return []RemoteSearchService{
 			{
@@ -136,7 +137,7 @@ func TestHandleFederatedRequestWithConfig(t *testing.T) {
 
 	defer func() { getFedConfig = realGetFederationConfig }()
 	// Mock getFederationConfig function
-	getFedConfig = func() []RemoteSearchService {
+	getFedConfig = func(ctx context.Context, request *http.Request) []RemoteSearchService {
 		// Replace with mock data
 		return []RemoteSearchService{
 			{
