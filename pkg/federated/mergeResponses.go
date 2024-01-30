@@ -86,24 +86,24 @@ func (d *Data) mergeMessages(msgs []string) {
 	d.Messages = append(d.Messages, msgs...)
 }
 
-func (d *Data) mergeRelatedResults(mergedItems, newItems []SearchRelatedResult) {
-	klog.Info("Merge related results to federated response.")
-	d.writeLock.Lock()
-	defer d.writeLock.Unlock()
+// func (d *Data) mergeRelatedResults(mergedItems, newItems []SearchRelatedResult) {
+// 	klog.Info("Merge related results to federated response.")
+// 	d.writeLock.Lock()
+// 	defer d.writeLock.Unlock()
 
-	// Related results are grouped by kind.
-	for _, newItem := range newItems {
-		kind := newItem.Kind
-		for _, mergedItem := range mergedItems {
-			if mergedItem.Kind == kind {
-				// Merge the new items.
-				mergedItem.Count = mergedItem.Count + newItem.Count
-				for _, item := range newItem.Items {
-					item["managedHub"] = "TODO_ADD_HUB_NAME_HERE" // TODO: Add hub name to related items.
-					mergedItem.Items = append(mergedItem.Items, item)
-				}
-				return
-			}
-		}
-	}
-}
+// 	// Related results are grouped by kind.
+// 	for _, newItem := range newItems {
+// 		kind := newItem.Kind
+// 		for _, mergedItem := range mergedItems {
+// 			if mergedItem.Kind == kind {
+// 				// Merge the new items.
+// 				mergedItem.Count = mergedItem.Count + newItem.Count
+// 				for _, item := range newItem.Items {
+// 					item["managedHub"] = "TODO_ADD_HUB_NAME_HERE" // TODO: Add hub name to related items.
+// 					mergedItem.Items = append(mergedItem.Items, item)
+// 				}
+// 				return
+// 			}
+// 		}
+// 	}
+// }

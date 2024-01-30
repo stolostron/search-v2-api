@@ -22,13 +22,18 @@ var getFedConfig = getFederationConfig
 var httpClientGetter = GetHttpClient
 
 func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
-	klog.Info("Resolving federated search query.")
+	klog.Info("Received federated search request.")
 	ctx := r.Context()
 	receivedBody, err := io.ReadAll(r.Body)
 	if err != nil {
 		klog.Errorf("Error reading request body: %s", err)
+		sendResponse(w, &GraphQLPayload{
+			Data:   Data{},
+			Errors: []string{fmt.Errorf("error reading request body: %s", err).Error()},
+		})
+		return
 	}
-	klog.Infof("Received federated search query: %s", string(receivedBody))
+	klog.V(3).Infof("Federated search query: %s", string(receivedBody))
 
 	fedRequest := FederatedRequest{
 		InRequestBody: receivedBody,
@@ -39,7 +44,7 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fedConfig := getFedConfig(ctx, r)
-	klog.Infof("Sending federated query to %d remote services.", len(fedConfig))
+	klog.V(2).Infof("Sending federated query to %d remote services.", len(fedConfig))
 
 	wg := sync.WaitGroup{}
 	for _, remoteService := range fedConfig {
@@ -49,19 +54,24 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 			// Get the http client from pool.
 			client := httpClientGetter(remoteService)
 			fedRequest.getFederatedResponse(remoteService, receivedBody, client)
-			httpClientPool.Put(client) // Put the client back into the pool for reuse
+			httpClientPool.Put(client) // Put the client back into the pool for reuse.
 		}(remoteService)
 	}
-	klog.Info("Waiting for all remote services to respond.")
+	klog.V(2).Info("Waiting for all federated requests to respond.")
 	wg.Wait()
 
 	// Send JSON response to client.
+	sendResponse(w, &fedRequest.Response)
+}
+
+// Send GraphQL/JSON response to client.
+func sendResponse(w http.ResponseWriter, response *GraphQLPayload) {
 	w.Header().Set("Content-Type", "application/json")
-	result := json.NewEncoder(w).Encode(&fedRequest.Response)
+	result := json.NewEncoder(w).Encode(response)
 	if result != nil {
 		klog.Errorf("Error encoding federated response: %s", result)
 	}
-	klog.Info("Sent federated response to client.")
+	klog.Info("Sent federated response.")
 }
 
 func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSearchService,
@@ -89,11 +99,11 @@ func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSea
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		klog.Errorf("Error reading federated response body: %s", err)
+		klog.Errorf("Error reading federated response from %s: %s", remoteService.Name, err)
 		fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("error reading federated response body: %s", err).Error())
 		return
 	}
 
-	klog.Infof("Received federated response from %s: \n%s", remoteService.Name, string(body))
+	klog.V(2).Infof("Received response from %s:\n%s", remoteService.Name, string(body))
 	parseResponse(fedRequest, body, remoteService.Name)
 }
