@@ -83,7 +83,9 @@ func (s *SearchResult) Items() ([]map[string]interface{}, error) {
 		return nil, err
 	}
 	r, e := s.resolveItems()
-	s.checkErrorBuildingQuery(e, "Error resolving items.")
+	if e != nil {
+		s.checkErrorBuildingQuery(e, "Error resolving items.")
+	}
 	return r, e
 }
 
