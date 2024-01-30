@@ -1108,7 +1108,7 @@ func (ec *executionContext) _SearchResult_count(ctx context.Context, field graph
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Count(), nil
+		return obj.Count()
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1149,7 +1149,7 @@ func (ec *executionContext) _SearchResult_items(ctx context.Context, field graph
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Items(), nil
+		return obj.Items()
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1190,7 +1190,7 @@ func (ec *executionContext) _SearchResult_related(ctx context.Context, field gra
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Related(ctx), nil
+		return obj.Related(ctx)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -3016,18 +3016,20 @@ func (ec *executionContext) unmarshalInputSearchFilter(ctx context.Context, obj 
 			var err error
 
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("property"))
-			it.Property, err = ec.unmarshalNString2string(ctx, v)
+			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
+			it.Property = data
 		case "values":
 			var err error
 
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("values"))
-			it.Values, err = ec.unmarshalNString2ᚕᚖstring(ctx, v)
+			data, err := ec.unmarshalNString2ᚕᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
+			it.Values = data
 		}
 	}
 
@@ -3052,34 +3054,38 @@ func (ec *executionContext) unmarshalInputSearchInput(ctx context.Context, obj i
 			var err error
 
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("keywords"))
-			it.Keywords, err = ec.unmarshalOString2ᚕᚖstring(ctx, v)
+			data, err := ec.unmarshalOString2ᚕᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
+			it.Keywords = data
 		case "filters":
 			var err error
 
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("filters"))
-			it.Filters, err = ec.unmarshalOSearchFilter2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋgraphᚋmodelᚐSearchFilter(ctx, v)
+			data, err := ec.unmarshalOSearchFilter2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋgraphᚋmodelᚐSearchFilter(ctx, v)
 			if err != nil {
 				return it, err
 			}
+			it.Filters = data
 		case "limit":
 			var err error
 
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("limit"))
-			it.Limit, err = ec.unmarshalOInt2ᚖint(ctx, v)
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
 			if err != nil {
 				return it, err
 			}
+			it.Limit = data
 		case "relatedKinds":
 			var err error
 
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("relatedKinds"))
-			it.RelatedKinds, err = ec.unmarshalOString2ᚕᚖstring(ctx, v)
+			data, err := ec.unmarshalOString2ᚕᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
+			it.RelatedKinds = data
 		}
 	}
 
