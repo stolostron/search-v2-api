@@ -14,7 +14,7 @@ import (
 
 var Cfg = new()
 
-// Define a Config type to hold our config properties.
+// Defines the configurable options for this microservice.
 type Config struct {
 	API_SERVER_URL      string // address for Kubernetes API Server
 	AuthCacheTTL        int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
@@ -31,14 +31,35 @@ type Config struct {
 	DBPass              string
 	DBPort              int
 	DBUser              string
+	Features            featureFlags     // Enable or disable features.
+	Federation          federationConfig // Federated search configuration.
 	HttpPort            int
 	PlaygroundMode      bool // Enable the GraphQL Playground client.
 	QueryLimit          int  // The default LIMIT to use on queries. Client can override.
 	RelationLevel       int  // The number of levels/hops for finding relationships for a particular resource
 	SlowLog             int  // Logs when queries are slower than the specified time duration in ms. Default 300ms
-	// Placeholder for future use.
-	// QueryLoopLimit          int // number of queries handled at a time
-	// RBAC_INACTIVITY_TIMEOUT int
+}
+
+// Define feature flags.
+type featureFlags struct {
+	FederatedSearch bool // Enable federated search.
+}
+
+// Http Client Pool Transport settings for federated client pool.
+type httpClientPool struct {
+	MaxConnsPerHost       int
+	MaxIdleConns          int
+	MaxIdleConnPerHost    int
+	MaxIdleConnTimeout    int
+	ResponseHeaderTimeout int
+	RequestTimeout        int // Timeout for outbound federated requests.
+}
+
+// Federated search configuration options.
+type federationConfig struct {
+	GlobalHubName  string         // Identifies the global hub cluster, similar to local-cluster
+	ConfigCacheTTL int            // Time-to-live (milliseconds) of federation config cache.
+	HttpPool       httpClientPool // Transport settings for federated client pool.
 }
 
 func new() *Config {
@@ -61,16 +82,28 @@ func new() *Config {
 		DBPass:              getEnv("DB_PASS", ""),
 		DBPort:              getEnvAsInt("DB_PORT", 5432),
 		DBUser:              getEnv("DB_USER", ""),
-		HttpPort:            getEnvAsInt("HTTP_PORT", 4010),
-		PlaygroundMode:      getEnvAsBool("PLAYGROUND_MODE", false),
-		QueryLimit:          getEnvAsInt("QUERY_LIMIT", 1000),
-		SlowLog:             getEnvAsInt("SLOW_LOG", 300),
+		Features: featureFlags{
+			FederatedSearch: getEnvAsBool("FEATURE_FEDERATED_SEARCH", false), // In Dev mode default to true.
+		},
+		Federation: federationConfig{
+			GlobalHubName:  getEnv("GLOBAL_HUB_NAME", "global-hub"),
+			ConfigCacheTTL: getEnvAsInt("FEDERATION_CONFIG_CACHE_TTL", 2*60*1000), // 2 mins
+			HttpPool: httpClientPool{ // Default values for federated client pool.
+				MaxConnsPerHost:       getEnvAsInt("MAX_CONNS_PER_HOST", 2),
+				MaxIdleConns:          getEnvAsInt("MAX_IDLE_CONNS", 10),
+				MaxIdleConnPerHost:    getEnvAsInt("MAX_IDLE_CONN_PER_HOST", 2),
+				MaxIdleConnTimeout:    getEnvAsInt("MAX_IDLE_CONN_TIMEOUT", 15*1000),     // 15 seconds.
+				ResponseHeaderTimeout: getEnvAsInt("RESPONSE_HEADER_TIMEOUT", 15*1000),   // 15 seconds.
+				RequestTimeout:        getEnvAsInt("FEDERATED_REQUEST_TIMEOUT", 60*1000), // 60 seconds.
+			},
+		},
+		HttpPort:       getEnvAsInt("HTTP_PORT", 4010),
+		PlaygroundMode: getEnvAsBool("PLAYGROUND_MODE", false),
+		QueryLimit:     getEnvAsInt("QUERY_LIMIT", 1000),
+		SlowLog:        getEnvAsInt("SLOW_LOG", 300),
 		// Setting default level to 0 to check if user has explicitly set this variable
 		// This will be updated to 1 for default searches and 3 for applications - unless set by the user
 		RelationLevel: getEnvAsInt("RELATION_LEVEL", 0),
-		// Placeholder for future use.
-		// QueryLoopLimit:          getEnvAsInt("QUERY_LOOP_LIMIT", 5000),
-		// RBAC_INACTIVITY_TIMEOUT: getEnvAsInt("RBAC_INACTIVITY_TIMEOUT", 600000), // 10 minutes
 	}
 	conf.DBPass = url.QueryEscape(conf.DBPass)
 	return conf

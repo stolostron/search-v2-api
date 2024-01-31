@@ -15,6 +15,7 @@ import (
 	"github.com/stolostron/search-v2-api/graph"
 	"github.com/stolostron/search-v2-api/graph/generated"
 	"github.com/stolostron/search-v2-api/pkg/config"
+	"github.com/stolostron/search-v2-api/pkg/federated"
 	"github.com/stolostron/search-v2-api/pkg/metrics"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 )
@@ -42,6 +43,17 @@ func StartAndListen() {
 		router.Handle("/playground",
 			playground.Handler("Search GraphQL playground", fmt.Sprintf("%s/graphql", config.Cfg.ContextPath)))
 		klog.Infof("GraphQL playground is now running on https://localhost:%d/playground", port)
+	}
+
+	if config.Cfg.Features.FederatedSearch {
+		klog.Infof("Federated search is enabled.")
+		fedSubrouter := router.PathPrefix("/federated").Subrouter()
+		fedSubrouter.Use(rbac.AuthenticateUser)
+		// fedSubrouter.Use(metrics.PrometheusMiddleware)  // FUTURE: Add prometheus metric for federated requests.
+		// fedSubrouter.Use(federated.GetConfig)           // TODO: Add a health check for federated services.
+		fedSubrouter.HandleFunc("", federated.HandleFederatedRequest).Methods("POST")
+	} else {
+		klog.Infof("Federated search is disabled. To enable set env variable FEATURES_FEDERATED_SEARCH=true")
 	}
 
 	// Add authentication middleware to the /searchapi (ContextPath) subroute.
