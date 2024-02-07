@@ -4,7 +4,7 @@ package federated
 import "k8s.io/klog/v2"
 
 func (d *Data) mergeSearchSchema(schemaProps []string) {
-	klog.Info("Merge searchSchema results to federated response.")
+	klog.V(1).Info("Merge [searchSchema] results to federated response.")
 	d.writeLock.Lock()
 	defer d.writeLock.Unlock()
 
@@ -21,7 +21,7 @@ func (d *Data) mergeSearchSchema(schemaProps []string) {
 }
 
 func (d *Data) mergeSearchComplete(s []string) {
-	klog.Info("Merge searchComplete results to federated response.")
+	klog.V(1).Info("Merge [searchComplete] results to federated response.")
 	d.writeLock.Lock()
 	defer d.writeLock.Unlock()
 
@@ -47,7 +47,7 @@ func (d *Data) mergeSearchComplete(s []string) {
 }
 
 func (d *Data) mergeSearchResults(hubName string, results []SearchResult) {
-	klog.Info("Merge searchResult to federated response.")
+	klog.V(1).Info("Merge [searchResult] to federated response.")
 	d.writeLock.Lock()
 	defer d.writeLock.Unlock()
 
@@ -82,7 +82,7 @@ func (d *Data) mergeSearchResults(hubName string, results []SearchResult) {
 }
 
 func (d *Data) mergeMessages(msgs []string) {
-	klog.Info("Merge [message] results to federated response.")
+	klog.V(1).Info("Merge [message] results to federated response.")
 	d.writeLock.Lock()
 	defer d.writeLock.Unlock()
 
@@ -94,7 +94,7 @@ func (d *Data) mergeMessages(msgs []string) {
 }
 
 func (d *Data) appendRelatedResults(mergedItems, newItems []SearchRelatedResult) []SearchRelatedResult {
-	klog.Info("Merge [related] to federated response.")
+	klog.V(1).Info("Merge [related] to federated response.")
 
 	if len(mergedItems) == 0 {
 		return newItems
