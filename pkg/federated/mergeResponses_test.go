@@ -1,3 +1,6 @@
+// Copyright Contributors to the Open Cluster Management project
+package federated
+
 import (
 	"reflect"
 	"testing"
@@ -5,19 +8,19 @@ import (
 
 func TestAppendRelatedResults(t *testing.T) {
 	mergedItems := []SearchRelatedResult{
-		{Kind: "kind1", Count: 2, Items: []string{"item1"}},
-		{Kind: "kind2", Count: 3, Items: []string{"item2"}},
+		{Kind: "kind1", Count: 2, Items: []map[string]interface{}{{"name": "result1"}}},
+		{Kind: "kind2", Count: 3, Items: []map[string]interface{}{{"name": "result2"}}},
 	}
 
 	newItems := []SearchRelatedResult{
-		{Kind: "kind1", Count: 1, Items: []string{"item3"}},
-		{Kind: "kind3", Count: 4, Items: []string{"item4"}},
+		{Kind: "kind1", Count: 1, Items: []map[string]interface{}{{"name": "result3"}}},
+		{Kind: "kind3", Count: 4, Items: []map[string]interface{}{{"name": "result4"}}},
 	}
 
 	expected := []SearchRelatedResult{
-		{Kind: "kind1", Count: 3, Items: []string{"item1", "item3"}},
-		{Kind: "kind2", Count: 3, Items: []string{"item2"}},
-		{Kind: "kind3", Count: 4, Items: []string{"item4"}},
+		{Kind: "kind1", Count: 3, Items: []map[string]interface{}{{"name": "result1"}, {"name": "result3"}}},
+		{Kind: "kind2", Count: 3, Items: []map[string]interface{}{{"name": "result2"}}},
+		{Kind: "kind3", Count: 4, Items: []map[string]interface{}{{"name": "result4"}}},
 	}
 
 	d := &Data{}
