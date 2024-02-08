@@ -4,7 +4,7 @@ package federated
 import "k8s.io/klog/v2"
 
 func (d *Data) mergeSearchSchema(schemaProps []string) {
-	klog.Info("Merge searchSchema results to federated response.")
+	klog.V(1).Info("Merge [searchSchema] results to federated response.")
 	d.writeLock.Lock()
 	defer d.writeLock.Unlock()
 
@@ -21,7 +21,7 @@ func (d *Data) mergeSearchSchema(schemaProps []string) {
 }
 
 func (d *Data) mergeSearchComplete(s []string) {
-	klog.Info("Merge searchComplete results to federated response.")
+	klog.V(1).Info("Merge [searchComplete] results to federated response.")
 	d.writeLock.Lock()
 	defer d.writeLock.Unlock()
 
@@ -47,7 +47,7 @@ func (d *Data) mergeSearchComplete(s []string) {
 }
 
 func (d *Data) mergeSearchResults(hubName string, results []SearchResult) {
-	klog.Info("Merge searchResult to federated response.")
+	klog.V(1).Info("Merge [searchResult] to federated response.")
 	d.writeLock.Lock()
 	defer d.writeLock.Unlock()
 
@@ -60,22 +60,29 @@ func (d *Data) mergeSearchResults(hubName string, results []SearchResult) {
 		d.Search[index].Count = d.Search[index].Count + int(result.Count)
 
 		// Items
+		// TODO: Handle SORT and LIMIT for Items.
 		for _, item := range result.Items {
 			item["managedHub"] = hubName
 			d.Search[index].Items = append(d.Search[index].Items, item)
 		}
-		// TODO: Handle SORT and LIMIT for Items.
 
 		// Related
 		if d.Search[index].Related == nil {
 			d.Search[index].Related = make([]SearchRelatedResult, 0)
 		}
-		// d.mergeRelatedResults(d.Search[index].Related, result.Related)
+		if len(result.Related) > 0 {
+			for _, related := range result.Related {
+				for _, item := range related.Items {
+					item["managedHub"] = hubName
+				}
+			}
+			d.Search[index].Related = d.appendRelatedResults(d.Search[index].Related, result.Related)
+		}
 	}
 }
 
 func (d *Data) mergeMessages(msgs []string) {
-	klog.Info("Merge message results to federated response.")
+	klog.V(1).Info("Merge [message] results to federated response.")
 	d.writeLock.Lock()
 	defer d.writeLock.Unlock()
 
@@ -86,24 +93,32 @@ func (d *Data) mergeMessages(msgs []string) {
 	d.Messages = append(d.Messages, msgs...)
 }
 
-// func (d *Data) mergeRelatedResults(mergedItems, newItems []SearchRelatedResult) {
-// 	klog.Info("Merge related results to federated response.")
-// 	d.writeLock.Lock()
-// 	defer d.writeLock.Unlock()
+func (d *Data) appendRelatedResults(mergedItems, newItems []SearchRelatedResult) []SearchRelatedResult {
+	klog.V(1).Info("Merge [related] to federated response.")
 
-// 	// Related results are grouped by kind.
-// 	for _, newItem := range newItems {
-// 		kind := newItem.Kind
-// 		for _, mergedItem := range mergedItems {
-// 			if mergedItem.Kind == kind {
-// 				// Merge the new items.
-// 				mergedItem.Count = mergedItem.Count + newItem.Count
-// 				for _, item := range newItem.Items {
-// 					item["managedHub"] = "TODO_ADD_HUB_NAME_HERE" // TODO: Add hub name to related items.
-// 					mergedItem.Items = append(mergedItem.Items, item)
-// 				}
-// 				return
-// 			}
-// 		}
-// 	}
-// }
+	if len(mergedItems) == 0 {
+		return newItems
+	}
+
+	// Related results are grouped by kind.
+	for _, newItem := range newItems {
+		found := false
+		kind := newItem.Kind
+
+		// If the kind is found, merge the newItems with the mergedItems.
+		for index, mergedItem := range mergedItems {
+			if mergedItem.Kind == kind {
+				mergedItems[index].Count = mergedItem.Count + newItem.Count
+				mergedItems[index].Items = append(mergedItem.Items, newItem.Items...)
+				found = true
+				break
+			}
+		}
+
+		// If the kind was not found, add it to the mergedItems.
+		if !found {
+			mergedItems = append(mergedItems, newItem)
+		}
+	}
+	return mergedItems
+}
