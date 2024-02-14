@@ -97,7 +97,70 @@ for MANAGED_HUB in "${MANAGED_HUBS[@]}"; do
   # FUTURE: Validate that the Managed Hub is running ACM 2.9.0 or later.
   # ACM_VERSION=$(oc get mch -A -o custom-columns=VERSION:.status.currentVersion --no-headers)
   echo "Configuring managed hub: ${MANAGED_HUB}"
-  oc apply -f ./federation-managed-hub-config.yaml -n "${MANAGED_HUB}"
+  
+  # NOTE: The YAML file was added in-line below to simplify deployment with a single script file.
+  #       Any changes below must be synchronized with the setup.sh script.
+  # oc apply -f ./federation-managed-hub-config.yaml -n "${MANAGED_HUB}"
+  oc apply -n "${MANAGED_HUB}" -f - << EOF
+apiVersion: work.open-cluster-management.io/v1
+kind: ManifestWork
+metadata:
+  labels:
+    app: ocm-search
+  name: search-global-config
+spec:
+  workload:
+    manifests:
+    - apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        labels:
+          app: ocm-search
+        name: search-global-binding
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: global-search-user
+      subjects:
+      - kind: ServiceAccount
+        name: search-global
+        namespace: open-cluster-management-agent-addon
+    - apiVersion: route.openshift.io/v1
+      kind: Route
+      metadata:
+        labels:
+          app: ocm-search
+        name: search-global-hub
+        namespace: open-cluster-management
+      spec:
+        port:
+          targetPort: search-api
+        tls:
+          termination: passthrough
+        to:
+          kind: Service
+          name: search-search-api
+          weight: 100
+---
+apiVersion: addon.open-cluster-management.io/v1alpha1
+kind: ManagedClusterAddOn
+metadata:
+  name: managed-serviceaccount
+  labels:
+    app: ocm-search
+spec:
+  installNamespace: open-cluster-management-agent-addon
+---
+apiVersion: authentication.open-cluster-management.io/v1beta1
+kind: ManagedServiceAccount
+metadata:
+  name: search-global
+  labels:
+    app: ocm-search
+spec:
+  rotation: {}
+EOF
+
   echo ""
 done
 

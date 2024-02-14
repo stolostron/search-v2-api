@@ -8,7 +8,11 @@ Use federated search to query and combine results from multiple Red Hat Advanced
     - Managed Hub clusters mu have RHACM 2.9.0 or later
 
 ## Setup
-Execute the script at `./setup.sh` to configure Global Search on the Global Hub cluster.  
+Execute the script at `./setup.sh` to configure Global Search on the Global Hub cluster. 
+
+```bash
+bash <(curl -s https://raw.githubusercontent.com/stolostron/search-v2-api/main/pkg/federated/setup.sh) 
+``` 
 
 The script automates the following steps:
   1. Enable the Managed Service Account add-on in the MulticlusterEngine CR.
@@ -20,3 +24,10 @@ The script automates the following steps:
 > Must run using an account with role `open-cluster-management:admin-aggregate` or higher.
 > You must re-run this script when a Managed Hub is added.    
 > This setup is required for Development Preview, it will be fully automated for GA.
+
+## Uninstall
+Execute the script at `./cleanup.sh` to remove the Global Search configuration from the Global Hub cluster. 
+
+```bash
+bash <(curl -s https://raw.githubusercontent.com/stolostron/search-v2-api/main/pkg/federated/cleanup.sh) 
+``` 
