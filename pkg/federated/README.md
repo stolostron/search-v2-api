@@ -36,8 +36,8 @@ bash <(curl -s https://raw.githubusercontent.com/stolostron/search-v2-api/main/p
 
 Known limitations for Development Preview.
 
-1. When a Managed Hub is added, must re-run ./setup.sh to see resources.
-2. When a Managed Hub is removed, the console will show an error.
+1. When a Managed Hub is added, resources won't appear on global search. Re-run ./setup.sh to update configuration.
+2. When a Managed Hub is offline, the console will show an error. Re-run ./setup.sh to resolve.
 3. Filter by Managed Hub is not implemented.
 4. LIMIT and SORT for aggregated results is not implemented.
 5. Resource YAML and log views are not implemented in the console. This is removed when Global Search is enabled.
