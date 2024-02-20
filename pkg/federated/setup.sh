@@ -87,6 +87,7 @@ else
 fi
 
 # Delete any existing configuration for the Managed Hubs. This helps to reset the state if Managed Hubs are removed or offline.
+echo -e "\nDeleting existing configuration resources for the Managed Hubs...\n"
 oc delete manifestwork -A -l app=ocm-search
 oc delete managedclusteraddon -A -l app=ocm-search
 oc delete managedserviceaccount -A -l app=ocm-search
