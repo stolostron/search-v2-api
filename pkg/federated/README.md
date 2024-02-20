@@ -31,3 +31,14 @@ Execute the script at `./cleanup.sh` to remove the Global Search configuration f
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/stolostron/search-v2-api/main/pkg/federated/cleanup.sh) 
 ``` 
+
+## Limitations
+
+Known limitations for Development Preview.
+
+1. When a Managed Hub is added, must re-run ./setup.sh to see resources.
+2. When a Managed Hub is removed, the console will show an error.
+3. Filter by Managed Hub is not implemented.
+4. LIMIT and SORT for aggregated results is not implemented.
+5. Resource YAML and log views are not implemented in the console. This is removed when Global Search is enabled.
+6. Actions on resources (delete, edit) are not implemented in the console. This is removed when Global Search is enabled.

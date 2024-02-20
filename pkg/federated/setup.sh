@@ -86,7 +86,12 @@ else
   done
 fi
 
-# Create config resources for each Managed Hub.
+# Delete any existing configuration for the Managed Hubs. This helps to reset the state if Managed Hubs are removed or offline.
+oc delete manifestwork -A -l app=ocm-search
+oc delete managedclusteraddon -A -l app=ocm-search
+oc delete managedserviceaccount -A -l app=ocm-search
+
+# Create configuration resources for each Managed Hub.
 echo -e "\nCreating config resources for each Managed Hub...\n"
 MANAGED_HUBS=($(oc get managedcluster -o json | jq -r '.items[] | select(.status.clusterClaims[] | .name == "hub.open-cluster-management.io" and .value != "NotInstalled") | .metadata.name'))
 if [ ${#MANAGED_HUBS[@]} -eq 0 ]; then
