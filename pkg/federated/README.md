@@ -2,6 +2,8 @@
 
 Use federated search to query and combine results from multiple Red Hat Advanced Cluster Management.
 
+**Feature Status (2/20/2024): Development Preview**
+
 ## Pre-requisites  
 1. Multicluster Global Hub Operator 1.0.0 or later.  
 2. Red Hat Advanced Cluster Management 2.10.0 or later.  
