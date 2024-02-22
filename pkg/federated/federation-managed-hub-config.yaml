@@ -21,22 +21,6 @@ spec:
       - kind: ServiceAccount
         name: search-global
         namespace: open-cluster-management-agent-addon
-    - apiVersion: route.openshift.io/v1
-      kind: Route
-      metadata:
-        labels:
-          app: ocm-search
-        name: search-global-hub
-        namespace: open-cluster-management
-      spec:
-        port:
-          targetPort: search-api
-        tls:
-          termination: passthrough
-        to:
-          kind: Service
-          name: search-search-api
-          weight: 100
     - apiVersion: rbac.authorization.k8s.io/v1
       kind: Role
       metadata:

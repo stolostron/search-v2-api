@@ -12,6 +12,7 @@ import (
 	klog "k8s.io/klog/v2"
 )
 
+var DEVELOPMENT_MODE = false // Do not change this. See config_development.go to enable.
 var Cfg = new()
 
 // Defines the configurable options for this microservice.
@@ -31,6 +32,7 @@ type Config struct {
 	DBPass              string
 	DBPort              int
 	DBUser              string
+	DevelopmentMode     bool             // Indicates if running in local development mode.
 	Features            featureFlags     // Enable or disable features.
 	Federation          federationConfig // Federated search configuration.
 	HttpPort            int
@@ -82,6 +84,7 @@ func new() *Config {
 		DBPass:              getEnv("DB_PASS", ""),
 		DBPort:              getEnvAsInt("DB_PORT", 5432),
 		DBUser:              getEnv("DB_USER", ""),
+		DevelopmentMode:     DEVELOPMENT_MODE,
 		Features: featureFlags{
 			FederatedSearch: getEnvAsBool("FEATURE_FEDERATED_SEARCH", false), // In Dev mode default to true.
 		},

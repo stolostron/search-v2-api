@@ -2,36 +2,84 @@
 package federated
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
 	config "github.com/stolostron/search-v2-api/pkg/config"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
+// This function returns an http client to communicate with the search-api service on the global hub cluster.
+func getLocalHttpClient() HTTPClient {
+	tlsConfig := tls.Config{
+		MinVersion: tls.VersionTLS13,
+		RootCAs:    x509.NewCertPool(),
+	}
+
+	if config.Cfg.DevelopmentMode {
+		klog.Warningf("Running in DevelopmentMode. Using local self-signed certificate.")
+		// Read the local self-signed CA bundle file.
+		tlsCert, err := os.ReadFile("sslcert/tls.crt")
+		if err != nil {
+			klog.Errorf("Error reading local self-signed certificate: %s", err)
+			klog.Info("Use 'make setup' to generate the local self-signed certificate.")
+		} else {
+			tlsConfig.RootCAs.AppendCertsFromPEM([]byte(tlsCert))
+		}
+	} else {
+		client := config.KubeClient()
+		caBundleConfigMap, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(context.TODO(), "search-ca-crt", metav1.GetOptions{})
+		if err != nil {
+			klog.Errorf("Error getting the search-ca-crt configmap: %s", err)
+		}
+		tlsConfig.RootCAs.AppendCertsFromPEM([]byte(caBundleConfigMap.Data["service-ca.crt"]))
+	}
+
+	client := &RealHTTPClient{
+		&http.Client{
+			Transport: &http.Transport{
+				MaxIdleConns:          config.Cfg.Federation.HttpPool.MaxIdleConns,
+				IdleConnTimeout:       time.Duration(config.Cfg.Federation.HttpPool.MaxIdleConnTimeout) * time.Millisecond,
+				ResponseHeaderTimeout: time.Duration(config.Cfg.Federation.HttpPool.ResponseHeaderTimeout) * time.Millisecond,
+				DisableKeepAlives:     false,
+				TLSClientConfig:       &tlsConfig,
+				MaxConnsPerHost:       config.Cfg.Federation.HttpPool.MaxConnsPerHost,
+				MaxIdleConnsPerHost:   config.Cfg.Federation.HttpPool.MaxIdleConnPerHost,
+			},
+			Timeout: time.Duration(config.Cfg.Federation.HttpPool.RequestTimeout) * time.Millisecond,
+		},
+	}
+	return client
+}
+
 // Returns a client to process the federated request.
 func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
+	if remoteService.Name == config.Cfg.Federation.GlobalHubName {
+		return getLocalHttpClient()
+	}
+
 	// Get http client from pool.
 	client := httpClientPool.Get().(*RealHTTPClient)
 
+	// Set the TLS client configuration.
 	tlsConfig := tls.Config{
+		MinVersion: tls.VersionTLS13,
 		RootCAs:    x509.NewCertPool(),
-		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
 	}
 
 	if len(remoteService.CABundle) > 0 {
 		ok := tlsConfig.RootCAs.AppendCertsFromPEM(remoteService.CABundle)
 		if !ok {
-			klog.Warningf("Failed to parse root certificate for %s", remoteService.Name)
-		} else {
-			klog.Info("Using provided TLS CA bundle for ", remoteService.Name)
+			klog.Warningf("Failed to append CA bundle for %s", remoteService.Name)
 		}
 	} else {
-		klog.Warningf("TLS CA bundle not provided for %s. Skipping TLS verification.", remoteService.Name)
-		tlsConfig.InsecureSkipVerify = true // #nosec G402 - FIXME: Add TLS verification.
+		klog.Warningf("TLS CA bundle not provided for remote service: %s.", remoteService.Name)
 	}
 
 	client.SetTLSClientConfig(&tlsConfig)
@@ -48,7 +96,8 @@ var tr = &http.Transport{
 	ResponseHeaderTimeout: time.Duration(config.Cfg.Federation.HttpPool.ResponseHeaderTimeout) * time.Millisecond,
 	DisableKeepAlives:     false,
 	TLSClientConfig: &tls.Config{
-		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
+		MinVersion: tls.VersionTLS13,
+		RootCAs:    x509.NewCertPool(),
 	},
 	MaxConnsPerHost:     config.Cfg.Federation.HttpPool.MaxConnsPerHost,
 	MaxIdleConnsPerHost: config.Cfg.Federation.HttpPool.MaxIdleConnPerHost,

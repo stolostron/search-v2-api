@@ -91,13 +91,13 @@ func Test_SearchResolver_CountWithOperatorNum(t *testing.T) {
 	val1 := "1"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val1}}}}
 	ud := rbac.UserData{CsResources: []rbac.Resource{}}
-	propTypesMock := map[string]string{"current": "number"}
+	propTypesMock := map[string]string{"kind": "string", "current": "number"}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, ud, propTypesMock)
 
 	// Mock the database query
 	mockRow := &Row{MockValue: 1}
 	mockPool.EXPECT().QueryRow(gomock.Any(),
-		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE (("data"->>'current' IN ('1')) AND ("cluster" = ANY ('{}')))`),
+		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ((("data"->'current')::numeric IN ('1')) AND ("cluster" = ANY ('{}')))`),
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
@@ -105,7 +105,7 @@ func Test_SearchResolver_CountWithOperatorNum(t *testing.T) {
 	assert.Nil(t, err)
 	// Verify response
 	if r != mockRow.MockValue {
-		t.Errorf("Incorrect Count() expected [%d] got [%d]", mockRow.MockValue, r)
+		t.Errorf("Incorrect Count(): expected [%d] got [%d]", mockRow.MockValue, r)
 	}
 }
 
@@ -241,7 +241,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	prop := "created"
 
 	val8 := "year"
-	opValMap := getOperatorAndNumDateFilter(prop, []string{val8}, nil)
+	opValMap := getOperatorIfDateFilter(prop, []string{val8}, map[string][]string{})
 	csres, nsres, mc := newUserData()
 
 	rbac := buildRbacWhereClause(context.TODO(),
@@ -255,7 +255,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val9 := "hour"
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val9}, nil)
+	opValMap = getOperatorIfDateFilter(prop, []string{val9}, map[string][]string{})
 	mockQueryHour, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0]), rbac).Limit(1000).ToSQL()
 
 	testOperatorHour := TestOperatorItem{
@@ -264,7 +264,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val10 := "day"
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val10}, nil)
+	opValMap = getOperatorIfDateFilter(prop, []string{val10}, map[string][]string{})
 	mockQueryDay, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0])), rbac).Limit(1000).ToSQL()
 
 	testOperatorDay := TestOperatorItem{
@@ -273,7 +273,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val11 := "week"
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val11}, nil)
+	opValMap = getOperatorIfDateFilter(prop, []string{val11}, map[string][]string{})
 	mockQueryWeek, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0])), rbac).Limit(1000).ToSQL()
 
 	testOperatorWeek := TestOperatorItem{
@@ -282,15 +282,14 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val12 := "month"
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val12}, nil)
+	opValMap = getOperatorIfDateFilter(prop, []string{val12}, map[string][]string{})
 	mockQueryMonth, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0])), rbac).Limit(1000).ToSQL()
 
 	testOperatorMonth := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: prop, Values: []*string{&val12}}}},
 		mockQuery:   mockQueryMonth, // `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'created' > ('2021-05-16T13:11:12Z')) LIMIT 1000`,
 	}
-
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val8, val9}, nil)
+	opValMap = getOperatorIfDateFilter(prop, []string{val8, val9}, map[string][]string{})
 	mockQueryMultiple, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.Or(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0]),
 		goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][1])), rbac).Limit(1000).ToSQL()
 
@@ -842,15 +841,10 @@ func Test_SearchResolver_Items_WrongLabelFormat(t *testing.T) {
 	ud := rbac.UserData{CsResources: []rbac.Resource{}}
 	propTypesMock := map[string]string{"cluster": "string", "kind": "string", "label": "object"}
 
-	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, ud, propTypesMock)
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, ud, propTypesMock)
 
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", limit)
-
-	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'kind'?('Template') AND ("cluster" IN ('local-cluster')) AND "data"->'label' @> '{"samples.operator.openshift.io/managed":"true"}' AND ("cluster" = ANY ('{}'))) LIMIT 10`),
-		gomock.Eq([]interface{}{}),
-	).Return(mockRows, nil)
 
 	// Execute the function
 	result, err := resolver.Items()
@@ -877,4 +871,229 @@ func Test_SearchResolver_Items_WrongLabelFormat(t *testing.T) {
 			}
 		}
 	}
+}
+
+func Test_SearchResolver_Items_MultipleLabels(t *testing.T) {
+	// Create a SearchResolver instance with a mock connection pool.
+	cluster := "local-cluster"
+	val1 := "Template"
+
+	val2 := "samples*=tru*"
+	val3 := "app*=*prometheus*"
+	limit := 10
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}, {Property: "cluster", Values: []*string{&cluster}}, {Property: "label", Values: []*string{&val2, &val3}}}, Limit: &limit}
+	ud := rbac.UserData{CsResources: []rbac.Resource{}}
+	propTypesMock := map[string]string{"cluster": "string", "kind": "string", "label": "object"}
+
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, ud, propTypesMock)
+
+	// Mock the database queries.
+	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", limit)
+	mockPool.EXPECT().Query(gomock.Any(), gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'kind'?('Template') AND ("cluster" IN ('local-cluster')) AND EXISTS((SELECT 1 FROM jsonb_each_text("data"->'label') As kv(key, value) WHERE (((key LIKE 'samples%') AND (value LIKE 'tru%')) OR ((key LIKE 'app%') AND (value LIKE '%prometheus%'))))) AND ("cluster" = ANY ('{}'))) LIMIT 10`), gomock.Eq([]interface{}{})).Return(mockRows, nil)
+
+	// Execute the function
+	result, err := resolver.Items()
+	// Verify returned items.
+	if len(result) != len(mockRows.mockData) {
+		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result))
+	}
+
+	assert.Nil(t, err)
+	assert.Len(t, result, len(mockRows.mockData))
+
+	for i, item := range result {
+		mockRow := mockRows.mockData[i]
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow["_uid"] = mockRow["uid"]
+		expectedRow["cluster"] = mockRow["cluster"]
+
+		assert.Equal(t, expectedRow, item)
+	}
+
+	// Verify properties for each returned item.
+	for i, item := range result {
+		mockRow := mockRows.mockData[i]
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow["_uid"] = mockRow["uid"]
+		expectedRow["cluster"] = mockRow["cluster"]
+
+		if len(item) != len(expectedRow) {
+			t.Errorf("Number of properties don't match for item[%d]. Expected: %d Got: %d", i, len(expectedRow), len(item))
+		}
+
+		for key, val := range item {
+			if val != expectedRow[key] {
+				t.Errorf("Value of key [%s] does not match for item [%d].\nExpected: %s\nGot: %s", key, i, expectedRow[key], val)
+			}
+		}
+	}
+}
+
+func TestSearchResolverArrayLabel(t *testing.T) {
+	type test struct {
+		name          string
+		cluster       string
+		val1          string
+		val2          string
+		filterProp1   string
+		filterProp2   string
+		expectedQuery string
+	}
+
+	tests := []test{
+		{
+			name:          "Match Array",
+			cluster:       "local*",
+			val1:          "Temp*",
+			val2:          "acm-agent",
+			filterProp1:   "kind",
+			filterProp2:   "container",
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND "data"->'container' @> '["acm-agent"]' AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+		},
+		{
+			name:          "Not Match Array",
+			cluster:       "local*",
+			val1:          "Temp*",
+			val2:          `!acm-agent`,
+			filterProp1:   "kind",
+			filterProp2:   "container",
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND NOT("data"->'container' @> '["acm-agent"]') AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+		},
+		{
+			name:          "Partial Match Array",
+			cluster:       "local*",
+			val1:          "Temp*",
+			val2:          "acm-*",
+			filterProp1:   "kind",
+			filterProp2:   "container",
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE 'acm-%'))) AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+		},
+		{
+			name:          "Partial Not Match Array",
+			cluster:       "local*",
+			val1:          "Temp*",
+			val2:          "!acm-*",
+			filterProp1:   "kind",
+			filterProp2:   "container",
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND NOT EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE 'acm-%'))) AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+		},
+		{
+			name:          "Partial Match Label Key And Value",
+			cluster:       "!local*",
+			val1:          "Temp*",
+			val2:          "samples.operator.openshift.io/man*:tru*",
+			filterProp1:   "kind",
+			filterProp2:   "label",
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND NOT(("cluster" LIKE 'local%')) AND EXISTS((SELECT 1 FROM jsonb_each_text("data"->'label') As kv(key, value) WHERE ((key LIKE 'samples.operator.openshift.io/man%') AND (value LIKE 'tru%')))) AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+		},
+		{
+			name:          "Partial Match Label Key Or Value",
+			cluster:       "!local*",
+			val1:          "Temp*",
+			val2:          "samples.operator.openshift.io/man*",
+			filterProp1:   "kind",
+			filterProp2:   "label",
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND NOT(("cluster" LIKE 'local%')) AND EXISTS((SELECT 1 FROM jsonb_each_text("data"->'label') As kv(key, value) WHERE ((key LIKE ('samples.operator.openshift.io/man%')) OR (value LIKE ('samples.operator.openshift.io/man%'))))) AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+		},
+		{
+			name:          "Partial Match Label Not Key Or Value",
+			cluster:       "!local*",
+			val1:          "Temp*",
+			val2:          "!samples.operator.openshift.io/man*=tru*",
+			filterProp1:   "kind",
+			filterProp2:   "label",
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND NOT(("cluster" LIKE 'local%')) AND NOT EXISTS((SELECT 1 FROM jsonb_each_text("data"->'label') As kv(key, value) WHERE ((key LIKE 'samples.operator.openshift.io/man%') AND (value LIKE 'tru%')))) AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+		},
+		{
+			name:          "Match Label Not Key Or Value",
+			cluster:       "!local*",
+			val1:          "Temp*",
+			val2:          "!samples.operator.openshift.io/managed=true",
+			filterProp1:   "kind",
+			filterProp2:   "label",
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND NOT(("cluster" LIKE 'local%')) AND NOT("data"->'label' @> '{"samples.operator.openshift.io/managed":"true"}') AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+		},
+		{
+			name:          "Match filter Only star",
+			cluster:       "local*",
+			val1:          "Temp*",
+			val2:          "*",
+			filterProp1:   "kind",
+			filterProp2:   "namespace",
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND ("data"->>'namespace' LIKE '%') AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+		},
+		{
+			name:          "Partial Match 2 Arrays",
+			cluster:       "local*",
+			val1:          "*agent-1*",
+			val2:          "*agent-2*",
+			filterProp1:   "container",
+			filterProp2:   "container",
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE '%agent-1%'))) AND ("cluster" LIKE 'local%') AND EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE '%agent-2%'))) AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+		},
+		{
+			name:          "Match 2 Arrays",
+			cluster:       "local-cluster",
+			val1:          "acm-agent-1",
+			val2:          "acm-agent-2",
+			filterProp1:   "container",
+			filterProp2:   "container",
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'container' @> '["acm-agent-1"]' AND ("cluster" IN ('local-cluster')) AND "data"->'container' @> '["acm-agent-2"]' AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+		},
+		{
+			name:          "Match 1 Arrays And Partial Match 2nd array",
+			cluster:       "local-cluster",
+			val1:          "acm-agent-1",
+			val2:          "*acm-agent-2",
+			filterProp1:   "container",
+			filterProp2:   "container",
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'container' @> '["acm-agent-1"]' AND ("cluster" IN ('local-cluster')) AND EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE '%acm-agent-2'))) AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+		},
+	}
+
+	limit := 10
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			searchInput := &model.SearchInput{
+				Filters: []*model.SearchFilter{
+					{Property: tc.filterProp1, Values: []*string{&tc.val1}},
+					{Property: "cluster", Values: []*string{&tc.cluster}},
+					{Property: tc.filterProp2, Values: []*string{&tc.val2}},
+				},
+				Limit: &limit,
+			}
+			ud := rbac.UserData{
+				CsResources:     []rbac.Resource{},
+				ManagedClusters: map[string]struct{}{"test": {}},
+			}
+			propTypesMock := map[string]string{"cluster": "string", "kind": "string", "container": "array",
+				"label": "object", "namespace": "string"}
+
+			resolver, mockPool := newMockSearchResolver(t, searchInput, nil, ud, propTypesMock)
+			mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", limit)
+
+			mockPool.EXPECT().Query(gomock.Any(), gomock.Eq(tc.expectedQuery), gomock.Eq([]interface{}{})).Return(mockRows, nil)
+
+			result, err := resolver.Items()
+			assert.Nil(t, err)
+			assert.Len(t, result, len(mockRows.mockData))
+
+			for i, item := range result {
+				mockRow := mockRows.mockData[i]
+				expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
+				expectedRow["_uid"] = mockRow["uid"]
+				expectedRow["cluster"] = mockRow["cluster"]
+
+				assert.Equal(t, expectedRow, item)
+			}
+		})
+	}
+}
+
+func Test_decodePropertyTypes(t *testing.T) {
+	_, err := decodePropertyTypes([]string{"!master"}, "array")
+	assert.Nil(t, err, "expected no error")
 }

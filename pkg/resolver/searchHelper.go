@@ -13,7 +13,6 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/lib/pq"
-	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"k8s.io/klog/v2"
@@ -24,36 +23,69 @@ func getPropertyType(ctx context.Context, refresh bool) (map[string]string, erro
 	return propTypesCache, err
 }
 
-// Remove operator (<=, >=, !=, !, <, >, =) if any from values
-func getOperator(values []string) map[string][]string {
-	// Get the operator (/^<=|^>=|^!=|^!|^<|^>|^=/)
-	var operator string
-	// Replace any of these symbols with ""
-	replacer := strings.NewReplacer("<=", "",
-		">=", "",
-		"!=", "",
-		"!", "",
-		"<", "",
-		">", "",
-		"=", "")
-	operatorValue := map[string][]string{}
+// Extract operator (<=, >=, !=, !, <, >, =) if any from string
+func getOperatorFromString(value string) (string, string) {
+	operator := "="
+	operand := value
 
-	for _, value := range values {
-		operatorRemovedValue := replacer.Replace(value)
-		operator = strings.Replace(value, operatorRemovedValue, "", 1) // find operator
-		if vals, ok := operatorValue[operator]; !ok {
-			if operator != "" { // Add to map only if operator is present
-				operatorValue[operator] = []string{operatorRemovedValue} // Add an entry to map with key as operator
-			}
-		} else {
-			vals = append(vals, operatorRemovedValue)
-			operatorValue[operator] = vals
+	prefixes := []string{"<=", ">=", "!=", "!", "<", ">", "="}
+	for _, prefix := range prefixes {
+		if cutString, yes := strings.CutPrefix(value, prefix); yes {
+			operator = prefix
+			operand = cutString
+			klog.V(5).Infof("Extracted operator: %s and operand: %s from value: %s", operator, operand, value)
+			break
 		}
 	}
-	return operatorValue
+	return operator, operand
+}
+
+// Extract operator (<=, >=, !=, !, <, >, =) if any from values. Combine with other operators like "*" if present.
+func extractOperator(values []string, innerOperator string,
+	operatorOperandMap map[string][]string) map[string][]string {
+	for _, value := range values {
+		operator, operand := getOperatorFromString(value)
+		if innerOperator != "" {
+			updateOperatorValueMap(operator+":"+innerOperator, operatorOperandMap, operand)
+		} else {
+			updateOperatorValueMap(operator, operatorOperandMap, operand)
+		}
+	}
+	return operatorOperandMap
+}
+
+// Check if value has partial match "*"
+// Returns a map that stores operator and values
+func getPartialMatchFilter(filter string, values []string, dataType interface{},
+	operatorOperandMap map[string][]string) map[string][]string {
+	for i, val := range values {
+		if strings.Contains(val, "*") {
+			values[i] = strings.ReplaceAll(val, "*", "%")
+		}
+	}
+	if dataType == "object" {
+		return extractOperator(values, "*@>", operatorOperandMap)
+	} else if dataType == "array" {
+		return extractOperator(values, "*[]", operatorOperandMap)
+	}
+	return extractOperator(values, "*", operatorOperandMap)
+}
+
+// compareValues checks if a string is equal to any string in an array of strings.
+func compareValues(inputArray, compareArray []string) bool {
+	for _, date := range compareArray {
+		for _, str := range inputArray {
+			if strings.Contains(str, date) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func getWhereClauseExpression(prop, operator string, values []string, dataType string) []exp.Expression {
+	klog.V(5).Info("Building where clause for filter: ", prop, " with ", len(values), " values: ", values,
+		"and operator: ", operator)
 	exps := []exp.Expression{}
 	var lhsExp interface{}
 
@@ -66,8 +98,15 @@ func getWhereClauseExpression(prop, operator string, values []string, dataType s
 			lhsExp = goqu.L(`("data"->?)?`, prop, goqu.L("::numeric"))
 		}
 	}
-
 	switch operator {
+	case "*", "=:*":
+		for _, val := range values {
+			exps = append(exps, goqu.L(`?`, lhsExp).Like(val))
+		}
+	case "!:*", "!=:*":
+		for _, val := range values {
+			exps = append(exps, goqu.L("NOT(?)", goqu.L(`?`, lhsExp).Like(val)))
+		}
 	case "<=":
 		for _, val := range values {
 			exps = append(exps, goqu.L(`?`, lhsExp).Lte(val))
@@ -90,31 +129,35 @@ func getWhereClauseExpression(prop, operator string, values []string, dataType s
 		for _, val := range values {
 			exps = append(exps, goqu.L(`?`, lhsExp).Gt(val))
 		}
-	case "=":
-		// use jsonb operator if prop is not cluster
-		// Refer to https://www.postgresql.org/docs/9.5/functions-json.html#FUNCTIONS-JSONB-OP-TABLE
-		if prop != "cluster" && isString(values) {
-			lhsExp = goqu.L(`"data"->?`, prop)
-			exps = append(exps, goqu.L("???", lhsExp, goqu.Literal("?"), values))
-		} else {
-			exps = append(exps, goqu.L(`?`, lhsExp).In(values))
-		}
-	case "@>":
+	case "!:*@>", "!=:*@>":
+		exps = append(exps, goqu.L("NOT EXISTS(?)", createSubQueryForArray("object", prop, values)))
+
+	case ":*@>", "=:*@>":
+		exps = append(exps, goqu.L("EXISTS(?)", createSubQueryForArray("object", prop, values)))
+
+	case "!:*[]", "!=:*[]":
+		exps = append(exps, goqu.L("NOT EXISTS(?)", createSubQueryForArray("array", prop, values)))
+
+	case ":*[]", "=:*[]":
+		exps = append(exps, goqu.L("EXISTS(?)", createSubQueryForArray("array", prop, values)))
+
+	case "@>", "=:@>":
 		for _, val := range values {
 			exps = append(exps, goqu.L(`"data"->? @> ?`, prop, val))
 		}
+	case "!:@>":
+		for _, val := range values {
+			exps = append(exps, goqu.L("NOT(?)", goqu.L(`"data"->? @> ?`, prop, val)))
+		}
 	case "?|":
 		exps = append(exps, goqu.L(`"data"->? ? ?`, prop, "?|", values))
-
 	default:
-		if prop == "cluster" {
-			exps = append(exps, goqu.C(prop).In(values))
-		} else if prop == "kind" && isLower(values) {
+		if prop == "kind" && isLower(values) {
 			//ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
 			exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
 			klog.Warning("Using ILIKE for lower case KIND string comparison.",
 				"- This behavior is needed for V1 compatibility and will be deprecated with Search V2.")
-		} else if isString(values) {
+		} else if isString(values) && prop != "cluster" {
 			if len(values) == 1 { // for single value, use "?" operator
 				// Refer to https://www.postgresql.org/docs/9.5/functions-json.html#FUNCTIONS-JSONB-OP-TABLE
 				lhsExp = goqu.L(`"data"->?`, prop)
@@ -124,11 +167,41 @@ func getWhereClauseExpression(prop, operator string, values []string, dataType s
 				exps = append(exps, goqu.L("???", lhsExp, goqu.Literal("?|"), pq.Array(values)))
 			}
 		} else {
-			exps = append(exps, goqu.L(`"data"->>?`, prop).In(values))
+			exps = append(exps, goqu.L(`?`, lhsExp).In(values))
 		}
 	}
 	return exps
 
+}
+
+func createSubQueryForArray(dataType, prop string, values []string) *goqu.SelectDataset {
+	var subexps []exp.Expression
+
+	if dataType == "array" {
+		for _, val := range values {
+			subexps = append(subexps, goqu.L(`arrayProp`).Like(val))
+		}
+		return goqu.From(goqu.L(`jsonb_array_elements_text("data"->?) As arrayProp`, prop)).
+			Select(goqu.L("1")).
+			Where(goqu.Or(subexps...))
+	} else {
+		var subexpInnerList []exp.Expression
+		var subexpList exp.ExpressionList
+		for _, val := range values {
+			keyValue := strings.Split(val, ":")
+			if len(keyValue) == 2 {
+				subexps := []exp.Expression{goqu.L(`key`).Like(keyValue[0]), goqu.L(`value`).Like(keyValue[1])}
+				subexpInnerList = append(subexpInnerList, goqu.And(subexps...))
+			} else {
+				subexps := []exp.Expression{goqu.L(`key`).Like(keyValue), goqu.L(`value`).Like(keyValue)}
+				subexpInnerList = append(subexpInnerList, goqu.Or(subexps...))
+			}
+			subexpList = goqu.Or(subexpInnerList...)
+		}
+		return goqu.From(goqu.L(`jsonb_each_text("data"->?) As kv(key, value)`, prop)).
+			Select(goqu.L("1")).
+			Where(goqu.Or(subexpList))
+	}
 }
 
 // Check if the values contain numerical values
@@ -153,61 +226,48 @@ func isLower(values []string) bool {
 	return false
 }
 
-// Check if value is a number or date and get the operator
-// Returns a map that stores operator and values
-func getOperatorAndNumDateFilter(filter string, values []string, dataType interface{}) map[string][]string {
-	opValueMap := getOperator(values) //If values are numbers
-
-	// Store the operator and value in a map - this is to handle multiple values
-	updateOpValueMap := func(operator string, operatorValueMap map[string][]string, operatorRemovedValue string) {
-		if vals, ok := operatorValueMap[operator]; !ok {
-			operatorValueMap[operator] = []string{operatorRemovedValue}
-		} else {
-			vals = append(vals, operatorRemovedValue)
-			operatorValueMap[operator] = vals
-		}
+// Store the operator and value in a map - this is to handle multiple values
+func updateOperatorValueMap(operator string, operatorValueMap map[string][]string,
+	operatorRemovedValue string) map[string][]string {
+	if vals, ok := operatorValueMap[operator]; !ok {
+		operatorValueMap[operator] = []string{operatorRemovedValue} // Add an entry to map with key as operator
+	} else {
+		vals = append(vals, operatorRemovedValue)
+		operatorValueMap[operator] = vals
 	}
+	return operatorValueMap
+}
 
-	if len(opValueMap) < 1 { //If not a number (no operator), check if values are dates
-		// Expected values: {"hour", "day", "week", "month", "year"}
-		operator := ">" // For dates, always check for values '>'
-		now := time.Now()
-		for _, val := range values {
-
-			var then string
-			format := "2006-01-02T15:04:05Z"
-			switch val {
-			case "hour":
-				then = now.Add(time.Duration(-1) * time.Hour).Format(format)
-
-			case "day":
-				then = now.AddDate(0, 0, -1).Format(format)
-
-			case "week":
-				then = now.AddDate(0, 0, -7).Format(format)
-
-			case "month":
-				then = now.AddDate(0, -1, 0).Format(format)
-
-			case "year":
-				then = now.AddDate(-1, 0, 0).Format(format)
-
-			default:
-				//check that property value is an array:
-				if dataType == "object" || dataType == "array" {
-					klog.V(7).Info("filter is object or array type. Operator is @>.")
-					operator = "@>"
-
-				} else {
-					klog.V(7).Info("filter is neither label nor in arrayProperties: ", filter)
-					operator = ""
-				}
-
-				then = val
-			}
-			// Add the value and operator to map
-			updateOpValueMap(operator, opValueMap, then)
+// Check if value is a date and get the operator
+// Returns a map that stores operator and values
+func getOperatorIfDateFilter(filter string, values []string,
+	opValueMap map[string][]string) map[string][]string {
+	now := time.Now()
+	for _, val := range values {
+		operator, operand := getOperatorFromString(val)
+		if operator == "=" { // For dates, unless specified otherwise, always check for values '>'
+			operator = ">"
 		}
+		var then string
+		format := "2006-01-02T15:04:05Z"
+		switch operand {
+		case "hour":
+			then = now.Add(time.Duration(-1) * time.Hour).Format(format)
+
+		case "day":
+			then = now.AddDate(0, 0, -1).Format(format)
+
+		case "week":
+			then = now.AddDate(0, 0, -7).Format(format)
+
+		case "month":
+			then = now.AddDate(0, -1, 0).Format(format)
+
+		case "year":
+			then = now.AddDate(-1, 0, 0).Format(format)
+		}
+		// Add the value and operator to map
+		updateOperatorValueMap(operator, opValueMap, then)
 	}
 	return opValueMap
 }
@@ -279,7 +339,7 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 }
 
 // helper function to point values in string  array
-func pointerToStringArray(pointerArray []*string) []string {
+func PointerToStringArray(pointerArray []*string) []string {
 
 	values := make([]string, len(pointerArray))
 	for i, val := range pointerArray {
@@ -290,52 +350,66 @@ func pointerToStringArray(pointerArray []*string) []string {
 	return values
 }
 
-func decodePropertyTypes(values []string, dataType string) ([]string, error) {
+func CheckIfInArray(lookupMap []string, uid string) bool {
+	for _, id := range lookupMap {
+		if id == uid {
+			return true
+		}
+	}
+	return false
+}
+
+func decodeObject(isPartialMatch bool, values []string) ([]string, error) {
 	cleanedVal := make([]string, len(values))
 
 	for i, val := range values {
-		if dataType == "object" {
-			labels := strings.Split(val, "=")
-			if len(labels) == 2 {
-				cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
+		operator, operand := getOperatorFromString(val)
+		labels := strings.Split(operand, "=")
+		if len(labels) == 2 {
+			if isPartialMatch {
+				cleanedVal[i] = fmt.Sprintf(`%s%s:%s`, operator, labels[0], labels[1])
 			} else {
-				return cleanedVal, fmt.Errorf("incorrect label format, label filters must have the format key=value")
+				cleanedVal[i] = fmt.Sprintf(`%s{"%s":"%s"}`, operator, labels[0], labels[1])
 			}
-		} else if dataType == "array" {
-			cleanedVal[i] = fmt.Sprintf(`["%s"]`, val)
+		} else {
+			if isPartialMatch {
+				cleanedVal[i] = fmt.Sprintf(`%s%s`, operator, labels[0])
+			} else {
+				return cleanedVal,
+					fmt.Errorf("incorrect label format, label filters must have the format key=value")
+			}
+		}
+
+	}
+	return cleanedVal, nil
+}
+
+func decodeArray(isPartialMatch bool, values []string) ([]string, error) {
+	cleanedVal := make([]string, len(values))
+
+	for i, val := range values {
+		operator, operand := getOperatorFromString(val)
+
+		if !isPartialMatch {
+			cleanedVal[i] = fmt.Sprintf(`%s["%s"]`, operator, operand)
 		} else {
 			cleanedVal[i] = val
 		}
-
-		values = cleanedVal
 	}
-	return values, nil
-
+	return cleanedVal, nil
 }
 
-// if func above fails because proptypes map is empty/doesn't contain value we default to old implementation:
-func decodePropertyTypesNoPropMap(values []string, filter *model.SearchFilter) []string {
-	// If property is of array type like label, remove the equal sign in it and use colon
-	// - to be similar to how it is stored in the database
-	if _, ok := arrayProperties[filter.Property]; ok {
-		cleanedVal := make([]string, len(values))
-		for i, val := range values {
-			labels := strings.Split(val, "=")
-			if len(labels) == 2 {
-				cleanedVal[i] = fmt.Sprintf(`{"%s":"%s"}`, labels[0], labels[1])
-			} else if len(labels) == 1 {
-				//// If property is of array type, format it as an array for easy searching
-				cleanedVal[i] = labels[0]
-			} else {
-				klog.Error("Error while decoding label string")
-				cleanedVal[i] = val
-			}
-		}
+func decodePropertyTypes(values []string, dataType string) ([]string, error) {
+	isPartialMatch := compareValues(values, []string{"*"})
 
-		values = cleanedVal
+	switch dataType {
+	case "object":
+		return decodeObject(isPartialMatch, values)
+	case "array":
+		return decodeArray(isPartialMatch, values)
+	default:
+		return values, nil
 	}
-
-	return values
 }
 
 func getKeys(stringKeyMap interface{}) []string {
@@ -365,4 +439,19 @@ func (s *SearchResult) setLimit() int {
 		limit = config.Cfg.QueryLimit
 	}
 	return limit
+}
+
+func matchOperatorToProperty(dataType string, opValueMap map[string][]string,
+	values []string, property string) map[string][]string {
+	if (dataType == "object" || dataType == "array") && !compareValues(values, []string{"*"}) {
+		opValueMap = extractOperator(values, "@>", opValueMap)
+	} else if compareValues(values, []string{"hour", "day", "week", "month", "year"}) {
+		// Check if value is a number or date and get the cleaned up value
+		opValueMap = getOperatorIfDateFilter(property, values, opValueMap)
+	} else if compareValues(values, []string{"*"}) { //partialMatch
+		opValueMap = getPartialMatchFilter(property, values, dataType, opValueMap)
+	} else {
+		opValueMap = extractOperator(values, "", opValueMap)
+	}
+	return opValueMap
 }

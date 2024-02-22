@@ -33,48 +33,78 @@ var cachedFedConfig = fedConfigCache{
 	fedConfig:   []RemoteSearchService{},
 }
 
+var (
+	routesGvr = schemav1.GroupVersionResource{
+		Group:    "route.openshift.io",
+		Version:  "v1",
+		Resource: "routes",
+	}
+	managedClustersGvr = schemav1.GroupVersionResource{
+		Group:    "cluster.open-cluster-management.io",
+		Version:  "v1",
+		Resource: "managedclusters",
+	}
+)
+
 func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSearchService {
 	cacheDuration := time.Duration(config.Cfg.Federation.ConfigCacheTTL) * time.Millisecond
 	if cachedFedConfig.lastUpdated.IsZero() || cachedFedConfig.lastUpdated.Add(cacheDuration).Before(time.Now()) {
 		klog.Infof("Refreshing federation config.")
-		cachedFedConfig.fedConfig = getFederationConfigFromSecret(ctx)
+		cachedFedConfig.fedConfig = getFederationConfigFromSecret(ctx, request)
 		cachedFedConfig.lastUpdated = time.Now()
 	} else {
 		klog.Infof("Using cached federation config.")
 	}
 
-	client := config.KubeClient()
-	ca, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "search-ca-crt", metav1.GetOptions{})
-	if err != nil {
-		klog.Errorf("Error getting search-ca-crt: %s", err)
-	}
-	// Add the global-hub (self) first.
-	local := RemoteSearchService{
-		Name:     config.Cfg.Federation.GlobalHubName,
-		URL:      "https://localhost:4010/searchapi/graphql",
-		Token:    strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
-		CABundle: []byte(ca.Data["service-ca.crt"]),
-	}
-
-	result := append(cachedFedConfig.fedConfig, local)
-	return result
+	logFederationConfig(cachedFedConfig.fedConfig)
+	return cachedFedConfig.fedConfig
 }
 
-// Read the secret search-global-token on each managed hub namespace to get the route token and certificates.
-func getFederationConfigFromSecret(ctx context.Context) []RemoteSearchService {
+func getLocalSearchApiConfig(request *http.Request) RemoteSearchService {
+	url := "https://search-search-api.open-cluster-management.svc:4010/searchapi/graphql" // FIXME: Namespace.
+
+	if config.Cfg.DevelopmentMode {
+		klog.Warningf("Running in DevelopmentMode. Using local self-signed certificate.")
+		url = "https://localhost:4010/searchapi/graphql"
+	}
+
+	return RemoteSearchService{
+		Name:     config.Cfg.Federation.GlobalHubName,
+		URL:      url,
+		Token:    strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
+		CABundle: []byte{}, // addded later in client.go
+	}
+}
+
+// Read the secret search-global-token on each managed hub namespace to get the token and certificates.
+func getFederationConfigFromSecret(ctx context.Context, request *http.Request) []RemoteSearchService {
 	result := []RemoteSearchService{}
 	resultLock := sync.Mutex{}
 	wg := sync.WaitGroup{}
 
+	// Add the local search-api on the global hub.
+	result = append(result, getLocalSearchApiConfig(request))
+
 	// Add the managed hubs.
 	client := config.KubeClient()
 	dynamicClient := config.GetDynamicClient()
-	gvr := schemav1.GroupVersionResource{
-		Group:    "cluster.open-cluster-management.io",
-		Version:  "v1",
-		Resource: "managedclusters",
+
+	// The kube-root-ca.crt has the CA bundle to verify the TLS connection to the cluster-proxy-user route in the global hub.
+	kubeRootCA, err := client.CoreV1().ConfigMaps("openshift-service-ca").Get(ctx, "kube-root-ca.crt", metav1.GetOptions{})
+	if err != nil {
+		klog.Errorf("Error getting the kube-root-ca.crt: %s", err)
 	}
-	managedClusters, err := dynamicClient.Resource(gvr).List(ctx, metav1.ListOptions{})
+
+	// Get the cluster-proxy-user route on the global hub. We use this to proxy the requests to the managed hubs.
+	routes, err := dynamicClient.Resource(routesGvr).List(ctx, metav1.ListOptions{
+		FieldSelector: "metadata.name=cluster-proxy-addon-user",
+	})
+	if err != nil {
+		klog.Errorf("Error getting the routes list: %s", err)
+	}
+	clusterProxyRoute := routes.Items[0].UnstructuredContent()["spec"].(map[string]interface{})["host"].(string)
+
+	managedClusters, err := dynamicClient.Resource(managedClustersGvr).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		klog.Errorf("Error getting the managed clusters list: %s", err)
 	} else {
@@ -92,13 +122,11 @@ func getFederationConfigFromSecret(ctx context.Context) []RemoteSearchService {
 				}
 			}
 			if !isManagedHub {
-				klog.Infof("Skipping managed cluster [%s] because it is not a managed hub.", hubName)
+				klog.V(5).Infof("Managed cluster [%s] is not a managed hub.	Skipping.", hubName)
 				continue
 			}
 
 			// Using cluster-proxy on global hub to access the search-api on managed hubs.
-			searchApiURL := "https://cluster-proxy-user.apps.sno-4xlarge-414-6rqfc.dev07.red-chesterfield.com/" // FIXME: get from cluster-proxy route.
-
 			// Get the ManagedServiceAccount token and ca.crt.
 			wg.Add(1)
 			go func(hubName string) {
@@ -111,21 +139,18 @@ func getFederationConfigFromSecret(ctx context.Context) []RemoteSearchService {
 				resultLock.Lock()
 				defer resultLock.Unlock()
 
-				if err != nil {
-					klog.Errorf("Error decoding ca.crt for managed hub [%s]: %s", hubName, err)
-					return
-				}
+				// FIXME: namespace is hardcoded to open-cluster-management.
 				result = append(result, RemoteSearchService{
-					Name:     hubName,
-					URL:      searchApiURL + hubName + "/api/v1/namespaces/open-cluster-management/services/search-search-api:4010/proxy-service/searchapi/graphql",
+					Name: hubName,
+					URL: "https://" + clusterProxyRoute + "/" + hubName +
+						"/api/v1/namespaces/open-cluster-management/services/search-search-api:4010/proxy-service/searchapi/graphql",
 					Token:    string(secret.Data["token"]),
-					CABundle: secret.Data["ca.crt"],
+					CABundle: []byte(kubeRootCA.Data["ca.crt"]),
 				})
 			}(hubName)
 		}
 	}
 	wg.Wait() // Wait for all managed hub configs to be retrieved.
-	logFederationConfig(result)
 
 	return result
 }
@@ -133,7 +158,7 @@ func getFederationConfigFromSecret(ctx context.Context) []RemoteSearchService {
 func logFederationConfig(fedConfig []RemoteSearchService) {
 	configStr := ""
 	for _, service := range fedConfig {
-		configStr += fmt.Sprintf("{ Name: %s URL: %s Token: [yes] TLSCert: [yes/no] }\n", service.Name, service.URL)
+		configStr += fmt.Sprintf("{ Name: %s , URL: %s }\n", service.Name, service.URL)
 	}
 	klog.Infof("Federation config:\n %s", configStr)
 }

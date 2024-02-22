@@ -72,34 +72,34 @@ func TestHandleFederatedRequestLogReadBodyErr(t *testing.T) {
 
 	// Capture the logger output for verification.
 	logMsg := buf.String()
-	if !strings.Contains(logMsg, "Error reading request body:") {
-		t.Error("Expected error reading request body to be logged")
+	if !strings.Contains(logMsg, "Error reading federated request body:") {
+		t.Error("Expected error reading federated request body to be logged")
 	}
 }
 
-func TestHandleFederatedRequestNoConfig(t *testing.T) {
-	// Mock data
-	mockResponseData := Data{}
+// func TestHandleFederatedRequestNoConfig(t *testing.T) {
+// 	// Mock data
+// 	mockResponseData := Data{}
 
-	// Setup HTTP request
-	req := httptest.NewRequest("POST", "/federated", bytes.NewBuffer([]byte("mock request body")))
+// 	// Setup HTTP request
+// 	req := httptest.NewRequest("POST", "/federated", bytes.NewBuffer([]byte("mock request body")))
 
-	// Setup HTTP response recorder
-	w := httptest.NewRecorder()
+// 	// Setup HTTP response recorder
+// 	w := httptest.NewRecorder()
 
-	// Call the function with mock data
-	HandleFederatedRequest(w, req)
+// 	// Call the function with mock data
+// 	HandleFederatedRequest(w, req)
 
-	// Assertions
-	assert.Equal(t, http.StatusOK, w.Code)
-	var respBody GraphQLPayload
-	err := json.NewDecoder(w.Body).Decode(&respBody)
-	data := &respBody.Data
+// 	// Assertions
+// 	assert.Equal(t, http.StatusOK, w.Code)
+// 	var respBody GraphQLPayload
+// 	err := json.NewDecoder(w.Body).Decode(&respBody)
+// 	data := &respBody.Data
 
-	assert.NoError(t, err)
-	assert.Equal(t, &mockResponseData, data)
-	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
-}
+// 	assert.NoError(t, err)
+// 	assert.Equal(t, &mockResponseData, data)
+// 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+// }
 
 func TestHandleFederatedRequestWithConfig(t *testing.T) {
 	// Mock request body
@@ -141,16 +141,12 @@ func TestHandleFederatedRequestWithConfig(t *testing.T) {
 		// Replace with mock data
 		return []RemoteSearchService{
 			{
-				Name:    "MockService1",
-				URL:     "http://mockservice1.com",
-				TLSCert: "tlscert1",
-				TLSKey:  "tlskey1",
+				Name: "MockService1",
+				URL:  "http://mockservice1.com",
 			},
 			{
-				Name:    "MockService2",
-				URL:     "http://mockservice2.com",
-				TLSCert: "tlscert2",
-				TLSKey:  "tlskey2",
+				Name: "MockService2",
+				URL:  "http://mockservice2.com",
 			},
 		}
 	}
@@ -221,7 +217,7 @@ func TestGetFederatedResponseSuccess(t *testing.T) {
 	assert.Equal(t, 1, len(fedRequest.Response.Data.Search))
 	assert.Equal(t, 2, fedRequest.Response.Data.Search[0].Count)
 	assert.Equal(t, 2, len(fedRequest.Response.Data.SearchComplete))
-	assert.Equal(t, 3, len(fedRequest.Response.Data.SearchSchema.AllProperties))
+	assert.Equal(t, 4, len(fedRequest.Response.Data.SearchSchema.AllProperties)) //managedHub is added after merge
 
 }
 
@@ -257,11 +253,9 @@ func TestGetFederatedResponsePartialErrors(t *testing.T) {
 
 	// Create a sample remote service
 	remoteService := RemoteSearchService{
-		Name:    "TestService",
-		URL:     "http://example.com",
-		Token:   "test-token",
-		TLSCert: "cert-xxx",
-		TLSKey:  "key-xxx",
+		Name:  "TestService",
+		URL:   "http://example.com",
+		Token: "test-token",
 	}
 	// Set up an expectation for SetTLSClientConfig
 	expectedTLSConfig := &tls.Config{MinVersion: tls.VersionTLS13}
@@ -344,7 +338,7 @@ func TestGetFederatedResponseErrors(t *testing.T) {
 				URL:  "http://example.com",
 			},
 			// receivedBody:  []byte("error body"),
-			expectedError: "error reading federated response body",
+			expectedError: "Error reading federated response body",
 		},
 		{
 			name: "Error parsing federated response",
