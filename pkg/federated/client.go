@@ -3,6 +3,7 @@ package federated
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"net/http"
 	"sync"
 	"time"
@@ -17,18 +18,19 @@ func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
 	client := httpClientPool.Get().(*RealHTTPClient)
 
 	tlsConfig := tls.Config{
+		RootCAs:    x509.NewCertPool(),
 		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
 	}
-	if remoteService.TLSCert != "" && remoteService.TLSKey != "" {
-		tlsConfig.Certificates = []tls.Certificate{
-			{
-				// RootCAs:     nil,
-				Certificate: [][]byte{[]byte(remoteService.TLSCert)},
-				PrivateKey:  []byte(remoteService.TLSKey),
-			},
+
+	if len(remoteService.CABundle) > 0 {
+		ok := tlsConfig.RootCAs.AppendCertsFromPEM(remoteService.CABundle)
+		if !ok {
+			klog.Warningf("Failed to parse root certificate for %s", remoteService.Name)
+		} else {
+			klog.Info("Using provided TLS CA bundle for ", remoteService.Name)
 		}
 	} else {
-		klog.Warningf("TLS cert and key not provided for %s. Skipping TLS verification.", remoteService.Name)
+		klog.Warningf("TLS CA bundle not provided for %s. Skipping TLS verification.", remoteService.Name)
 		tlsConfig.InsecureSkipVerify = true // #nosec G402 - FIXME: Add TLS verification.
 	}
 

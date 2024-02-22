@@ -17,11 +17,10 @@ import (
 
 // Holds the data needed to connect to a remote search service.
 type RemoteSearchService struct {
-	Name    string
-	URL     string
-	Token   string
-	TLSCert string
-	TLSKey  string
+	Name     string
+	URL      string
+	Token    string
+	CABundle []byte
 }
 
 type fedConfigCache struct {
@@ -44,11 +43,17 @@ func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSea
 		klog.Infof("Using cached federation config.")
 	}
 
+	client := config.KubeClient()
+	ca, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "search-ca-crt", metav1.GetOptions{})
+	if err != nil {
+		klog.Errorf("Error getting search-ca-crt: %s", err)
+	}
 	// Add the global-hub (self) first.
 	local := RemoteSearchService{
-		Name:  config.Cfg.Federation.GlobalHubName,
-		URL:   "https://localhost:4010/searchapi/graphql",
-		Token: strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
+		Name:     config.Cfg.Federation.GlobalHubName,
+		URL:      "https://localhost:4010/searchapi/graphql",
+		Token:    strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
+		CABundle: []byte(ca.Data["service-ca.crt"]),
 	}
 
 	result := append(cachedFedConfig.fedConfig, local)
@@ -91,14 +96,12 @@ func getFederationConfigFromSecret(ctx context.Context) []RemoteSearchService {
 				continue
 			}
 
-			// Get the search-api URL.
-			hubUrl := managedCluster.UnstructuredContent()["spec"].(map[string]interface{})["managedClusterClientConfigs"].([]interface{})[0].(map[string]interface{})["url"].(string)
-			searchApiURL := strings.ReplaceAll(hubUrl, "https://api", "https://search-global-hub-open-cluster-management.apps")
-			searchApiURL = strings.ReplaceAll(searchApiURL, ":6443", "/searchapi/graphql")
+			// Using cluster-proxy on global hub to access the search-api on managed hubs.
+			searchApiURL := "https://cluster-proxy-user.apps.sno-4xlarge-414-6rqfc.dev07.red-chesterfield.com/" // FIXME: get from cluster-proxy route.
 
-			// Get the search-api token.
+			// Get the ManagedServiceAccount token and ca.crt.
 			wg.Add(1)
-			go func(hubName, url string) {
+			go func(hubName string) {
 				defer wg.Done()
 				secret, err := client.CoreV1().Secrets(hubName).Get(ctx, "search-global", metav1.GetOptions{})
 				if err != nil {
@@ -107,13 +110,18 @@ func getFederationConfigFromSecret(ctx context.Context) []RemoteSearchService {
 				}
 				resultLock.Lock()
 				defer resultLock.Unlock()
+
+				if err != nil {
+					klog.Errorf("Error decoding ca.crt for managed hub [%s]: %s", hubName, err)
+					return
+				}
 				result = append(result, RemoteSearchService{
-					Name:  hubName,
-					URL:   url,
-					Token: string(secret.Data["token"]),
-					// TLSCert: string(secret.Data["ca.crt"]),
+					Name:     hubName,
+					URL:      searchApiURL + hubName + "/api/v1/namespaces/open-cluster-management/services/search-search-api:4010/proxy-service/searchapi/graphql",
+					Token:    string(secret.Data["token"]),
+					CABundle: secret.Data["ca.crt"],
 				})
-			}(hubName, searchApiURL)
+			}(hubName)
 		}
 	}
 	wg.Wait() // Wait for all managed hub configs to be retrieved.
