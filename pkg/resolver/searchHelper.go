@@ -43,7 +43,8 @@ func getOperatorFromString(value string) (string, string) {
 }
 
 // Extract operator (<=, >=, !=, !, <, >, =) if any from values. Combine with other operators like "*" if present.
-func extractOperator(values []string, innerOperator string, operatorOperandMap map[string][]string) map[string][]string {
+func extractOperator(values []string, innerOperator string,
+	operatorOperandMap map[string][]string) map[string][]string {
 	for _, value := range values {
 		operator, operand := getOperatorFromString(value)
 		if innerOperator != "" {
@@ -57,13 +58,14 @@ func extractOperator(values []string, innerOperator string, operatorOperandMap m
 
 // Check if value has partial match "*"
 // Returns a map that stores operator and values
-func getPartialMatchFilter(filter string, values []string, dataType interface{}, opValueMap map[string][]string) map[string][]string {
+func getPartialMatchFilter(filter string, values []string, dataType interface{},
+	operatorOperandMap map[string][]string) map[string][]string {
 	for i, val := range values {
 		if strings.Contains(val, "*") {
 			values[i] = strings.ReplaceAll(val, "*", "%")
 		}
 	}
-	return extractOperator(values, "*", opValueMap)
+	return extractOperator(values, "*", operatorOperandMap)
 }
 
 // compareValues checks if a string is equal to any string in an array of strings.
