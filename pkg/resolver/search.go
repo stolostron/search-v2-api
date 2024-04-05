@@ -288,7 +288,6 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 
 func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 	propTypeMap map[string]string) ([]exp.Expression, map[string]string, error) {
-	var opDateValueMap map[string][]string
 
 	var whereDs []exp.Expression
 	var err error
@@ -305,6 +304,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 
 	if input.Filters != nil {
 		for _, filter := range input.Filters {
+			opValueMap := map[string][]string{}
 			if len(filter.Values) == 0 {
 				klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
 				continue
@@ -316,45 +316,51 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 				klog.V(3).Infof("Property type for [%s] doesn't exist in cache. Refreshing property type cache",
 					filter.Property)
 				propTypeMapNew, err := getPropertyType(ctx, true) // Refresh the property type cache.
-				if err != nil {
-					klog.Errorf("Error creating property type map with err: [%s] ", err)
-					return whereDs, propTypeMap, fmt.Errorf("error [%s] fetching data type for property: [%s]", err, filter.Property)
-				}
-
 				propTypeMap = propTypeMapNew
-
 				dataType, dataTypeInMap = propTypeMap[filter.Property]
 				klog.Infof("For filter prop: %s, datatype is :%s dataTypeInMap: %t\n", filter.Property,
 					dataType, dataTypeInMap)
-			}
-
-			if len(propTypeMap) > 0 && dataTypeInMap {
-				klog.V(5).Infof("For filter prop: %s, datatype is :%s\n", filter.Property, dataType)
-
-				// if property matches then call decode function:
-				values, err = decodePropertyTypes(values, dataType)
-				if err != nil {
-					return whereDs, propTypeMap, err
+				if err != nil || !dataTypeInMap {
+					klog.Errorf("Error creating property type map with err: [%s] or datatype for  [%s] not found in map",
+						err, filter.Property)
+					return whereDs, propTypeMap, fmt.Errorf("error [%s] fetching data type for property: [%s]",
+						err, filter.Property)
 				}
-				// Check if value is a number or date and get the cleaned up value
-				opDateValueMap = getOperatorAndNumDateFilter(filter.Property, values, dataType)
-			} else {
-				klog.Error("Error with property type list is empty.")
-				values = decodePropertyTypesNoPropMap(values, filter)
-				// Check if value is a number or date and get the cleaned up value
-				opDateValueMap = getOperatorAndNumDateFilter(filter.Property, values, nil)
-
 			}
+
+			klog.V(5).Infof("For filter prop: %s, datatype is :%s\n", filter.Property, dataType)
+
+			// if property matches then call decode function:
+			values, err = decodePropertyTypes(values, dataType)
+			if err != nil {
+				return whereDs, propTypeMap, err
+			}
+			simpleMatch := true
+			if dataType == "object" || dataType == "array" {
+				opValueMap = extractOperator(values, "@>", opValueMap)
+				simpleMatch = false
+			}
+			// Check if value is a number or date and get the cleaned up value
+			if compareValues(values, []string{"hour", "day", "week", "month", "year"}) {
+				opValueMap = getOperatorIfDateFilter(filter.Property, values, opValueMap)
+				simpleMatch = false
+			}
+			if compareValues(values, []string{"*"}) {
+				opValueMap = getPartialMatchFilter(filter.Property, values, dataType, opValueMap)
+				simpleMatch = false
+			}
+			if simpleMatch {
+				opValueMap = extractOperator(values, "", opValueMap)
+			}
+
 			//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
-			keys := getKeys(opDateValueMap)
+			keys := getKeys(opValueMap)
 			var operatorWhereDs []exp.Expression //store all the clauses for this filter together
 			for _, operator := range keys {
 				operatorWhereDs = append(operatorWhereDs,
-					getWhereClauseExpression(filter.Property, operator, opDateValueMap[operator], propTypeMap[filter.Property])...)
+					getWhereClauseExpression(filter.Property, operator, opValueMap[operator], propTypeMap[filter.Property])...)
 			}
-
 			whereDs = append(whereDs, goqu.Or(operatorWhereDs...)) //Join all the clauses with OR
-
 		}
 	}
 

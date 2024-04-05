@@ -91,13 +91,13 @@ func Test_SearchResolver_CountWithOperatorNum(t *testing.T) {
 	val1 := "1"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val1}}}}
 	ud := rbac.UserData{CsResources: []rbac.Resource{}}
-	propTypesMock := map[string]string{"current": "number"}
+	propTypesMock := map[string]string{"kind": "string", "current": "number"}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, ud, propTypesMock)
 
 	// Mock the database query
 	mockRow := &Row{MockValue: 1}
 	mockPool.EXPECT().QueryRow(gomock.Any(),
-		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE (("data"->>'current' IN ('1')) AND ("cluster" = ANY ('{}')))`),
+		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ((("data"->'current')::numeric IN ('1')) AND ("cluster" = ANY ('{}')))`),
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
@@ -105,7 +105,7 @@ func Test_SearchResolver_CountWithOperatorNum(t *testing.T) {
 	assert.Nil(t, err)
 	// Verify response
 	if r != mockRow.MockValue {
-		t.Errorf("Incorrect Count() expected [%d] got [%d]", mockRow.MockValue, r)
+		t.Errorf("Incorrect Count(): expected [%d] got [%d]", mockRow.MockValue, r)
 	}
 }
 
@@ -241,7 +241,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	prop := "created"
 
 	val8 := "year"
-	opValMap := getOperatorAndNumDateFilter(prop, []string{val8}, nil)
+	opValMap := getOperatorIfDateFilter(prop, []string{val8}, map[string][]string{})
 	csres, nsres, mc := newUserData()
 
 	rbac := buildRbacWhereClause(context.TODO(),
@@ -255,7 +255,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val9 := "hour"
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val9}, nil)
+	opValMap = getOperatorIfDateFilter(prop, []string{val9}, map[string][]string{})
 	mockQueryHour, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0]), rbac).Limit(1000).ToSQL()
 
 	testOperatorHour := TestOperatorItem{
@@ -264,7 +264,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val10 := "day"
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val10}, nil)
+	opValMap = getOperatorIfDateFilter(prop, []string{val10}, map[string][]string{})
 	mockQueryDay, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0])), rbac).Limit(1000).ToSQL()
 
 	testOperatorDay := TestOperatorItem{
@@ -273,7 +273,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val11 := "week"
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val11}, nil)
+	opValMap = getOperatorIfDateFilter(prop, []string{val11}, map[string][]string{})
 	mockQueryWeek, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0])), rbac).Limit(1000).ToSQL()
 
 	testOperatorWeek := TestOperatorItem{
@@ -282,15 +282,14 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val12 := "month"
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val12}, nil)
+	opValMap = getOperatorIfDateFilter(prop, []string{val12}, map[string][]string{})
 	mockQueryMonth, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0])), rbac).Limit(1000).ToSQL()
 
 	testOperatorMonth := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: prop, Values: []*string{&val12}}}},
 		mockQuery:   mockQueryMonth, // `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'created' > ('2021-05-16T13:11:12Z')) LIMIT 1000`,
 	}
-
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val8, val9}, nil)
+	opValMap = getOperatorIfDateFilter(prop, []string{val8, val9}, map[string][]string{})
 	mockQueryMultiple, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.Or(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0]),
 		goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][1])), rbac).Limit(1000).ToSQL()
 
