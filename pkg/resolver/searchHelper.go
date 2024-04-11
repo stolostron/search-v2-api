@@ -358,3 +358,18 @@ func (s *SearchResult) setLimit() int {
 	}
 	return limit
 }
+
+func matchOperatorToProperty(dataType string, opValueMap map[string][]string,
+	values []string, property string) map[string][]string {
+	if dataType == "object" || dataType == "array" {
+		opValueMap = extractOperator(values, "@>", opValueMap)
+	} else if compareValues(values, []string{"hour", "day", "week", "month", "year"}) {
+		// Check if value is a number or date and get the cleaned up value
+		opValueMap = getOperatorIfDateFilter(property, values, opValueMap)
+	} else if compareValues(values, []string{"*"}) { //partialMatch
+		opValueMap = getPartialMatchFilter(property, values, dataType, opValueMap)
+	} else {
+		opValueMap = extractOperator(values, "", opValueMap)
+	}
+	return opValueMap
+}

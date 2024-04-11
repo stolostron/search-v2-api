@@ -877,3 +877,54 @@ func Test_SearchResolver_Items_WrongLabelFormat(t *testing.T) {
 		}
 	}
 }
+
+func Test_SearchResolver_Partial_Match(t *testing.T) {
+	// Create a SearchResolver instance with a mock connection pool.
+	cluster := "!local*"
+	val1 := "Temp*"
+	// SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" IN ('local-cluster')) AND ("cluster" = ANY ('{}'))) LIMIT 10
+	val2 := "!samples.operator.openshift.io/managed=true"
+
+	limit := 10
+
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}, {Property: "cluster", Values: []*string{&cluster}}, {Property: "label", Values: []*string{&val2}}}, Limit: &limit}
+	ud := rbac.UserData{CsResources: []rbac.Resource{}, ManagedClusters: map[string]struct{}{"test": {}}}
+	propTypesMock := map[string]string{"cluster": "string", "kind": "string", "label": "object"}
+
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, ud, propTypesMock)
+
+	// Mock the database queries.
+	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", limit)
+
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND NOT(("cluster" LIKE 'local%')) AND NOT("data"->'label' @> '{"samples.operator.openshift.io/managed":"true"}') AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`),
+		gomock.Eq([]interface{}{}),
+	).Return(mockRows, nil)
+
+	// Execute the function
+	result, err := resolver.Items()
+	assert.Nil(t, err)
+
+	// Verify returned items.
+	if len(result) != len(mockRows.mockData) {
+		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result))
+	}
+
+	// Verify properties for each returned item.
+	for i, item := range result {
+		mockRow := mockRows.mockData[i]
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow["_uid"] = mockRow["uid"]
+		expectedRow["cluster"] = mockRow["cluster"]
+
+		if len(item) != len(expectedRow) {
+			t.Errorf("Number of properties don't match for item[%d]. Expected: %d Got: %d", i, len(expectedRow), len(item))
+		}
+
+		for key, val := range item {
+			if val != expectedRow[key] {
+				t.Errorf("Value of key [%s] does not match for item [%d].\nExpected: %s\nGot: %s", key, i, expectedRow[key], val)
+			}
+		}
+	}
+}

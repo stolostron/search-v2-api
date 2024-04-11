@@ -335,23 +335,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 			if err != nil {
 				return whereDs, propTypeMap, err
 			}
-			simpleMatch := true
-			if dataType == "object" || dataType == "array" {
-				opValueMap = extractOperator(values, "@>", opValueMap)
-				simpleMatch = false
-			}
-			// Check if value is a number or date and get the cleaned up value
-			if compareValues(values, []string{"hour", "day", "week", "month", "year"}) {
-				opValueMap = getOperatorIfDateFilter(filter.Property, values, opValueMap)
-				simpleMatch = false
-			}
-			if compareValues(values, []string{"*"}) {
-				opValueMap = getPartialMatchFilter(filter.Property, values, dataType, opValueMap)
-				simpleMatch = false
-			}
-			if simpleMatch {
-				opValueMap = extractOperator(values, "", opValueMap)
-			}
+			opValueMap = matchOperatorToProperty(dataType, opValueMap, values, filter.Property)
 
 			//Sort map according to keys - This is for the ease/stability of tests when there are multiple operators
 			keys := getKeys(opValueMap)
