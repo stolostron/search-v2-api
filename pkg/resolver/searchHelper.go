@@ -25,7 +25,6 @@ func getPropertyType(ctx context.Context, refresh bool) (map[string]string, erro
 
 // Extract operator (<=, >=, !=, !, <, >, =) if any from string
 func getOperatorFromString(value string) (string, string) {
-	klog.Info("value: ", value)
 	operator := "="
 	operand := value
 
@@ -34,8 +33,7 @@ func getOperatorFromString(value string) (string, string) {
 		if cutString, yes := strings.CutPrefix(value, prefix); yes {
 			operator = prefix
 			operand = cutString
-			klog.Info("operator: ", operator)
-			klog.Info("operand: ", operand)
+			klog.V(5).Infof("Extracted operator: %s and operand: %s from value: %s", operator, operand, value)
 			break
 		}
 	}
@@ -197,8 +195,6 @@ func updateOperatorValueMap(operator string, operatorValueMap map[string][]strin
 // Returns a map that stores operator and values
 func getOperatorIfDateFilter(filter string, values []string,
 	opValueMap map[string][]string) map[string][]string {
-	klog.Info("1. In getOperatorAndNumDateFilter")
-
 	now := time.Now()
 	for _, val := range values {
 		operator, operand := getOperatorFromString(val)
