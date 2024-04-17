@@ -91,13 +91,13 @@ func Test_SearchResolver_CountWithOperatorNum(t *testing.T) {
 	val1 := "1"
 	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "current", Values: []*string{&val1}}}}
 	ud := rbac.UserData{CsResources: []rbac.Resource{}}
-	propTypesMock := map[string]string{"current": "number"}
+	propTypesMock := map[string]string{"kind": "string", "current": "number"}
 	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, ud, propTypesMock)
 
 	// Mock the database query
 	mockRow := &Row{MockValue: 1}
 	mockPool.EXPECT().QueryRow(gomock.Any(),
-		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE (("data"->>'current' IN ('1')) AND ("cluster" = ANY ('{}')))`),
+		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ((("data"->'current')::numeric IN ('1')) AND ("cluster" = ANY ('{}')))`),
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
@@ -105,7 +105,7 @@ func Test_SearchResolver_CountWithOperatorNum(t *testing.T) {
 	assert.Nil(t, err)
 	// Verify response
 	if r != mockRow.MockValue {
-		t.Errorf("Incorrect Count() expected [%d] got [%d]", mockRow.MockValue, r)
+		t.Errorf("Incorrect Count(): expected [%d] got [%d]", mockRow.MockValue, r)
 	}
 }
 
@@ -241,7 +241,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	prop := "created"
 
 	val8 := "year"
-	opValMap := getOperatorAndNumDateFilter(prop, []string{val8}, nil)
+	opValMap := getOperatorIfDateFilter(prop, []string{val8}, map[string][]string{})
 	csres, nsres, mc := newUserData()
 
 	rbac := buildRbacWhereClause(context.TODO(),
@@ -255,7 +255,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val9 := "hour"
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val9}, nil)
+	opValMap = getOperatorIfDateFilter(prop, []string{val9}, map[string][]string{})
 	mockQueryHour, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0]), rbac).Limit(1000).ToSQL()
 
 	testOperatorHour := TestOperatorItem{
@@ -264,7 +264,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val10 := "day"
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val10}, nil)
+	opValMap = getOperatorIfDateFilter(prop, []string{val10}, map[string][]string{})
 	mockQueryDay, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0])), rbac).Limit(1000).ToSQL()
 
 	testOperatorDay := TestOperatorItem{
@@ -273,7 +273,7 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val11 := "week"
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val11}, nil)
+	opValMap = getOperatorIfDateFilter(prop, []string{val11}, map[string][]string{})
 	mockQueryWeek, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0])), rbac).Limit(1000).ToSQL()
 
 	testOperatorWeek := TestOperatorItem{
@@ -282,15 +282,14 @@ func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	}
 
 	val12 := "month"
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val12}, nil)
+	opValMap = getOperatorIfDateFilter(prop, []string{val12}, map[string][]string{})
 	mockQueryMonth, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.L(`"data"->>?`, prop).Gt(goqu.L("?", opValMap[">"][0])), rbac).Limit(1000).ToSQL()
 
 	testOperatorMonth := TestOperatorItem{
 		searchInput: &model.SearchInput{Filters: []*model.SearchFilter{{Property: prop, Values: []*string{&val12}}}},
 		mockQuery:   mockQueryMonth, // `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->>'created' > ('2021-05-16T13:11:12Z')) LIMIT 1000`,
 	}
-
-	opValMap = getOperatorAndNumDateFilter(prop, []string{val8, val9}, nil)
+	opValMap = getOperatorIfDateFilter(prop, []string{val8, val9}, map[string][]string{})
 	mockQueryMultiple, _, _ := ds.SelectDistinct("uid", "cluster", "data").Where(goqu.Or(goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][0]),
 		goqu.L(`"data"->>?`, prop).Gt(opValMap[">"][1])), rbac).Limit(1000).ToSQL()
 
@@ -855,6 +854,57 @@ func Test_SearchResolver_Items_WrongLabelFormat(t *testing.T) {
 	// Execute the function
 	result, err := resolver.Items()
 	assert.Equal(t, "incorrect label format, label filters must have the format key=value", err.Error())
+	// Verify returned items.
+	if len(result) != len(mockRows.mockData) {
+		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result))
+	}
+
+	// Verify properties for each returned item.
+	for i, item := range result {
+		mockRow := mockRows.mockData[i]
+		expectedRow := formatDataMap(mockRow["data"].(map[string]interface{}))
+		expectedRow["_uid"] = mockRow["uid"]
+		expectedRow["cluster"] = mockRow["cluster"]
+
+		if len(item) != len(expectedRow) {
+			t.Errorf("Number of properties don't match for item[%d]. Expected: %d Got: %d", i, len(expectedRow), len(item))
+		}
+
+		for key, val := range item {
+			if val != expectedRow[key] {
+				t.Errorf("Value of key [%s] does not match for item [%d].\nExpected: %s\nGot: %s", key, i, expectedRow[key], val)
+			}
+		}
+	}
+}
+
+func Test_SearchResolver_Partial_Match(t *testing.T) {
+	// Create a SearchResolver instance with a mock connection pool.
+	cluster := "!local*"
+	val1 := "Temp*"
+	// SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" IN ('local-cluster')) AND ("cluster" = ANY ('{}'))) LIMIT 10
+	val2 := "!samples.operator.openshift.io/managed=true"
+
+	limit := 10
+
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}, {Property: "cluster", Values: []*string{&cluster}}, {Property: "label", Values: []*string{&val2}}}, Limit: &limit}
+	ud := rbac.UserData{CsResources: []rbac.Resource{}, ManagedClusters: map[string]struct{}{"test": {}}}
+	propTypesMock := map[string]string{"cluster": "string", "kind": "string", "label": "object"}
+
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, ud, propTypesMock)
+
+	// Mock the database queries.
+	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", limit)
+
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND NOT(("cluster" LIKE 'local%')) AND NOT("data"->'label' @> '{"samples.operator.openshift.io/managed":"true"}') AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`),
+		gomock.Eq([]interface{}{}),
+	).Return(mockRows, nil)
+
+	// Execute the function
+	result, err := resolver.Items()
+	assert.Nil(t, err)
+
 	// Verify returned items.
 	if len(result) != len(mockRows.mockData) {
 		t.Errorf("Items() received incorrect number of items. Expected %d Got: %d", len(mockRows.mockData), len(result))
