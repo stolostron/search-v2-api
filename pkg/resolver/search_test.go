@@ -892,14 +892,14 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			filterProp:    "container",
 			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND "data"->'container' @> '["acm-agent"]' AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
 		},
-		// {
-		// 	name:          "Not Match Array",
-		// 	cluster:       "local*",
-		// 	val1:          "Temp*",
-		// 	val2:          `!acm-agent`,
-		// 	filterProp:    "container",
-		// 	expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND "data"->'container' @> '["acm-agent"]' AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
-		// },
+		{
+			name:          "Not Match Array",
+			cluster:       "local*",
+			val1:          "Temp*",
+			val2:          `!acm-agent`,
+			filterProp:    "container",
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND NOT("data"->'container' @> '["acm-agent"]') AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+		},
 		{
 			name:          "Partial Match Array",
 			cluster:       "local*",
@@ -907,6 +907,14 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			val2:          "acm-*",
 			filterProp:    "container",
 			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE 'acm-%'))) AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+		},
+		{
+			name:          "Partial Not Match Array",
+			cluster:       "local*",
+			val1:          "Temp*",
+			val2:          "!acm-*",
+			filterProp:    "container",
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND NOT EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE 'acm-%'))) AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
 		},
 		{
 			name:          "Partial Match Label Key And Value",
@@ -981,4 +989,9 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_decodePropertyTypes(t *testing.T) {
+	_, err := decodePropertyTypes([]string{"!master"}, "array")
+	assert.Nil(t, err, "expected no error")
 }

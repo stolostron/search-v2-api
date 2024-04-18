@@ -58,31 +58,21 @@ func extractOperator(values []string, innerOperator string,
 // Returns a map that stores operator and values
 func getPartialMatchFilter(filter string, values []string, dataType interface{},
 	operatorOperandMap map[string][]string) map[string][]string {
-	klog.Info("In getPartialMatchFilter: dataType: ", dataType, " filter: ", filter, " values: ", values)
 	for i, val := range values {
 		if strings.Contains(val, "*") {
 			values[i] = strings.ReplaceAll(val, "*", "%")
 		}
 	}
 	if dataType == "object" {
-		klog.Info("In getPartialMatchFilter: object dataType:  ", dataType)
-
 		return extractOperator(values, "*@>", operatorOperandMap)
 	} else if dataType == "array" {
-		klog.Info("In getPartialMatchFilter: array dataType:  ", dataType)
-
 		return extractOperator(values, "*[]", operatorOperandMap)
 	}
-	klog.Info("In getPartialMatchFilter: simple dataType:  ", dataType)
-
 	return extractOperator(values, "*", operatorOperandMap)
 }
 
 // compareValues checks if a string is equal to any string in an array of strings.
 func compareValues(inputArray, compareArray []string) bool {
-	klog.Info("inputArray: ", inputArray)
-	klog.Info("compareArray: ", compareArray)
-
 	for _, date := range compareArray {
 		for _, str := range inputArray {
 			if strings.Contains(str, date) {
@@ -106,7 +96,6 @@ func getWhereClauseExpression(prop, operator string, values []string, dataType s
 			lhsExp = goqu.L(`("data"->?)?`, prop, goqu.L("::numeric"))
 		}
 	}
-	klog.Info("operator: ", operator, " dataType: ", dataType, " values: ", values)
 	switch operator {
 	case "*", "=:*":
 		for _, val := range values {
@@ -139,22 +128,15 @@ func getWhereClauseExpression(prop, operator string, values []string, dataType s
 			exps = append(exps, goqu.L(`?`, lhsExp).Gt(val))
 		}
 	case "!:*@>", "!=:*@>":
-		klog.Info(`In case "!:*@>", "!=:*@>" `, values)
 		exps = append(exps, goqu.L("NOT EXISTS(?)", createSubQueryForArray("object", prop, values)))
 
 	case ":*@>", "=:*@>":
-		klog.Info(`In case ":*@>", "=:*@>" `, values)
-
 		exps = append(exps, goqu.L("EXISTS(?)", createSubQueryForArray("object", prop, values)))
 
 	case "!:*[]", "!=:*[]":
-		klog.Info(`In case  "!:*[]", "!=:*[]" `, values)
-
 		exps = append(exps, goqu.L("NOT EXISTS(?)", createSubQueryForArray("array", prop, values)))
 
 	case ":*[]", "=:*[]":
-		klog.Info(`In case   ":*[]", "=:*[]" `, values)
-
 		exps = append(exps, goqu.L("EXISTS(?)", createSubQueryForArray("array", prop, values)))
 
 	case "@>", "=:@>":
@@ -167,10 +149,7 @@ func getWhereClauseExpression(prop, operator string, values []string, dataType s
 		}
 	case "?|":
 		exps = append(exps, goqu.L(`"data"->? ? ?`, prop, "?|", values))
-
 	default:
-		klog.Info(`In default `, values)
-
 		if prop == "kind" && isLower(values) {
 			//ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
 			exps = append(exps, goqu.L(`"data"->>?`, prop).ILike(goqu.Any(pq.Array(values))))
@@ -367,38 +346,57 @@ func pointerToStringArray(pointerArray []*string) []string {
 	return values
 }
 
-func decodePropertyTypes(values []string, dataType string) ([]string, error) {
+func decodeObject(isPartialMatch bool, values []string) ([]string, error) {
 	cleanedVal := make([]string, len(values))
 
-	isPartialMatch := compareValues(values, []string{"*"})
 	for i, val := range values {
-		if dataType == "object" {
-			operator, operand := getOperatorFromString(val)
-			labels := strings.Split(operand, "=")
-			if len(labels) == 2 {
-				if isPartialMatch {
-					cleanedVal[i] = fmt.Sprintf(`%s%s:%s`, operator, labels[0], labels[1])
-				} else {
-					cleanedVal[i] = fmt.Sprintf(`%s{"%s":"%s"}`, operator, labels[0], labels[1])
-				}
+		operator, operand := getOperatorFromString(val)
+		labels := strings.Split(operand, "=")
+		if len(labels) == 2 {
+			if isPartialMatch {
+				cleanedVal[i] = fmt.Sprintf(`%s%s:%s`, operator, labels[0], labels[1])
 			} else {
-				if isPartialMatch {
-					klog.Info("???????? labels: ", labels)
-					cleanedVal[i] = fmt.Sprintf(`%s%s`, operator, labels[0])
-				} else {
-					return cleanedVal,
-						fmt.Errorf("incorrect label format, label filters must have the format key=value")
-				}
+				cleanedVal[i] = fmt.Sprintf(`%s{"%s":"%s"}`, operator, labels[0], labels[1])
 			}
-		} else if !isPartialMatch && dataType == "array" {
-			cleanedVal[i] = fmt.Sprintf(`["%s"]`, val)
+		} else {
+			if isPartialMatch {
+				cleanedVal[i] = fmt.Sprintf(`%s%s`, operator, labels[0])
+			} else {
+				return cleanedVal,
+					fmt.Errorf("incorrect label format, label filters must have the format key=value")
+			}
+		}
+
+	}
+	return cleanedVal, nil
+}
+
+func decodeArray(isPartialMatch bool, values []string) ([]string, error) {
+	cleanedVal := make([]string, len(values))
+
+	for i, val := range values {
+		operator, operand := getOperatorFromString(val)
+
+		if !isPartialMatch {
+			cleanedVal[i] = fmt.Sprintf(`%s["%s"]`, operator, operand)
 		} else {
 			cleanedVal[i] = val
 		}
-		values = cleanedVal
 	}
-	klog.Info("cleaned value:", values)
-	return values, nil
+	return cleanedVal, nil
+}
+
+func decodePropertyTypes(values []string, dataType string) ([]string, error) {
+	isPartialMatch := compareValues(values, []string{"*"})
+
+	switch dataType {
+	case "object":
+		return decodeObject(isPartialMatch, values)
+	case "array":
+		return decodeArray(isPartialMatch, values)
+	default:
+		return values, nil
+	}
 }
 
 func getKeys(stringKeyMap interface{}) []string {
@@ -432,22 +430,14 @@ func (s *SearchResult) setLimit() int {
 
 func matchOperatorToProperty(dataType string, opValueMap map[string][]string,
 	values []string, property string) map[string][]string {
-	klog.Info("Is partial match? property ", property, compareValues(values, []string{"*"}))
 	if (dataType == "object" || dataType == "array") && !compareValues(values, []string{"*"}) {
-		klog.Info("******* DO OBJECT MATCH BUT NO PARTIAL")
-
 		opValueMap = extractOperator(values, "@>", opValueMap)
 	} else if compareValues(values, []string{"hour", "day", "week", "month", "year"}) {
-		klog.Info("******* DO DATE MATCH")
-
 		// Check if value is a number or date and get the cleaned up value
 		opValueMap = getOperatorIfDateFilter(property, values, opValueMap)
 	} else if compareValues(values, []string{"*"}) { //partialMatch
-		klog.Info("******* DO PARTIAL MATCH")
 		opValueMap = getPartialMatchFilter(property, values, dataType, opValueMap)
 	} else {
-		klog.Info("******* DO SIMPLE MATCH")
-
 		opValueMap = extractOperator(values, "", opValueMap)
 	}
 	return opValueMap
