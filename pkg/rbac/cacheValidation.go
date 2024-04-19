@@ -135,7 +135,10 @@ func (c *Cache) namespaceAdded(obj *unstructured.Unstructured) {
 		wg.Add(1)
 		go func(userCache *UserDataCache) { // All users updated asynchronously
 			defer wg.Done()
-			userCache.getSSRRforNamespace(context.TODO(), c, obj.GetName(), &lock)
+			userHasAllAccess, err := userCache.userHasAllAccess(context.TODO(), c)
+			if err != nil || !userHasAllAccess {
+				userCache.getSSRRforNamespace(context.TODO(), c, obj.GetName(), &lock)
+			}
 		}(userCache)
 	}
 	wg.Wait() // Wait until all users have been updated.
@@ -184,8 +187,11 @@ func (c *Cache) managedClusterAdded(obj *unstructured.Unstructured) {
 		wg.Add(1)
 		go func(userCache *UserDataCache) { // All users updated asynchronously
 			defer wg.Done()
-			// Refresh the SSRR, this will add the Managed cluster if user has access.
-			userCache.getSSRRforNamespace(context.TODO(), c, obj.GetName(), &lock)
+			userHasAllAccess, err := userCache.userHasAllAccess(context.TODO(), c)
+			if err != nil || !userHasAllAccess {
+				// Refresh the SSRR, this will add the Managed cluster if user has access.
+				userCache.getSSRRforNamespace(context.TODO(), c, obj.GetName(), &lock)
+			}
 		}(userCache)
 	}
 	wg.Wait() // Wait until all users have been updated.
