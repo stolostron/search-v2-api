@@ -163,6 +163,8 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		return true, nil
 	} else if user.userAuthorizedListSSAR(ctx, impersClientSet,
 		"get", "search.open-cluster-management.io", "searches/allManagedData") {
+		// Added to handle global hub search case.
+		// Refer to documentation https://github.com/stolostron/search-v2-operator/wiki/Global-Search-User-Configuration
 		user.csrCache.lock.Lock()
 		defer user.csrCache.lock.Unlock()
 		user.CsResources = []Resource{}

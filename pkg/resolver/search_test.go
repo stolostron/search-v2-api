@@ -948,6 +948,14 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			filterProp:    "label",
 			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND NOT(("cluster" LIKE 'local%')) AND NOT("data"->'label' @> '{"samples.operator.openshift.io/managed":"true"}') AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
 		},
+		{
+			name:          "Match Label Only star",
+			cluster:       "local*",
+			val1:          "Temp*",
+			val2:          "*",
+			filterProp:    "namespace",
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND ("data"->>'namespace' LIKE '%') AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+		},
 	}
 
 	limit := 10
@@ -968,7 +976,8 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 				CsResources:     []rbac.Resource{},
 				ManagedClusters: map[string]struct{}{"test": {}},
 			}
-			propTypesMock := map[string]string{"cluster": "string", "kind": "string", "container": "array", "label": "object"}
+			propTypesMock := map[string]string{"cluster": "string", "kind": "string", "container": "array",
+				"label": "object", "namespace": "string"}
 
 			resolver, mockPool := newMockSearchResolver(t, searchInput, nil, ud, propTypesMock)
 			mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", limit)
