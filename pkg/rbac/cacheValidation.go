@@ -127,21 +127,7 @@ func (c *Cache) namespaceAdded(obj *unstructured.Unstructured) {
 	c.shared.nsCache.lock.Unlock()
 
 	// Add the namespace to each user in UserData cache.
-	c.usersLock.Lock()
-	defer c.usersLock.Unlock()
-	wg := sync.WaitGroup{}
-	lock := sync.Mutex{}
-	for _, userCache := range c.users {
-		wg.Add(1)
-		go func(userCache *UserDataCache) { // All users updated asynchronously
-			defer wg.Done()
-			userHasAllAccess, err := userCache.userHasAllAccess(context.TODO(), c)
-			if err != nil || !userHasAllAccess {
-				userCache.getSSRRforNamespace(context.TODO(), c, obj.GetName(), &lock)
-			}
-		}(userCache)
-	}
-	wg.Wait() // Wait until all users have been updated.
+	c.updateUserDataCacheForObj(obj)
 
 	// Note: The ManagedCluster and DisabledClusters cache will get updated
 	// when we receive the ManagedCluster ADD event.
@@ -172,13 +158,17 @@ func (c *Cache) namespaceDeleted(obj *unstructured.Unstructured) {
 }
 
 func (c *Cache) managedClusterAdded(obj *unstructured.Unstructured) {
-	// Addd Managed Cluster to shared cache.
+	// Add Managed Cluster to shared cache.
 	c.shared.mcCache.lock.Lock()
 	c.shared.managedClusters[obj.GetName()] = struct{}{}
 	c.shared.mcCache.updatedAt = time.Now()
 	c.shared.mcCache.lock.Unlock()
+	// Add the managed cluster to each user in UserData cache.
+	c.updateUserDataCacheForObj(obj)
+}
 
-	// Update UserData cache for users with access to the managed cluster.
+func (c *Cache) updateUserDataCacheForObj(obj *unstructured.Unstructured) {
+	// Update UserData cache for users with access to the namespace/managed cluster.
 	c.usersLock.Lock()
 	defer c.usersLock.Unlock()
 	wg := sync.WaitGroup{}
@@ -189,7 +179,7 @@ func (c *Cache) managedClusterAdded(obj *unstructured.Unstructured) {
 			defer wg.Done()
 			userHasAllAccess, err := userCache.userHasAllAccess(context.TODO(), c)
 			if err != nil || !userHasAllAccess {
-				// Refresh the SSRR, this will add the Managed cluster if user has access.
+				// Refresh the SSRR, this will add the namespace/Managed cluster if user has access.
 				userCache.getSSRRforNamespace(context.TODO(), c, obj.GetName(), &lock)
 			}
 		}(userCache)
