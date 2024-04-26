@@ -84,6 +84,8 @@ func compareValues(inputArray, compareArray []string) bool {
 }
 
 func getWhereClauseExpression(prop, operator string, values []string, dataType string) []exp.Expression {
+	klog.V(5).Info("Building where clause for filter: ", prop, " with ", len(values), " values: ", values,
+		"and operator: ", operator)
 	exps := []exp.Expression{}
 	var lhsExp interface{}
 
@@ -183,16 +185,18 @@ func createSubQueryForArray(dataType, prop string, values []string) *goqu.Select
 			Select(goqu.L("1")).
 			Where(goqu.Or(subexps...))
 	} else {
+		var subexpInnerList []exp.Expression
 		var subexpList exp.ExpressionList
 		for _, val := range values {
 			keyValue := strings.Split(val, ":")
 			if len(keyValue) == 2 {
-				subexps = append(subexps, goqu.L(`key`).Like(keyValue[0]), goqu.L(`value`).Like(keyValue[1]))
-				subexpList = goqu.And(subexps...)
+				subexps := []exp.Expression{goqu.L(`key`).Like(keyValue[0]), goqu.L(`value`).Like(keyValue[1])}
+				subexpInnerList = append(subexpInnerList, goqu.And(subexps...))
 			} else {
-				subexps = append(subexps, goqu.L(`key`).Like(keyValue), goqu.L(`value`).Like(keyValue))
-				subexpList = goqu.Or(subexps...)
+				subexps := []exp.Expression{goqu.L(`key`).Like(keyValue), goqu.L(`value`).Like(keyValue)}
+				subexpInnerList = append(subexpInnerList, goqu.Or(subexps...))
 			}
+			subexpList = goqu.Or(subexpInnerList...)
 		}
 		return goqu.From(goqu.L(`jsonb_each_text("data"->?) As kv(key, value)`, prop)).
 			Select(goqu.L("1")).
