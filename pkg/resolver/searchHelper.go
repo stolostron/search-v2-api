@@ -63,6 +63,11 @@ func getPartialMatchFilter(filter string, values []string, dataType interface{},
 			values[i] = strings.ReplaceAll(val, "*", "%")
 		}
 	}
+	if dataType == "object" {
+		return extractOperator(values, "*@>", operatorOperandMap)
+	} else if dataType == "array" {
+		return extractOperator(values, "*[]", operatorOperandMap)
+	}
 	return extractOperator(values, "*", operatorOperandMap)
 }
 
@@ -79,6 +84,8 @@ func compareValues(inputArray, compareArray []string) bool {
 }
 
 func getWhereClauseExpression(prop, operator string, values []string, dataType string) []exp.Expression {
+	klog.V(5).Info("Building where clause for filter: ", prop, " with ", len(values), " values: ", values,
+		"and operator: ", operator)
 	exps := []exp.Expression{}
 	var lhsExp interface{}
 
@@ -91,7 +98,6 @@ func getWhereClauseExpression(prop, operator string, values []string, dataType s
 			lhsExp = goqu.L(`("data"->?)?`, prop, goqu.L("::numeric"))
 		}
 	}
-
 	switch operator {
 	case "*", "=:*":
 		for _, val := range values {
@@ -123,6 +129,18 @@ func getWhereClauseExpression(prop, operator string, values []string, dataType s
 		for _, val := range values {
 			exps = append(exps, goqu.L(`?`, lhsExp).Gt(val))
 		}
+	case "!:*@>", "!=:*@>":
+		exps = append(exps, goqu.L("NOT EXISTS(?)", createSubQueryForArray("object", prop, values)))
+
+	case ":*@>", "=:*@>":
+		exps = append(exps, goqu.L("EXISTS(?)", createSubQueryForArray("object", prop, values)))
+
+	case "!:*[]", "!=:*[]":
+		exps = append(exps, goqu.L("NOT EXISTS(?)", createSubQueryForArray("array", prop, values)))
+
+	case ":*[]", "=:*[]":
+		exps = append(exps, goqu.L("EXISTS(?)", createSubQueryForArray("array", prop, values)))
+
 	case "@>", "=:@>":
 		for _, val := range values {
 			exps = append(exps, goqu.L(`"data"->? @> ?`, prop, val))
@@ -133,7 +151,6 @@ func getWhereClauseExpression(prop, operator string, values []string, dataType s
 		}
 	case "?|":
 		exps = append(exps, goqu.L(`"data"->? ? ?`, prop, "?|", values))
-
 	default:
 		if prop == "kind" && isLower(values) {
 			//ILIKE to enable case-insensitive comparison for kind. Needed for V1 compatibility.
@@ -155,6 +172,36 @@ func getWhereClauseExpression(prop, operator string, values []string, dataType s
 	}
 	return exps
 
+}
+
+func createSubQueryForArray(dataType, prop string, values []string) *goqu.SelectDataset {
+	var subexps []exp.Expression
+
+	if dataType == "array" {
+		for _, val := range values {
+			subexps = append(subexps, goqu.L(`arrayProp`).Like(val))
+		}
+		return goqu.From(goqu.L(`jsonb_array_elements_text("data"->?) As arrayProp`, prop)).
+			Select(goqu.L("1")).
+			Where(goqu.Or(subexps...))
+	} else {
+		var subexpInnerList []exp.Expression
+		var subexpList exp.ExpressionList
+		for _, val := range values {
+			keyValue := strings.Split(val, ":")
+			if len(keyValue) == 2 {
+				subexps := []exp.Expression{goqu.L(`key`).Like(keyValue[0]), goqu.L(`value`).Like(keyValue[1])}
+				subexpInnerList = append(subexpInnerList, goqu.And(subexps...))
+			} else {
+				subexps := []exp.Expression{goqu.L(`key`).Like(keyValue), goqu.L(`value`).Like(keyValue)}
+				subexpInnerList = append(subexpInnerList, goqu.Or(subexps...))
+			}
+			subexpList = goqu.Or(subexpInnerList...)
+		}
+		return goqu.From(goqu.L(`jsonb_each_text("data"->?) As kv(key, value)`, prop)).
+			Select(goqu.L("1")).
+			Where(goqu.Or(subexpList))
+	}
 }
 
 // Check if the values contain numerical values
@@ -303,27 +350,57 @@ func pointerToStringArray(pointerArray []*string) []string {
 	return values
 }
 
-func decodePropertyTypes(values []string, dataType string) ([]string, error) {
+func decodeObject(isPartialMatch bool, values []string) ([]string, error) {
 	cleanedVal := make([]string, len(values))
 
 	for i, val := range values {
-		if dataType == "object" {
-			operator, operand := getOperatorFromString(val)
-			labels := strings.Split(operand, "=")
-			if len(labels) == 2 {
-				cleanedVal[i] = fmt.Sprintf(`%s{"%s":"%s"}`, operator, labels[0], labels[1])
+		operator, operand := getOperatorFromString(val)
+		labels := strings.Split(operand, "=")
+		if len(labels) == 2 {
+			if isPartialMatch {
+				cleanedVal[i] = fmt.Sprintf(`%s%s:%s`, operator, labels[0], labels[1])
 			} else {
-				return cleanedVal, fmt.Errorf("incorrect label format, label filters must have the format key=value")
+				cleanedVal[i] = fmt.Sprintf(`%s{"%s":"%s"}`, operator, labels[0], labels[1])
 			}
-		} else if dataType == "array" {
-			cleanedVal[i] = fmt.Sprintf(`["%s"]`, val)
+		} else {
+			if isPartialMatch {
+				cleanedVal[i] = fmt.Sprintf(`%s%s`, operator, labels[0])
+			} else {
+				return cleanedVal,
+					fmt.Errorf("incorrect label format, label filters must have the format key=value")
+			}
+		}
+
+	}
+	return cleanedVal, nil
+}
+
+func decodeArray(isPartialMatch bool, values []string) ([]string, error) {
+	cleanedVal := make([]string, len(values))
+
+	for i, val := range values {
+		operator, operand := getOperatorFromString(val)
+
+		if !isPartialMatch {
+			cleanedVal[i] = fmt.Sprintf(`%s["%s"]`, operator, operand)
 		} else {
 			cleanedVal[i] = val
 		}
-
-		values = cleanedVal
 	}
-	return values, nil
+	return cleanedVal, nil
+}
+
+func decodePropertyTypes(values []string, dataType string) ([]string, error) {
+	isPartialMatch := compareValues(values, []string{"*"})
+
+	switch dataType {
+	case "object":
+		return decodeObject(isPartialMatch, values)
+	case "array":
+		return decodeArray(isPartialMatch, values)
+	default:
+		return values, nil
+	}
 }
 
 func getKeys(stringKeyMap interface{}) []string {
@@ -357,7 +434,7 @@ func (s *SearchResult) setLimit() int {
 
 func matchOperatorToProperty(dataType string, opValueMap map[string][]string,
 	values []string, property string) map[string][]string {
-	if dataType == "object" || dataType == "array" {
+	if (dataType == "object" || dataType == "array") && !compareValues(values, []string{"*"}) {
 		opValueMap = extractOperator(values, "@>", opValueMap)
 	} else if compareValues(values, []string{"hour", "day", "week", "month", "year"}) {
 		// Check if value is a number or date and get the cleaned up value
