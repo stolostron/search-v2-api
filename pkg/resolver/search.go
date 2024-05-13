@@ -295,7 +295,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 	if input.Keywords != nil && len(input.Keywords) > 0 {
 		// Sample query: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data")
 		// WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' ILIKE ANY ('{"pod","deployment"}')))
-		keywords := pointerToStringArray(input.Keywords)
+		keywords := PointerToStringArray(input.Keywords)
 		for _, key := range keywords {
 			key = "%" + key + "%"
 			whereDs = append(whereDs, goqu.L(`"value"`).ILike(key).Expression())
@@ -309,7 +309,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 				klog.Warningf("Ignoring filter [%s] because it has no values", filter.Property)
 				continue
 			}
-			values := pointerToStringArray(filter.Values)
+			values := PointerToStringArray(filter.Values)
 
 			dataType, dataTypeInMap := propTypeMap[filter.Property]
 			if len(propTypeMap) == 0 || !dataTypeInMap {

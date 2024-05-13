@@ -339,7 +339,7 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 }
 
 // helper function to point values in string  array
-func pointerToStringArray(pointerArray []*string) []string {
+func PointerToStringArray(pointerArray []*string) []string {
 
 	values := make([]string, len(pointerArray))
 	for i, val := range pointerArray {
@@ -348,6 +348,15 @@ func pointerToStringArray(pointerArray []*string) []string {
 
 	}
 	return values
+}
+
+func CheckIfInArray(lookupMap []string, uid string) bool {
+	for _, id := range lookupMap {
+		if id == uid {
+			return true
+		}
+	}
+	return false
 }
 
 func decodeObject(isPartialMatch bool, values []string) ([]string, error) {
