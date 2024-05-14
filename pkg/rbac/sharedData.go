@@ -84,7 +84,7 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 	klog.V(5).Infof("Query for property datatypes: [%s] ", query)
 	rows, err := shared.pool.Query(ctx, query, params...)
 	if err != nil {
-		klog.Errorf("Error resolving property types query [%s] with args [%+v]. Error: [%+v]", query, err)
+		klog.Errorf("Error resolving property types query [%s]. Error: [%+v]", query, err)
 		return propTypeMap, err
 	}
 	defer rows.Close()
@@ -436,7 +436,7 @@ func (shared *SharedData) findSrchAddonDisabledClusters(ctx context.Context) (*m
 			var srchAddonDisabledCluster string
 			err := rows.Scan(&srchAddonDisabledCluster)
 			if err != nil {
-				klog.Errorf("Error %s resolving addon disabled cluster name for query: %s", err.Error())
+				klog.Errorf("Error %s resolving addon disabled cluster name for query: %s", err.Error(), sql)
 				continue // skip and continue in case of scan error
 			}
 			disabledClusters[srchAddonDisabledCluster] = struct{}{}

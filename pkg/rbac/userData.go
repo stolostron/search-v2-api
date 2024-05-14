@@ -454,7 +454,7 @@ func setImpersonationUserInfo(userInfo authv1.UserInfo) *rest.ImpersonationConfi
 		}
 		impersonConfig.Extra = extraUpdated //set additional information
 	}
-	klog.V(9).Info("UserInfo available for impersonation is %+v:", userInfo)
+	klog.V(9).Infof("UserInfo available for impersonation is %+v:", userInfo)
 	return impersonConfig
 }
 

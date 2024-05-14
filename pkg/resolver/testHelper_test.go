@@ -419,9 +419,9 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 			case *interface{}:
 				dest[i] = r.mockData[r.index-1][r.columnHeaders[i]]
 			case nil:
-				klog.Info("error type %T", v)
+				klog.Infof("error type %T", v)
 			default:
-				klog.Info("unexpected type %T", v)
+				klog.Infof("unexpected type %T", v)
 
 			}
 
