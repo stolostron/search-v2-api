@@ -92,6 +92,8 @@ func getWhereClauseExpression(prop, operator string, values []string, dataType s
 	// check if the property is cluster
 	if prop == "cluster" {
 		lhsExp = goqu.C(prop)
+	} else if prop == "managedHub" {
+		return exps
 	} else {
 		lhsExp = goqu.L(`"data"->>?`, prop)
 		if dataType == "number" {
