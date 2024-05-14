@@ -127,6 +127,8 @@ func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[str
 			klog.Errorf("Error retrieving property types. Error: [%+v]", err)
 			return map[string]string{}, err
 		} else {
+			// Record property type for managedHub - for Global Search - https://issues.redhat.com/browse/ACM-10019
+			propTypes["managedHub"] = "string"
 			klog.V(6).Info("Successfully retrieved property types!")
 
 			return propTypes, nil
