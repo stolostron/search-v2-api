@@ -239,7 +239,7 @@ func (s *SearchResult) getRelationResolvers(ctx context.Context) []SearchRelated
 	// defining variables
 	relatedMap := map[string][]string{} // Map to store relations
 	currSearchUidsMap := map[string]struct{}{}
-	for _, uid := range pointerToStringArray(s.uids) {
+	for _, uid := range PointerToStringArray(s.uids) {
 		currSearchUidsMap[uid] = struct{}{}
 	}
 	// Maps what each result is related to
@@ -297,7 +297,7 @@ func (s *SearchResult) getRelationResolvers(ctx context.Context) []SearchRelated
 
 		klog.V(6).Info("RelatedSearch Result: ", relatedSearch)
 	} else {
-		klog.Warning("No UIDs matched for relatedKinds: ", pointerToStringArray(s.input.RelatedKinds))
+		klog.Warning("No UIDs matched for relatedKinds: ", PointerToStringArray(s.input.RelatedKinds))
 	}
 	return relatedSearch
 }
@@ -327,7 +327,7 @@ func (s *SearchResult) filterRelatedUIDs(levelsMap map[string][]string) {
 			}
 		}
 		if len(s.uids) == 0 {
-			klog.Warning("No UIDs matched for relatedKinds: ", pointerToStringArray(s.input.RelatedKinds))
+			klog.Warning("No UIDs matched for relatedKinds: ", PointerToStringArray(s.input.RelatedKinds))
 		}
 	}
 
@@ -375,7 +375,7 @@ func (s *SearchResult) updResultToCurrSearchUidsMap(resultUid string, currSearch
 				resultToCurrSearchUidsMap[resultUid] = []string{relatedUid}
 			} else {
 				// if the relatedUid is not already added, append it
-				if !checkIfInArray(resultToCurrSearchUidsMap[resultUid], relatedUid) {
+				if !CheckIfInArray(resultToCurrSearchUidsMap[resultUid], relatedUid) {
 					resultToCurrSearchUidsMap[resultUid] = append(resultToCurrSearchUidsMap[resultUid], relatedUid)
 					klog.V(9).Infof("uid %s is newly mapped to uids %+v", resultUid,
 						resultToCurrSearchUidsMap[resultUid])
@@ -386,15 +386,6 @@ func (s *SearchResult) updResultToCurrSearchUidsMap(resultUid string, currSearch
 			break
 		}
 	}
-}
-
-func checkIfInArray(lookupMap []string, uid string) bool {
-	for _, id := range lookupMap {
-		if id == uid {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *SearchResult) setDepth() {
