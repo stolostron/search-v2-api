@@ -221,7 +221,7 @@ func TestGetFederatedResponseSuccess(t *testing.T) {
 	assert.Equal(t, 1, len(fedRequest.Response.Data.Search))
 	assert.Equal(t, 2, fedRequest.Response.Data.Search[0].Count)
 	assert.Equal(t, 2, len(fedRequest.Response.Data.SearchComplete))
-	assert.Equal(t, 3, len(fedRequest.Response.Data.SearchSchema.AllProperties))
+	assert.Equal(t, 4, len(fedRequest.Response.Data.SearchSchema.AllProperties)) //managedHub is added after merge
 
 }
 

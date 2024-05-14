@@ -4,6 +4,9 @@ package federated
 import (
 	"reflect"
 	"testing"
+
+	"github.com/stolostron/search-v2-api/pkg/resolver"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAppendRelatedResults(t *testing.T) {
@@ -29,4 +32,11 @@ func TestAppendRelatedResults(t *testing.T) {
 	if !reflect.DeepEqual(result, expected) {
 		t.Errorf("Unexpected result. Expected: %v, Got: %v", expected, result)
 	}
+}
+
+func Test_mergeSearchSchema(t *testing.T) {
+	d := &Data{}
+	d.mergeSearchSchema([]string{"kind", "cluster"})
+	shouldbeTrue := resolver.CheckIfInArray(d.SearchSchema.AllProperties, "managedHub")
+	assert.True(t, shouldbeTrue, true, "Expected managedHub to be present in the schema. Expected true, got %t", shouldbeTrue)
 }
