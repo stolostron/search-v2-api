@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 
+	slices "golang.org/x/exp/slices"
+
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -375,7 +377,7 @@ func (s *SearchResult) updResultToCurrSearchUidsMap(resultUid string, currSearch
 				resultToCurrSearchUidsMap[resultUid] = []string{relatedUid}
 			} else {
 				// if the relatedUid is not already added, append it
-				if !CheckIfInArray(resultToCurrSearchUidsMap[resultUid], relatedUid) {
+				if !slices.Contains(resultToCurrSearchUidsMap[resultUid], relatedUid) {
 					resultToCurrSearchUidsMap[resultUid] = append(resultToCurrSearchUidsMap[resultUid], relatedUid)
 					klog.V(9).Infof("uid %s is newly mapped to uids %+v", resultUid,
 						resultToCurrSearchUidsMap[resultUid])

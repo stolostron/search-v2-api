@@ -5,7 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stolostron/search-v2-api/pkg/resolver"
+	slices "golang.org/x/exp/slices"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -37,6 +38,6 @@ func TestAppendRelatedResults(t *testing.T) {
 func Test_mergeSearchSchema(t *testing.T) {
 	d := &Data{}
 	d.mergeSearchSchema([]string{"kind", "cluster"})
-	shouldbeTrue := resolver.CheckIfInArray(d.SearchSchema.AllProperties, "managedHub")
+	shouldbeTrue := slices.Contains(d.SearchSchema.AllProperties, "managedHub")
 	assert.True(t, shouldbeTrue, true, "Expected managedHub to be present in the schema. Expected true, got %t", shouldbeTrue)
 }

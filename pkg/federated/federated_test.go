@@ -40,7 +40,7 @@ func TestHandleFederatedRequestLogReadBodyErr(t *testing.T) {
 
 	defer func() { getFedConfig = realGetFederationConfig }()
 	// Mock getFederationConfig function
-	getFedConfig = func(ctx context.Context, request *http.Request) []RemoteSearchService {
+	getFedConfig = func(ctx context.Context, request *http.Request, clusterList []string) []RemoteSearchService {
 		// Replace with your mock data
 		return []RemoteSearchService{
 			{
@@ -137,7 +137,7 @@ func TestHandleFederatedRequestWithConfig(t *testing.T) {
 
 	defer func() { getFedConfig = realGetFederationConfig }()
 	// Mock getFederationConfig function
-	getFedConfig = func(ctx context.Context, request *http.Request) []RemoteSearchService {
+	getFedConfig = func(ctx context.Context, request *http.Request, clusterList []string) []RemoteSearchService {
 		// Replace with mock data
 		return []RemoteSearchService{
 			{

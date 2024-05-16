@@ -92,6 +92,10 @@ func getWhereClauseExpression(prop, operator string, values []string, dataType s
 	// check if the property is cluster
 	if prop == "cluster" {
 		lhsExp = goqu.C(prop)
+	} else if prop == "managedHub" { //ignore managedHub filter as it is not a property in the database.
+		// This property is used to federate the request to this specific hub.
+		// So, fetch results based on the other filters.
+		return exps
 	} else {
 		lhsExp = goqu.L(`"data"->>?`, prop)
 		if dataType == "number" {
@@ -348,15 +352,6 @@ func PointerToStringArray(pointerArray []*string) []string {
 
 	}
 	return values
-}
-
-func CheckIfInArray(lookupMap []string, uid string) bool {
-	for _, id := range lookupMap {
-		if id == uid {
-			return true
-		}
-	}
-	return false
 }
 
 func decodeObject(isPartialMatch bool, values []string) ([]string, error) {

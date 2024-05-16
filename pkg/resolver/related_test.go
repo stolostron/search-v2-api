@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	slices "golang.org/x/exp/slices"
+
 	"github.com/golang/mock/gomock"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -266,8 +268,8 @@ func Test_SearchResolver_Relationships_NoUserData(t *testing.T) {
 }
 
 func TestCheckIfInArray(t *testing.T) {
-	shouldbeTrue := CheckIfInArray([]string{"uid123", "uid234"}, "uid123")
-	shouldbeFalse := CheckIfInArray([]string{"uid123", "uid234"}, "uid456")
+	shouldbeTrue := slices.Contains([]string{"uid123", "uid234"}, "uid123")
+	shouldbeFalse := slices.Contains([]string{"uid123", "uid234"}, "uid456")
 	// Verify expected result
 	assert.True(t, shouldbeTrue, "uid uid123 is present in the list. Expected true, got %t", shouldbeTrue)
 	// Verify expected result

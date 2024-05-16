@@ -2,14 +2,21 @@
 package federated
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
+	slices "golang.org/x/exp/slices"
+
+	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
+	"github.com/stolostron/search-v2-api/pkg/resolver"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	schemav1 "k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
@@ -34,7 +41,7 @@ var cachedFedConfig = fedConfigCache{
 	fedConfig:   []RemoteSearchService{},
 }
 
-func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSearchService {
+func getFederationConfig(ctx context.Context, request *http.Request, clusterList []string) []RemoteSearchService {
 	cacheDuration := time.Duration(config.Cfg.Federation.ConfigCacheTTL) * time.Millisecond
 	if cachedFedConfig.lastUpdated.IsZero() || cachedFedConfig.lastUpdated.Add(cacheDuration).Before(time.Now()) {
 		klog.Infof("Refreshing federation config.")
@@ -50,8 +57,21 @@ func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSea
 		URL:   "https://localhost:4010/searchapi/graphql",
 		Token: strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
 	}
+	var result []RemoteSearchService
 
-	result := append(cachedFedConfig.fedConfig, local)
+	// if user is searching for specific managedHubs(clusterList), send search queries only to those hubs
+	if len(clusterList) > 0 {
+		for _, remoteSearchService := range cachedFedConfig.fedConfig {
+			if slices.Contains(clusterList, remoteSearchService.Name) {
+				result = append(result, remoteSearchService)
+				klog.V(3).Infof("Federating to %s as it is in the list of managedHubs", remoteSearchService.Name)
+			} else {
+				klog.V(3).Infof("Not federating to %s as it is not in the list of managedHubs", remoteSearchService.Name)
+			}
+		}
+	} else {
+		result = append(cachedFedConfig.fedConfig, local)
+	}
 	return result
 }
 
@@ -128,4 +148,63 @@ func logFederationConfig(fedConfig []RemoteSearchService) {
 		configStr += fmt.Sprintf("{ Name: %s URL: %s Token: [yes] TLSCert: [yes/no] }\n", service.Name, service.URL)
 	}
 	klog.Infof("Federation config:\n %s", configStr)
+}
+
+func quoteAllStrings(input string) string {
+	input = strings.Replace(input, "input:", "", 1)
+	input = strings.ReplaceAll(input, " ", "")
+	input = strings.ReplaceAll(input, `\`, "")
+	// Find all strings enclosed in double quotes or otherwise
+	re := regexp.MustCompile(`("[^"]*")|(\w+)`)
+	// Matche a string that consists of one or more digits
+	digitCheck := regexp.MustCompile(`^[0-9]+$`)
+
+	// Replace unquoted strings with quoted strings - exclude numbers
+	output := re.ReplaceAllStringFunc(input, func(match string) string {
+		if match[0] == '"' || digitCheck.MatchString(match) {
+			return match
+		}
+		return `"` + match + `"`
+	})
+	return output
+}
+
+func processRequestBody(receivedBody []byte) []string {
+	receivedBodyStr := string(receivedBody)
+	processedStr := strings.ReplaceAll(receivedBodyStr, `\n`, "")
+	processedStr = strings.ReplaceAll(processedStr, `\t`, "")
+	klog.V(4).Infof("Cleaned search query: %s", processedStr)
+	// Look for the search query part of the request
+	re := regexp.MustCompile(`search\((.*?)\)`)
+	return re.FindStringSubmatch(processedStr)
+}
+
+func managedHubList(receivedBody []byte) ([]string, error) {
+	matches := processRequestBody(receivedBody)
+	clusterList := []string{} // To store list of managedHubs
+
+	if len(matches) > 0 { // if there is a search request within the request
+		quotedStr := quoteAllStrings(matches[1])
+		klog.V(4).Infof("Federated Search Input", quotedStr)
+		searchInput := []model.SearchInput{}
+		buf := bytes.NewBufferString(quotedStr)
+		unmarshalErr := json.Unmarshal(buf.Bytes(), &searchInput)
+		if unmarshalErr != nil {
+			klog.Errorf("Error unmarshaling search input %s: %+v", quotedStr, unmarshalErr)
+			return clusterList, unmarshalErr
+		}
+		klog.V(4).Infof("Found %d search requests in the federated request:", len(searchInput))
+		// TODO: Have to check the case when multiple requests are present
+		fedSearchInput := searchInput[0]
+		// Get the clusterlist to send request to
+		if len(fedSearchInput.Filters) > 0 {
+			for _, filter := range fedSearchInput.Filters {
+				if filter.Property == "managedHub" {
+					clusterList = resolver.PointerToStringArray(filter.Values)
+					break
+				}
+			}
+		}
+	}
+	return clusterList, nil
 }

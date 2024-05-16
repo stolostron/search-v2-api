@@ -42,8 +42,18 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 			Errors: []string{},
 		},
 	}
+	// Check if receivedBody has ManagedHub filter - if yes, get FedConfig only for select managedHubs
+	clusterList, hubListErr := managedHubList(receivedBody)
+	if hubListErr != nil {
+		klog.Errorf("Error fetching managed hub list %s: %+v", string(receivedBody), hubListErr)
+		sendResponse(w, &GraphQLPayload{
+			Data:   Data{},
+			Errors: []string{fmt.Errorf("error fetching managed hub list: %s", hubListErr).Error()},
+		})
+		return
+	}
+	fedConfig := getFedConfig(ctx, r, clusterList)
 
-	fedConfig := getFedConfig(ctx, r)
 	klog.V(2).Infof("Sending federated query to %d remote services.", len(fedConfig))
 
 	wg := sync.WaitGroup{}
@@ -51,6 +61,7 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(remoteService RemoteSearchService) {
 			defer wg.Done()
+			klog.V(5).Info("Sending federated request to ", remoteService.Name)
 			// Get the http client from pool.
 			client := httpClientGetter(remoteService)
 			fedRequest.getFederatedResponse(remoteService, receivedBody, client)
