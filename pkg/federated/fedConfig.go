@@ -175,7 +175,15 @@ func processRequestBody(receivedBody []byte) []string {
 	processedStr = strings.ReplaceAll(processedStr, `\t`, "")
 	klog.V(4).Infof("Cleaned search query: %s", processedStr)
 	// Look for the search query part of the request
-	re := regexp.MustCompile(`search\((.*?)\)`)
+	// if search query is provided as input variables
+	re := regexp.MustCompile(`"variables":{"input":(.*?)},"query"`)
+	searchQuery := re.FindStringSubmatch(processedStr)
+	if len(searchQuery) > 0 {
+		return searchQuery
+	} else {
+		// if search query is embedded in the queryString itself
+		re = regexp.MustCompile(`search\((.*?)\)`)
+	}
 	return re.FindStringSubmatch(processedStr)
 }
 
@@ -185,7 +193,7 @@ func managedHubList(receivedBody []byte) ([]string, error) {
 
 	if len(matches) > 0 { // if there is a search request within the request
 		quotedStr := quoteAllStrings(matches[1])
-		klog.V(4).Infof("Federated Search Input", quotedStr)
+		klog.V(4).Infof("Federated Search Input %s", quotedStr)
 		searchInput := []model.SearchInput{}
 		buf := bytes.NewBufferString(quotedStr)
 		unmarshalErr := json.Unmarshal(buf.Bytes(), &searchInput)
@@ -205,6 +213,8 @@ func managedHubList(receivedBody []byte) ([]string, error) {
 				}
 			}
 		}
+	} else {
+		klog.V(4).Info("managedHubList not found in search query, ", string(receivedBody))
 	}
 	return clusterList, nil
 }
