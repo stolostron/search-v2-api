@@ -13,9 +13,12 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
 	"k8s.io/klog/v2"
 )
 
@@ -403,6 +406,79 @@ func TestGetFederatedResponseErrors(t *testing.T) {
 			assert.Contains(t, fedRequest.Response.Errors[0], tc.expectedError)
 		})
 	}
+}
+
+func TestManagedHubFederatedResponseSuccess(t *testing.T) {
+
+	// Mock fedConfig
+	cachedFedConfig = fedConfigCache{
+		lastUpdated: time.Now(),
+		fedConfig: []RemoteSearchService{{Name: "test-hub-a",
+			URL:     "https://api.mockHubUrl.com:6443",
+			Token:   "mockToken",
+			TLSCert: "mocktlscert",
+			TLSKey:  "mocktlskey"}},
+	}
+	// Mock data
+	mockResponseData := Data{
+		Search:        []SearchResult{{Count: 2, Items: []map[string]interface{}{{"kind": "Pod", "ns": "ns1", "managedHub": "test-hub-a"}, {"kind": "Job", "ns": "ns1", "managedHub": "test-hub-a"}}}},
+		GraphQLSchema: "schema",
+	}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	realGetHttpClient := httpClientGetter
+
+	// Create a sample response body
+	payLoad := GraphQLPayload{Data: Data{
+		Search:        []SearchResult{{Count: 2, Items: []map[string]interface{}{{"kind": "Pod", "ns": "ns1"}, {"kind": "Job", "ns": "ns1"}}}},
+		GraphQLSchema: "schema",
+	},
+		Errors: nil,
+	}
+	responseBody, _ := json.Marshal(&payLoad)
+
+	// Create a mock HTTP client
+	mockClient := &MockHTTPClient{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			// Mock HTTP response
+			return &http.Response{
+				Status:     "200 OK",
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBuffer(responseBody)),
+			}, nil
+		},
+		SetTLSClientConfigFunc: func(config *tls.Config) {
+		},
+	}
+	defer func() { httpClientGetter = realGetHttpClient }()
+
+	// Set httpClientGetter to return the mock client
+	httpClientGetter = func(remoteService RemoteSearchService) HTTPClient {
+		return mockClient
+	}
+
+	receivedBody := []byte(`{"query":"query{\n  search(\n  input: [\n  {filters:[{property:\"kind\",values:[\"*\"]},\n    {property:\"managedHub\",values:[\"test-hub-a\"]}\n  ],limit:1000}]\n\t\t\t   ) {\n\t\t\t     count\n    items\n\t\t\t   }\n\t}"}`)
+
+	// Setup HTTP request
+	req := httptest.NewRequest("POST", "/federated", bytes.NewBuffer(receivedBody))
+
+	// Setup HTTP response recorder
+	w := httptest.NewRecorder()
+
+	// Call the function with mock data
+	HandleFederatedRequest(w, req)
+
+	// Assertions
+	assert.Equal(t, http.StatusOK, w.Code)
+	var respBody = GraphQLPayload{}
+
+	err := json.NewDecoder(w.Body).Decode(&respBody)
+	data := &respBody.Data
+
+	assert.NoError(t, err)
+	assert.Equal(t, &mockResponseData, data)
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 }
 
 // errorReader is a custom reader that always returns an error.
