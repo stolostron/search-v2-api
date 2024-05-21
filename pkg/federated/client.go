@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -12,26 +13,68 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// This function returns an http client to communicate with the search-api service on the global hub cluster.
+func getLocalHttpClient() HTTPClient {
+	tlsConfig := tls.Config{
+		RootCAs:    x509.NewCertPool(),
+		MinVersion: tls.VersionTLS13,
+	}
+
+	localDev := true // TODO: Add to config.
+	if localDev {
+		klog.Warningf("DevMode is enabled. Using local self-signed certificate.")
+		// Read the local self-signed CA bundle file.
+		tlsCert, err := os.ReadFile("sslcert/tls.crt")
+		if err != nil {
+			klog.Errorf("Error reading local self-signed certificate: %s", err)
+		} else {
+			tlsConfig.RootCAs.AppendCertsFromPEM([]byte(tlsCert))
+		}
+	} else {
+		klog.Info("Get the CA bundle from search-ca-crt configmap.")
+	}
+	client := &RealHTTPClient{
+		&http.Client{
+			Transport: &http.Transport{
+				MaxIdleConns:          config.Cfg.Federation.HttpPool.MaxIdleConns,
+				IdleConnTimeout:       time.Duration(config.Cfg.Federation.HttpPool.MaxIdleConnTimeout) * time.Millisecond,
+				ResponseHeaderTimeout: time.Duration(config.Cfg.Federation.HttpPool.ResponseHeaderTimeout) * time.Millisecond,
+				DisableKeepAlives:     false,
+				TLSClientConfig:       &tlsConfig,
+				MaxConnsPerHost:       config.Cfg.Federation.HttpPool.MaxConnsPerHost,
+				MaxIdleConnsPerHost:   config.Cfg.Federation.HttpPool.MaxIdleConnPerHost,
+			},
+			Timeout: time.Duration(config.Cfg.Federation.HttpPool.RequestTimeout) * time.Millisecond,
+		},
+	}
+	return client
+}
+
 // Returns a client to process the federated request.
 func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
+	if remoteService.Name == config.Cfg.Federation.GlobalHubName {
+		return getLocalHttpClient()
+	}
+
 	// Get http client from pool.
 	client := httpClientPool.Get().(*RealHTTPClient)
 
+	// Set the TLS client configuration.
 	tlsConfig := tls.Config{
 		RootCAs:    x509.NewCertPool(),
-		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
+		MinVersion: tls.VersionTLS13,
 	}
 
 	if len(remoteService.CABundle) > 0 {
 		ok := tlsConfig.RootCAs.AppendCertsFromPEM(remoteService.CABundle)
-		if !ok {
-			klog.Warningf("Failed to parse root certificate for %s", remoteService.Name)
+		if ok {
+			klog.Info("Added provided TLS CA bundle for ", remoteService.Name)
 		} else {
-			klog.Info("Using provided TLS CA bundle for ", remoteService.Name)
+			klog.Warningf("Failed to parse and append root certificate for %s", remoteService.Name)
 		}
 	} else {
-		klog.Warningf("TLS CA bundle not provided for %s. Skipping TLS verification.", remoteService.Name)
-		tlsConfig.InsecureSkipVerify = true // #nosec G402 - FIXME: Add TLS verification.
+		klog.Warningf("TLS CA bundle not provided for remote service: %s.", remoteService.Name)
+
 	}
 
 	client.SetTLSClientConfig(&tlsConfig)
@@ -48,7 +91,7 @@ var tr = &http.Transport{
 	ResponseHeaderTimeout: time.Duration(config.Cfg.Federation.HttpPool.ResponseHeaderTimeout) * time.Millisecond,
 	DisableKeepAlives:     false,
 	TLSClientConfig: &tls.Config{
-		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
+		MinVersion: tls.VersionTLS13,
 	},
 	MaxConnsPerHost:     config.Cfg.Federation.HttpPool.MaxConnsPerHost,
 	MaxIdleConnsPerHost: config.Cfg.Federation.HttpPool.MaxIdleConnPerHost,

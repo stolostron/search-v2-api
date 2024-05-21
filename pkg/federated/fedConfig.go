@@ -43,24 +43,20 @@ func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSea
 		klog.Infof("Using cached federation config.")
 	}
 
-	client := config.KubeClient()
-	ca, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "search-ca-crt", metav1.GetOptions{})
-	if err != nil {
-		klog.Errorf("Error getting search-ca-crt: %s", err)
-	}
-	// Add the global-hub (self) first.
+	// Add the search-api on the global-hub (self).
 	local := RemoteSearchService{
-		Name:     config.Cfg.Federation.GlobalHubName,
-		URL:      "https://localhost:4010/searchapi/graphql",
-		Token:    strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
-		CABundle: []byte(ca.Data["service-ca.crt"]),
+		Name:  config.Cfg.Federation.GlobalHubName,
+		URL:   "https://localhost:4010/searchapi/graphql",
+		Token: strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
 	}
 
 	result := append(cachedFedConfig.fedConfig, local)
+
+	logFederationConfig(result)
 	return result
 }
 
-// Read the secret search-global-token on each managed hub namespace to get the route token and certificates.
+// Read the secret search-global-token on each managed hub namespace to get the token and certificates.
 func getFederationConfigFromSecret(ctx context.Context) []RemoteSearchService {
 	result := []RemoteSearchService{}
 	resultLock := sync.Mutex{}
@@ -69,6 +65,25 @@ func getFederationConfigFromSecret(ctx context.Context) []RemoteSearchService {
 	// Add the managed hubs.
 	client := config.KubeClient()
 	dynamicClient := config.GetDynamicClient()
+
+	// Get the cluster-proxy-user route on the global hub. We use this to proxy the requests to the managed hubs.
+	routesGvr := schemav1.GroupVersionResource{
+		Group:    "route.openshift.io",
+		Version:  "v1",
+		Resource: "routes",
+	}
+	routes, err := dynamicClient.Resource(routesGvr).List(ctx, metav1.ListOptions{
+		FieldSelector: "metadata.name=cluster-proxy-addon-user",
+	})
+	if err != nil {
+		klog.Errorf("Error getting the routes list: %s", err)
+	}
+	clusterProxyRoute := routes.Items[0].UnstructuredContent()["spec"].(map[string]interface{})["host"].(string)
+	klog.Infof("Cluster proxy route: %s", clusterProxyRoute)
+
+	// The kube-root-ca.crt has the CA bundle to verify the TLS connection to the cluster-proxy-user route in the global hub.
+	kubeRootCA, err := client.CoreV1().ConfigMaps("openshift-service-ca").Get(ctx, "kube-root-ca.crt", metav1.GetOptions{})
+
 	gvr := schemav1.GroupVersionResource{
 		Group:    "cluster.open-cluster-management.io",
 		Version:  "v1",
@@ -92,13 +107,11 @@ func getFederationConfigFromSecret(ctx context.Context) []RemoteSearchService {
 				}
 			}
 			if !isManagedHub {
-				klog.Infof("Skipping managed cluster [%s] because it is not a managed hub.", hubName)
+				klog.V(5).Infof("Managed cluster [%s] is not a managed hub.	Skipping.", hubName)
 				continue
 			}
 
 			// Using cluster-proxy on global hub to access the search-api on managed hubs.
-			searchApiURL := "https://cluster-proxy-user.apps.sno-4xlarge-414-6rqfc.dev07.red-chesterfield.com/" // FIXME: get from cluster-proxy route.
-
 			// Get the ManagedServiceAccount token and ca.crt.
 			wg.Add(1)
 			go func(hubName string) {
@@ -111,21 +124,17 @@ func getFederationConfigFromSecret(ctx context.Context) []RemoteSearchService {
 				resultLock.Lock()
 				defer resultLock.Unlock()
 
-				if err != nil {
-					klog.Errorf("Error decoding ca.crt for managed hub [%s]: %s", hubName, err)
-					return
-				}
 				result = append(result, RemoteSearchService{
-					Name:     hubName,
-					URL:      searchApiURL + hubName + "/api/v1/namespaces/open-cluster-management/services/search-search-api:4010/proxy-service/searchapi/graphql",
+					Name: hubName,
+					URL: "https://" + clusterProxyRoute + "/" + hubName +
+						"/api/v1/namespaces/open-cluster-management/services/search-search-api:4010/proxy-service/searchapi/graphql",
 					Token:    string(secret.Data["token"]),
-					CABundle: secret.Data["ca.crt"],
+					CABundle: []byte(kubeRootCA.Data["ca.crt"]),
 				})
 			}(hubName)
 		}
 	}
 	wg.Wait() // Wait for all managed hub configs to be retrieved.
-	logFederationConfig(result)
 
 	return result
 }

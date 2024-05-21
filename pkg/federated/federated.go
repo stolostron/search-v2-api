@@ -54,7 +54,8 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 			// Get the http client from pool.
 			client := httpClientGetter(remoteService)
 			fedRequest.getFederatedResponse(remoteService, receivedBody, client)
-			httpClientPool.Put(client) // Put the client back into the pool for reuse.
+			// TODO: Test if this causes problems whith multiple hubs.
+			// httpClientPool.Put(client) // Put the client back into the pool for reuse.
 		}(remoteService)
 	}
 	klog.V(2).Info("Waiting for all federated requests to respond.")
