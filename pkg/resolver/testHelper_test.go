@@ -94,8 +94,8 @@ func (r *Row) Scan(dest ...interface{}) error {
 }
 
 // Load mock data from a json file.
-// NOTE: Don't add additional logic to filter or modify the mock data in
-//       this function. If needed, it should be added in a separate function.
+/*NOTE: Don't add additional logic to filter or modify the mock data in
+//       this function. If needed, it should be added in a separate function.*/
 func newMockRows(mockDataFile string) *MockRows {
 	bytes, _ := os.ReadFile(mockDataFile)
 	var data map[string]interface{}
@@ -131,11 +131,11 @@ func newMockRows(mockDataFile string) *MockRows {
 	}
 }
 
-// TODO: Update this function to load the date with newMockRows()
+/*TODO: Update this function to load the date with newMockRows()
 //       and then filter or update the mocks as needed.
 // NOTE: Try to keep the mock data as simple as possible. Try creating a new mock data json file
 //       instead of adding special load logic in this function.
-//
+*/
 // Prop will be the property input for searchComplete
 func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop string, limit int) *MockRows {
 	// Read json file and build mock data
@@ -307,7 +307,7 @@ func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, ite
 	var relatedValues []string
 
 	if len(input.RelatedKinds) > 0 {
-		relatedValues = pointerToStringArray(input.RelatedKinds)
+		relatedValues = PointerToStringArray(input.RelatedKinds)
 		data := item.(map[string]interface{})["properties"].(map[string]interface{})
 		destkind := data["kind"].(string)
 		if stringInSlice(destkind, relatedValues) {
@@ -319,11 +319,9 @@ func useInputFilterToLoadData(mockDataFile string, input *model.SearchInput, ite
 
 	for _, filter := range input.Filters {
 		if len(filter.Values) > 0 {
-			values := pointerToStringArray(filter.Values) //get the filter values
-			propTypesMock := map[string]string{}
-			_, datatype, _ := WhereClauseFilter(context.Background(), input, propTypesMock)
-
-			opValueMap := getOperatorAndNumDateFilter(filter.Property, values, datatype) // get the filter values if property is a number or date
+			values := PointerToStringArray(filter.Values) //get the filter values
+			opValueMap := extractOperator(values, "", map[string][]string{})
+			opValueMap = getOperatorIfDateFilter(filter.Property, values, opValueMap) // get the filter values if property is a number or date
 			var op string
 			for key, val := range opValueMap {
 				op = key
@@ -405,7 +403,7 @@ func (r *MockRows) Next() bool {
 	return r.index <= len(r.mockData)
 }
 
-//Mocking the Scan function for rows:
+// Mocking the Scan function for rows:
 func (r *MockRows) Scan(dest ...interface{}) error {
 
 	if len(dest) > 1 { // For search function
@@ -459,9 +457,9 @@ func (r *MockRows) RawValues() [][]byte { return nil }
 
 func AssertStringArrayEqual(t *testing.T, result, expected []*string, message string) {
 
-	resultSorted := pointerToStringArray(result)
+	resultSorted := PointerToStringArray(result)
 	sort.Strings(resultSorted)
-	expectedSorted := pointerToStringArray(expected)
+	expectedSorted := PointerToStringArray(expected)
 	sort.Strings(expectedSorted)
 
 	for i, exp := range expectedSorted {

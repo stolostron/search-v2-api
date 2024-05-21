@@ -8,6 +8,7 @@ import (
 
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	fakedynclient "k8s.io/client-go/dynamic/fake"
@@ -189,6 +190,10 @@ func Test_getResources_expiredCache(t *testing.T) {
 	propTypes, _ := mock_cache.GetPropertyTypes(ctx, false)
 	propTypes["kind"] = "string"
 	propTypes["apigroup"] = "string"
+
+	//Check managedHub property is populated
+	testval := propTypes["managedHub"]
+	assert.Equal(t, "string", testval)
 
 	csResource := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
 	_, csResPresent := mock_cache.shared.csResourcesMap[csResource]

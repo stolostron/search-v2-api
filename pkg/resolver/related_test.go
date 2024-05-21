@@ -266,8 +266,8 @@ func Test_SearchResolver_Relationships_NoUserData(t *testing.T) {
 }
 
 func TestCheckIfInArray(t *testing.T) {
-	shouldbeTrue := checkIfInArray([]string{"uid123", "uid234"}, "uid123")
-	shouldbeFalse := checkIfInArray([]string{"uid123", "uid234"}, "uid456")
+	shouldbeTrue := CheckIfInArray([]string{"uid123", "uid234"}, "uid123")
+	shouldbeFalse := CheckIfInArray([]string{"uid123", "uid234"}, "uid456")
 	// Verify expected result
 	assert.True(t, shouldbeTrue, "uid uid123 is present in the list. Expected true, got %t", shouldbeTrue)
 	// Verify expected result
