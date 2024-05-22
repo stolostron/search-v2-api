@@ -141,16 +141,12 @@ func TestHandleFederatedRequestWithConfig(t *testing.T) {
 		// Replace with mock data
 		return []RemoteSearchService{
 			{
-				Name:    "MockService1",
-				URL:     "http://mockservice1.com",
-				TLSCert: "tlscert1",
-				TLSKey:  "tlskey1",
+				Name: "MockService1",
+				URL:  "http://mockservice1.com",
 			},
 			{
-				Name:    "MockService2",
-				URL:     "http://mockservice2.com",
-				TLSCert: "tlscert2",
-				TLSKey:  "tlskey2",
+				Name: "MockService2",
+				URL:  "http://mockservice2.com",
 			},
 		}
 	}
@@ -257,11 +253,9 @@ func TestGetFederatedResponsePartialErrors(t *testing.T) {
 
 	// Create a sample remote service
 	remoteService := RemoteSearchService{
-		Name:    "TestService",
-		URL:     "http://example.com",
-		Token:   "test-token",
-		TLSCert: "cert-xxx",
-		TLSKey:  "key-xxx",
+		Name:  "TestService",
+		URL:   "http://example.com",
+		Token: "test-token",
 	}
 	// Set up an expectation for SetTLSClientConfig
 	expectedTLSConfig := &tls.Config{MinVersion: tls.VersionTLS13}

@@ -31,6 +31,7 @@ func getLocalHttpClient() HTTPClient {
 			tlsConfig.RootCAs.AppendCertsFromPEM([]byte(tlsCert))
 		}
 	} else {
+		// TODO: Read the CA bundle from the search-ca-crt configmap.
 		klog.Info("Get the CA bundle from search-ca-crt configmap.")
 	}
 	client := &RealHTTPClient{

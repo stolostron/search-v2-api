@@ -83,6 +83,9 @@ func getFederationConfigFromSecret(ctx context.Context) []RemoteSearchService {
 
 	// The kube-root-ca.crt has the CA bundle to verify the TLS connection to the cluster-proxy-user route in the global hub.
 	kubeRootCA, err := client.CoreV1().ConfigMaps("openshift-service-ca").Get(ctx, "kube-root-ca.crt", metav1.GetOptions{})
+	if err != nil {
+		klog.Errorf("Error getting the kube-root-ca.crt: %s", err)
+	}
 
 	gvr := schemav1.GroupVersionResource{
 		Group:    "cluster.open-cluster-management.io",
