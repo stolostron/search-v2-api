@@ -12,11 +12,13 @@ import (
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stolostron/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/metrics"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	v1 "k8s.io/api/authentication/v1"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/strings/slices"
 )
 
 type SearchResult struct {
@@ -65,7 +67,26 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 
 }
 
+// Stop search if managedHub is in filters and current hub name is not in values.
+// Otherwise, proceed with the search.
+func (s *SearchResult) isManagedHub() bool {
+	klog.V(7).Info("HUB_NAME is ", config.Cfg.HubName)
+	for _, filter := range s.input.Filters {
+		if filter.Property == "managedHub" {
+			if !slices.Contains(PointerToStringArray(filter.Values), config.Cfg.HubName) {
+				klog.V(4).Infof("%s not in managedHub filter %+v. Not proceeding with Search",
+					config.Cfg.HubName, PointerToStringArray(filter.Values))
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func (s *SearchResult) Count() (int, error) {
+	if !s.isManagedHub() { // if current hub is not part of managedHub filter, stop search
+		return 0, nil
+	}
 	klog.V(2).Info("Resolving SearchResult:Count()")
 	err := s.buildSearchQuery(s.context, true, false)
 	if err != nil {
@@ -77,6 +98,9 @@ func (s *SearchResult) Count() (int, error) {
 func (s *SearchResult) Items() ([]map[string]interface{}, error) {
 	s.wg.Add(1)
 	defer s.wg.Done()
+	if !s.isManagedHub() { // if current hub is not part of managedHub filter, stop search
+		return nil, nil
+	}
 	klog.V(2).Info("Resolving SearchResult:Items()")
 	err := s.buildSearchQuery(s.context, false, false)
 	if err != nil {
@@ -90,6 +114,9 @@ func (s *SearchResult) Items() ([]map[string]interface{}, error) {
 }
 
 func (s *SearchResult) Related(ctx context.Context) ([]SearchRelatedResult, error) {
+	if !s.isManagedHub() { // if current hub is not part of managedHub filter, stop search
+		return nil, nil
+	}
 	var r []SearchRelatedResult
 	if s.context == nil {
 		s.context = ctx

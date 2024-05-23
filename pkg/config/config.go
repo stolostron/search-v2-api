@@ -16,6 +16,7 @@ var Cfg = new()
 
 // Defines the configurable options for this microservice.
 type Config struct {
+	HubName             string //Display Name of the cluster where ACM is deployed
 	API_SERVER_URL      string // address for Kubernetes API Server
 	AuthCacheTTL        int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
 	SharedCacheTTL      int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
@@ -66,6 +67,7 @@ func new() *Config {
 	// If environment variables are set, use default values
 	// Simply put, the order of preference is env -> default values (from left to right)
 	conf := &Config{
+		HubName:        getEnv("HUB_NAME", ""),
 		API_SERVER_URL: getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
 		AuthCacheTTL:   getEnvAsInt("AUTH_CACHE_TTL", 60000),    // 1 minute
 		SharedCacheTTL: getEnvAsInt("SHARED_CACHE_TTL", 300000), // 5 min (increase to 10min after implementation)
