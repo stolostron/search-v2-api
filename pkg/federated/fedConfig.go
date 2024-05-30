@@ -46,8 +46,11 @@ func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSea
 	// Add the search-api on the global-hub (self).
 	local := RemoteSearchService{
 		Name:  config.Cfg.Federation.GlobalHubName,
-		URL:   "https://localhost:4010/searchapi/graphql",
+		URL:   "https://search-search-api.open-cluster-management.svc.cluster.local:4010/searchapi/graphql",
 		Token: strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
+	}
+	if config.Cfg.DevelopmentMode {
+		local.URL = "https://localhost:4010/searchapi/graphql"
 	}
 
 	result := append(cachedFedConfig.fedConfig, local)
