@@ -22,14 +22,14 @@ var getFedConfig = getFederationConfig
 var httpClientGetter = GetHttpClient
 
 func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
-	klog.Info("Received federated search request.")
+	klog.V(1).Info("Received federated search request.")
 	ctx := r.Context()
 	receivedBody, err := io.ReadAll(r.Body)
 	if err != nil {
-		klog.Errorf("Error reading request body: %s", err)
+		klog.Errorf("Error reading federated request body: %s", err)
 		sendResponse(w, &GraphQLPayload{
 			Data:   Data{},
-			Errors: []string{fmt.Errorf("error reading request body: %s", err).Error()},
+			Errors: []string{fmt.Errorf("error reading federated request body: %s", err).Error()},
 		})
 		return
 	}
@@ -44,7 +44,6 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fedConfig := getFedConfig(ctx, r)
-	klog.V(2).Infof("Sending federated query to %d remote services.", len(fedConfig))
 
 	wg := sync.WaitGroup{}
 	for _, remoteService := range fedConfig {
@@ -58,7 +57,7 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 			// httpClientPool.Put(client) // Put the client back into the pool for reuse.
 		}(remoteService)
 	}
-	klog.V(2).Info("Waiting for all federated requests to respond.")
+	klog.V(3).Infof("Sent %d federated requests, waiting for response.", len(fedConfig))
 	wg.Wait()
 
 	// Send JSON response to client.
@@ -72,7 +71,7 @@ func sendResponse(w http.ResponseWriter, response *GraphQLPayload) {
 	if result != nil {
 		klog.Errorf("Error encoding federated response: %s", result)
 	}
-	klog.Info("Sent federated response.")
+	klog.V(3).Info("Responded to federated request.")
 }
 
 func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSearchService,
@@ -105,6 +104,6 @@ func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSea
 		return
 	}
 
-	klog.V(2).Infof("Received response from %s:\n%s", remoteService.Name, string(body))
+	klog.V(3).Infof("Received response from %s:\n%s", remoteService.Name, string(body))
 	parseResponse(fedRequest, body, remoteService.Name)
 }

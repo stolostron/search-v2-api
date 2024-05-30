@@ -20,13 +20,13 @@ func getLocalHttpClient() HTTPClient {
 		MinVersion: tls.VersionTLS13,
 	}
 
-	localDev := true // TODO: Add to config.
-	if localDev {
-		klog.Warningf("DevMode is enabled. Using local self-signed certificate.")
+	if config.Cfg.DevelopmentMode {
+		klog.Warningf("Running in DevelopmentMode. Using local self-signed certificate.")
 		// Read the local self-signed CA bundle file.
 		tlsCert, err := os.ReadFile("sslcert/tls.crt")
 		if err != nil {
 			klog.Errorf("Error reading local self-signed certificate: %s", err)
+			klog.Info("Use 'make setup' to generate the local self-signed certificate.")
 		} else {
 			tlsConfig.RootCAs.AppendCertsFromPEM([]byte(tlsCert))
 		}
