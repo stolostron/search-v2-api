@@ -33,34 +33,47 @@ var cachedFedConfig = fedConfigCache{
 	fedConfig:   []RemoteSearchService{},
 }
 
+var (
+	routesGvr = schemav1.GroupVersionResource{
+		Group:    "route.openshift.io",
+		Version:  "v1",
+		Resource: "routes",
+	}
+	managedClustersGvr = schemav1.GroupVersionResource{
+		Group:    "cluster.open-cluster-management.io",
+		Version:  "v1",
+		Resource: "managedclusters",
+	}
+)
+
 func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSearchService {
 	cacheDuration := time.Duration(config.Cfg.Federation.ConfigCacheTTL) * time.Millisecond
 	if cachedFedConfig.lastUpdated.IsZero() || cachedFedConfig.lastUpdated.Add(cacheDuration).Before(time.Now()) {
 		klog.Infof("Refreshing federation config.")
-		cachedFedConfig.fedConfig = getFederationConfigFromSecret(ctx)
+		cachedFedConfig.fedConfig = getFederationConfigFromSecret(ctx, request)
 		cachedFedConfig.lastUpdated = time.Now()
 	} else {
 		klog.Infof("Using cached federation config.")
 	}
 
 	// Add the search-api on the global-hub (self).
-	local := RemoteSearchService{
-		Name:  config.Cfg.Federation.GlobalHubName,
-		URL:   "https://search-search-api.open-cluster-management.svc.cluster.local:4010/searchapi/graphql",
-		Token: strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
-	}
-	if config.Cfg.DevelopmentMode {
-		local.URL = "https://localhost:4010/searchapi/graphql"
-	}
+	// local := RemoteSearchService{
+	// 	Name:  config.Cfg.Federation.GlobalHubName,
+	// 	URL:   "https://search-search-api.open-cluster-management.svc.cluster.local:4010/searchapi/graphql",
+	// 	Token: strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
+	// }
+	// if config.Cfg.DevelopmentMode {
+	// 	local.URL = "https://localhost:4010/searchapi/graphql"
+	// }
 
-	result := append(cachedFedConfig.fedConfig, local)
+	// result := append(cachedFedConfig.fedConfig, local)
 
-	logFederationConfig(result)
-	return result
+	logFederationConfig(cachedFedConfig.fedConfig)
+	return cachedFedConfig.fedConfig
 }
 
 // Read the secret search-global-token on each managed hub namespace to get the token and certificates.
-func getFederationConfigFromSecret(ctx context.Context) []RemoteSearchService {
+func getFederationConfigFromSecret(ctx context.Context, request *http.Request) []RemoteSearchService {
 	result := []RemoteSearchService{}
 	resultLock := sync.Mutex{}
 	wg := sync.WaitGroup{}
@@ -69,12 +82,25 @@ func getFederationConfigFromSecret(ctx context.Context) []RemoteSearchService {
 	client := config.KubeClient()
 	dynamicClient := config.GetDynamicClient()
 
-	// Get the cluster-proxy-user route on the global hub. We use this to proxy the requests to the managed hubs.
-	routesGvr := schemav1.GroupVersionResource{
-		Group:    "route.openshift.io",
-		Version:  "v1",
-		Resource: "routes",
+	// The kube-root-ca.crt has the CA bundle to verify the TLS connection to the cluster-proxy-user route in the global hub.
+	kubeRootCA, err := client.CoreV1().ConfigMaps("openshift-service-ca").Get(ctx, "kube-root-ca.crt", metav1.GetOptions{})
+	if err != nil {
+		klog.Errorf("Error getting the kube-root-ca.crt: %s", err)
 	}
+
+	// Add the search-api on the global-hub (self).
+	local := RemoteSearchService{
+		Name:     config.Cfg.Federation.GlobalHubName,
+		URL:      "https://search-search-api.open-cluster-management.svc.cluster.local:4010/searchapi/graphql",
+		Token:    strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
+		CABundle: []byte(kubeRootCA.Data["ca.crt"]),
+	}
+	if config.Cfg.DevelopmentMode {
+		local.URL = "https://localhost:4010/searchapi/graphql"
+	}
+	result = append(result, local)
+
+	// Get the cluster-proxy-user route on the global hub. We use this to proxy the requests to the managed hubs.
 	routes, err := dynamicClient.Resource(routesGvr).List(ctx, metav1.ListOptions{
 		FieldSelector: "metadata.name=cluster-proxy-addon-user",
 	})
@@ -82,20 +108,9 @@ func getFederationConfigFromSecret(ctx context.Context) []RemoteSearchService {
 		klog.Errorf("Error getting the routes list: %s", err)
 	}
 	clusterProxyRoute := routes.Items[0].UnstructuredContent()["spec"].(map[string]interface{})["host"].(string)
-	klog.Infof("Cluster proxy route: %s", clusterProxyRoute)
+	// klog.Infof("Cluster proxy route: %s", clusterProxyRoute)
 
-	// The kube-root-ca.crt has the CA bundle to verify the TLS connection to the cluster-proxy-user route in the global hub.
-	kubeRootCA, err := client.CoreV1().ConfigMaps("openshift-service-ca").Get(ctx, "kube-root-ca.crt", metav1.GetOptions{})
-	if err != nil {
-		klog.Errorf("Error getting the kube-root-ca.crt: %s", err)
-	}
-
-	gvr := schemav1.GroupVersionResource{
-		Group:    "cluster.open-cluster-management.io",
-		Version:  "v1",
-		Resource: "managedclusters",
-	}
-	managedClusters, err := dynamicClient.Resource(gvr).List(ctx, metav1.ListOptions{})
+	managedClusters, err := dynamicClient.Resource(managedClustersGvr).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		klog.Errorf("Error getting the managed clusters list: %s", err)
 	} else {
