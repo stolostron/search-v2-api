@@ -76,10 +76,6 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 		klog.Errorf("Error getting the kube-root-ca.crt: %s", err)
 	}
 
-	// searchApiCerts, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "search-api-certs", metav1.GetOptions{})
-	// if err != nil {
-	// 	klog.Errorf("Error getting the search-api-certs: %s", err)
-	// }
 	caBundle, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "trusted-ca-bundle", metav1.GetOptions{})
 	if err != nil {
 		klog.Errorf("Error getting the search-ca-crt: %s", err)
@@ -87,13 +83,12 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 
 	// Add the search-api on the global-hub (self).
 	local := RemoteSearchService{
-		Name:  config.Cfg.Federation.GlobalHubName,
-		URL:   "https://search-search-api.open-cluster-management.svc:4010/searchapi/graphql",
-		Token: strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
-		// CABundle: []byte(kubeRootCA.Data["ca.crt"]),
-		CABundle: []byte(caBundle.Data["service-ca.crt"]),
+		Name:     config.Cfg.Federation.GlobalHubName,
+		URL:      "https://search-search-api.open-cluster-management.svc:4010/searchapi/graphql",
+		Token:    strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
+		CABundle: []byte(caBundle.Data["ca-bundle.crt"]),
 	}
-	klog.Info(" caBundle.Data[service-ca.crt]: ", caBundle.Data["service-ca.crt"])
+	klog.Info(" caBundle.Data[ca-bundle.crt]: ", caBundle.Data["ca-bundle.crt"])
 
 	if config.Cfg.DevelopmentMode {
 		local.URL = "https://localhost:4010/searchapi/graphql"
