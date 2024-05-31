@@ -56,18 +56,6 @@ func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSea
 		klog.Infof("Using cached federation config.")
 	}
 
-	// Add the search-api on the global-hub (self).
-	// local := RemoteSearchService{
-	// 	Name:  config.Cfg.Federation.GlobalHubName,
-	// 	URL:   "https://search-search-api.open-cluster-management.svc.cluster.local:4010/searchapi/graphql",
-	// 	Token: strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
-	// }
-	// if config.Cfg.DevelopmentMode {
-	// 	local.URL = "https://localhost:4010/searchapi/graphql"
-	// }
-
-	// result := append(cachedFedConfig.fedConfig, local)
-
 	logFederationConfig(cachedFedConfig.fedConfig)
 	return cachedFedConfig.fedConfig
 }
@@ -88,12 +76,22 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 		klog.Errorf("Error getting the kube-root-ca.crt: %s", err)
 	}
 
+	// searchApiCerts, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "search-api-certs", metav1.GetOptions{})
+	// if err != nil {
+	// 	klog.Errorf("Error getting the search-api-certs: %s", err)
+	// }
+	searchCA, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "search-ca-crt", metav1.GetOptions{})
+	if err != nil {
+		klog.Errorf("Error getting the search-ca-crt: %s", err)
+	}
+
 	// Add the search-api on the global-hub (self).
 	local := RemoteSearchService{
-		Name:     config.Cfg.Federation.GlobalHubName,
-		URL:      "https://search-search-api.open-cluster-management.svc.cluster.local:4010/searchapi/graphql",
-		Token:    strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
-		CABundle: []byte(kubeRootCA.Data["ca.crt"]),
+		Name:  config.Cfg.Federation.GlobalHubName,
+		URL:   "https://search-search-api.open-cluster-management.svc.cluster.local:4010/searchapi/graphql",
+		Token: strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
+		// CABundle: []byte(kubeRootCA.Data["ca.crt"]),
+		CABundle: []byte(searchCA.Data["service-ca.crt"]),
 	}
 	if config.Cfg.DevelopmentMode {
 		local.URL = "https://localhost:4010/searchapi/graphql"
