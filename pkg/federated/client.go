@@ -53,7 +53,7 @@ func getLocalHttpClient() HTTPClient {
 
 // Returns a client to process the federated request.
 func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
-	if remoteService.Name == config.Cfg.Federation.GlobalHubName {
+	if config.Cfg.DevelopmentMode && remoteService.Name == config.Cfg.Federation.GlobalHubName {
 		return getLocalHttpClient()
 	}
 
@@ -75,7 +75,6 @@ func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
 		}
 	} else {
 		klog.Warningf("TLS CA bundle not provided for remote service: %s.", remoteService.Name)
-
 	}
 
 	client.SetTLSClientConfig(&tlsConfig)

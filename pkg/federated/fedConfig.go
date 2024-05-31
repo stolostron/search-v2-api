@@ -93,6 +93,8 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 		// CABundle: []byte(kubeRootCA.Data["ca.crt"]),
 		CABundle: []byte(searchCA.Data["service-ca.crt"]),
 	}
+	klog.Info(" >>> local.CABundle: ", local.CABundle)
+	
 	if config.Cfg.DevelopmentMode {
 		local.URL = "https://localhost:4010/searchapi/graphql"
 	}
@@ -161,7 +163,7 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 func logFederationConfig(fedConfig []RemoteSearchService) {
 	configStr := ""
 	for _, service := range fedConfig {
-		configStr += fmt.Sprintf("{ Name: %s URL: %s Token: [yes] TLSCert: [yes/no] }\n", service.Name, service.URL)
+		configStr += fmt.Sprintf("{ Name: %s , URL: %s }\n", service.Name, service.URL)
 	}
 	klog.Infof("Federation config:\n %s", configStr)
 }
