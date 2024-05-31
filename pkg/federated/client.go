@@ -69,9 +69,10 @@ func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
 	if len(remoteService.CABundle) > 0 {
 		ok := tlsConfig.RootCAs.AppendCertsFromPEM(remoteService.CABundle)
 		if ok {
-			klog.Info("Added provided TLS CA bundle for ", remoteService.Name)
+			klog.Info("Added CA bundle for client to ", remoteService.Name)
+			klog.Infof("TLS CA bundle: %s", remoteService.CABundle)
 		} else {
-			klog.Warningf("Failed to parse and append root certificate for %s", remoteService.Name)
+			klog.Warningf("Failed to parse and append CA bundle for %s", remoteService.Name)
 		}
 	} else {
 		klog.Warningf("TLS CA bundle not provided for remote service: %s.", remoteService.Name)
