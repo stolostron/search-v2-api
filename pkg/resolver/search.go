@@ -69,7 +69,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 
 // Stop search if managedHub is in filters and current hub name is not in values.
 // Otherwise, proceed with the search.
-func (s *SearchResult) isManagedHub() bool {
+func (s *SearchResult) matchesManagedHubFilter() bool {
 	klog.V(7).Info("HUB_NAME is ", config.Cfg.HubName)
 	for _, filter := range s.input.Filters {
 		if filter.Property == "managedHub" {
@@ -84,7 +84,7 @@ func (s *SearchResult) isManagedHub() bool {
 }
 
 func (s *SearchResult) Count() (int, error) {
-	if !s.isManagedHub() { // if current hub is not part of managedHub filter, stop search
+	if !s.matchesManagedHubFilter() { // if current hub is not part of managedHub filter, stop search
 		return 0, nil
 	}
 	klog.V(2).Info("Resolving SearchResult:Count()")
@@ -98,8 +98,8 @@ func (s *SearchResult) Count() (int, error) {
 func (s *SearchResult) Items() ([]map[string]interface{}, error) {
 	s.wg.Add(1)
 	defer s.wg.Done()
-	if !s.isManagedHub() { // if current hub is not part of managedHub filter, stop search
-		return nil, nil
+	if !s.matchesManagedHubFilter() { // if current hub is not part of managedHub filter, stop search
+		return []map[string]interface{}{}, nil
 	}
 	klog.V(2).Info("Resolving SearchResult:Items()")
 	err := s.buildSearchQuery(s.context, false, false)
@@ -114,10 +114,10 @@ func (s *SearchResult) Items() ([]map[string]interface{}, error) {
 }
 
 func (s *SearchResult) Related(ctx context.Context) ([]SearchRelatedResult, error) {
-	if !s.isManagedHub() { // if current hub is not part of managedHub filter, stop search
-		return nil, nil
-	}
 	var r []SearchRelatedResult
+	if !s.matchesManagedHubFilter() { // if current hub is not part of managedHub filter, stop search
+		return r, nil
+	}
 	if s.context == nil {
 		s.context = ctx
 	}
