@@ -13,7 +13,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"k8s.io/klog/v2"
@@ -414,4 +416,98 @@ func (er errorReader) Read(p []byte) (n int, err error) {
 
 func (er errorReader) Close(p []byte) (n int, err error) {
 	return 0, errors.New("simulated error reading response body")
+}
+
+func TestManagedHubFederatedResponseSuccess(t *testing.T) {
+	callNum := 0
+
+	os.Setenv("GLOBAL_HUB_NAME", "test-hub-a")
+
+	// Mock fedConfig
+	cachedFedConfig = fedConfigCache{
+		lastUpdated: time.Now(),
+		fedConfig: []RemoteSearchService{{Name: "test-hub-a",
+			URL:     "https://api.mockHubUrl.com:6443",
+			Token:   "mockToken",
+			TLSCert: "mocktlscert",
+			TLSKey:  "mocktlskey"}},
+	}
+	// Mock data
+	mockResponseData := Data{
+		Search:        []SearchResult{{Count: 2, Items: []map[string]interface{}{{"kind": "Pod", "managedHub": "test-hub-a", "ns": "ns1"}, {"kind": "Job", "managedHub": "test-hub-a", "ns": "ns1"}}}},
+		GraphQLSchema: "schema",
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	realGetHttpClient := httpClientGetter
+
+	// Create a sample response body
+	realPayLoad := GraphQLPayload{Data: Data{
+		Search:        []SearchResult{{Count: 2, Items: []map[string]interface{}{{"kind": "Pod", "ns": "ns1"}, {"kind": "Job", "ns": "ns1"}}}},
+		GraphQLSchema: "schema",
+	},
+		Errors: nil,
+	}
+	realResponseBody, _ := json.Marshal(&realPayLoad)
+
+	emptyPayLoad := GraphQLPayload{Data: Data{
+		Search:        []SearchResult{{Count: 0, Items: []map[string]interface{}{}}},
+		GraphQLSchema: "schema",
+	},
+		Errors: nil,
+	}
+	emptyResponseBody, _ := json.Marshal(&emptyPayLoad)
+
+	// Create a mock HTTP client
+	mockClient := &MockHTTPClient{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			callNum++
+			if callNum == 2 { // for test-hub-a managed cluster
+				// Mock HTTP response
+				return &http.Response{
+					Status:     "200 OK",
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBuffer(realResponseBody)),
+				}, nil
+			} else { // for global-hub cluster
+				return &http.Response{
+					Status:     "200 OK",
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBuffer(emptyResponseBody)),
+				}, nil
+			}
+		},
+		SetTLSClientConfigFunc: func(config *tls.Config) {
+		},
+	}
+	defer func() { httpClientGetter = realGetHttpClient }()
+
+	// Set httpClientGetter to return the mock client
+	httpClientGetter = func(remoteService RemoteSearchService) HTTPClient {
+		return mockClient
+	}
+
+	receivedBody := []byte(`{"query":"query{\n  search(\n  input: [\n  {filters:[{property:\"kind\",values:[\"*\"]},\n    {property:\"managedHub\",values:[\"test-hub-a\"]}\n  ],limit:1000}]\n\t\t\t   ) {\n\t\t\t     count\n    items\n\t\t\t   }\n\t}"}`)
+
+	// Setup HTTP request
+	req := httptest.NewRequest("POST", "/federated", bytes.NewBuffer(receivedBody))
+
+	// Setup HTTP response recorder
+	w := httptest.NewRecorder()
+
+	// Call the function with mock data
+	HandleFederatedRequest(w, req)
+
+	// Assertions
+	assert.Equal(t, http.StatusOK, w.Code)
+	var respBody = GraphQLPayload{}
+
+	err := json.NewDecoder(w.Body).Decode(&respBody)
+	data := &respBody.Data
+
+	assert.NoError(t, err)
+	assert.Equal(t, &mockResponseData, data)
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 }
