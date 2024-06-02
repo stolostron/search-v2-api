@@ -31,8 +31,12 @@ type SearchCompleteResult struct {
 }
 
 var arrayProperties = make(map[string]struct{})
+var hubName = config.Cfg.HubName
 
 func (s *SearchCompleteResult) autoComplete(ctx context.Context) ([]*string, error) {
+	if s.property == "managedHub" { // return hubName for managedHub property
+		return []*string{&hubName}, nil
+	}
 	s.searchCompleteQuery(ctx)
 	res, autoCompleteErr := s.searchCompleteResults(ctx)
 	if autoCompleteErr != nil {
