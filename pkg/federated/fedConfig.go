@@ -62,12 +62,12 @@ func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSea
 
 func getLocalSearchApiConfig(ctx context.Context, request *http.Request) RemoteSearchService {
 	client := config.KubeClient()
-	caBundle, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "trusted-ca-bundle", metav1.GetOptions{})
+	caBundle, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "search-ca-crt", metav1.GetOptions{})
 	if err != nil {
 		klog.Errorf("Error getting the search-ca-crt: %s", err)
 	}
 
-	url := "https://search-search-api.open-cluster-management.svc:4010/searchapi/graphql"
+	url := "https://search-search-api.open-cluster-management.svc/searchapi/graphql" // FIXME: Namespace.
 	if config.Cfg.DevelopmentMode {
 		url = "https://localhost:4010/searchapi/graphql"
 	}
@@ -76,7 +76,7 @@ func getLocalSearchApiConfig(ctx context.Context, request *http.Request) RemoteS
 		Name:     config.Cfg.Federation.GlobalHubName,
 		URL:      url,
 		Token:    strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
-		CABundle: []byte(caBundle.Data["ca-bundle.crt"]),
+		CABundle: []byte(caBundle.Data["service-ca.crt"]),
 	}
 }
 
@@ -144,10 +144,10 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 				resultLock.Lock()
 				defer resultLock.Unlock()
 
-				if hubName != config.Cfg.Federation.GlobalHubName { // FIXME: Remove this debug code.
-					klog.Warning(">>>> DEBUG: Skipping managed hub: ", hubName)
-					return
-				}
+				// if hubName != config.Cfg.Federation.GlobalHubName { // FIXME: Remove this debug code.
+				// 	klog.Warning(">>>> DEBUG: Skipping managed hub: ", hubName)
+				// 	return
+				// }
 
 				result = append(result, RemoteSearchService{
 					Name: hubName,
