@@ -92,6 +92,7 @@ var tr = &http.Transport{
 	ResponseHeaderTimeout: time.Duration(config.Cfg.Federation.HttpPool.ResponseHeaderTimeout) * time.Millisecond,
 	DisableKeepAlives:     false,
 	TLSClientConfig: &tls.Config{
+		RootCAs:    x509.NewCertPool(),
 		MinVersion: tls.VersionTLS13,
 	},
 	MaxConnsPerHost:     config.Cfg.Federation.HttpPool.MaxConnsPerHost,
@@ -128,5 +129,6 @@ func (c RealHTTPClient) Do(req *http.Request) (*http.Response, error) {
 
 // SetTLSClientConfig sets the TLS client configuration for the HTTP client.
 func (c RealHTTPClient) SetTLSClientConfig(config *tls.Config) {
+	klog.Info(">>>> Setting TLS client configuration.")
 	c.Transport.(*http.Transport).TLSClientConfig = config
 }
