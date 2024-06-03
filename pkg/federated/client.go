@@ -92,7 +92,7 @@ var tr = &http.Transport{
 	ResponseHeaderTimeout: time.Duration(config.Cfg.Federation.HttpPool.ResponseHeaderTimeout) * time.Millisecond,
 	DisableKeepAlives:     false,
 	TLSClientConfig: &tls.Config{
-		RootCAs:    x509.NewCertPool(),
+		RootCAs:    x509.NewCertPool(), // FIXME???
 		MinVersion: tls.VersionTLS13,
 	},
 	MaxConnsPerHost:     config.Cfg.Federation.HttpPool.MaxConnsPerHost,

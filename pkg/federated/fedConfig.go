@@ -60,11 +60,34 @@ func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSea
 	return cachedFedConfig.fedConfig
 }
 
+func getLocalSearchApiConfig(ctx context.Context, request *http.Request) RemoteSearchService {
+	client := config.KubeClient()
+	caBundle, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "trusted-ca-bundle", metav1.GetOptions{})
+	if err != nil {
+		klog.Errorf("Error getting the search-ca-crt: %s", err)
+	}
+
+	url := "https://search-search-api.open-cluster-management.svc:4010/searchapi/graphql"
+	if config.Cfg.DevelopmentMode {
+		url = "https://localhost:4010/searchapi/graphql"
+	}
+
+	return RemoteSearchService{
+		Name:     config.Cfg.Federation.GlobalHubName,
+		URL:      url,
+		Token:    strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
+		CABundle: []byte(caBundle.Data["ca-bundle.crt"]),
+	}
+}
+
 // Read the secret search-global-token on each managed hub namespace to get the token and certificates.
 func getFederationConfigFromSecret(ctx context.Context, request *http.Request) []RemoteSearchService {
 	result := []RemoteSearchService{}
 	resultLock := sync.Mutex{}
 	wg := sync.WaitGroup{}
+
+	// Add the local search-api on the global hub.
+	result = append(result, getLocalSearchApiConfig(ctx, request))
 
 	// Add the managed hubs.
 	client := config.KubeClient()
@@ -75,25 +98,6 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 	if err != nil {
 		klog.Errorf("Error getting the kube-root-ca.crt: %s", err)
 	}
-
-	caBundle, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "trusted-ca-bundle", metav1.GetOptions{})
-	if err != nil {
-		klog.Errorf("Error getting the search-ca-crt: %s", err)
-	}
-
-	// Add the search-api on the global-hub (self).
-	local := RemoteSearchService{
-		Name:     config.Cfg.Federation.GlobalHubName,
-		URL:      "https://search-search-api.open-cluster-management.svc:4010/searchapi/graphql",
-		Token:    strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
-		CABundle: []byte(caBundle.Data["ca-bundle.crt"]),
-	}
-	klog.Info(" caBundle.Data[ca-bundle.crt]: ", caBundle.Data["ca-bundle.crt"])
-
-	if config.Cfg.DevelopmentMode {
-		local.URL = "https://localhost:4010/searchapi/graphql"
-	}
-	result = append(result, local)
 
 	// Get the cluster-proxy-user route on the global hub. We use this to proxy the requests to the managed hubs.
 	routes, err := dynamicClient.Resource(routesGvr).List(ctx, metav1.ListOptions{
