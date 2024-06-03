@@ -64,10 +64,10 @@ func getLocalSearchApiConfig(ctx context.Context, request *http.Request) RemoteS
 	client := config.KubeClient()
 	caBundle, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "search-ca-crt", metav1.GetOptions{})
 	if err != nil {
-		klog.Errorf("Error getting the search-ca-crt: %s", err)
+		klog.Errorf("Error getting the search-ca-crt configmap: %s", err)
 	}
 
-	url := "https://search-search-api.open-cluster-management.svc/searchapi/graphql" // FIXME: Namespace.
+	url := "https://search-search-api.open-cluster-management.svc:4010/searchapi/graphql" // FIXME: Namespace.
 	if config.Cfg.DevelopmentMode {
 		url = "https://localhost:4010/searchapi/graphql"
 	}
