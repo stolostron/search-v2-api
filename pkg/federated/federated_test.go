@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	config "github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"k8s.io/klog/v2"
@@ -421,8 +422,7 @@ func (er errorReader) Close(p []byte) (n int, err error) {
 func TestManagedHubFederatedResponseSuccess(t *testing.T) {
 	callNum := 0
 
-	os.Setenv("GLOBAL_HUB_NAME", "test-hub-a")
-
+	config.Cfg.Federation.GlobalHubName = "test-hub-a"
 	// Mock fedConfig
 	cachedFedConfig = fedConfigCache{
 		lastUpdated: time.Now(),
