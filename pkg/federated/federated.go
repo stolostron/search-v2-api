@@ -99,7 +99,7 @@ func (fedRequest *FederatedRequest) getFederatedResponse(remoteService RemoteSea
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		klog.Errorf("Error reading federated response from %s: %s", remoteService.Name, err)
-		fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("error reading federated response body: %s", err).Error())
+		fedRequest.Response.Errors = append(fedRequest.Response.Errors, fmt.Errorf("Error reading federated response body: %s", err).Error())
 		return
 	}
 
