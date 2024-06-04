@@ -61,7 +61,8 @@ func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSea
 }
 
 func getLocalSearchApiConfig(request *http.Request) RemoteSearchService {
-	url := "https://search-search-api.open-cluster-management.svc:4010/searchapi/graphql" // FIXME: Namespace.
+	namespace := "open-cluster-management" // FIXME: Namespace.
+	url := fmt.Sprintf("https://search-search-api.%s.svc:4010/searchapi/graphql", namespace)
 
 	if config.Cfg.DevelopmentMode {
 		klog.Warningf("Running in DevelopmentMode. Using local self-signed certificate.")
@@ -139,11 +140,12 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 				resultLock.Lock()
 				defer resultLock.Unlock()
 
-				// FIXME: namespace is hardcoded to open-cluster-management.
+				namespace := "open-cluster-management" // FIXME: namespace is hardcoded to open-cluster-management.
 				result = append(result, RemoteSearchService{
 					Name: hubName,
-					URL: "https://" + clusterProxyRoute + "/" + hubName +
-						"/api/v1/namespaces/open-cluster-management/services/search-search-api:4010/proxy-service/searchapi/graphql",
+					URL: fmt.Sprintf(
+						"https://%s/%s/api/v1/namespaces/%s/services/search-search-api:4010/proxy-service/searchapi/graphql",
+						clusterProxyRoute, hubName, namespace),
 					Token:    string(secret.Data["token"]),
 					CABundle: []byte(kubeRootCA.Data["ca.crt"]),
 				})
