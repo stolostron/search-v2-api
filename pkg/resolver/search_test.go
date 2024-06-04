@@ -10,6 +10,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/golang/mock/gomock"
 	"github.com/stolostron/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"github.com/stretchr/testify/assert"
 )
@@ -36,6 +37,60 @@ func Test_SearchResolver_Count(t *testing.T) {
 	if r != mockRow.MockValue {
 		t.Errorf("Incorrect Count() expected [%d] got [%d]", mockRow.MockValue, r)
 	}
+}
+
+func Test_SearchResolver_MatchManagedHubCount(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string", "managedHub": "string"}
+	// Create a SearchResolver instance with a mock connection pool.
+	config.Cfg.HubName = "test-hub-a"
+	val1 := "Pod"
+	managedHub := "test-hub-a"
+
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}, {Property: "managedHub", Values: []*string{&managedHub}}}}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Mock the database query
+	mockRow := &Row{MockValue: 10}
+	mockPool.EXPECT().QueryRow(gomock.Any(),
+		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->'kind'?('Pod') AND ("cluster" = ANY ('{}')))`),
+		gomock.Eq([]interface{}{})).Return(mockRow)
+
+	// Execute function
+	r, err := resolver.Count()
+	assert.Nil(t, err)
+
+	// Verify response
+	if r != mockRow.MockValue {
+		t.Errorf("Incorrect Count() expected [%d] got [%d]", mockRow.MockValue, r)
+	}
+}
+
+func Test_SearchResolver_NotMatchManagedHub(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string", "managedHub": "string"}
+	// Create a SearchResolver instance with a mock connection pool.
+	config.Cfg.HubName = "test-hub-b"
+
+	val1 := "Pod"
+	managedHub := "test-hub-a"
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}, {Property: "managedHub", Values: []*string{&managedHub}}}}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Execute function
+	r, err := resolver.Count()
+	assert.Nil(t, err)
+
+	// Verify response
+	if r != 0 {
+		t.Errorf("Incorrect Count() expected [%d] got [%d]", 0, r)
+	}
+	rItems, err := resolver.Items()
+	assert.Nil(t, err)
+	assert.Equal(t, len(rItems), 0, "Items() received incorrect number of items. Expected %d Got: %d", 0, len(rItems))
+
+	rRelated, err := resolver.Related(context.TODO())
+	assert.Nil(t, err)
+	assert.Equal(t, len(rRelated), 0, "Related() received incorrect number of items. Expected %d Got: %d", 0, len(rRelated))
+
 }
 
 func Test_SearchResolver_Count_WithRBAC(t *testing.T) {
