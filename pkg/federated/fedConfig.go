@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -61,22 +62,40 @@ func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSea
 }
 
 func getLocalSearchApiConfig(ctx context.Context, request *http.Request) RemoteSearchService {
-	client := config.KubeClient()
-	caBundle, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "search-ca-crt", metav1.GetOptions{})
-	if err != nil {
-		klog.Errorf("Error getting the search-ca-crt configmap: %s", err)
-	}
+	// client := config.KubeClient()
+	// caBundle, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "search-ca-crt", metav1.GetOptions{})
+	// if err != nil {
+	// 	klog.Errorf("Error getting the search-ca-crt configmap: %s", err)
+	// }
 
 	url := "https://search-search-api.open-cluster-management.svc:4010/searchapi/graphql" // FIXME: Namespace.
+	var caBundle []byte
 	if config.Cfg.DevelopmentMode {
+		klog.Warningf("Running in DevelopmentMode. Using local self-signed certificate.")
 		url = "https://localhost:4010/searchapi/graphql"
+
+		// Read the local self-signed CA bundle file.
+		tlsCert, err := os.ReadFile("sslcert/tls.crt")
+		if err != nil {
+			klog.Errorf("Error reading local self-signed certificate: %s", err)
+			klog.Info("Use 'make setup' to generate the local self-signed certificate.")
+		} else {
+			caBundle = []byte(tlsCert)
+		}
+	} else {
+		client := config.KubeClient()
+		caBundleConfigMap, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "search-ca-crt", metav1.GetOptions{})
+		if err != nil {
+			klog.Errorf("Error getting the search-ca-crt configmap: %s", err)
+		}
+		caBundle = []byte(caBundleConfigMap.Data["service-ca.crt"])
 	}
 
 	return RemoteSearchService{
 		Name:     config.Cfg.Federation.GlobalHubName,
 		URL:      url,
 		Token:    strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
-		CABundle: []byte(caBundle.Data["service-ca.crt"]),
+		CABundle: caBundle,
 	}
 }
 

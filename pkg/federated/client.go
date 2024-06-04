@@ -2,6 +2,7 @@
 package federated
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	config "github.com/stolostron/search-v2-api/pkg/config"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -33,7 +35,14 @@ func getLocalHttpClient() HTTPClient {
 	} else {
 		// TODO: Read the CA bundle from the search-ca-crt configmap.
 		klog.Info("Get the CA bundle from search-ca-crt configmap.")
+		client := config.KubeClient()
+		caBundleConfigMap, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(context.TODO(), "search-ca-crt", metav1.GetOptions{})
+		if err != nil {
+			klog.Errorf("Error getting the search-ca-crt configmap: %s", err)
+		}
+		tlsConfig.RootCAs.AppendCertsFromPEM([]byte(caBundleConfigMap.Data["service-ca.crt"]))
 	}
+
 	client := &RealHTTPClient{
 		&http.Client{
 			Transport: &http.Transport{
@@ -53,7 +62,7 @@ func getLocalHttpClient() HTTPClient {
 
 // Returns a client to process the federated request.
 func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
-	if config.Cfg.DevelopmentMode && remoteService.Name == config.Cfg.Federation.GlobalHubName {
+	if remoteService.Name == config.Cfg.Federation.GlobalHubName {
 		return getLocalHttpClient()
 	}
 
@@ -70,7 +79,7 @@ func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
 		ok := tlsConfig.RootCAs.AppendCertsFromPEM(remoteService.CABundle)
 		if ok {
 			klog.Info("Added CA bundle for client to ", remoteService.Name)
-			klog.Infof("TLS CA bundle: %s", remoteService.CABundle)
+			// klog.Infof("TLS CA bundle: %s", remoteService.CABundle)
 		} else {
 			klog.Warningf("Failed to parse and append CA bundle for %s", remoteService.Name)
 		}
@@ -79,6 +88,8 @@ func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
 	}
 
 	client.SetTLSClientConfig(&tlsConfig)
+
+	// klog.Infof("Http Client created for %s.  %+v", remoteService.Name, client.Client.Transport.TLSClientConfig)
 
 	return client
 }
@@ -92,7 +103,7 @@ var tr = &http.Transport{
 	ResponseHeaderTimeout: time.Duration(config.Cfg.Federation.HttpPool.ResponseHeaderTimeout) * time.Millisecond,
 	DisableKeepAlives:     false,
 	TLSClientConfig: &tls.Config{
-		RootCAs:    x509.NewCertPool(), // FIXME???
+		RootCAs:    x509.NewCertPool(),
 		MinVersion: tls.VersionTLS13,
 	},
 	MaxConnsPerHost:     config.Cfg.Federation.HttpPool.MaxConnsPerHost,
