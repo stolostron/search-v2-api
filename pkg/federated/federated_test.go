@@ -421,10 +421,9 @@ func TestManagedHubFederatedResponseSuccess(t *testing.T) {
 	cachedFedConfig = fedConfigCache{
 		lastUpdated: time.Now(),
 		fedConfig: []RemoteSearchService{{Name: "test-hub-a",
-			URL:     "https://api.mockHubUrl.com:6443",
-			Token:   "mockToken",
-			TLSCert: "mocktlscert",
-			TLSKey:  "mocktlskey"}},
+			URL:   "https://api.mockHubUrl.com:6443",
+			Token: "mockToken",
+		}},
 	}
 	// Mock data
 	mockResponseData := Data{
