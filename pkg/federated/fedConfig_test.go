@@ -1,11 +1,36 @@
 package federated
 
 import (
+	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestGetFederatedConfig_fromCache(t *testing.T) {
+	cachedFedConfig = fedConfigCache{
+		lastUpdated: time.Now(),
+		fedConfig: []RemoteSearchService{
+			{
+				Name:     "mock-cache-name",
+				URL:      "https://mock-cache-url",
+				Token:    "mock-cache-token",
+				CABundle: []byte{},
+			},
+		},
+	}
+
+	mockRequest := &http.Request{}
+	ctx := context.Background()
+	result := getFederationConfig(ctx, mockRequest)
+
+	assert.Equal(t, 1, len(result))
+	assert.Equal(t, "mock-cache-name", result[0].Name)
+	assert.Equal(t, "https://mock-cache-url", result[0].URL)
+	assert.Equal(t, "mock-cache-token", result[0].Token)
+}
 
 func TestGetLocalSearchApiConfig(t *testing.T) {
 	mockRequest := &http.Request{
