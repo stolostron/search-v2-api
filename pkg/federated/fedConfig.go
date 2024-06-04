@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -61,7 +60,7 @@ func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSea
 	return cachedFedConfig.fedConfig
 }
 
-func getLocalSearchApiConfig(ctx context.Context, request *http.Request) RemoteSearchService {
+func getLocalSearchApiConfig(request *http.Request) RemoteSearchService {
 	// client := config.KubeClient()
 	// caBundle, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "search-ca-crt", metav1.GetOptions{})
 	// if err != nil {
@@ -69,33 +68,33 @@ func getLocalSearchApiConfig(ctx context.Context, request *http.Request) RemoteS
 	// }
 
 	url := "https://search-search-api.open-cluster-management.svc:4010/searchapi/graphql" // FIXME: Namespace.
-	var caBundle []byte
+	// var caBundle []byte
 	if config.Cfg.DevelopmentMode {
 		klog.Warningf("Running in DevelopmentMode. Using local self-signed certificate.")
 		url = "https://localhost:4010/searchapi/graphql"
 
 		// Read the local self-signed CA bundle file.
-		tlsCert, err := os.ReadFile("sslcert/tls.crt")
-		if err != nil {
-			klog.Errorf("Error reading local self-signed certificate: %s", err)
-			klog.Info("Use 'make setup' to generate the local self-signed certificate.")
-		} else {
-			caBundle = []byte(tlsCert)
-		}
+		// tlsCert, err := os.ReadFile("sslcert/tls.crt")
+		// if err != nil {
+		// 	klog.Errorf("Error reading local self-signed certificate: %s", err)
+		// 	klog.Info("Use 'make setup' to generate the local self-signed certificate.")
+		// } else {
+		// 	caBundle = []byte(tlsCert)
+		// }
 	} else {
-		client := config.KubeClient()
-		caBundleConfigMap, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "search-ca-crt", metav1.GetOptions{})
-		if err != nil {
-			klog.Errorf("Error getting the search-ca-crt configmap: %s", err)
-		}
-		caBundle = []byte(caBundleConfigMap.Data["service-ca.crt"])
+		// client := config.KubeClient()
+		// caBundleConfigMap, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "search-ca-crt", metav1.GetOptions{})
+		// if err != nil {
+		// 	klog.Errorf("Error getting the search-ca-crt configmap: %s", err)
+		// }
+		// caBundle = []byte(caBundleConfigMap.Data["service-ca.crt"])
 	}
 
 	return RemoteSearchService{
 		Name:     config.Cfg.Federation.GlobalHubName,
 		URL:      url,
 		Token:    strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
-		CABundle: caBundle,
+		CABundle: []byte{}, // addded later in client.go
 	}
 }
 
@@ -106,7 +105,7 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 	wg := sync.WaitGroup{}
 
 	// Add the local search-api on the global hub.
-	result = append(result, getLocalSearchApiConfig(ctx, request))
+	result = append(result, getLocalSearchApiConfig(request))
 
 	// Add the managed hubs.
 	client := config.KubeClient()
@@ -126,7 +125,6 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 		klog.Errorf("Error getting the routes list: %s", err)
 	}
 	clusterProxyRoute := routes.Items[0].UnstructuredContent()["spec"].(map[string]interface{})["host"].(string)
-	// klog.Infof("Cluster proxy route: %s", clusterProxyRoute)
 
 	managedClusters, err := dynamicClient.Resource(managedClustersGvr).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -163,11 +161,7 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 				resultLock.Lock()
 				defer resultLock.Unlock()
 
-				// if hubName != config.Cfg.Federation.GlobalHubName { // FIXME: Remove this debug code.
-				// 	klog.Warning(">>>> DEBUG: Skipping managed hub: ", hubName)
-				// 	return
-				// }
-
+				// FIXME: namespace is hardcoded to open-cluster-management.
 				result = append(result, RemoteSearchService{
 					Name: hubName,
 					URL: "https://" + clusterProxyRoute + "/" + hubName +
