@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -458,4 +460,72 @@ func matchOperatorToProperty(dataType string, opValueMap map[string][]string,
 		opValueMap = extractOperator(values, "", opValueMap)
 	}
 	return opValueMap
+}
+
+// partialMatchStringPattern checks if config.Cfg.HubName partially matches any pattern in the values slice.
+// It loops through each pattern, prepares it for matching, and checks for a match.
+// If a match is found, it returns true, indicating a match is found. Else, returns false.
+func partialMatchStringPattern(values []string) (bool, error) {
+	for _, pattern := range values {
+		klog.V(5).Info("ManagedHub filter pattern to match: ", pattern, " hubname: ", config.Cfg.HubName)
+		//fix prefix
+		if !strings.HasPrefix(pattern, "*") {
+			pattern = "^" + pattern
+		}
+		//fix suffix
+		if !strings.HasSuffix(pattern, "*") {
+			pattern = pattern + "$"
+		}
+		// fix start and end of string and match multiple characters
+		pattern = strings.ReplaceAll(pattern, "%", ".*")
+		matched, err := regexp.MatchString(pattern, config.Cfg.HubName)
+
+		if err != nil {
+			klog.Error("Error in partialMatchStringPattern for managedHub filter:", err)
+			return false, err
+		}
+		if matched {
+			klog.V(5).Infof("ManagedHub filter pattern: %s hubname: %s matched: %t values: %+v",
+				pattern, config.Cfg.HubName, matched, values)
+			return matched, nil
+		}
+	}
+	klog.V(4).Infof("%s not in managedHub filter %+v", config.Cfg.HubName, values)
+	return false, nil
+}
+
+// processOpValueMapManagedHub processes the key-value pair for a managedHub filter.
+// It handles different key cases such as "!", "!=", "=", "!:*", "!=:*", and "=:*".
+// It returns a boolean indicating whether the search should proceed based on the evaluation of the key and values.
+func processOpValueMapManagedHub(key string, values []string) bool {
+	switch key {
+	case "!", "!=":
+		// Check if config.Cfg.HubName is in the values slice
+		if slices.Contains((values), config.Cfg.HubName) {
+			klog.V(4).Infof("%s in managedHub filter exclude list %+v. Not proceeding with Search",
+				config.Cfg.HubName, (values))
+			return false // Search should not proceed if there is a match
+		}
+		return true // Return true to indicate search should proceed
+	case "=":
+		if !slices.Contains(values, config.Cfg.HubName) {
+			klog.V(4).Infof("%s not in managedHub filter %+v. Not proceeding with Search",
+				config.Cfg.HubName, (values))
+			return false // Search should not proceed if there is no match
+		}
+		return true // Return true to indicate search should proceed
+	case "!:*", "!=:*":
+		match, err := partialMatchStringPattern(values)
+		if err != nil {
+			return false
+		}
+		return !match // Return the inverse of match to indicate search should proceed if there is no partial match
+	case "=:*":
+		match, err := partialMatchStringPattern(values)
+		if err != nil {
+			return false
+		}
+		return match // Return match to indicate search should proceed if there is a partial match
+	}
+	return false
 }
