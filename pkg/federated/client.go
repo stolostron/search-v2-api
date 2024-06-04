@@ -18,8 +18,8 @@ import (
 // This function returns an http client to communicate with the search-api service on the global hub cluster.
 func getLocalHttpClient() HTTPClient {
 	tlsConfig := tls.Config{
-		RootCAs:    x509.NewCertPool(),
 		MinVersion: tls.VersionTLS13,
+		RootCAs:    x509.NewCertPool(),
 	}
 
 	if config.Cfg.DevelopmentMode {
@@ -33,8 +33,6 @@ func getLocalHttpClient() HTTPClient {
 			tlsConfig.RootCAs.AppendCertsFromPEM([]byte(tlsCert))
 		}
 	} else {
-		// TODO: Read the CA bundle from the search-ca-crt configmap.
-		klog.Info("Get the CA bundle from search-ca-crt configmap.")
 		client := config.KubeClient()
 		caBundleConfigMap, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(context.TODO(), "search-ca-crt", metav1.GetOptions{})
 		if err != nil {
@@ -71,25 +69,20 @@ func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
 
 	// Set the TLS client configuration.
 	tlsConfig := tls.Config{
-		RootCAs:    x509.NewCertPool(),
 		MinVersion: tls.VersionTLS13,
+		RootCAs:    x509.NewCertPool(),
 	}
 
 	if len(remoteService.CABundle) > 0 {
 		ok := tlsConfig.RootCAs.AppendCertsFromPEM(remoteService.CABundle)
-		if ok {
-			klog.Info("Added CA bundle for client to ", remoteService.Name)
-			// klog.Infof("TLS CA bundle: %s", remoteService.CABundle)
-		} else {
-			klog.Warningf("Failed to parse and append CA bundle for %s", remoteService.Name)
+		if !ok {
+			klog.Warningf("Failed to append CA bundle for %s", remoteService.Name)
 		}
 	} else {
 		klog.Warningf("TLS CA bundle not provided for remote service: %s.", remoteService.Name)
 	}
 
 	client.SetTLSClientConfig(&tlsConfig)
-
-	// klog.Infof("Http Client created for %s.  %+v", remoteService.Name, client.Client.Transport.TLSClientConfig)
 
 	return client
 }
@@ -103,8 +96,8 @@ var tr = &http.Transport{
 	ResponseHeaderTimeout: time.Duration(config.Cfg.Federation.HttpPool.ResponseHeaderTimeout) * time.Millisecond,
 	DisableKeepAlives:     false,
 	TLSClientConfig: &tls.Config{
-		RootCAs:    x509.NewCertPool(),
 		MinVersion: tls.VersionTLS13,
+		RootCAs:    x509.NewCertPool(),
 	},
 	MaxConnsPerHost:     config.Cfg.Federation.HttpPool.MaxConnsPerHost,
 	MaxIdleConnsPerHost: config.Cfg.Federation.HttpPool.MaxIdleConnPerHost,
@@ -140,6 +133,5 @@ func (c RealHTTPClient) Do(req *http.Request) (*http.Response, error) {
 
 // SetTLSClientConfig sets the TLS client configuration for the HTTP client.
 func (c RealHTTPClient) SetTLSClientConfig(config *tls.Config) {
-	klog.Info(">>>> Setting TLS client configuration.")
 	c.Transport.(*http.Transport).TLSClientConfig = config
 }
