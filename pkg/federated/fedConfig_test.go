@@ -7,6 +7,16 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+	fakedynclient "k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
 )
 
 func TestGetFederatedConfig_fromCache(t *testing.T) {
@@ -46,15 +56,100 @@ func TestGetLocalSearchApiConfig(t *testing.T) {
 	assert.Equal(t, result.CABundle, []byte{})
 }
 
-// func TestGetFederationConfigFromSecret(t *testing.T) {
-// 	mockRequest := &http.Request{
-// 		Header: map[string][]string{
-// 			"Authorization": {"Bearer mock-token"},
-// 		},
-// 	}
-// 	ctx := context.Background()
-// 	result := getFederationConfigFromSecret(ctx, mockRequest)
+func TestGetFederationConfigFromSecret(t *testing.T) {
+	// Build mock k8s client.
+	getKubeClient = func() kubernetes.Interface {
+		fakeClient := fake.NewSimpleClientset(
+			&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "search-global-token",
+					Namespace: "open-cluster-management",
+				},
+				Data: map[string][]byte{
+					"token": []byte("mock-token"),
+				},
+			},
+			&corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "kube-root-ca.crt",
+					Namespace: "openshift-service-ca",
+				},
+				Data: map[string]string{
+					"ca.crt": "mock-ca-bundle",
+				},
+			},
+		)
+		return fakeClient
+	}
 
-// 	t.Log("Result: ", result)
-// 	assert.Equal(t, 2, len(result))
-// }
+	// Build mock dynamic client.
+	gvrToListKind := map[schema.GroupVersionResource]string{
+		{Group: "route.openshift.io", Version: "v1", Resource: "routes"}:                          "RoutesList",
+		{Group: "cluster.open-cluster-management.io", Version: "v1", Resource: "managedclusters"}: "ManagedClustersList",
+	}
+
+	getDynamicClient = func() dynamic.Interface {
+		fakeClient := fakedynclient.NewSimpleDynamicClientWithCustomListKinds(
+			scheme.Scheme, gvrToListKind,
+			[]runtime.Object{
+				&unstructured.UnstructuredList{
+					Object: map[string]interface{}{
+						"apiVersion": "route.openshift.io/v1",
+						"kind":       "Route",
+					},
+					Items: []unstructured.Unstructured{
+						{
+							Object: map[string]interface{}{
+								"apiVersion": "route.openshift.io/v1",
+								"kind":       "Route",
+								"metadata": map[string]interface{}{
+									"name":      "cluster-proxy-user",
+									"namespace": "open-cluster-management",
+								},
+								"spec": map[string]interface{}{
+									"host": "mock-cluster-proxy-route",
+								},
+							},
+						},
+					},
+				},
+				&unstructured.UnstructuredList{
+					Object: map[string]interface{}{
+						"apiVersion": "cluster.open-cluster-management.io/v1",
+						"kind":       "ManagedCluster",
+					},
+					Items: []unstructured.Unstructured{
+						{
+							Object: map[string]interface{}{
+								"apiVersion": "cluster.open-cluster-management.io/v1",
+								"kind":       "ManagedCluster",
+								"metadata": map[string]interface{}{
+									"name": "mock-managed-cluster",
+								},
+								"status": map[string]interface{}{
+									"clusterClaims": []interface{}{
+										map[string]interface{}{
+											"name":  "hub.open-cluster-management.io",
+											"value": "Installed",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}...)
+		return fakeClient
+	}
+
+	mockRequest := &http.Request{
+		Header: map[string][]string{
+			"Authorization": {"Bearer mock-token"},
+		},
+	}
+	ctx := context.Background()
+	result := getFederationConfigFromSecret(ctx, mockRequest)
+
+	t.Log("Result: ", result)
+	assert.Equal(t, 1, len(result))
+}

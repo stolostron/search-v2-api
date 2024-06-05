@@ -46,6 +46,9 @@ var (
 	}
 )
 
+var getKubeClient = config.KubeClient          // Allows for mocking client in tests.
+var getDynamicClient = config.GetDynamicClient // Allows for mocking client in tests.
+
 func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSearchService {
 	cacheDuration := time.Duration(config.Cfg.Federation.ConfigCacheTTL) * time.Millisecond
 	if cachedFedConfig.lastUpdated.IsZero() || cachedFedConfig.lastUpdated.Add(cacheDuration).Before(time.Now()) {
@@ -87,8 +90,8 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 	result = append(result, getLocalSearchApiConfig(request))
 
 	// Add the managed hubs.
-	client := config.KubeClient()
-	dynamicClient := config.GetDynamicClient()
+	client := getKubeClient()
+	dynamicClient := getDynamicClient()
 
 	// The kube-root-ca.crt has the CA bundle to verify the TLS connection to the cluster-proxy-user route in the global hub.
 	kubeRootCA, err := client.CoreV1().ConfigMaps("openshift-service-ca").Get(ctx, "kube-root-ca.crt", metav1.GetOptions{})

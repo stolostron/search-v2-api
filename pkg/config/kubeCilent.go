@@ -12,7 +12,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func KubeClient() *kubernetes.Clientset {
+func KubeClient() kubernetes.Interface {
 	config := GetClientConfig()
 
 	kClientset, err := kubernetes.NewForConfig(config)
