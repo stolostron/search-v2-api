@@ -12,3 +12,13 @@ func TestGetLocalHttpClient(t *testing.T) {
 
 	assert.NotNil(t, c)
 }
+
+func TestGetHttpClient(t *testing.T) {
+	mockService := RemoteSearchService{
+		Name: "test",
+	}
+
+	c := GetHttpClient(mockService)
+
+	assert.NotNil(t, c)
+}
