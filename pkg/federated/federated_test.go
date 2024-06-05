@@ -77,29 +77,29 @@ func TestHandleFederatedRequestLogReadBodyErr(t *testing.T) {
 	}
 }
 
-// func TestHandleFederatedRequestNoConfig(t *testing.T) {
-// 	// Mock data
-// 	mockResponseData := Data{}
+func TestHandleFederatedRequestNoConfig(t *testing.T) {
+	// Mock data
+	mockResponseData := Data{}
 
-// 	// Setup HTTP request
-// 	req := httptest.NewRequest("POST", "/federated", bytes.NewBuffer([]byte("mock request body")))
+	// Setup HTTP request
+	req := httptest.NewRequest("POST", "/federated", bytes.NewBuffer([]byte("mock request body")))
 
-// 	// Setup HTTP response recorder
-// 	w := httptest.NewRecorder()
+	// Setup HTTP response recorder
+	w := httptest.NewRecorder()
 
-// 	// Call the function with mock data
-// 	HandleFederatedRequest(w, req)
+	// Call the function with mock data
+	HandleFederatedRequest(w, req)
 
-// 	// Assertions
-// 	assert.Equal(t, http.StatusOK, w.Code)
-// 	var respBody GraphQLPayload
-// 	err := json.NewDecoder(w.Body).Decode(&respBody)
-// 	data := &respBody.Data
+	// Assertions
+	assert.Equal(t, http.StatusOK, w.Code)
+	var respBody GraphQLPayload
+	err := json.NewDecoder(w.Body).Decode(&respBody)
+	data := &respBody.Data
 
-// 	assert.NoError(t, err)
-// 	assert.Equal(t, &mockResponseData, data)
-// 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
-// }
+	assert.NoError(t, err)
+	assert.Equal(t, &mockResponseData, data)
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+}
 
 func TestHandleFederatedRequestWithConfig(t *testing.T) {
 	// Mock request body
