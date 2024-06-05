@@ -149,7 +149,7 @@ func getWhereClauseExpression(prop, operator string, values []string, dataType s
 		for _, val := range values {
 			exps = append(exps, goqu.L(`"data"->? @> ?`, prop, val))
 		}
-	case "!:@>":
+	case "!:@>", "!=:@>":
 		for _, val := range values {
 			exps = append(exps, goqu.L("NOT(?)", goqu.L(`"data"->? @> ?`, prop, val)))
 		}
