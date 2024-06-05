@@ -485,8 +485,6 @@ func partialMatchStringPattern(values []string) (bool, error) {
 			return false, err
 		}
 		if matched {
-			klog.V(5).Infof("ManagedHub filter pattern: %s hubname: %s matched: %t values: %+v",
-				pattern, config.Cfg.HubName, matched, values)
 			return matched, nil
 		}
 	}
@@ -515,17 +513,34 @@ func processOpValueMapManagedHub(key string, values []string) bool {
 		}
 		return true // Return true to indicate search should proceed
 	case "!:*", "!=:*":
+		klog.V(4).Infof("Checking if ManagedHub filter values: %+v %s matches hubname: %s",
+			values, key, config.Cfg.HubName)
 		match, err := partialMatchStringPattern(values)
 		if err != nil {
 			return false
 		}
-		return !match // Return the inverse of match to indicate search should proceed if there is no partial match
+		klog.V(4).Infof("ManagedHub filter values: %+v %s matches hubname: %s? %t",
+			values, key, config.Cfg.HubName, !match)
+		return !match // Return the inverse of match to indicate search should not proceed if there is a partial match
 	case "=:*":
+		klog.V(4).Infof("Checking if ManagedHub filter values: %+v %s matches hubname: %s",
+			values, key, config.Cfg.HubName)
 		match, err := partialMatchStringPattern(values)
 		if err != nil {
 			return false
 		}
+		klog.V(4).Infof("ManagedHub filter values: %+v %s matches hubname: %s? %t",
+			values, key, config.Cfg.HubName, match)
 		return match // Return match to indicate search should proceed if there is a partial match
+	}
+	return false
+}
+
+func anyTrue(bools []bool) bool {
+	for _, b := range bools {
+		if b {
+			return true
+		}
 	}
 	return false
 }
