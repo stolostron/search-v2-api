@@ -62,8 +62,8 @@ func TestGetFederationConfigFromSecret(t *testing.T) {
 		fakeClient := fake.NewSimpleClientset(
 			&corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "search-global-token",
-					Namespace: "open-cluster-management",
+					Name:      "search-global",
+					Namespace: "mock-managed-cluster",
 				},
 				Data: map[string][]byte{
 					"token": []byte("mock-token"),
@@ -150,6 +150,14 @@ func TestGetFederationConfigFromSecret(t *testing.T) {
 	ctx := context.Background()
 	result := getFederationConfigFromSecret(ctx, mockRequest)
 
-	t.Log("Result: ", result)
-	assert.Equal(t, 1, len(result))
+	assert.Equal(t, 2, len(result))
+	assert.Equal(t, "global-hub", result[0].Name)
+	assert.Equal(t, "https://search-search-api.open-cluster-management.svc:4010/searchapi/graphql", result[0].URL)
+	assert.Equal(t, "mock-token", result[0].Token)
+	assert.Equal(t, []byte{}, result[0].CABundle)
+
+	assert.Equal(t, "mock-managed-cluster", result[1].Name)
+	assert.Equal(t, "https://mock-cluster-proxy-route/mock-managed-cluster/api/v1/namespaces/open-cluster-management/services/search-search-api:4010/proxy-service/searchapi/graphql", result[1].URL)
+	assert.Equal(t, "mock-token", result[1].Token)
+	assert.Equal(t, []byte("mock-ca-bundle"), result[1].CABundle)
 }
