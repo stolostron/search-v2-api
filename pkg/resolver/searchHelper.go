@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
+
+	"k8s.io/utils/strings/slices"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
