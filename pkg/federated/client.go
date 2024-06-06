@@ -17,10 +17,10 @@ import (
 
 // This function returns an http client to communicate with the search-api service on the global hub cluster.
 func getLocalHttpClient() HTTPClient {
-	tlsConfig := tls.Config{
-		MinVersion: tls.VersionTLS13,
-		RootCAs:    x509.NewCertPool(),
-	}
+	// tlsConfig := tls.Config{
+	// 	MinVersion: tls.VersionTLS13,
+	// 	RootCAs:    x509.NewCertPool(),
+	// }
 
 	if config.Cfg.DevelopmentMode {
 		klog.Warningf("Running in DevelopmentMode. Using local self-signed certificate.")
@@ -30,7 +30,9 @@ func getLocalHttpClient() HTTPClient {
 			klog.Errorf("Error reading local self-signed certificate: %s", err)
 			klog.Info("Use 'make setup' to generate the local self-signed certificate.")
 		} else {
-			tlsConfig.RootCAs.AppendCertsFromPEM([]byte(tlsCert))
+			// tlsConfig.RootCAs.AppendCertsFromPEM([]byte(tlsCert))
+			ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM(tlsCert)
+			klog.Info("Appended CA bundle for local client: ", ok)
 		}
 	} else {
 		client := config.KubeClient()
@@ -38,21 +40,24 @@ func getLocalHttpClient() HTTPClient {
 		if err != nil {
 			klog.Errorf("Error getting the search-ca-crt configmap: %s", err)
 		}
-		tlsConfig.RootCAs.AppendCertsFromPEM([]byte(caBundleConfigMap.Data["service-ca.crt"]))
+		// tlsConfig.RootCAs.AppendCertsFromPEM([]byte(caBundleConfigMap.Data["service-ca.crt"]))
+		ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM([]byte(caBundleConfigMap.Data["service-ca.crt"]))
+		klog.Info("Appended CA bundle for local client: ", ok)
 	}
 
 	client := &RealHTTPClient{
 		&http.Client{
-			Transport: &http.Transport{
-				MaxIdleConns:          config.Cfg.Federation.HttpPool.MaxIdleConns,
-				IdleConnTimeout:       time.Duration(config.Cfg.Federation.HttpPool.MaxIdleConnTimeout) * time.Millisecond,
-				ResponseHeaderTimeout: time.Duration(config.Cfg.Federation.HttpPool.ResponseHeaderTimeout) * time.Millisecond,
-				DisableKeepAlives:     false,
-				TLSClientConfig:       &tlsConfig,
-				MaxConnsPerHost:       config.Cfg.Federation.HttpPool.MaxConnsPerHost,
-				MaxIdleConnsPerHost:   config.Cfg.Federation.HttpPool.MaxIdleConnPerHost,
-			},
-			Timeout: time.Duration(config.Cfg.Federation.HttpPool.RequestTimeout) * time.Millisecond,
+			// Transport: &http.Transport{
+			// 	MaxIdleConns:          config.Cfg.Federation.HttpPool.MaxIdleConns,
+			// 	IdleConnTimeout:       time.Duration(config.Cfg.Federation.HttpPool.MaxIdleConnTimeout) * time.Millisecond,
+			// 	ResponseHeaderTimeout: time.Duration(config.Cfg.Federation.HttpPool.ResponseHeaderTimeout) * time.Millisecond,
+			// 	DisableKeepAlives:     false,
+			// 	TLSClientConfig:       &tlsConfig,
+			// 	MaxConnsPerHost:       config.Cfg.Federation.HttpPool.MaxConnsPerHost,
+			// 	MaxIdleConnsPerHost:   config.Cfg.Federation.HttpPool.MaxIdleConnPerHost,
+			// },
+			Transport: tr,
+			Timeout:   time.Duration(config.Cfg.Federation.HttpPool.RequestTimeout) * time.Millisecond,
 		},
 	}
 	return client
