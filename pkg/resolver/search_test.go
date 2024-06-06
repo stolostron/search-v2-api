@@ -1015,6 +1015,15 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND NOT("data"->'container' @> '["acm-agent"]') AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
 		},
 		{
+			name:          "Not Equal To Match Array",
+			cluster:       "local*",
+			val1:          "Temp*",
+			val2:          `!=acm-agent`,
+			filterProp1:   "kind",
+			filterProp2:   "container",
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND NOT("data"->'container' @> '["acm-agent"]') AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+		},
+		{
 			name:          "Partial Match Array",
 			cluster:       "local*",
 			val1:          "Temp*",

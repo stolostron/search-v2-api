@@ -40,6 +40,24 @@ func Test_SearchComplete_Query(t *testing.T) {
 	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchComplete_Query")
 }
 
+func Test_SearchCompleteManagedHub_Query(t *testing.T) {
+	hubName = "test-hub"
+	// Create a SearchCompleteResolver instance with a mock connection pool.
+	prop1 := "managedHub"
+	searchInput := &model.SearchInput{}
+	resolver, _ := newMockSearchComplete(t, searchInput, prop1, rbac.UserData{CsResources: []rbac.Resource{}}, nil)
+	val1 := "test-hub"
+	expectedProps := []*string{&val1}
+
+	// Execute function
+	result, err := resolver.autoComplete(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"))
+	if err != nil {
+		t.Errorf("Incorrect results. expected error to be [%v] got [%v]", nil, err)
+	}
+	// Verify response
+	AssertStringArrayEqual(t, result, expectedProps, "Error in Test_SearchCompleteManagedHub_Query")
+}
+
 func Test_SearchComplete_Query_WithLimit(t *testing.T) {
 	// Create a SearchCompleteResolver instance with a mock connection pool.
 	prop1 := "kind"
