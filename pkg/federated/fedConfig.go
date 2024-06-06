@@ -18,10 +18,9 @@ import (
 
 // Holds the data needed to connect to a remote search service.
 type RemoteSearchService struct {
-	Name     string
-	URL      string
-	Token    string
-	CABundle []byte
+	Name  string
+	URL   string
+	Token string
 }
 
 type fedConfigCache struct {
@@ -67,7 +66,6 @@ func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSea
 func getLocalSearchApiConfig(request *http.Request) RemoteSearchService {
 	url := fmt.Sprintf("https://search-search-api.%s.svc:4010/searchapi/graphql", config.Cfg.PodNamespace)
 
-	caBundle := []byte{}
 	if config.Cfg.DevelopmentMode {
 		klog.Warningf("Running in DevelopmentMode. Using local self-signed certificate.")
 		url = "https://localhost:4010/searchapi/graphql"
@@ -76,32 +74,23 @@ func getLocalSearchApiConfig(request *http.Request) RemoteSearchService {
 		if err != nil {
 			klog.Errorf("Error reading local self-signed certificate: %s", err)
 			klog.Info("Use 'make setup' to generate the local self-signed certificate.")
-		} else {
-			// tlsConfig.RootCAs.AppendCertsFromPEM([]byte(tlsCert))
-			// ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM(tlsCert)
-			// klog.Info("Appended CA bundle for local client: ", ok)
-			caBundle = tlsCert
 		}
+		ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM(tlsCert)
+		klog.Info("Appended CA bundle for local client: ", ok)
 	} else {
 		client := config.KubeClient()
 		caBundleConfigMap, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(context.TODO(), "search-ca-crt", metav1.GetOptions{})
 		if err != nil {
 			klog.Errorf("Error getting the search-ca-crt configmap: %s", err)
 		}
-		// tlsConfig.RootCAs.AppendCertsFromPEM([]byte(caBundleConfigMap.Data["service-ca.crt"]))
-		// ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM([]byte(caBundleConfigMap.Data["service-ca.crt"]))
-		// klog.Info("Appended CA bundle for local client: ", ok)
-		caBundle = []byte(caBundleConfigMap.Data["service-ca.crt"])
+		ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM([]byte(caBundleConfigMap.Data["ca.crt"]))
+		klog.Info("Appended CA bundle for local client: ", ok)
 	}
 
-	ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM(caBundle)
-	klog.Info("Appended CA bundle for local client: ", ok)
-
 	return RemoteSearchService{
-		Name:     config.Cfg.Federation.GlobalHubName,
-		URL:      url,
-		Token:    strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
-		CABundle: caBundle,
+		Name:  config.Cfg.Federation.GlobalHubName,
+		URL:   url,
+		Token: strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
 	}
 }
 
@@ -175,8 +164,7 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 					URL: fmt.Sprintf(
 						"https://%s/%s/api/v1/namespaces/%s/services/search-search-api:4010/proxy-service/searchapi/graphql",
 						clusterProxyRoute, hubName, config.Cfg.PodNamespace), // FIXME: ACM namespace on the managed hub.
-					Token:    string(secret.Data["token"]),
-					CABundle: []byte(kubeRootCA.Data["ca.crt"]),
+					Token: string(secret.Data["token"]),
 				})
 			}(hubName)
 		}

@@ -24,10 +24,9 @@ func TestGetFederatedConfig_fromCache(t *testing.T) {
 		lastUpdated: time.Now(),
 		fedConfig: []RemoteSearchService{
 			{
-				Name:     "mock-cache-name",
-				URL:      "https://mock-cache-url",
-				Token:    "mock-cache-token",
-				CABundle: []byte{},
+				Name:  "mock-cache-name",
+				URL:   "https://mock-cache-url",
+				Token: "mock-cache-token",
 			},
 		},
 	}
@@ -53,7 +52,6 @@ func TestGetLocalSearchApiConfig(t *testing.T) {
 	assert.Equal(t, result.Name, "global-hub")
 	assert.Equal(t, result.URL, "https://search-search-api.open-cluster-management.svc:4010/searchapi/graphql")
 	assert.Equal(t, result.Token, "mock-token")
-	assert.Equal(t, result.CABundle, []byte{})
 }
 
 func TestGetFederationConfigFromSecret(t *testing.T) {
@@ -154,10 +152,8 @@ func TestGetFederationConfigFromSecret(t *testing.T) {
 	assert.Equal(t, "global-hub", result[0].Name)
 	assert.Equal(t, "https://search-search-api.open-cluster-management.svc:4010/searchapi/graphql", result[0].URL)
 	assert.Equal(t, "mock-token", result[0].Token)
-	assert.Equal(t, []byte{}, result[0].CABundle)
 
 	assert.Equal(t, "mock-managed-cluster", result[1].Name)
 	assert.Equal(t, "https://mock-cluster-proxy-route/mock-managed-cluster/api/v1/namespaces/open-cluster-management/services/search-search-api:4010/proxy-service/searchapi/graphql", result[1].URL)
 	assert.Equal(t, "mock-token", result[1].Token)
-	assert.Equal(t, []byte("mock-ca-bundle"), result[1].CABundle)
 }
