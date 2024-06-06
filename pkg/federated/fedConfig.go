@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -66,16 +67,41 @@ func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSea
 func getLocalSearchApiConfig(request *http.Request) RemoteSearchService {
 	url := fmt.Sprintf("https://search-search-api.%s.svc:4010/searchapi/graphql", config.Cfg.PodNamespace)
 
+	caBundle := []byte{}
 	if config.Cfg.DevelopmentMode {
 		klog.Warningf("Running in DevelopmentMode. Using local self-signed certificate.")
 		url = "https://localhost:4010/searchapi/graphql"
+		// Read the local self-signed CA bundle file.
+		tlsCert, err := os.ReadFile("sslcert/tls.crt")
+		if err != nil {
+			klog.Errorf("Error reading local self-signed certificate: %s", err)
+			klog.Info("Use 'make setup' to generate the local self-signed certificate.")
+		} else {
+			// tlsConfig.RootCAs.AppendCertsFromPEM([]byte(tlsCert))
+			// ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM(tlsCert)
+			// klog.Info("Appended CA bundle for local client: ", ok)
+			caBundle = tlsCert
+		}
+	} else {
+		client := config.KubeClient()
+		caBundleConfigMap, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(context.TODO(), "search-ca-crt", metav1.GetOptions{})
+		if err != nil {
+			klog.Errorf("Error getting the search-ca-crt configmap: %s", err)
+		}
+		// tlsConfig.RootCAs.AppendCertsFromPEM([]byte(caBundleConfigMap.Data["service-ca.crt"]))
+		// ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM([]byte(caBundleConfigMap.Data["service-ca.crt"]))
+		// klog.Info("Appended CA bundle for local client: ", ok)
+		caBundle = []byte(caBundleConfigMap.Data["service-ca.crt"])
 	}
+
+	ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM(caBundle)
+	klog.Info("Appended CA bundle for local client: ", ok)
 
 	return RemoteSearchService{
 		Name:     config.Cfg.Federation.GlobalHubName,
 		URL:      url,
 		Token:    strings.ReplaceAll(request.Header.Get("Authorization"), "Bearer ", ""),
-		CABundle: []byte{}, // addded later in client.go
+		CABundle: caBundle,
 	}
 }
 
@@ -97,6 +123,8 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 	if err != nil {
 		klog.Errorf("Error getting the kube-root-ca.crt: %s", err)
 	}
+	ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM([]byte(kubeRootCA.Data["ca.crt"]))
+	klog.Info("Appended CA bundle for remote client: ", ok)
 
 	// Get the cluster-proxy-user route on the global hub. We use this to proxy the requests to the managed hubs.
 	routes, err := dynamicClient.Resource(routesGvr).List(ctx, metav1.ListOptions{

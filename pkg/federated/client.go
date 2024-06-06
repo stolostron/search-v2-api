@@ -65,29 +65,31 @@ func getLocalHttpClient() HTTPClient {
 
 // Returns a client to process the federated request.
 func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
-	if remoteService.Name == config.Cfg.Federation.GlobalHubName {
-		return getLocalHttpClient()
-	}
+	// if config.Cfg.DevelopmentMode {
+	// 	// if remoteService.Name == config.Cfg.Federation.GlobalHubName {
+	// 	return getLocalHttpClient()
+	// }
 
 	// Get http client from pool.
 	client := httpClientPool.Get().(*RealHTTPClient)
 
 	// Set the TLS client configuration.
-	tlsConfig := tls.Config{
-		MinVersion: tls.VersionTLS13,
-		RootCAs:    x509.NewCertPool(),
-	}
+	// tlsConfig := tls.Config{
+	// 	MinVersion: tls.VersionTLS13,
+	// 	RootCAs:    x509.NewCertPool(),
+	// }
 
-	if len(remoteService.CABundle) > 0 {
-		ok := tlsConfig.RootCAs.AppendCertsFromPEM(remoteService.CABundle)
-		if !ok {
-			klog.Warningf("Failed to append CA bundle for %s", remoteService.Name)
-		}
-	} else {
-		klog.Warningf("TLS CA bundle not provided for remote service: %s.", remoteService.Name)
-	}
+	// if len(remoteService.CABundle) > 0 {
+	// 	// ok := tlsConfig.RootCAs.AppendCertsFromPEM(remoteService.CABundle)
+	// 	ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM(remoteService.CABundle)
+	// 	if !ok {
+	// 		klog.Warningf("Failed to append CA bundle for %s", remoteService.Name)
+	// 	}
+	// } else {
+	// 	klog.Warningf("TLS CA bundle not provided for remote service: %s.", remoteService.Name)
+	// }
 
-	client.SetTLSClientConfig(&tlsConfig)
+	// client.SetTLSClientConfig(&tlsConfig)
 
 	return client
 }
@@ -123,7 +125,7 @@ var httpClientPool = sync.Pool{
 // HTTPClient is an interface for an HTTP client.
 type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
-	SetTLSClientConfig(*tls.Config)
+	// SetTLSClientConfig(*tls.Config)
 }
 
 // RealHTTPClient is a real implementation of the HTTPClient interface.
@@ -137,6 +139,6 @@ func (c RealHTTPClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 // SetTLSClientConfig sets the TLS client configuration for the HTTP client.
-func (c RealHTTPClient) SetTLSClientConfig(config *tls.Config) {
-	c.Transport.(*http.Transport).TLSClientConfig = config
-}
+// func (c RealHTTPClient) SetTLSClientConfig(config *tls.Config) {
+// 	c.Transport.(*http.Transport).TLSClientConfig = config
+// }
