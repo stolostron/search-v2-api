@@ -14,8 +14,6 @@ func (d *Data) mergeSearchSchema(schemaProps []string) {
 	if d.SearchSchema == nil {
 		d.searchSchemaValues = make(map[string]interface{})
 		d.SearchSchema = &SearchSchema{AllProperties: make([]string, 0)}
-		// Add "managedHub" as a filter option in global Search - ACM-10019
-		schemaProps = append([]string{"managedHub"}, schemaProps[:]...)
 	}
 	// Add "managedHub" as a filter option in global Search - ACM-10019
 	if !slices.Contains(schemaProps, "managedHub") {
