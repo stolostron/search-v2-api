@@ -51,7 +51,6 @@ var httpClientPool = sync.Pool{
 // HTTPClient is an interface for an HTTP client.
 type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
-	// SetTLSClientConfig(*tls.Config)
 }
 
 // RealHTTPClient is a real implementation of the HTTPClient interface.
@@ -63,8 +62,3 @@ type RealHTTPClient struct {
 func (c RealHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	return c.Client.Do(req)
 }
-
-// SetTLSClientConfig sets the TLS client configuration for the HTTP client.
-// func (c RealHTTPClient) SetTLSClientConfig(config *tls.Config) {
-// 	c.Transport.(*http.Transport).TLSClientConfig = config
-// }

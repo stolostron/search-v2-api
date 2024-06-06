@@ -76,14 +76,14 @@ func getLocalSearchApiConfig(request *http.Request) RemoteSearchService {
 			klog.Info("Use 'make setup' to generate the local self-signed certificate.")
 		}
 		ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM(tlsCert)
-		klog.Info("Appended CA bundle for local client: ", ok)
+		klog.Info("Appended CA bundle for local client (local dev mode): ", ok)
 	} else {
 		client := config.KubeClient()
 		caBundleConfigMap, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(context.TODO(), "search-ca-crt", metav1.GetOptions{})
 		if err != nil {
 			klog.Errorf("Error getting the search-ca-crt configmap: %s", err)
 		}
-		ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM([]byte(caBundleConfigMap.Data["ca.crt"]))
+		ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM([]byte(caBundleConfigMap.Data["service-ca.crt"]))
 		klog.Info("Appended CA bundle for local client: ", ok)
 	}
 
