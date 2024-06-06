@@ -13,7 +13,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"k8s.io/klog/v2"
@@ -410,8 +412,6 @@ func (er errorReader) Close(p []byte) (n int, err error) {
 	return 0, errors.New("simulated error reading response body")
 }
 
-/* FIXME: Fix this test before merging.
-
 func TestManagedHubFederatedResponseSuccess(t *testing.T) {
 	callNum := 0
 
@@ -421,8 +421,9 @@ func TestManagedHubFederatedResponseSuccess(t *testing.T) {
 	cachedFedConfig = fedConfigCache{
 		lastUpdated: time.Now(),
 		fedConfig: []RemoteSearchService{{Name: "test-hub-a",
-			URL:   "https://api.mockHubUrl.com:6443",
-			Token: "mockToken",
+			URL:      "https://api.mockHubUrl.com:6443",
+			Token:    "mockToken",
+			CABundle: []byte("mockCA"),
 		}},
 	}
 	// Mock data
@@ -457,7 +458,7 @@ func TestManagedHubFederatedResponseSuccess(t *testing.T) {
 	mockClient := &MockHTTPClient{
 		DoFunc: func(req *http.Request) (*http.Response, error) {
 			callNum++
-			if callNum == 2 { // for test-hub-a managed cluster
+			if callNum == 1 { // for test-hub-a managed cluster
 				// Mock HTTP response
 				return &http.Response{
 					Status:     "200 OK",
@@ -504,4 +505,3 @@ func TestManagedHubFederatedResponseSuccess(t *testing.T) {
 	assert.Equal(t, &mockResponseData, data)
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 }
-*/
