@@ -38,9 +38,10 @@ type Config struct {
 	Federation          federationConfig // Federated search configuration.
 	HttpPort            int
 	PlaygroundMode      bool // Enable the GraphQL Playground client.
-	QueryLimit          int  // The default LIMIT to use on queries. Client can override.
-	RelationLevel       int  // The number of levels/hops for finding relationships for a particular resource
-	SlowLog             int  // Logs when queries are slower than the specified time duration in ms. Default 300ms
+	PodNamespace        string
+	QueryLimit          int // The default LIMIT to use on queries. Client can override.
+	RelationLevel       int // The number of levels/hops for finding relationships for a particular resource
+	SlowLog             int // Logs when queries are slower than the specified time duration in ms. Default 300ms
 }
 
 // Define feature flags.
@@ -104,6 +105,7 @@ func new() *Config {
 		},
 		HttpPort:       getEnvAsInt("HTTP_PORT", 4010),
 		PlaygroundMode: getEnvAsBool("PLAYGROUND_MODE", false),
+		PodNamespace:   getEnv("POD_NAMESPACE", "open-cluster-management"),
 		QueryLimit:     getEnvAsInt("QUERY_LIMIT", 1000),
 		SlowLog:        getEnvAsInt("SLOW_LOG", 300),
 		// Setting default level to 0 to check if user has explicitly set this variable

@@ -64,8 +64,7 @@ func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSea
 }
 
 func getLocalSearchApiConfig(request *http.Request) RemoteSearchService {
-	namespace := "open-cluster-management" // FIXME: Namespace.
-	url := fmt.Sprintf("https://search-search-api.%s.svc:4010/searchapi/graphql", namespace)
+	url := fmt.Sprintf("https://search-search-api.%s.svc:4010/searchapi/graphql", config.Cfg.PodNamespace)
 
 	if config.Cfg.DevelopmentMode {
 		klog.Warningf("Running in DevelopmentMode. Using local self-signed certificate.")
@@ -143,12 +142,11 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 				resultLock.Lock()
 				defer resultLock.Unlock()
 
-				namespace := "open-cluster-management" // FIXME: namespace is hardcoded to open-cluster-management.
 				result = append(result, RemoteSearchService{
 					Name: hubName,
 					URL: fmt.Sprintf(
 						"https://%s/%s/api/v1/namespaces/%s/services/search-search-api:4010/proxy-service/searchapi/graphql",
-						clusterProxyRoute, hubName, namespace),
+						clusterProxyRoute, hubName, config.Cfg.PodNamespace), // FIXME: ACM namespace on the managed hub.
 					Token:    string(secret.Data["token"]),
 					CABundle: []byte(kubeRootCA.Data["ca.crt"]),
 				})
