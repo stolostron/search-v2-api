@@ -75,7 +75,8 @@ func (s *SearchResult) matchesManagedHubFilter() bool {
 			klog.V(5).Infof("managedHub filter: %s values: %+v \n", filter.Property,
 				PointerToStringArray(filter.Values))
 
-			opValueMap := matchOperatorToProperty("string", map[string][]string{}, PointerToStringArray(filter.Values), filter.Property)
+			opValueMap := matchOperatorToProperty("string", map[string][]string{},
+				PointerToStringArray(filter.Values), filter.Property)
 			klog.V(5).Infof("Extract operator from managedHub filter: %+v \n", opValueMap)
 
 			for key, values := range opValueMap {
