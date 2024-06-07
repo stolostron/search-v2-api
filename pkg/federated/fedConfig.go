@@ -108,7 +108,7 @@ func getACMInstallNamespaces(localService RemoteSearchService) map[string]string
 	client := httpClientGetter()
 
 	reqBody := []byte(`{
-		"query":"query Search ($input: [SearchInput]) { search(input: $input) { items }}",
+		"query":"query Search ($input: [SearchInput]) { searchResult: search (input: $input) { items }}",
 		"variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["MultiClusterHub"]}] }]}}`)
 	req, err := http.NewRequest("POST", localService.URL, bytes.NewBuffer(reqBody))
 	if err != nil {
@@ -138,7 +138,7 @@ func getACMInstallNamespaces(localService RemoteSearchService) map[string]string
 		klog.Errorf("Error unmarshalling search result: %s", err)
 	}
 
-	for _, item := range response.Data.SearchAlias[0].Items {
+	for _, item := range response.Data.Search[0].Items {
 		result[item["cluster"].(string)] = item["namespace"].(string)
 	}
 
@@ -158,7 +158,7 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 	result = append(result, localSearchApi)
 
 	// Get the namespace where ACM is installed in each managed hub.
-	acmInstallNamespaceMap := getACMInstallNamespaces(localSearchApi)	
+	acmInstallNamespaceMap := getACMInstallNamespaces(localSearchApi)
 
 	// The kube-root-ca.crt has the CA bundle to verify the TLS connection to the cluster-proxy-user route in the global hub.
 	kubeRootCA, err := client.CoreV1().ConfigMaps("openshift-service-ca").Get(ctx, "kube-root-ca.crt", metav1.GetOptions{})

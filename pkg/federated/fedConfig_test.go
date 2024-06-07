@@ -151,7 +151,7 @@ func buildFakeHttpClient() *MockHTTPClient {
 				Body: io.NopCloser(bytes.NewBuffer([]byte(
 					`{
 						"data": {
-							"search": [
+							"searchResult": [
 								{"items":[{"cluster": "mock-managed-cluster", "namespace": "mock-namespace"}]}
 							]
 						}
