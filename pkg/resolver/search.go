@@ -77,14 +77,14 @@ func (s *SearchResult) matchesManagedHubFilter() bool {
 
 			opValueMap := matchOperatorToProperty("string", map[string][]string{}, PointerToStringArray(filter.Values), filter.Property)
 			klog.V(5).Infof("Extract operator from managedHub filter: %+v \n", opValueMap)
-			proceedWithSearch := make([]bool, len(opValueMap))
-			count := 0
+
 			for key, values := range opValueMap {
 				klog.Info("Processing ", key, " values ", values, " in opValueMap for managedHub filter")
-				proceedWithSearch[count] = processOpValueMapManagedHub(key, values)
-				count++
+				if processOpValueMapManagedHub(key, values) {
+					return true
+				}
 			}
-			return anyTrue(proceedWithSearch) // check if any of the patterns match
+			return false
 		}
 	}
 	klog.V(4).Infof("managedHub filter not present. Proceeding with Search")

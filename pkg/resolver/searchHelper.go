@@ -497,51 +497,30 @@ func partialMatchStringPattern(values []string) (bool, error) {
 // It handles different key cases such as "!", "!=", "=", "!:*", "!=:*", and "=:*".
 // It returns a boolean indicating whether the search should proceed based on the evaluation of the key and values.
 func processOpValueMapManagedHub(key string, values []string) bool {
+	result := false
 	switch key {
+	// Check if config.Cfg.HubName is in the values slice
 	case "!", "!=":
-		// Check if config.Cfg.HubName is in the values slice
-		if slices.Contains((values), config.Cfg.HubName) {
-			klog.V(4).Infof("%s in managedHub filter exclude list %+v. Not proceeding with Search",
-				config.Cfg.HubName, (values))
-			return false // Search should not proceed if there is a match
-		}
-		return true // Return true to indicate search should proceed
+		result = !slices.Contains((values), config.Cfg.HubName) // Search should not proceed if there is a match
 	case "=":
-		if !slices.Contains(values, config.Cfg.HubName) {
-			klog.V(4).Infof("%s not in managedHub filter %+v. Not proceeding with Search",
-				config.Cfg.HubName, (values))
-			return false // Search should not proceed if there is no match
-		}
-		return true // Return true to indicate search should proceed
+		result = slices.Contains(values, config.Cfg.HubName) // Search to proceed if there is a match
 	case "!:*", "!=:*":
-		klog.V(4).Infof("Checking if ManagedHub filter values: %+v %s matches hubname: %s",
-			values, key, config.Cfg.HubName)
 		match, err := partialMatchStringPattern(values)
 		if err != nil {
+			klog.Errorf("Error processing partial match for ManagedHub filter:", err)
 			return false
 		}
-		klog.V(4).Infof("ManagedHub filter values: %+v %s matches hubname: %s? %t",
-			values, key, config.Cfg.HubName, !match)
-		return !match // Return the inverse of match to indicate search should not proceed if there is a partial match
+		result = !match // Return the inverse of match to indicate search should not proceed if there is a partial match
 	case "=:*":
-		klog.V(4).Infof("Checking if ManagedHub filter values: %+v %s matches hubname: %s",
-			values, key, config.Cfg.HubName)
 		match, err := partialMatchStringPattern(values)
 		if err != nil {
+			klog.Errorf("Error processing partial match for ManagedHub filter:", err)
 			return false
 		}
-		klog.V(4).Infof("ManagedHub filter values: %+v %s matches hubname: %s? %t",
-			values, key, config.Cfg.HubName, match)
-		return match // Return match to indicate search should proceed if there is a partial match
+		result = match // Return match to indicate search should proceed if there is a partial match
 	}
-	return false
-}
+	klog.V(4).Infof("ManagedHub filter hubname: %s operation: %s values: %+v  result: %t",
+		config.Cfg.HubName, key, values, result)
 
-func anyTrue(bools []bool) bool {
-	for _, b := range bools {
-		if b {
-			return true
-		}
-	}
-	return false
+	return result
 }
