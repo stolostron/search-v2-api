@@ -150,17 +150,15 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 	result := []RemoteSearchService{}
 	resultLock := sync.Mutex{}
 	wg := sync.WaitGroup{}
+	client := getKubeClient()
+	dynamicClient := getDynamicClient()
 
 	// Add the local search-api on the global hub.
 	localSearchApi := getLocalSearchApiConfig(ctx, request)
 	result = append(result, localSearchApi)
 
-	// acmInstallNamespace := map[string]string{"global-hub": config.Cfg.PodNamespace, "mock-managed-cluster": "mock-namespace"}
-	acmInstallNamespace := getACMInstallNamespaces(localSearchApi) // FIXME
-
-	// Add the managed hubs.
-	client := getKubeClient()
-	dynamicClient := getDynamicClient()
+	// Get the namespace where ACM is installed in each managed hub.
+	acmInstallNamespaceMap := getACMInstallNamespaces(localSearchApi)	
 
 	// The kube-root-ca.crt has the CA bundle to verify the TLS connection to the cluster-proxy-user route in the global hub.
 	kubeRootCA, err := client.CoreV1().ConfigMaps("openshift-service-ca").Get(ctx, "kube-root-ca.crt", metav1.GetOptions{})
@@ -168,7 +166,9 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 		klog.Errorf("Error getting the kube-root-ca.crt: %s", err)
 	}
 	ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM([]byte(kubeRootCA.Data["ca.crt"]))
-	klog.Info("Appended CA bundle for remote client: ", ok)
+	if !ok {
+		klog.Error("Error appending CA bundle for remote client (cluster-proxy).")
+	}
 
 	// Get the cluster-proxy-user route on the global hub. We use this to proxy the requests to the managed hubs.
 	routes, err := dynamicClient.Resource(routesGvr).List(ctx, metav1.ListOptions{
@@ -179,6 +179,7 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 	}
 	clusterProxyRoute := routes.Items[0].UnstructuredContent()["spec"].(map[string]interface{})["host"].(string)
 
+	// Build the list of managed hubs.
 	managedClusters, err := dynamicClient.Resource(managedClustersGvr).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		klog.Errorf("Error getting the managed clusters list: %s", err)
@@ -218,7 +219,7 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 					Name: hubName,
 					URL: fmt.Sprintf(
 						"https://%s/%s/api/v1/namespaces/%s/services/search-search-api:4010/proxy-service/searchapi/graphql",
-						clusterProxyRoute, hubName, acmInstallNamespace[hubName]),
+						clusterProxyRoute, hubName, acmInstallNamespaceMap[hubName]),
 					Token: string(secret.Data["token"]),
 				})
 			}(hubName)
