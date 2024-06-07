@@ -12,8 +12,10 @@ import (
 	"k8s.io/klog/v2"
 )
 
+var httpClientGetter = GetHttpClient // Needed for mocking http client in tests.
+
 // Returns a client to process the federated request.
-func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
+func GetHttpClient() HTTPClient {
 	// Get http client from pool.
 	client := httpClientPool.Get().(*RealHTTPClient)
 

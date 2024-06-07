@@ -129,7 +129,7 @@ func TestHandleFederatedRequestWithConfig(t *testing.T) {
 	defer func() { httpClientGetter = realGetHttpClient }()
 
 	// Set httpClientGetter to return the mock client
-	httpClientGetter = func(remoteService RemoteSearchService) HTTPClient {
+	httpClientGetter = func() HTTPClient {
 		return mockClient
 	}
 
@@ -461,7 +461,7 @@ func TestManagedHubFederatedResponseSuccess(t *testing.T) {
 	defer func() { httpClientGetter = realGetHttpClient }()
 
 	// Set httpClientGetter to return the mock client
-	httpClientGetter = func(remoteService RemoteSearchService) HTTPClient {
+	httpClientGetter = func() HTTPClient {
 		return mockClient
 	}
 

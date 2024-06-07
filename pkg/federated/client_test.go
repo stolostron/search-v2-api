@@ -6,13 +6,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-
 func TestGetHttpClient(t *testing.T) {
-	mockService := RemoteSearchService{
-		Name: "test",
-	}
 
-	c := GetHttpClient(mockService)
+	c := GetHttpClient()
 
 	assert.NotNil(t, c)
 }

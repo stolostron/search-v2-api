@@ -29,6 +29,7 @@ type SearchSchema struct {
 type Data struct {
 	Messages             []string       `json:"messages,omitempty"`
 	Search               []SearchResult `json:"searchResult,omitempty"` // FIXME: Hacked to solve aliasing issue from console.
+	SearchAlias          []SearchResult `json:"search,omitempty"` // FIXME: Need to rename this to searchResult.
 	SearchComplete       []string       `json:"searchComplete,omitempty"`
 	SearchSchema         *SearchSchema  `json:"searchSchema,omitempty"`
 	GraphQLSchema        interface{}    `json:"__schema,omitempty"`

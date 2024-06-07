@@ -2,8 +2,11 @@
 package federated
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -34,7 +37,9 @@ var cachedFedConfig = fedConfigCache{
 }
 
 var (
-	routesGvr = schemav1.GroupVersionResource{
+	getKubeClient    = config.KubeClient       // Allows for mocking client in tests.
+	getDynamicClient = config.GetDynamicClient // Allows for mocking client in tests.
+	routesGvr        = schemav1.GroupVersionResource{
 		Group:    "route.openshift.io",
 		Version:  "v1",
 		Resource: "routes",
@@ -45,9 +50,6 @@ var (
 		Resource: "managedclusters",
 	}
 )
-
-var getKubeClient = config.KubeClient          // Allows for mocking client in tests.
-var getDynamicClient = config.GetDynamicClient // Allows for mocking client in tests.
 
 func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSearchService {
 	cacheDuration := time.Duration(config.Cfg.Federation.ConfigCacheTTL) * time.Millisecond
@@ -63,7 +65,7 @@ func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSea
 	return cachedFedConfig.fedConfig
 }
 
-func getLocalSearchApiConfig(request *http.Request) RemoteSearchService {
+func getLocalSearchApiConfig(ctx context.Context, request *http.Request) RemoteSearchService {
 	url := fmt.Sprintf("https://search-search-api.%s.svc:4010/searchapi/graphql", config.Cfg.PodNamespace)
 
 	if config.Cfg.DevelopmentMode {
@@ -76,15 +78,20 @@ func getLocalSearchApiConfig(request *http.Request) RemoteSearchService {
 			klog.Info("Use 'make setup' to generate the local self-signed certificate.")
 		}
 		ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM(tlsCert)
-		klog.Info("Appended CA bundle for local client (local dev mode): ", ok)
+		if !ok {
+			klog.Errorf("Error appending self-signed CA bundle for local service.")
+		}
 	} else {
 		client := config.KubeClient()
-		caBundleConfigMap, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(context.TODO(), "search-ca-crt", metav1.GetOptions{})
+		caBundleConfigMap, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "search-ca-crt", metav1.GetOptions{})
 		if err != nil {
 			klog.Errorf("Error getting the search-ca-crt configmap: %s", err)
 		}
 		ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM([]byte(caBundleConfigMap.Data["service-ca.crt"]))
-		klog.Info("Appended CA bundle for local client: ", ok)
+		if !ok {
+			klog.Errorf("Error appending CA bundle for local service.")
+		}
+
 	}
 
 	return RemoteSearchService{
@@ -94,6 +101,50 @@ func getLocalSearchApiConfig(request *http.Request) RemoteSearchService {
 	}
 }
 
+// Get the namespace where ACM is installed in each managed hub.
+// Query the search api on the global hub to get the namespace of the MultiClusterHub resource.
+func getACMInstallNamespaces(localService RemoteSearchService) map[string]string {
+	result := map[string]string{}
+	client := httpClientGetter()
+
+	reqBody := []byte(`{
+		"query":"query Search ($input: [SearchInput]) { search(input: $input) { items }}",
+		"variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["MultiClusterHub"]}] }]}}`)
+	req, err := http.NewRequest("POST", localService.URL, bytes.NewBuffer(reqBody))
+	if err != nil {
+		klog.Errorf("Error creating request to get ACM install namespaces: %s", err)
+		return result
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", localService.Token))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		klog.Errorf("Error getting ACM install namespaces: %s", err)
+		return result
+	}
+	defer resp.Body.Close()
+
+	// Read the response body.
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		klog.Errorf("Error reading response body: %s", err)
+		return result
+	}
+
+	response := GraphQLPayload{}
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		klog.Errorf("Error unmarshalling search result: %s", err)
+	}
+
+	for _, item := range response.Data.SearchAlias[0].Items {
+		result[item["cluster"].(string)] = item["namespace"].(string)
+	}
+
+	return result
+}
+
 // Read the secret search-global-token on each managed hub namespace to get the token and certificates.
 func getFederationConfigFromSecret(ctx context.Context, request *http.Request) []RemoteSearchService {
 	result := []RemoteSearchService{}
@@ -101,7 +152,11 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 	wg := sync.WaitGroup{}
 
 	// Add the local search-api on the global hub.
-	result = append(result, getLocalSearchApiConfig(request))
+	localSearchApi := getLocalSearchApiConfig(ctx, request)
+	result = append(result, localSearchApi)
+
+	// acmInstallNamespace := map[string]string{"global-hub": config.Cfg.PodNamespace, "mock-managed-cluster": "mock-namespace"}
+	acmInstallNamespace := getACMInstallNamespaces(localSearchApi) // FIXME
 
 	// Add the managed hubs.
 	client := getKubeClient()
@@ -163,7 +218,7 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 					Name: hubName,
 					URL: fmt.Sprintf(
 						"https://%s/%s/api/v1/namespaces/%s/services/search-search-api:4010/proxy-service/searchapi/graphql",
-						clusterProxyRoute, hubName, config.Cfg.PodNamespace), // FIXME: ACM namespace on the managed hub.
+						clusterProxyRoute, hubName, acmInstallNamespace[hubName]),
 					Token: string(secret.Data["token"]),
 				})
 			}(hubName)
