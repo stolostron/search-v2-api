@@ -91,7 +91,6 @@ func getLocalSearchApiConfig(ctx context.Context, request *http.Request) RemoteS
 		if !ok {
 			klog.Errorf("Error appending CA bundle for local service.")
 		}
-
 	}
 
 	return RemoteSearchService{
@@ -101,12 +100,14 @@ func getLocalSearchApiConfig(ctx context.Context, request *http.Request) RemoteS
 	}
 }
 
-// Get the namespace where ACM is installed in each managed hub.
-// Query the search api on the global hub to get the namespace of the MultiClusterHub resource.
+// Builds a map of managed hub name to ACM install namespace.
+// Use the local search-api to query the MultiClusterHub resource on the managed hubs.
+// The MultiClusterHub resource namespace is the namespace where ACM is installed.
 func getACMInstallNamespaces(localService RemoteSearchService) map[string]string {
 	result := map[string]string{}
 	client := httpClientGetter()
 
+	// Build request to local search-api.
 	reqBody := []byte(`{
 		"query":"query Search ($input: [SearchInput]) { searchResult: search (input: $input) { items }}",
 		"variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["MultiClusterHub"]}] }]}}`)
@@ -118,6 +119,7 @@ func getACMInstallNamespaces(localService RemoteSearchService) map[string]string
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", localService.Token))
 	req.Header.Set("Content-Type", "application/json")
 
+	// Send the request to the local search-api.
 	resp, err := client.Do(req)
 	if err != nil {
 		klog.Errorf("Error getting ACM install namespaces: %s", err)
@@ -132,12 +134,14 @@ func getACMInstallNamespaces(localService RemoteSearchService) map[string]string
 		return result
 	}
 
+	// Unmarshal the response.
 	response := GraphQLPayload{}
 	err = json.Unmarshal(body, &response)
 	if err != nil {
 		klog.Errorf("Error unmarshalling search result: %s", err)
 	}
 
+	// Build the map of managed hub name to ACM install namespace.
 	for _, item := range response.Data.Search[0].Items {
 		result[item["cluster"].(string)] = item["namespace"].(string)
 	}
@@ -145,7 +149,23 @@ func getACMInstallNamespaces(localService RemoteSearchService) map[string]string
 	return result
 }
 
-// Read the secret search-global-token on each managed hub namespace to get the token and certificates.
+// The kube-root-ca.crt has the CA bundle to verify the TLS connection to the cluster-proxy-user route in the global hub.
+func addCABundleForClusterProxy(ctx context.Context) {
+	client := getKubeClient()
+
+	kubeRootCA, err := client.CoreV1().ConfigMaps("openshift-service-ca").Get(ctx, "kube-root-ca.crt", metav1.GetOptions{})
+	if err != nil {
+		klog.Errorf("Error getting the kube-root-ca.crt: %s", err)
+	}
+	ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM([]byte(kubeRootCA.Data["ca.crt"]))
+	if !ok {
+		klog.Error("Error appending CA bundle for remote client (cluster-proxy).")
+	}
+}
+
+// Build the list of managed hubs the URL and token to access.
+// The token to access each managed hub is created by the managedserviceaccount and saved in the
+// secret search-global-token on each managed huc namespace.
 func getFederationConfigFromSecret(ctx context.Context, request *http.Request) []RemoteSearchService {
 	result := []RemoteSearchService{}
 	resultLock := sync.Mutex{}
@@ -160,16 +180,6 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 	// Get the namespace where ACM is installed in each managed hub.
 	acmInstallNamespaceMap := getACMInstallNamespaces(localSearchApi)
 
-	// The kube-root-ca.crt has the CA bundle to verify the TLS connection to the cluster-proxy-user route in the global hub.
-	kubeRootCA, err := client.CoreV1().ConfigMaps("openshift-service-ca").Get(ctx, "kube-root-ca.crt", metav1.GetOptions{})
-	if err != nil {
-		klog.Errorf("Error getting the kube-root-ca.crt: %s", err)
-	}
-	ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM([]byte(kubeRootCA.Data["ca.crt"]))
-	if !ok {
-		klog.Error("Error appending CA bundle for remote client (cluster-proxy).")
-	}
-
 	// Get the cluster-proxy-user route on the global hub. We use this to proxy the requests to the managed hubs.
 	routes, err := dynamicClient.Resource(routesGvr).List(ctx, metav1.ListOptions{
 		FieldSelector: "metadata.name=cluster-proxy-addon-user",
@@ -179,13 +189,15 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 	}
 	clusterProxyRoute := routes.Items[0].UnstructuredContent()["spec"].(map[string]interface{})["host"].(string)
 
+	// Add the CA bundle for the cluster-proxy-user route.
+	addCABundleForClusterProxy(ctx)
+
 	// Build the list of managed hubs.
 	managedClusters, err := dynamicClient.Resource(managedClustersGvr).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		klog.Errorf("Error getting the managed clusters list: %s", err)
 	} else {
-		// Filter managed hubs.
-		// A managed hub is a managed cluster that has the RHACM operator installed.
+		// Filter managed hubs. A managed hub is a managed cluster that has the RHACM operator installed.
 		// oc get mcl -o json | jq -r '.items[] | select(.status.clusterClaims[] | .name == "hub.open-cluster-management.io" and .value != "NotInstalled") | .metadata.name'
 		for _, managedCluster := range managedClusters.Items {
 			hubName := managedCluster.GetName()
@@ -202,8 +214,7 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 				continue
 			}
 
-			// Using cluster-proxy on global hub to access the search-api on managed hubs.
-			// Get the ManagedServiceAccount token and ca.crt.
+			// Get the token to access the managed hub.
 			wg.Add(1)
 			go func(hubName string) {
 				defer wg.Done()
@@ -235,5 +246,5 @@ func logFederationConfig(fedConfig []RemoteSearchService) {
 	for _, service := range fedConfig {
 		configStr += fmt.Sprintf("{ Name: %s , URL: %s }\n", service.Name, service.URL)
 	}
-	klog.Infof("Federation config:\n %s", configStr)
+	klog.Infof("Using federation config:\n %s", configStr)
 }
