@@ -37,11 +37,11 @@ type Config struct {
 	Features            featureFlags     // Enable or disable features.
 	Federation          federationConfig // Federated search configuration.
 	HttpPort            int
-	PlaygroundMode      bool // Enable the GraphQL Playground client.
-	PodNamespace        string
-	QueryLimit          int // The default LIMIT to use on queries. Client can override.
-	RelationLevel       int // The number of levels/hops for finding relationships for a particular resource
-	SlowLog             int // Logs when queries are slower than the specified time duration in ms. Default 300ms
+	PlaygroundMode      bool   // Enable the GraphQL Playground client.
+	PodNamespace        string // Kubernetes namespace where the pod is running.
+	QueryLimit          int    // The default LIMIT to use on queries. Client can override.
+	RelationLevel       int    // The number of levels/hops for finding relationships for a particular resource
+	SlowLog             int    // Logs when queries are slower than the specified time duration in ms. Default 300ms
 }
 
 // Define feature flags.

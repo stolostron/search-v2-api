@@ -71,19 +71,19 @@ func getLocalSearchApiConfig(ctx context.Context, request *http.Request) RemoteS
 	if config.Cfg.DevelopmentMode {
 		klog.Warningf("Running in DevelopmentMode. Using local self-signed certificate.")
 		url = "https://localhost:4010/searchapi/graphql"
-		// Read the local self-signed CA bundle file.
-		tlsCert, err := os.ReadFile("sslcert/tls.crt")
+		tlsCert, err := os.ReadFile("sslcert/tls.crt") // Local self-signed certificate.
 		if err != nil {
 			klog.Errorf("Error reading local self-signed certificate: %s", err)
 			klog.Info("Use 'make setup' to generate the local self-signed certificate.")
 		}
 		ok := tr.TLSClientConfig.RootCAs.AppendCertsFromPEM(tlsCert)
 		if !ok {
-			klog.Errorf("Error appending self-signed CA bundle for local service.")
+			klog.Errorf("Error appending local self-signed CA bundle.")
 		}
 	} else {
-		client := config.KubeClient()
-		caBundleConfigMap, err := client.CoreV1().ConfigMaps("open-cluster-management").Get(ctx, "search-ca-crt", metav1.GetOptions{})
+		client := getKubeClient()
+		caBundleConfigMap, err := client.CoreV1().ConfigMaps(config.Cfg.PodNamespace).
+			Get(ctx, "search-ca-crt", metav1.GetOptions{})
 		if err != nil {
 			klog.Errorf("Error getting the search-ca-crt configmap: %s", err)
 		}

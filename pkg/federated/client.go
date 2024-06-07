@@ -12,7 +12,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-var httpClientGetter = GetHttpClient // Needed for mocking http client in tests.
+var httpClientGetter = GetHttpClient // Allows mocking http client in tests.
 
 // Returns a client to process the federated request.
 func GetHttpClient() HTTPClient {

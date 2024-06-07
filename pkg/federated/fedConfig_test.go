@@ -70,6 +70,15 @@ func buildFakeKubernetesClient() kubernetes.Interface {
 		},
 		&corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
+				Name:      "search-ca-crt",
+				Namespace: "open-cluster-management",
+			},
+			Data: map[string]string{
+				"service-ca-crt": "mock-token",
+			},
+		},
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:      "kube-root-ca.crt",
 				Namespace: "openshift-service-ca",
 			},
