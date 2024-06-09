@@ -80,7 +80,7 @@ func (s *SearchResult) matchesManagedHubFilter() bool {
 			klog.V(5).Infof("Extract operator from managedHub filter: %+v \n", opValueMap)
 
 			for key, values := range opValueMap {
-				klog.Info("Processing ", key, " values ", values, " in opValueMap for managedHub filter")
+				klog.V(5).Info("Processing ", key, " values ", values, " in opValueMap for managedHub filter")
 				if processOpValueMapManagedHub(key, values) {
 					return true
 				}
