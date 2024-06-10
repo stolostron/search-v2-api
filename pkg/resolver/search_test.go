@@ -1161,3 +1161,107 @@ func Test_decodePropertyTypes(t *testing.T) {
 	_, err := decodePropertyTypes([]string{"!master"}, "array")
 	assert.Nil(t, err, "expected no error")
 }
+
+func TestMatchesManagedHubFilter(t *testing.T) {
+	type test struct {
+		name        string
+		val1        string
+		filterProp1 string
+		expectedRes bool
+	}
+	config.Cfg.HubName = "test-hub-a"
+
+	tests := []test{
+		{
+			name:        "Match hub name",
+			val1:        "test-hub-a",
+			filterProp1: "managedHub",
+			expectedRes: true,
+		},
+		{
+			name:        "Not Match hub name",
+			val1:        "test-hub-b",
+			filterProp1: "managedHub",
+			expectedRes: false,
+		},
+		{
+			name:        "Not hub name operator !",
+			val1:        "!test-hub-a",
+			filterProp1: "managedHub",
+			expectedRes: false,
+		},
+		{
+			name:        "Not Equal to hub name operator !=",
+			val1:        "!=test-hub-a",
+			filterProp1: "managedHub",
+			expectedRes: false,
+		},
+		{
+			name:        "Partial Match hub name operator",
+			val1:        "*test-*",
+			filterProp1: "managedHub",
+			expectedRes: true,
+		},
+		{
+			name:        "Partial Match Not hub name operator !",
+			val1:        "!*test-*",
+			filterProp1: "managedHub",
+			expectedRes: false,
+		},
+		{
+			name:        "1 Partial Match Not Equal to hub name operator !=",
+			val1:        "!=*-hub-*",
+			filterProp1: "managedHub",
+			expectedRes: false,
+		},
+		{
+			name:        "Partial Match hub name operator - unmatched pattern at start",
+			val1:        "=hub-*",
+			filterProp1: "managedHub",
+			expectedRes: false,
+		},
+		{
+			name:        "Partial Match hub name operator - unmatched pattern at end",
+			val1:        "=*hub",
+			filterProp1: "managedHub",
+			expectedRes: false,
+		},
+		{
+			name:        "Partial Match hub name operator =",
+			val1:        "=*hub-a",
+			filterProp1: "managedHub",
+			expectedRes: true,
+		},
+		{
+			name:        "Error in pattern",
+			val1:        "=hub*(",
+			filterProp1: "managedHub",
+			expectedRes: false,
+		},
+	}
+
+	limit := 10
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			searchInput := &model.SearchInput{
+				Filters: []*model.SearchFilter{
+					{Property: tc.filterProp1, Values: []*string{&tc.val1}},
+				},
+				Limit: &limit,
+			}
+			ud := rbac.UserData{
+				CsResources:     []rbac.Resource{},
+				ManagedClusters: map[string]struct{}{"test": {}},
+			}
+			propTypesMock := map[string]string{"cluster": "string", "kind": "string", "container": "array",
+				"label": "object", "namespace": "string", "managedHub": "string"}
+
+			resolver, _ := newMockSearchResolver(t, searchInput, nil, ud, propTypesMock)
+			result := resolver.matchesManagedHubFilter()
+			assert.Equal(t, tc.expectedRes, result)
+		})
+	}
+}

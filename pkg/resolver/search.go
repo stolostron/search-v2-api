@@ -18,7 +18,6 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	v1 "k8s.io/api/authentication/v1"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/strings/slices"
 )
 
 type SearchResult struct {
@@ -67,19 +66,29 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 
 }
 
-// Stop search if managedHub is in filters and current hub name is not in values.
+// Stop search if managedHub is a filter and current hub name is not in values.
 // Otherwise, proceed with the search.
 func (s *SearchResult) matchesManagedHubFilter() bool {
 	klog.V(7).Info("HUB_NAME is ", config.Cfg.HubName)
 	for _, filter := range s.input.Filters {
 		if filter.Property == "managedHub" {
-			if !slices.Contains(PointerToStringArray(filter.Values), config.Cfg.HubName) {
-				klog.V(4).Infof("%s not in managedHub filter %+v. Not proceeding with Search",
-					config.Cfg.HubName, PointerToStringArray(filter.Values))
-				return false
+			klog.V(5).Infof("managedHub filter: %s values: %+v \n", filter.Property,
+				PointerToStringArray(filter.Values))
+
+			opValueMap := matchOperatorToProperty("string", map[string][]string{},
+				PointerToStringArray(filter.Values), filter.Property)
+			klog.V(5).Infof("Extract operator from managedHub filter: %+v \n", opValueMap)
+
+			for key, values := range opValueMap {
+				klog.V(5).Info("Processing ", key, " values ", values, " in opValueMap for managedHub filter")
+				if processOpValueMapManagedHub(key, values) {
+					return true
+				}
 			}
+			return false
 		}
 	}
+	klog.V(4).Infof("managedHub filter not present. Proceeding with Search")
 	return true
 }
 
