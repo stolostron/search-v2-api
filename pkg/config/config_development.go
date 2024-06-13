@@ -15,6 +15,7 @@ import (
 
 func init() {
 	klog.Warning("!!! Running in development mode. !!!")
+	DEVELOPMENT_MODE = true
 	os.Setenv("FEATURE_FEDERATED_SEARCH", "true")
 	Cfg = new()
 }

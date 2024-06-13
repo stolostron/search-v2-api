@@ -131,22 +131,36 @@ spec:
       - kind: ServiceAccount
         name: search-global
         namespace: open-cluster-management-agent-addon
-    - apiVersion: route.openshift.io/v1
-      kind: Route
+    - apiVersion: rbac.authorization.k8s.io/v1
+      kind: Role
       metadata:
+        name: search-proxy
+        namespace: open-cluster-management
         labels:
           app: ocm-search
-        name: search-global-hub
+      rules:
+      - apiGroups:
+        - ""
+        resources:
+        - pods
+        verbs:
+        - list
+        - get
+    - apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        name: search-proxy
         namespace: open-cluster-management
-      spec:
-        port:
-          targetPort: search-api
-        tls:
-          termination: passthrough
-        to:
-          kind: Service
-          name: search-search-api
-          weight: 100
+        labels:
+          app: ocm-search
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: Role
+        name: search-proxy
+      subjects:
+      - kind: ServiceAccount
+        name: search-global
+        namespace: open-cluster-management-agent-addon
 ---
 apiVersion: addon.open-cluster-management.io/v1alpha1
 kind: ManagedClusterAddOn

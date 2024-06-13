@@ -12,6 +12,7 @@ import (
 	klog "k8s.io/klog/v2"
 )
 
+var DEVELOPMENT_MODE = false // Do not change this. See config_development.go to enable.
 var Cfg = new()
 
 // Defines the configurable options for this microservice.
@@ -32,13 +33,15 @@ type Config struct {
 	DBPass              string
 	DBPort              int
 	DBUser              string
+	DevelopmentMode     bool             // Indicates if running in local development mode.
 	Features            featureFlags     // Enable or disable features.
 	Federation          federationConfig // Federated search configuration.
 	HttpPort            int
-	PlaygroundMode      bool // Enable the GraphQL Playground client.
-	QueryLimit          int  // The default LIMIT to use on queries. Client can override.
-	RelationLevel       int  // The number of levels/hops for finding relationships for a particular resource
-	SlowLog             int  // Logs when queries are slower than the specified time duration in ms. Default 300ms
+	PlaygroundMode      bool   // Enable the GraphQL Playground client.
+	PodNamespace        string // Kubernetes namespace where the pod is running.
+	QueryLimit          int    // The default LIMIT to use on queries. Client can override.
+	RelationLevel       int    // The number of levels/hops for finding relationships for a particular resource
+	SlowLog             int    // Logs when queries are slower than the specified time duration in ms. Default 300ms
 }
 
 // Define feature flags.
@@ -84,6 +87,7 @@ func new() *Config {
 		DBPass:              getEnv("DB_PASS", ""),
 		DBPort:              getEnvAsInt("DB_PORT", 5432),
 		DBUser:              getEnv("DB_USER", ""),
+		DevelopmentMode:     DEVELOPMENT_MODE,
 		Features: featureFlags{
 			FederatedSearch: getEnvAsBool("FEATURE_FEDERATED_SEARCH", false), // In Dev mode default to true.
 		},
@@ -101,6 +105,7 @@ func new() *Config {
 		},
 		HttpPort:       getEnvAsInt("HTTP_PORT", 4010),
 		PlaygroundMode: getEnvAsBool("PLAYGROUND_MODE", false),
+		PodNamespace:   getEnv("POD_NAMESPACE", "open-cluster-management"),
 		QueryLimit:     getEnvAsInt("QUERY_LIMIT", 1000),
 		SlowLog:        getEnvAsInt("SLOW_LOG", 300),
 		// Setting default level to 0 to check if user has explicitly set this variable

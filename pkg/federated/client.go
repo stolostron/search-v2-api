@@ -3,6 +3,7 @@ package federated
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"net/http"
 	"sync"
 	"time"
@@ -11,28 +12,12 @@ import (
 	"k8s.io/klog/v2"
 )
 
+var httpClientGetter = GetHttpClient // Allows mocking http client in tests.
+
 // Returns a client to process the federated request.
-func GetHttpClient(remoteService RemoteSearchService) HTTPClient {
+func GetHttpClient() HTTPClient {
 	// Get http client from pool.
 	client := httpClientPool.Get().(*RealHTTPClient)
-
-	tlsConfig := tls.Config{
-		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
-	}
-	if remoteService.TLSCert != "" && remoteService.TLSKey != "" {
-		tlsConfig.Certificates = []tls.Certificate{
-			{
-				// RootCAs:     nil,
-				Certificate: [][]byte{[]byte(remoteService.TLSCert)},
-				PrivateKey:  []byte(remoteService.TLSKey),
-			},
-		}
-	} else {
-		klog.Warningf("TLS cert and key not provided for %s. Skipping TLS verification.", remoteService.Name)
-		tlsConfig.InsecureSkipVerify = true // #nosec G402 - FIXME: Add TLS verification.
-	}
-
-	client.SetTLSClientConfig(&tlsConfig)
 
 	return client
 }
@@ -46,7 +31,8 @@ var tr = &http.Transport{
 	ResponseHeaderTimeout: time.Duration(config.Cfg.Federation.HttpPool.ResponseHeaderTimeout) * time.Millisecond,
 	DisableKeepAlives:     false,
 	TLSClientConfig: &tls.Config{
-		MinVersion: tls.VersionTLS13, // TODO: Verify if 1.3 is ok now. It caused issues in the past.
+		MinVersion: tls.VersionTLS13,
+		RootCAs:    x509.NewCertPool(),
 	},
 	MaxConnsPerHost:     config.Cfg.Federation.HttpPool.MaxConnsPerHost,
 	MaxIdleConnsPerHost: config.Cfg.Federation.HttpPool.MaxIdleConnPerHost,
@@ -67,7 +53,6 @@ var httpClientPool = sync.Pool{
 // HTTPClient is an interface for an HTTP client.
 type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
-	SetTLSClientConfig(*tls.Config)
 }
 
 // RealHTTPClient is a real implementation of the HTTPClient interface.
@@ -78,9 +63,4 @@ type RealHTTPClient struct {
 // Do implements the HTTPClient interface for RealHTTPClient.
 func (c RealHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	return c.Client.Do(req)
-}
-
-// SetTLSClientConfig sets the TLS client configuration for the HTTP client.
-func (c RealHTTPClient) SetTLSClientConfig(config *tls.Config) {
-	c.Transport.(*http.Transport).TLSClientConfig = config
 }
