@@ -54,7 +54,7 @@ WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, clus
  		  WHERE (("e"."destkind" NOT IN ('Node', 'Channel')) AND ("e"."sourcekind" NOT IN ('Node', 'Channel')) AND  -- Avoid Node and Channel to prevent all resources on the node from showing up
 				 ("sg"."level" <= 3) --Limit level to 3
  				)
-------------------------RECURSIVE PART START------------------------
+------------------------RECURSIVE PART END------------------------
 		 )
 		) SELECT DISTINCT "level", "sourceid", "destid", "sourcekind", "destkind", "cluster" FROM "search_graph"
 ```
