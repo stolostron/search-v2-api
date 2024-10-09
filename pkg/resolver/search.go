@@ -328,7 +328,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 	var whereDs []exp.Expression
 	var err error
 
-	if input.Keywords != nil && len(input.Keywords) > 0 {
+	if len(input.Keywords) > 0 {
 		// Sample query: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data")
 		// WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' ILIKE ANY ('{"pod","deployment"}')))
 		keywords := PointerToStringArray(input.Keywords)
