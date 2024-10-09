@@ -182,12 +182,12 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 
-	if s.input.Keywords != nil && len(s.input.Keywords) > 0 {
+	if len(s.input.Keywords) > 0 {
 		jsb := goqu.L("jsonb_each_text(?)", goqu.C("data"))
 		ds = goqu.From(schemaTable, jsb)
 	}
 
-	if s.input != nil && (len(s.input.Filters) > 0 || (s.input.Keywords != nil && len(s.input.Keywords) > 0)) {
+	if s.input != nil && (len(s.input.Filters) > 0 || len(s.input.Keywords) > 0) {
 		// WHERE CLAUSE
 		whereDs, s.propTypes, err = WhereClauseFilter(s.context, s.input, s.propTypes)
 		if err != nil {
@@ -220,10 +220,10 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 				return err
 			}
 		} else {
-			errorStr := fmt.Sprintf("RBAC clause is required! None found for search query %+v for user %s with uid %s ",
+			s.checkErrorBuildingQuery(fmt.Errorf("RBAC clause is required! None found for search query %+v for user %s with uid %s ",
+				s.input, userInfo.Username, userInfo.UID), ErrorMsg)
+			return fmt.Errorf("RBAC clause is required! None found for search query %+v for user %s with uid %s ",
 				s.input, userInfo.Username, userInfo.UID)
-			s.checkErrorBuildingQuery(fmt.Errorf(errorStr), ErrorMsg)
-			return fmt.Errorf(errorStr)
 		}
 	} else {
 		s.checkErrorBuildingQuery(fmt.Errorf("query input must contain a filter or keyword. Received: %+v",
