@@ -359,10 +359,21 @@ func (cache *Cache) GetDisabledClusters(ctx context.Context) (*map[string]struct
 func disabledClustersForUser(disabledClusters map[string]struct{},
 	userClusters map[string]struct{}, uid string) map[string]struct{} {
 	userAccessDisabledClusters := map[string]struct{}{}
-	for disabledCluster := range disabledClusters {
-		if _, userHasAccess := userClusters[disabledCluster]; userHasAccess { //user has access
-			klog.V(7).Info("user ", uid, " has access to search addon disabled cluster: ", disabledCluster)
-			userAccessDisabledClusters[disabledCluster] = struct{}{}
+
+	var userClustersKeys []string
+	for k := range userClusters {
+		userClustersKeys = append(userClustersKeys, k)
+	}
+
+	if len(userClusters) == 1 && userClustersKeys[0] == "*" {
+		klog.V(5).Info("User has access to all clusters - returning the disabled cluster list.")
+		return disabledClusters
+	} else {
+		for disabledCluster := range disabledClusters {
+			if _, userHasAccess := userClusters[disabledCluster]; userHasAccess { //user has access
+				klog.V(7).Info("user ", uid, " has access to search addon disabled cluster: ", disabledCluster)
+				userAccessDisabledClusters[disabledCluster] = struct{}{}
+			}
 		}
 	}
 	return userAccessDisabledClusters
