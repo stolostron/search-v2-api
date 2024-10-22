@@ -356,26 +356,24 @@ func (cache *Cache) GetDisabledClusters(ctx context.Context) (*map[string]struct
 
 }
 
+// Filters the list of disabled clusters to only include the clusters the user has access.
 func disabledClustersForUser(disabledClusters map[string]struct{},
 	userClusters map[string]struct{}, uid string) map[string]struct{} {
-	userAccessDisabledClusters := map[string]struct{}{}
 
-	var userClustersKeys []string
-	for k := range userClusters {
-		userClustersKeys = append(userClustersKeys, k)
+	// If user has access to all clusters, return the full list of disabled clusters.
+	if _, exists := userClusters["*"]; exists {
+		klog.V(7).Infof("user %s has access to all clusters with search add-on disabled", uid)
+		return disabledClusters
 	}
 
-	if len(userClusters) == 1 && userClustersKeys[0] == "*" {
-		klog.V(5).Info("User has access to all clusters - returning the disabled cluster list.")
-		return disabledClusters
-	} else {
-		for disabledCluster := range disabledClusters {
-			if _, userHasAccess := userClusters[disabledCluster]; userHasAccess { //user has access
-				klog.V(7).Info("user ", uid, " has access to search addon disabled cluster: ", disabledCluster)
-				userAccessDisabledClusters[disabledCluster] = struct{}{}
-			}
+	// Filter out the clusters the user has access to.
+	userAccessDisabledClusters := map[string]struct{}{}
+	for disabledCluster := range disabledClusters {
+		if _, userHasAccess := userClusters[disabledCluster]; userHasAccess { // user has access to cluster.
+			userAccessDisabledClusters[disabledCluster] = struct{}{}
 		}
 	}
+	klog.V(7).Infof("user %s has access these clusters with search add-on disabled: %+v", uid, userAccessDisabledClusters)
 	return userAccessDisabledClusters
 }
 
