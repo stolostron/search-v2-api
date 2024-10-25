@@ -321,15 +321,15 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 	// Keep track of processed resources (apigroup + kind). Used to remove duplicates.
 	trackResources := map[Resource]struct{}{}
 	// Process the SSRR result and add to this UserDataCache object.
-	for _, rules := range result.Status.ResourceRules {
-		for _, verb := range rules.Verbs {
+	for _, rule := range result.Status.ResourceRules {
+		for _, verb := range rule.Verbs {
 			if verb == "list" || verb == "*" {
-				for _, res := range rules.Resources {
-					for _, api := range rules.APIGroups {
+				for _, res := range rule.Resources {
+					for _, api := range rule.APIGroups {
 						// Add the resource if it is not cluster scoped
 						// fail-safe mechanism to avoid whitelist - TODO: incorporate whitelist
-						if !cache.shared.isClusterScoped(res, api) && (len(rules.ResourceNames) == 0 ||
-							(len(rules.ResourceNames) > 0 && rules.ResourceNames[0] == "*")) {
+						if !cache.shared.isClusterScoped(res, api) && (len(rule.ResourceNames) == 0 ||
+							(len(rule.ResourceNames) > 0 && rule.ResourceNames[0] == "*")) {
 							// if the user has access to all resources, reset userData.NsResources for the namespace
 							// No need to loop through all resources. Save the wildcard *
 							// exit the resourceRulesLoop
@@ -352,7 +352,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 						} else if cache.shared.isClusterScoped(res, api) {
 							klog.V(6).Info("Got clusterscoped resource ", api, "/",
 								res, " from SelfSubjectRulesReviews. Excluding it from ns scoped resoures.")
-						} else if len(rules.ResourceNames) > 0 && rules.ResourceNames[0] != "*" {
+						} else if len(rule.ResourceNames) > 0 && rule.ResourceNames[0] != "*" {
 							klog.V(5).Info("Got whitelist in resourcenames. Excluding resource", api, "/", res,
 								" from ns scoped resoures.")
 						}
@@ -362,9 +362,13 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 			// Obtain namespaces with create managedclusterveiws resource action
 			// Equivalent to: oc auth can-i create ManagedClusterView -n <managedClusterName> --as=<user>
 			if verb == "create" || verb == "*" {
-				for _, res := range rules.Resources {
-					if res == "managedclusterviews" {
-						user.updateUserManagedClusterList(cache, ns)
+				for _, group := range rule.APIGroups {
+					if group == "cluster.open-cluster-management.io" || group == "*" {
+						for _, res := range rule.Resources {
+							if res == "managedclusterviews" || res == "*" {
+								user.updateUserManagedClusterList(cache, ns)
+							}
+						}
 					}
 				}
 			}

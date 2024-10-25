@@ -384,7 +384,7 @@ func Test_managedClusters_emptyCache(t *testing.T) {
 			ResourceRules: []authz.ResourceRule{
 				{
 					Verbs:     []string{"create"},
-					APIGroups: []string{"apigroup"},
+					APIGroups: []string{"cluster.open-cluster-management.io"},
 					Resources: []string{"managedclusterviews"},
 				},
 			},
@@ -398,7 +398,7 @@ func Test_managedClusters_emptyCache(t *testing.T) {
 			ResourceRules: []authz.ResourceRule{
 				{
 					Verbs:     []string{"list"},
-					APIGroups: []string{"apigroup"},
+					APIGroups: []string{"cluster.open-cluster-management.io"},
 					Resources: []string{"managedclusterviews"},
 				},
 			},
@@ -497,7 +497,7 @@ func Test_managedCluster_expiredCache(t *testing.T) {
 			ResourceRules: []authz.ResourceRule{
 				{
 					Verbs:     []string{"create"},
-					APIGroups: []string{"apigroup"},
+					APIGroups: []string{"cluster.open-cluster-management.io"},
 					Resources: []string{"managedclusterviews"},
 				},
 			},
@@ -511,7 +511,7 @@ func Test_managedCluster_expiredCache(t *testing.T) {
 			ResourceRules: []authz.ResourceRule{
 				{
 					Verbs:     []string{"list"},
-					APIGroups: []string{"apigroup"},
+					APIGroups: []string{"cluster.open-cluster-management.io"},
 					Resources: []string{"managedclusterviews"},
 				},
 			},
