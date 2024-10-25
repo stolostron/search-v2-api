@@ -280,20 +280,32 @@ func getOperatorIfDateFilter(filter string, values []string,
 	return opValueMap
 }
 
-// Labels are sorted alphabetically to ensure consistency, then encoded in a
-// string with the following format.
-// key1:value1; key2:value2; ...
-func formatLabels(labels map[string]interface{}) string {
-	keys := make([]string, 0)
-	labelStrings := make([]string, 0)
+// formatMap converts a map to a string sorted by keys alphabetically in the following format:
+// key1:value1; key2:value2; ..."
+func formatMap(labels map[string]interface{}) string {
+	keys := make([]string, 0, len(labels))
+	valueStrings := make([]string, 0, len(labels))
+
 	for k := range labels {
 		keys = append(keys, k)
 	}
+
 	sort.Strings(keys)
+
 	for _, k := range keys {
-		labelStrings = append(labelStrings, fmt.Sprintf("%s=%s", k, labels[k]))
+		var val string
+
+		if valAsFloat, ok := labels[k].(float64); ok {
+			// Converting the float64 to an int64 follows the convention in formatDataMap.
+			val = strconv.FormatInt(int64(valAsFloat), 10)
+		} else {
+			val = fmt.Sprintf("%s", labels[k])
+		}
+
+		valueStrings = append(valueStrings, fmt.Sprintf("%s=%s", k, val))
 	}
-	return strings.Join(labelStrings, "; ")
+
+	return strings.Join(valueStrings, "; ")
 }
 
 // Encode array into a single string with the format.
@@ -335,7 +347,7 @@ func formatDataMap(data map[string]interface{}) map[string]interface{} {
 		case float64:
 			item[key] = strconv.FormatInt(int64(v), 10)
 		case map[string]interface{}:
-			item[key] = formatLabels(v)
+			item[key] = formatMap(v)
 		case []interface{}:
 			item[key] = formatArray(v)
 		default:
