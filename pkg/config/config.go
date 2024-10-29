@@ -24,11 +24,11 @@ type Config struct {
 	UserCacheTTL        int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
 	ContextPath         string
 	DBHost              string
-	DBMinConns          int // Overrides pgxpool.Config{ MinConns } Default: 0
-	DBMaxConns          int // Overrides pgxpool.Config{ MaxConns } Default: 10
-	DBMaxConnIdleTime   int // Overrides pgxpool.Config{ MaxConnIdleTime } Default: 30 min
-	DBMaxConnLifeTime   int // Overrides pgxpool.Config{ MaxConnLifetime } Default: 60 min
-	DBMaxConnLifeJitter int // Overrides pgxpool.Config{ MaxConnLifetimeJitter } Default: 2 min
+	DBMinConns          int32 // Overrides pgxpool.Config{ MinConns } Default: 0
+	DBMaxConns          int32 // Overrides pgxpool.Config{ MaxConns } Default: 10
+	DBMaxConnIdleTime   int   // Overrides pgxpool.Config{ MaxConnIdleTime } Default: 30 min
+	DBMaxConnLifeTime   int   // Overrides pgxpool.Config{ MaxConnLifetime } Default: 60 min
+	DBMaxConnLifeJitter int   // Overrides pgxpool.Config{ MaxConnLifetimeJitter } Default: 2 min
 	DBName              string
 	DBPass              string
 	DBPort              int
@@ -158,6 +158,15 @@ func getEnvAsInt(name string, defaultVal int) int {
 	valueStr := getEnv(name, "")
 	if value, err := strconv.Atoi(valueStr); err == nil {
 		return value
+	}
+	return defaultVal
+}
+
+// Helper function to read an environment variable into integer32 or return a default value
+func getEnvAsInt32(name string, defaultVal int32) int32 {
+	valueStr := getEnv(name, "")
+	if value, err := strconv.ParseInt(valueStr, 10, 32); err == nil {
+		return int32(value)
 	}
 	return defaultVal
 }
