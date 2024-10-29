@@ -39,7 +39,7 @@ type Config struct {
 	HttpPort            int
 	PlaygroundMode      bool   // Enable the GraphQL Playground client.
 	PodNamespace        string // Kubernetes namespace where the pod is running.
-	QueryLimit          int    // The default LIMIT to use on queries. Client can override.
+	QueryLimit          uint   // The default LIMIT to use on queries. Client can override.
 	RelationLevel       int    // The number of levels/hops for finding relationships for a particular resource
 	SlowLog             int    // Logs when queries are slower than the specified time duration in ms. Default 300ms
 }
@@ -106,7 +106,7 @@ func new() *Config {
 		HttpPort:       getEnvAsInt("HTTP_PORT", 4010),
 		PlaygroundMode: getEnvAsBool("PLAYGROUND_MODE", false),
 		PodNamespace:   getEnv("POD_NAMESPACE", "open-cluster-management"),
-		QueryLimit:     getEnvAsInt("QUERY_LIMIT", 1000),
+		QueryLimit:     getEnvAsUint("QUERY_LIMIT", uint(1000)),
 		SlowLog:        getEnvAsInt("SLOW_LOG", 300),
 		// Setting default level to 0 to check if user has explicitly set this variable
 		// This will be updated to 1 for default searches and 3 for applications - unless set by the user
@@ -158,6 +158,15 @@ func getEnvAsInt(name string, defaultVal int) int {
 	valueStr := getEnv(name, "")
 	if value, err := strconv.Atoi(valueStr); err == nil {
 		return value
+	}
+	return defaultVal
+}
+
+// Helper function to read an environment variable into unsigned integer or return a default value
+func getEnvAsUint(name string, defaultVal uint) uint {
+	valueStr := getEnv(name, "")
+	if value, err := strconv.ParseUint(valueStr, 10, 32); err == nil {
+		return uint(value)
 	}
 	return defaultVal
 }
