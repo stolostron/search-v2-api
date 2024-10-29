@@ -436,10 +436,10 @@ func getKeys(stringKeyMap interface{}) []string {
 }
 
 // Set limit for queries
-func (s *SearchResult) setLimit() int {
-	var limit int
+func (s *SearchResult) setLimit() uint {
+	var limit uint
 	if s.input != nil && s.input.Limit != nil && *s.input.Limit > 0 {
-		limit = *s.input.Limit
+		limit = uint(*s.input.Limit)
 	} else if s.input != nil && s.input.Limit != nil && *s.input.Limit == -1 {
 		klog.V(2).Info("No limit set on query. Fetching all results.")
 	} else {
