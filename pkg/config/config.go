@@ -78,11 +78,11 @@ func new() *Config {
 		ContextPath:    getEnv("CONTEXT_PATH", "/searchapi"),
 		DBHost:         getEnv("DB_HOST", "localhost"),
 		// Postgres has 100 conns by default. Using 20 allows scaling indexer and api.
-		DBMaxConns:          getEnvAsInt("DB_MAX_CONNS", 10),                   // 10 - Overrides pgxpool default
+		DBMaxConns:          getEnvAsInt32("DB_MAX_CONNS", int32(10)),          // 10 - Overrides pgxpool default
 		DBMaxConnIdleTime:   getEnvAsInt("DB_MAX_CONN_IDLE_TIME", 30*60*1000),  // 30 min - Default for pgxpool.Config
 		DBMaxConnLifeJitter: getEnvAsInt("DB_MAX_CONN_LIFE_JITTER", 2*60*1000), // 2 min - Overrides pgxpool default
 		DBMaxConnLifeTime:   getEnvAsInt("DB_MAX_CONN_LIFE_TIME", 60*60*1000),  // 60 min - Default for pgxpool.Config
-		DBMinConns:          getEnvAsInt("DB_MIN_CONNS", 0),                    // Default for pgxpool.Config
+		DBMinConns:          getEnvAsInt32("DB_MIN_CONNS", int32(0)),           // Default for pgxpool.Config
 		DBName:              getEnv("DB_NAME", ""),
 		DBPass:              getEnv("DB_PASS", ""),
 		DBPort:              getEnvAsInt("DB_PORT", 5432),
