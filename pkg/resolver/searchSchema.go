@@ -78,10 +78,10 @@ func (s *SearchSchema) buildSearchSchemaQuery(ctx context.Context) {
 	// Adding a high number so as to get almost all the distinct properties from the database
 	if whereDs != nil {
 		selectDs = ds.SelectDistinct("prop").From(ds.Select(jsb).Where(whereDs).
-			Limit(uint(config.Cfg.QueryLimit) * 100).As("schema"))
+			Limit(config.Cfg.QueryLimit * 100).As("schema"))
 	} else {
 		selectDs = ds.SelectDistinct("prop").From(ds.Select(jsb).
-			Limit(uint(config.Cfg.QueryLimit) * 100).As("schema"))
+			Limit(config.Cfg.QueryLimit * 100).As("schema"))
 	}
 	//Get the query
 	sql, params, err := selectDs.ToSQL()

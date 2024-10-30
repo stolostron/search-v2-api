@@ -77,7 +77,7 @@ func SearchComplete(ctx context.Context, property string, srchInput *model.Searc
 // ORDER BY name ASC
 // LIMIT 1000
 func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
-	var limit int
+	var limit uint
 	var whereDs []exp.Expression
 	var selectDs *goqu.SelectDataset
 
@@ -124,7 +124,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 
 		// LIMIT CLAUSE
 		if s.limit != nil && *s.limit > 0 {
-			limit = *s.limit
+			limit = uint(*s.limit)
 		} else if s.limit != nil && *s.limit == -1 {
 			klog.Warning("Limit set to -1. Fetching all results. This may affect performance.")
 		} else {
@@ -137,7 +137,7 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 
 		// Get the query
 		if limit > 0 {
-			sql, params, err = selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
+			sql, params, err = selectDs.Where(whereDs...).Limit(limit).ToSQL()
 		} else {
 			sql, params, err = selectDs.Where(whereDs...).ToSQL()
 		}
