@@ -441,7 +441,7 @@ func (s *SearchResult) setLimit() uint {
 	var limit uint
 	if s.input != nil && s.input.Limit != nil && *s.input.Limit > 0 {
 		if *s.input.Limit <= math.MaxUint32 {
-			limit = uint(*s.input.Limit)
+			limit = uint(*s.input.Limit) // #nosec G115
 		} else {
 			limit = math.MaxUint32
 		}
