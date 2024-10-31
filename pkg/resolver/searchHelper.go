@@ -3,6 +3,7 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 	"strconv"
@@ -355,10 +356,14 @@ func getKeys(stringKeyMap interface{}) []string {
 }
 
 // Set limit for queries
-func (s *SearchResult) setLimit() int {
-	var limit int
+func (s *SearchResult) setLimit() uint {
+	var limit uint
 	if s.input != nil && s.input.Limit != nil && *s.input.Limit > 0 {
-		limit = *s.input.Limit
+		if *s.input.Limit <= math.MaxUint32 {
+			limit = uint(*s.input.Limit) // #nosec G115
+		} else {
+			limit = math.MaxUint32
+		}
 	} else if s.input != nil && s.input.Limit != nil && *s.input.Limit == -1 {
 		klog.V(2).Info("No limit set on query. Fetching all results.")
 	} else {
