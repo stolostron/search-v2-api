@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"sync"
 
@@ -37,6 +38,7 @@ type Config struct {
 
 type ResolverRoot interface {
 	Query() QueryResolver
+	Subscription() SubscriptionResolver
 }
 
 type DirectiveRoot struct {
@@ -67,6 +69,10 @@ type ComplexityRoot struct {
 		Items   func(childComplexity int) int
 		Related func(childComplexity int) int
 	}
+
+	Subscription struct {
+		SearchSubscription func(childComplexity int, input []*model.SearchInput) int
+	}
 }
 
 type QueryResolver interface {
@@ -74,6 +80,9 @@ type QueryResolver interface {
 	SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error)
 	SearchSchema(ctx context.Context) (map[string]interface{}, error)
 	Messages(ctx context.Context) ([]*model.Message, error)
+}
+type SubscriptionResolver interface {
+	SearchSubscription(ctx context.Context, input []*model.SearchInput) (<-chan []*resolver.SearchResult, error)
 }
 
 type executableSchema struct {
@@ -192,6 +201,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.SearchResult.Related(childComplexity), true
 
+	case "Subscription.searchSubscription":
+		if e.complexity.Subscription.SearchSubscription == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_searchSubscription_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Subscription.SearchSubscription(childComplexity, args["input"].([]*model.SearchInput)), true
+
 	}
 	return 0, false
 }
@@ -215,6 +236,23 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			ctx = graphql.WithUnmarshalerMap(ctx, inputUnmarshalMap)
 			data := ec._Query(ctx, rc.Operation.SelectionSet)
 			var buf bytes.Buffer
+			data.MarshalGQL(&buf)
+
+			return &graphql.Response{
+				Data: buf.Bytes(),
+			}
+		}
+	case ast.Subscription:
+		next := ec._Subscription(ctx, rc.Operation.SelectionSet)
+
+		var buf bytes.Buffer
+		return func(ctx context.Context) *graphql.Response {
+			buf.Reset()
+			data := next(ctx)
+
+			if data == nil {
+				return nil
+			}
 			data.MarshalGQL(&buf)
 
 			return &graphql.Response{
@@ -252,8 +290,19 @@ Copyright Contributors to the Open Cluster Management project.
 
 Search Query API.
 """
-schema { 
+schema {
   query: Query
+  subscription: Subscription
+}
+
+"""
+` + "`" + `Subscriptions` + "`" + ` supported by the Search Query API.
+"""
+type Subscription {
+  """
+  searchSubscription will return a stream of ` + "`" + `SearchResult` + "`" + ` objects.
+  """
+  searchSubscription(input: [SearchInput]): [SearchResult]
 }
 
 """
@@ -261,19 +310,19 @@ Queries supported by the Search Query API.
 """
 type Query {
   """
-  Search for resources and their relationships. 
+  Search for resources and their relationships.
   *[PLACEHOLDER] Results only include kubernetes resources for which the authenticated user has list permission.*
 
   For more information see the feature spec.
   """
   search(input: [SearchInput]): [SearchResult]
-  
+
   """
-  Query all values for the given property.  
-  Optionally, a query can be included to filter the results.  
+  Query all values for the given property.
+  Optionally, a query can be included to filter the results.
   For example, if we want to get the names of all resources in the namespace foo, we can pass a query with the filter ` + "`" + `{property: namespace, values:['foo']}` + "`" + `
-  
-  **Default limit is** 1,000  
+
+  **Default limit is** 1,000
   A value of -1 will remove the limit. Use carefully because it may impact the service.
   """
   searchComplete(property: String!, query: SearchInput, limit: Int): [String]
@@ -284,125 +333,125 @@ type Query {
   searchSchema: Map
 
   """
-  Additional information about the service status or conditions found while processing the query.  
+  Additional information about the service status or conditions found while processing the query.
   This is similar to the errors query, but without implying that there was a problem processing the query.
   """
   messages: [Message]
 }
 
 """
-Defines a key/value to filter results.  
+Defines a key/value to filter results.
 When multiple values are provided for a property, it is interpreted as an OR operation.
 """
 input SearchFilter {
-    """
-    Name of the property (key).
-    """
-    property: String!
-    """
-    Values for the property. Multiple values per property are interpreted as an OR operation.
-    Optionally one of these operations ` + "`" + `=,!,!=,>,>=,<,<=` + "`" + ` can be included at the beginning of the value.
-    By default the equality operation is used. 
-    The values available for datetime fields (Ex: ` + "`" + `created` + "`" + `, ` + "`" + `startedAt` + "`" + `) are ` + "`" + `hour` + "`" + `, ` + "`" + `day` + "`" + `, ` + "`" + `week` + "`" + `, ` + "`" + `month` + "`" + ` and ` + "`" + `year` + "`" + `.
-    Property ` + "`" + `kind` + "`" + `, if included in the filter, will be matched using a case-insensitive comparison.
-    For example, ` + "`" + `kind:Pod` + "`" + ` and ` + "`" + `kind:pod` + "`" + ` will bring up all pods. This is to maintain compatibility with Search V1.
-    """
-    values: [String]!
-  }
-
+  """
+  Name of the property (key).
+  """
+  property: String!
+  """
+  Values for the property. Multiple values per property are interpreted as an OR operation.
+  Optionally one of these operations ` + "`" + `=,!,!=,>,>=,<,<=` + "`" + ` can be included at the beginning of the value.
+  By default the equality operation is used.
+  The values available for datetime fields (Ex: ` + "`" + `created` + "`" + `, ` + "`" + `startedAt` + "`" + `) are ` + "`" + `hour` + "`" + `, ` + "`" + `day` + "`" + `, ` + "`" + `week` + "`" + `, ` + "`" + `month` + "`" + ` and ` + "`" + `year` + "`" + `.
+  Property ` + "`" + `kind` + "`" + `, if included in the filter, will be matched using a case-insensitive comparison.
+  For example, ` + "`" + `kind:Pod` + "`" + ` and ` + "`" + `kind:pod` + "`" + ` will bring up all pods. This is to maintain compatibility with Search V1.
+  """
+  values: [String]!
+}
 
 """
 Input options to the search query.
 """
 input SearchInput {
-    """
-    List of strings to match resources.  
-    Will match resources containing any of the keywords in any text field.  
-    When multiple keywords are provided, it is interpreted as an AND operation.  
-    Matches are case insensitive.
-    """
-    keywords: [String]
+  """
+  List of strings to match resources.
+  Will match resources containing any of the keywords in any text field.
+  When multiple keywords are provided, it is interpreted as an AND operation.
+  Matches are case insensitive.
+  """
+  keywords: [String]
 
-    """
-    List of SearchFilter, which is a key(property) and values.  
-    When multiple filters are provided, results will match all filters (AND operation).
-    """
-    filters: [SearchFilter]
-    
-    """
-    Max number of results returned by the query.  
-    **Default is** 10,000  
-    A value of -1 will remove the limit. Use carefully because it may impact the service.
-    """
-    limit: Int
+  """
+  List of SearchFilter, which is a key(property) and values.
+  When multiple filters are provided, results will match all filters (AND operation).
+  """
+  filters: [SearchFilter]
 
-    """
-    Filter relationships to the specified kinds.  
-    If empty, all relationships will be included.  
-    This filter is used with the 'related' field on SearchResult.
-    """
-    relatedKinds: [String]
-  }
+  """
+  Max number of results returned by the query.
+  **Default is** 10,000
+  A value of -1 will remove the limit. Use carefully because it may impact the service.
+  """
+  limit: Int
+
+  """
+  Filter relationships to the specified kinds.
+  If empty, all relationships will be included.
+  This filter is used with the 'related' field on SearchResult.
+  """
+  relatedKinds: [String]
+}
 
 """
 Data returned by the search query.
 """
 type SearchResult {
-    """
-    Total number of resources matching the query.  
-    **NOTE:** Should not use count in combination with items. If items are requested, the count is simply the size of items.
-    """
-    count: Int
-    """
-    Resources matching the search query.
-    """
-    items: [Map]
-    """
-    Resources related to the query results (items).  
-    For example, if searching for deployments, this will return the related pod resources.
-    """
-    related: [SearchRelatedResult]
-  }
+  """
+  Total number of resources matching the query.
+  **NOTE:** Should not use count in combination with items. If items are requested, the count is simply the size of items.
+  """
+  count: Int
+  """
+  Resources matching the search query.
+  """
+  items: [Map]
+  """
+  Resources related to the query results (items).
+  For example, if searching for deployments, this will return the related pod resources.
+  """
+  related: [SearchRelatedResult]
+}
 
 """
 Resources related to the items resolved from the search query.
 """
 type SearchRelatedResult {
-    kind: String!
-    """
-    Total number of related resources.  
-    **NOTE:** Should not use count in combination with items. If items are requested, the count is simply the size of items.
-    """
-    count: Int
-    """
-    Resources matched by the query.
-    """
-    items: [Map]
-  }
+  kind: String!
+  """
+  Total number of related resources.
+  **NOTE:** Should not use count in combination with items. If items are requested, the count is simply the size of items.
+  """
+  count: Int
+  """
+  Resources matched by the query.
+  """
+  items: [Map]
+}
 
 """
 A message is used to communicate conditions detected while executing a query on the server.
 """
 type Message {
-    """
-    Unique identifier to be used by clients to process the message independently of locale or grammatical changes.
-    """
-    id: String!
-    """
-    Message type. 
-    **Values:** information, warning, error.
-    """
-    kind: String
-    """
-    Message text.
-    """
-    description: String
+  """
+  Unique identifier to be used by clients to process the message independently of locale or grammatical changes.
+  """
+  id: String!
+  """
+  Message type.
+  **Values:** information, warning, error.
+  """
+  kind: String
+  """
+  Message text.
+  """
+  description: String
 }
 
 """
 Map of strings. Used to hold data for a result item.
 """
-scalar Map`, BuiltIn: false},
+scalar Map
+`, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
@@ -459,6 +508,21 @@ func (ec *executionContext) field_Query_searchComplete_args(ctx context.Context,
 }
 
 func (ec *executionContext) field_Query_search_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 []*model.SearchInput
+	if tmp, ok := rawArgs["input"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
+		arg0, err = ec.unmarshalOSearchInput2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋgraphᚋmodelᚐSearchInput(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Subscription_searchSubscription_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
 	var arg0 []*model.SearchInput
@@ -1221,6 +1285,80 @@ func (ec *executionContext) fieldContext_SearchResult_related(ctx context.Contex
 			}
 			return nil, fmt.Errorf("no field named %q was found under type SearchRelatedResult", field.Name)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_searchSubscription(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_searchSubscription(ctx, field)
+	if err != nil {
+		return nil
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = nil
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Subscription().SearchSubscription(rctx, fc.Args["input"].([]*model.SearchInput))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return nil
+	}
+	if resTmp == nil {
+		return nil
+	}
+	return func(ctx context.Context) graphql.Marshaler {
+		select {
+		case res, ok := <-resTmp.(<-chan []*resolver.SearchResult):
+			if !ok {
+				return nil
+			}
+			return graphql.WriterFunc(func(w io.Writer) {
+				w.Write([]byte{'{'})
+				graphql.MarshalString(field.Alias).MarshalGQL(w)
+				w.Write([]byte{':'})
+				ec.marshalOSearchResult2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋpkgᚋresolverᚐSearchResult(ctx, field.Selections, res).MarshalGQL(w)
+				w.Write([]byte{'}'})
+			})
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+func (ec *executionContext) fieldContext_Subscription_searchSubscription(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "count":
+				return ec.fieldContext_SearchResult_count(ctx, field)
+			case "items":
+				return ec.fieldContext_SearchResult_items(ctx, field)
+			case "related":
+				return ec.fieldContext_SearchResult_related(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type SearchResult", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_searchSubscription_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return
 	}
 	return fc, nil
 }
@@ -3338,6 +3476,26 @@ func (ec *executionContext) _SearchResult(ctx context.Context, sel ast.Selection
 		return graphql.Null
 	}
 	return out
+}
+
+var subscriptionImplementors = []string{"Subscription"}
+
+func (ec *executionContext) _Subscription(ctx context.Context, sel ast.SelectionSet) func(ctx context.Context) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, subscriptionImplementors)
+	ctx = graphql.WithFieldContext(ctx, &graphql.FieldContext{
+		Object: "Subscription",
+	})
+	if len(fields) != 1 {
+		ec.Errorf(ctx, "must subscribe to exactly one stream")
+		return nil
+	}
+
+	switch fields[0].Name {
+	case "searchSubscription":
+		return ec._Subscription_searchSubscription(ctx, fields[0])
+	default:
+		panic("unknown field " + strconv.Quote(fields[0].Name))
+	}
 }
 
 var __DirectiveImplementors = []string{"__Directive"}
