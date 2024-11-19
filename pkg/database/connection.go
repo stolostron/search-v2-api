@@ -37,8 +37,9 @@ func beforeAcquire(ctx context.Context, c *pgx.Conn) bool {
 
 // Release resources used by the connection before returning to the pool.
 func afterRelease(c *pgx.Conn) bool {
-	klog.V(7).Info("Releasing DB connection back to pool.")
-	_, err := c.Exec(context.TODO(), "DISCARD ALL")
+	// _, err := c.Exec(context.TODO(), "DISCARD ALL")
+	// https://www.postgresql.org/docs/current/sql-discard.html
+	_, err := c.Exec(context.TODO(), "DISCARD TEMP")
 	if err != nil {
 		klog.Error("Error discarding connection state.", err)
 		return false // Discard failed, don't return to pool.
