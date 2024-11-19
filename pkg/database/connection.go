@@ -35,6 +35,17 @@ func beforeAcquire(ctx context.Context, c *pgx.Conn) bool {
 	return true
 }
 
+// Release resources used by the connection before returning to the pool.
+func afterRelease(c *pgx.Conn) bool {
+	klog.V(7).Info("Releasing DB connection back to pool.")
+	_, err := c.Exec(context.TODO(), "DISCARD ALL")
+	if err != nil {
+		klog.Error("Error discarding connection state.", err)
+		return false // Discard failed, don't return to pool.
+	}
+	return true
+}
+
 func initializePool(ctx context.Context) {
 	cfg := config.Cfg
 	dbConnString := fmt.Sprint(
@@ -57,6 +68,7 @@ func initializePool(ctx context.Context) {
 
 	config.AfterConnect = afterConnect   // Checks new connection health before using it.
 	config.BeforeAcquire = beforeAcquire // Checks idle connection health before using it.
+	config.AfterRelease = afterRelease
 	// Add jitter to prevent all connections from being closed at same time.
 	config.MaxConnLifetimeJitter = time.Duration(cfg.DBMaxConnLifeJitter) * time.Millisecond
 	config.MaxConns = int32(cfg.DBMaxConns)
