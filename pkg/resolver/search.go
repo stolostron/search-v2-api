@@ -36,7 +36,6 @@ type SearchResult struct {
 const ErrorMsg string = "Error building Search query:"
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
-	klog.Infof("Search Resolver len(%d)  %+v", len(input), input[0])
 	defer metrics.SlowLog("SearchResolver", 0)()
 	// For each input, create a SearchResult resolver.
 	srchResult := make([]*SearchResult, len(input))
