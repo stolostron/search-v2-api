@@ -24,7 +24,6 @@ func SearchSchemaResolver(ctx context.Context) (map[string]interface{}, error) {
 	if userDataErr != nil {
 		return nil, userDataErr
 	}
-	klog.Info("From SearchSchemaResolver")
 	// Proceed if user's rbac data exists
 	searchSchemaResult := &SearchSchema{
 		pool:     db.GetConnPool(ctx),
