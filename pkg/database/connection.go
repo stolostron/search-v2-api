@@ -115,6 +115,7 @@ func GetConnPool(ctx context.Context) *pgxpool.Pool {
 		klog.V(5).Info("Database pool connection is healthy.")
 	}
 
-	klog.Info("Conn stats:  %+v", pool.Stat())
+	stats := pool.Stat()
+	klog.Info("Conn stats:  %+v", stats)
 	return pool
 }
