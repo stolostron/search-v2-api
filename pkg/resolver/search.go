@@ -36,6 +36,7 @@ type SearchResult struct {
 const ErrorMsg string = "Error building Search query:"
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
+	klog.Info("Search Resolver %+v", input)
 	defer metrics.SlowLog("SearchResolver", 0)()
 	// For each input, create a SearchResult resolver.
 	srchResult := make([]*SearchResult, len(input))
@@ -50,7 +51,6 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 		klog.Warningf("Error creating datatype map. Error: [%s] ", err)
 	}
 
-	klog.Info("From searchResolver")
 	// Proceed if user's rbac data exists
 	if len(input) > 0 {
 		for index, in := range input {
