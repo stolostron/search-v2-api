@@ -16,7 +16,15 @@ import (
 // Search is the resolver for the search field.
 func (r *queryResolver) Search(ctx context.Context, input []*model.SearchInput) ([]*resolver.SearchResult, error) {
 	klog.Infof("--------- Received Search query with %d inputs ---------\n", len(input))
-	klog.Infof("--------- input (0) keywords: %+v  filters: %+v \n", input[0].Keywords, input[0].Filters)
+	keywords := input[0].Keywords
+	filters := input[0].Filters
+	klog.Infof("--------- input (0) keywords: %d  filters: %d \n", len(keywords), len(filters))
+	for i, filter := range filters {
+		klog.Infof("--------- filter (%d)", i)
+		for j, value := range filter.Values {
+			klog.Infof("-------------------  property:%s  value:%s\n", j, filter.Property, value)
+		}
+	}
 	return resolver.Search(ctx, input)
 }
 
