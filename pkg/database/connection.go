@@ -121,7 +121,7 @@ func GetConnPool(ctx context.Context) *pgxpool.Pool {
 	klog.Infof("  Acquire duration:  %+v", stats.AcquireDuration().Abs())
 	klog.Infof("  Empty acquire count:  %+v", stats.EmptyAcquireCount())
 	klog.Infof("  Idle:  %+v", stats.IdleConns())
-	klog.Infof("  constructing:  %+v", stats.ConstructingConns())
+	klog.Infof("  Constructing:  %+v", stats.ConstructingConns())
 	klog.Infof("  New conns count:  %+v", stats.NewConnsCount())
 	klog.Infof("  TotalConns:  %+v", stats.TotalConns())
 
