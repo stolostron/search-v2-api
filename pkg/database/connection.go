@@ -37,7 +37,8 @@ func beforeAcquire(ctx context.Context, c *pgx.Conn) bool {
 
 // Release resources used by the connection before returning to the pool.
 func afterRelease(c *pgx.Conn) bool {
-	klog.Info("StatementCache len %d", c.StatementCache().Len())
+	klog.Infof("StatementCache len %d  cap %d", c.StatementCache().Len(),
+		c.StatementCache().Cap())
 	err := c.StatementCache().Clear(context.Background())
 	if err != nil {
 		klog.Error("Error clearing local statement cache.", err)
