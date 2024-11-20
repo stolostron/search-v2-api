@@ -50,6 +50,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 		klog.Warningf("Error creating datatype map. Error: [%s] ", err)
 	}
 
+	klog.Info("From searchResolver")
 	// Proceed if user's rbac data exists
 	if len(input) > 0 {
 		for index, in := range input {

@@ -58,6 +58,7 @@ func SearchComplete(ctx context.Context, property string, srchInput *model.Searc
 		klog.Warningf("Error creating datatype map with err: [%s] ", err)
 	}
 
+	klog.Info("From SearchComplete")
 	// Proceed if user's rbac data exists
 	searchCompleteResult := &SearchCompleteResult{
 		input:     srchInput,
