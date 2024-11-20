@@ -56,6 +56,7 @@ var cacheInst = Cache{
 
 // Get a reference to the cache instance.
 func GetCache() *Cache {
+	klog.Info(("From getCache"))
 	ctx := context.TODO()
 	// Workaround. Update cache connection with every request.
 	// We need a better way to maintain this connection.
