@@ -15,22 +15,17 @@ import (
 
 // Search is the resolver for the search field.
 func (r *queryResolver) Search(ctx context.Context, input []*model.SearchInput) ([]*resolver.SearchResult, error) {
-	klog.V(2).Infof("-- Received search query with [%d] inputs --", len(input))
-	for i, input := range input {
-		if klog.V(3).Enabled() { // Avoids evaluating the input string.
-			klog.Infof("-- input[%d]: %s", i, input.String())
-		}
-	}
+	klog.V(3).Infof("--------- Received Search query with %d inputs ---------\n", len(input))
 	return resolver.Search(ctx, input)
 }
 
 // SearchComplete is the resolver for the searchComplete field.
 func (r *queryResolver) SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error) {
-	// if limit != nil {
-	klog.V(2).Infof("Received SearchComplete query with input property [%s] and limit %+v", property, *limit)
-	// } else {
-	// klog.V(3).Infof("Received SearchComplete query with input property **%s**", property)
-	// }
+	if limit != nil {
+		klog.V(3).Infof("Received SearchComplete query with input property **%s** and limit %d", property, *limit)
+	} else {
+		klog.V(3).Infof("Received SearchComplete query with input property **%s**", property)
+	}
 	return resolver.SearchComplete(ctx, property, query, limit)
 }
 
