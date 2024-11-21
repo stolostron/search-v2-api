@@ -95,5 +95,12 @@ func GetConnPool(ctx context.Context) *pgxpool.Pool {
 		timeLastPing = time.Now()
 		klog.V(5).Info("Database pool connection is healthy.")
 	}
+
+	stats := pool.Stat()
+	klog.Infof("Pool:{ Acquired: %d AcqDuration: %+v EmptyAcq: %d Constructing: %d Idle: %d NewConns: %d Total: %d}",
+		stats.AcquiredConns(), stats.AcquireDuration(),
+		stats.EmptyAcquireCount(), stats.ConstructingConns(),
+		stats.IdleConns(), stats.NewConnsCount(), stats.TotalConns())
+
 	return pool
 }
