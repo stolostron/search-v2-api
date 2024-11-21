@@ -70,19 +70,18 @@ func new() *Config {
 	// If environment variables are set, use default values
 	// Simply put, the order of preference is env -> default values (from left to right)
 	conf := &Config{
-		HubName:        getEnv("HUB_NAME", ""),
-		API_SERVER_URL: getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
-		AuthCacheTTL:   getEnvAsInt("AUTH_CACHE_TTL", 60000),    // 1 minute
-		SharedCacheTTL: getEnvAsInt("SHARED_CACHE_TTL", 300000), // 5 min (increase to 10min after implementation)
-		UserCacheTTL:   getEnvAsInt("USER_CACHE_TTL", 300000),   // 5 min (increase to 10min after implementation)
-		ContextPath:    getEnv("CONTEXT_PATH", "/searchapi"),
-		DBHost:         getEnv("DB_HOST", "localhost"),
-		// Postgres has 100 conns by default. Using 20 allows scaling indexer and api.
-		DBMaxConns:          getEnvAsInt32("DB_MAX_CONNS", int32(10)),          // 10 - Overrides pgxpool default
-		DBMaxConnIdleTime:   getEnvAsInt("DB_MAX_CONN_IDLE_TIME", 30*60*1000),  // 30 min - Default for pgxpool.Config
-		DBMaxConnLifeJitter: getEnvAsInt("DB_MAX_CONN_LIFE_JITTER", 2*60*1000), // 2 min - Overrides pgxpool default
-		DBMaxConnLifeTime:   getEnvAsInt("DB_MAX_CONN_LIFE_TIME", 60*60*1000),  // 60 min - Default for pgxpool.Config
-		DBMinConns:          getEnvAsInt32("DB_MIN_CONNS", int32(0)),           // Default for pgxpool.Config
+		HubName:             getEnv("HUB_NAME", ""),
+		API_SERVER_URL:      getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
+		AuthCacheTTL:        getEnvAsInt("AUTH_CACHE_TTL", 60000),    // 1 minute
+		SharedCacheTTL:      getEnvAsInt("SHARED_CACHE_TTL", 300000), // 5 minutes
+		UserCacheTTL:        getEnvAsInt("USER_CACHE_TTL", 300000),   // 5 minutes
+		ContextPath:         getEnv("CONTEXT_PATH", "/searchapi"),
+		DBHost:              getEnv("DB_HOST", "localhost"),
+		DBMaxConns:          getEnvAsInt32("DB_MAX_CONNS", int32(10)),        // Overrides pgxpool default (4)
+		DBMaxConnIdleTime:   getEnvAsInt("DB_MAX_CONN_IDLE_TIME", 60*1000),   // 1 min - Overrides pgxpool default (30)
+		DBMaxConnLifeJitter: getEnvAsInt("DB_MAX_CONN_LIFE_JITTER", 10*1000), // 10 sec - Overrides pgxpool default
+		DBMaxConnLifeTime:   getEnvAsInt("DB_MAX_CONN_LIFE_TIME", 60*1000),   // 1 min - Overrides pgxpool default (60)
+		DBMinConns:          getEnvAsInt32("DB_MIN_CONNS", int32(2)),         // Overrides pgxpool default (0)
 		DBName:              getEnv("DB_NAME", ""),
 		DBPass:              getEnv("DB_PASS", ""),
 		DBPort:              getEnvAsInt("DB_PORT", 5432),
