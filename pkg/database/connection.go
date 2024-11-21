@@ -35,24 +35,6 @@ func beforeAcquire(ctx context.Context, c *pgx.Conn) bool {
 	return true
 }
 
-// Release resources used by the connection before returning to the pool.
-func afterRelease(c *pgx.Conn) bool {
-	err := c.StatementCache().Clear(context.Background())
-	if err != nil {
-		klog.Error("Error clearing local statement cache.", err)
-		return false // Don't return to pool.
-	}
-
-	// https://www.postgresql.org/docs/current/sql-discard.html
-	// _, err = c.Exec(context.Background(), "DISCARD ALL")
-	// if err != nil {
-	// 	klog.Error("Error discarding connection state.", err)
-	// 	return false // Discard failed, don't return to pool.
-	// }
-
-	return true
-}
-
 func initializePool(ctx context.Context) {
 	cfg := config.Cfg
 	dbConnString := fmt.Sprint(
@@ -73,9 +55,9 @@ func initializePool(ctx context.Context) {
 		klog.Error("Error parsing database connection configuration.", configErr)
 	}
 
-	config.AfterConnect = afterConnect   // Checks new connection health before using it.
-	config.BeforeAcquire = beforeAcquire // Checks idle connection health before using it.
-	config.AfterRelease = afterRelease
+	config.ConnConfig.BuildStatementCache = nil // Disable statement cache to reduce connection memory usage.
+	config.AfterConnect = afterConnect          // Checks new connection health before using it.
+	config.BeforeAcquire = beforeAcquire        // Checks idle connection health before using it.
 	// Add jitter to prevent all connections from being closed at same time.
 	config.MaxConnLifetimeJitter = time.Duration(cfg.DBMaxConnLifeJitter) * time.Millisecond
 	config.MaxConns = int32(cfg.DBMaxConns)
