@@ -17,32 +17,36 @@ func SearchSubscription(ctx context.Context, input []*model.SearchInput) (<-chan
 	// You can (and probably should) handle your channels in a central place outside of `schema.resolvers.go`.
 	// For this example we'll simply use a Goroutine with a simple loop.
 	go func() {
+		timeout := time.After(time.Duration(config.Cfg.SubscriptionPollTimeout) * time.Minute)
 		// Handle deregistration of the channel here. Note the `defer`
 		defer close(ch)
 
 		for {
+			klog.Infof("Search subscription new poll interval")
 			searchResult, err := Search(ctx, input)
 
 			if err != nil {
 				klog.Errorf("Error occurred durign the search subscription request: %s", err)
 			}
 
-			// The subscription may have got closed due to the client disconnecting.
+			// The subscription may have been closed due to the client disconnecting.
 			// Hence we do send in a select block with a check for context cancellation.
 			// This avoids goroutine getting blocked forever or panicking,
 			select {
 			case <-ctx.Done(): // This runs when context gets cancelled. Subscription closes.
 				klog.Infof("Search subscription Closed")
-				// Handle deregistration of the channel here. `close(ch)`
+				return // Remember to return to end the routine.
+
+			case <-timeout: // This runs when timeoout is hit. Subscription closes.
+				klog.Infof("Subscription timeout reached. Closing connection.")
 				return // Remember to return to end the routine.
 			
 			case ch <- searchResult: // This is the actual send.
-				// Our message went through, do nothing	
+				// Our message went through, do nothing 
 			}
 
-			// Wait 10 seconds for next search reuslt send.
+			// Wait SubscriptionPollInterval seconds for next search reuslt send.
 			time.Sleep(time.Duration(config.Cfg.SubscriptionPollInterval) * time.Second)
-			klog.Infof("Search subscription new poll interval")
 		}
 	}()
 

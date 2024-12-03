@@ -43,6 +43,7 @@ type Config struct {
 	RelationLevel            int    // The number of levels/hops for finding relationships for a particular resource
 	SlowLog                  int    // Logs when queries are slower than the specified time duration in ms. Default 300ms
 	SubscriptionPollInterval int    // Number of seconds between subscription polls
+	SubscriptionPollTimeout  int    // Minutes a subscription will stay open before timeout
 }
 
 // Define feature flags.
@@ -113,6 +114,7 @@ func new() *Config {
 		// This will be updated to 1 for default searches and 3 for applications - unless set by the user
 		RelationLevel: getEnvAsInt("RELATION_LEVEL", 0),
 		SubscriptionPollInterval:   getEnvAsInt("SUBSCRIPTION_POLL_INTERVAL", 10),  // 10 seconds - default subscription poll interval
+		SubscriptionPollTimeout:    getEnvAsInt("SUBSCRIPTION_POLL_TIMEOUT", 5),  // 5 minutes - default subscription poll timeout
 	}
 	conf.DBPass = url.QueryEscape(conf.DBPass)
 	return conf
