@@ -3,10 +3,12 @@ package resolver
 
 import (
 	"context"
-	"fmt"
 	"time"
 
+	klog "k8s.io/klog/v2"
+
 	"github.com/stolostron/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/pkg/config"
 )
 
 func SearchSubscription(ctx context.Context, input []*model.SearchInput) (<-chan []*SearchResult, error) {
@@ -19,25 +21,28 @@ func SearchSubscription(ctx context.Context, input []*model.SearchInput) (<-chan
 		defer close(ch)
 
 		for {
-			// Send the search results every 10 seconds.
-			time.Sleep(10 * time.Second)
-			fmt.Println("SearchSubscription new poll interval")
-			
-			// TODO 2nd return item is error... needs to be handled
-			searchResult, _ := Search(ctx, input)
+			searchResult, err := Search(ctx, input)
+
+			if err != nil {
+				klog.Errorf("Error occurred durign the search subscription request: %s", err)
+			}
 
 			// The subscription may have got closed due to the client disconnecting.
 			// Hence we do send in a select block with a check for context cancellation.
 			// This avoids goroutine getting blocked forever or panicking,
 			select {
 			case <-ctx.Done(): // This runs when context gets cancelled. Subscription closes.
-				fmt.Println("Subscription Closed")
+				klog.Infof("Search subscription Closed")
 				// Handle deregistration of the channel here. `close(ch)`
 				return // Remember to return to end the routine.
 			
 			case ch <- searchResult: // This is the actual send.
 				// Our message went through, do nothing	
 			}
+
+			// Wait 10 seconds for next search reuslt send.
+			time.Sleep(time.Duration(config.Cfg.SubscriptionPollInterval) * time.Second)
+			klog.Infof("Search subscription new poll interval")
 		}
 	}()
 

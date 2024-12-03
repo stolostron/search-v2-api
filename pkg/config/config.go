@@ -17,31 +17,32 @@ var Cfg = new()
 
 // Defines the configurable options for this microservice.
 type Config struct {
-	HubName             string //Display Name of the cluster where ACM is deployed
-	API_SERVER_URL      string // address for Kubernetes API Server
-	AuthCacheTTL        int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
-	SharedCacheTTL      int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
-	UserCacheTTL        int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
-	ContextPath         string
-	DBHost              string
-	DBMinConns          int32 // Overrides pgxpool.Config{ MinConns } Default: 0
-	DBMaxConns          int32 // Overrides pgxpool.Config{ MaxConns } Default: 10
-	DBMaxConnIdleTime   int   // Overrides pgxpool.Config{ MaxConnIdleTime } Default: 30 min
-	DBMaxConnLifeTime   int   // Overrides pgxpool.Config{ MaxConnLifetime } Default: 60 min
-	DBMaxConnLifeJitter int   // Overrides pgxpool.Config{ MaxConnLifetimeJitter } Default: 2 min
-	DBName              string
-	DBPass              string
-	DBPort              int
-	DBUser              string
-	DevelopmentMode     bool             // Indicates if running in local development mode.
-	Features            featureFlags     // Enable or disable features.
-	Federation          federationConfig // Federated search configuration.
-	HttpPort            int
-	PlaygroundMode      bool   // Enable the GraphQL Playground client.
-	PodNamespace        string // Kubernetes namespace where the pod is running.
-	QueryLimit          uint   // The default LIMIT to use on queries. Client can override.
-	RelationLevel       int    // The number of levels/hops for finding relationships for a particular resource
-	SlowLog             int    // Logs when queries are slower than the specified time duration in ms. Default 300ms
+	HubName                  string //Display Name of the cluster where ACM is deployed
+	API_SERVER_URL           string // address for Kubernetes API Server
+	AuthCacheTTL             int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
+	SharedCacheTTL           int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
+	UserCacheTTL             int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
+	ContextPath              string
+	DBHost                   string
+	DBMinConns               int32 // Overrides pgxpool.Config{ MinConns } Default: 0
+	DBMaxConns               int32 // Overrides pgxpool.Config{ MaxConns } Default: 10
+	DBMaxConnIdleTime        int   // Overrides pgxpool.Config{ MaxConnIdleTime } Default: 30 min
+	DBMaxConnLifeTime        int   // Overrides pgxpool.Config{ MaxConnLifetime } Default: 60 min
+	DBMaxConnLifeJitter      int   // Overrides pgxpool.Config{ MaxConnLifetimeJitter } Default: 2 min
+	DBName                   string
+	DBPass                   string
+	DBPort                   int
+	DBUser                   string
+	DevelopmentMode          bool             // Indicates if running in local development mode.
+	Features                 featureFlags     // Enable or disable features.
+	Federation               federationConfig // Federated search configuration.
+	HttpPort                 int
+	PlaygroundMode           bool   // Enable the GraphQL Playground client.
+	PodNamespace             string // Kubernetes namespace where the pod is running.
+	QueryLimit               uint   // The default LIMIT to use on queries. Client can override.
+	RelationLevel            int    // The number of levels/hops for finding relationships for a particular resource
+	SlowLog                  int    // Logs when queries are slower than the specified time duration in ms. Default 300ms
+	SubscriptionPollInterval int    // Number of seconds between subscription polls
 }
 
 // Define feature flags.
@@ -111,6 +112,7 @@ func new() *Config {
 		// Setting default level to 0 to check if user has explicitly set this variable
 		// This will be updated to 1 for default searches and 3 for applications - unless set by the user
 		RelationLevel: getEnvAsInt("RELATION_LEVEL", 0),
+		SubscriptionPollInterval:   getEnvAsInt("SUBSCRIPTION_POLL_INTERVAL", 10),  // 10 seconds - default subscription poll interval
 	}
 	conf.DBPass = url.QueryEscape(conf.DBPass)
 	return conf

@@ -71,7 +71,7 @@ type ComplexityRoot struct {
 	}
 
 	Subscription struct {
-		SearchSubscription func(childComplexity int, input []*model.SearchInput) int
+		Search func(childComplexity int, input []*model.SearchInput) int
 	}
 }
 
@@ -82,7 +82,7 @@ type QueryResolver interface {
 	Messages(ctx context.Context) ([]*model.Message, error)
 }
 type SubscriptionResolver interface {
-	SearchSubscription(ctx context.Context, input []*model.SearchInput) (<-chan []*resolver.SearchResult, error)
+	Search(ctx context.Context, input []*model.SearchInput) (<-chan []*resolver.SearchResult, error)
 }
 
 type executableSchema struct {
@@ -201,17 +201,17 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.SearchResult.Related(childComplexity), true
 
-	case "Subscription.searchSubscription":
-		if e.complexity.Subscription.SearchSubscription == nil {
+	case "Subscription.search":
+		if e.complexity.Subscription.Search == nil {
 			break
 		}
 
-		args, err := ec.field_Subscription_searchSubscription_args(context.TODO(), rawArgs)
+		args, err := ec.field_Subscription_search_args(context.TODO(), rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.complexity.Subscription.SearchSubscription(childComplexity, args["input"].([]*model.SearchInput)), true
+		return e.complexity.Subscription.Search(childComplexity, args["input"].([]*model.SearchInput)), true
 
 	}
 	return 0, false
@@ -296,13 +296,14 @@ schema {
 }
 
 """
-` + "`" + `Subscriptions` + "`" + ` supported by the Search Query API.
+Subscriptions implemented by the Search Query API.
 """
 type Subscription {
   """
-  searchSubscription will return a stream of ` + "`" + `SearchResult` + "`" + ` objects.
+  This subscription is experimental and must not be used by clients at this time.
+  Returns a stream of ` + "`" + `SearchResult` + "`" + ` objects.
   """
-  searchSubscription(input: [SearchInput]): [SearchResult]
+  search(input: [SearchInput]): [SearchResult]
 }
 
 """
@@ -522,7 +523,7 @@ func (ec *executionContext) field_Query_search_args(ctx context.Context, rawArgs
 	return args, nil
 }
 
-func (ec *executionContext) field_Subscription_searchSubscription_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) field_Subscription_search_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
 	var arg0 []*model.SearchInput
@@ -1289,8 +1290,8 @@ func (ec *executionContext) fieldContext_SearchResult_related(ctx context.Contex
 	return fc, nil
 }
 
-func (ec *executionContext) _Subscription_searchSubscription(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
-	fc, err := ec.fieldContext_Subscription_searchSubscription(ctx, field)
+func (ec *executionContext) _Subscription_search(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_search(ctx, field)
 	if err != nil {
 		return nil
 	}
@@ -1303,7 +1304,7 @@ func (ec *executionContext) _Subscription_searchSubscription(ctx context.Context
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Subscription().SearchSubscription(rctx, fc.Args["input"].([]*model.SearchInput))
+		return ec.resolvers.Subscription().Search(rctx, fc.Args["input"].([]*model.SearchInput))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1331,7 +1332,7 @@ func (ec *executionContext) _Subscription_searchSubscription(ctx context.Context
 	}
 }
 
-func (ec *executionContext) fieldContext_Subscription_searchSubscription(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Subscription_search(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Subscription",
 		Field:      field,
@@ -1356,7 +1357,7 @@ func (ec *executionContext) fieldContext_Subscription_searchSubscription(ctx con
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Subscription_searchSubscription_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Subscription_search_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return
 	}
@@ -3491,8 +3492,8 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 	}
 
 	switch fields[0].Name {
-	case "searchSubscription":
-		return ec._Subscription_searchSubscription(ctx, fields[0])
+	case "search":
+		return ec._Subscription_search(ctx, fields[0])
 	default:
 		panic("unknown field " + strconv.Quote(fields[0].Name))
 	}
