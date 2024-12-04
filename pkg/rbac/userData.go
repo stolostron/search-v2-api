@@ -363,7 +363,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 			// Equivalent to: oc auth can-i create ManagedClusterView -n <managedClusterName> --as=<user>
 			if verb == "create" || verb == "*" {
 				for _, group := range rule.APIGroups {
-					if group == "cluster.open-cluster-management.io" || group == "*" {
+					if group == "view.open-cluster-management.io" || group == "*" {
 						for _, res := range rule.Resources {
 							if res == "managedclusterviews" || res == "*" {
 								user.updateUserManagedClusterList(cache, ns)
