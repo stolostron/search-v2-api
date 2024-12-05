@@ -26,7 +26,7 @@ func SearchSubscription(ctx context.Context, input []*model.SearchInput) (<-chan
 			searchResult, err := Search(ctx, input)
 
 			if err != nil {
-				klog.Errorf("Error occurred durign the search subscription request: %s", err)
+				klog.Errorf("Error occurred during the search subscription request: %s", err)
 			}
 
 			// The subscription may have been closed due to the client disconnecting.
