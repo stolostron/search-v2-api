@@ -9,6 +9,7 @@ import (
 	klog "k8s.io/klog/v2"
 
 	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -64,8 +65,10 @@ func StartAndListen() {
 	apiSubrouter.Use(rbac.AuthenticateUser)
 	apiSubrouter.Use(rbac.AuthorizeUser)
 
-	apiSubrouter.Handle("/graphql", handler.NewDefaultServer(generated.NewExecutableSchema(
-		generated.Config{Resolvers: &graph.Resolver{}})))
+	defaultSrv := handler.NewDefaultServer(generated.NewExecutableSchema(
+		generated.Config{Resolvers: &graph.Resolver{}}))
+	defaultSrv.AddTransport(&transport.Websocket{})
+	apiSubrouter.Handle("/graphql", defaultSrv)
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
