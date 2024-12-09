@@ -22,7 +22,7 @@ func SearchSubscription(ctx context.Context, input []*model.SearchInput) (<-chan
 		defer close(ch)
 
 		for {
-			klog.Infof("Search subscription new poll interval")
+			klog.V(3).Info("Search subscription new poll interval")
 			searchResult, err := Search(ctx, input)
 
 			if err != nil {
@@ -34,11 +34,11 @@ func SearchSubscription(ctx context.Context, input []*model.SearchInput) (<-chan
 			// This avoids goroutine getting blocked forever or panicking,
 			select {
 			case <-ctx.Done(): // This runs when context gets cancelled. Subscription closes.
-				klog.Infof("Search subscription Closed")
+				klog.V(3).Info("Search subscription Closed")
 				return // Remember to return to end the routine.
 
 			case <-timeout: // This runs when timeoout is hit. Subscription closes.
-				klog.Infof("Subscription timeout reached. Closing connection.")
+				klog.V(3).Info("Subscription timeout reached. Closing connection.")
 				return // Remember to return to end the routine.
 			
 			case ch <- searchResult: // This is the actual send.

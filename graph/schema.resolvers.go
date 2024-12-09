@@ -43,7 +43,7 @@ func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) 
 
 // SearchSubscription is the resolver for the search field.
 func (r *subscriptionResolver) Search(ctx context.Context, input []*model.SearchInput) (<-chan []*resolver.SearchResult, error) {
-	klog.Infoln("Received search query subscription")
+	klog.V(3).Infoln("Received search query subscription")
 	return resolver.SearchSubscription(ctx, input)
 }
 
