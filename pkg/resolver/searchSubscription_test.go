@@ -20,12 +20,13 @@ type MockSearch struct {
 	mock.Mock
 }
 
-func (m *MockSearch) Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
+func (m *MockSearch) MockSearch(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
 	args := m.Called(ctx, input)
 	return args.Get(0).([]*SearchResult), args.Error(1)
 }
 
 func TestSearchSubscription(t *testing.T) {
+	config.Cfg.Features.SubscriptionEnabled = true // Enabled subscription requests
 	config.Cfg.SubscriptionPollTimeout = 1 // Set timeout to 1 minute
 	config.Cfg.SubscriptionPollInterval = 2 // Set Poll interval to 2 seconds
 	ctrl := gomock.NewController(t)
@@ -39,7 +40,7 @@ func TestSearchSubscription(t *testing.T) {
 
 	// Set up mock behavior for Search Query
 	mockSearch := new(MockSearch)
-	mockSearch.On("Search", mock.Anything, input).Return([]*SearchResult{{
+	mockSearch.On("Search", ctx, input).Return([]*SearchResult{{
 		input:     input[0],
 		pool:      mockPool,
 		uids:      nil,
@@ -65,6 +66,7 @@ func TestSearchSubscription(t *testing.T) {
 }
 
 func TestSearchSubscriptionTimeout(t *testing.T) {
+	config.Cfg.Features.SubscriptionEnabled = true // Enabled subscription requests
 	config.Cfg.SubscriptionPollTimeout = 0 // Set timeout to 0 minutes to immediately trigger timeout
 	config.Cfg.SubscriptionPollInterval = 2 // Set Poll interval to 2 seconds
 	timeout := time.After(time.Duration(config.Cfg.SubscriptionPollTimeout) * time.Minute)
@@ -79,7 +81,7 @@ func TestSearchSubscriptionTimeout(t *testing.T) {
 
 	// Set up mock behavior for Search Query
 	mockSearch := new(MockSearch)
-	mockSearch.On("Search", mock.Anything, input).Return([]*SearchResult{{
+	mockSearch.On("Search", ctx, input).Return([]*SearchResult{{
 		input:     input[0],
 		pool:      mockPool,
 		uids:      nil,
@@ -105,6 +107,7 @@ func TestSearchSubscriptionTimeout(t *testing.T) {
 }
 
 func TestSearchSubscriptionContextCancel(t *testing.T) {
+	config.Cfg.Features.SubscriptionEnabled = true // Enabled subscription requests
 	config.Cfg.SubscriptionPollTimeout = 1 // Set timeout to 1 minute
 	config.Cfg.SubscriptionPollInterval = 2 // Set Poll interval to 2 seconds
 	ctrl := gomock.NewController(t)
@@ -120,7 +123,7 @@ func TestSearchSubscriptionContextCancel(t *testing.T) {
 
 	// Set up mock behavior for Search Query
 	mockSearch := new(MockSearch)
-	mockSearch.On("Search", mock.Anything, input).Return([]*SearchResult{{
+	mockSearch.On("Search", ctx, input).Return([]*SearchResult{{
 		input:     input[0],
 		pool:      mockPool,
 		uids:      nil,

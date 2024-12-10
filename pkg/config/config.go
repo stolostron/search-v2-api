@@ -49,6 +49,7 @@ type Config struct {
 // Define feature flags.
 type featureFlags struct {
 	FederatedSearch bool // Enable federated search.
+	SubscriptionEnabled bool // enabled GraphQL Subscriptions
 }
 
 // Http Client Pool Transport settings for federated client pool.
@@ -92,6 +93,7 @@ func new() *Config {
 		DevelopmentMode:     DEVELOPMENT_MODE,
 		Features: featureFlags{
 			FederatedSearch: getEnvAsBool("FEATURE_FEDERATED_SEARCH", false), // In Dev mode default to true.
+			SubscriptionEnabled: getEnvAsBool("SUBSCRIPTION_ENABLED", false),
 		},
 		Federation: federationConfig{
 			GlobalHubName:  getEnv("GLOBAL_HUB_NAME", "global-hub"),

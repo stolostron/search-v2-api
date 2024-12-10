@@ -3,6 +3,7 @@ package resolver
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	klog "k8s.io/klog/v2"
@@ -13,6 +14,14 @@ import (
 
 func SearchSubscription(ctx context.Context, input []*model.SearchInput) (<-chan []*SearchResult, error) {
 	ch := make(chan []*SearchResult)
+
+	// if not enabled via feature flag -> return error message
+	if !config.Cfg.Features.SubscriptionEnabled {
+		klog.Infof("GraphQL subscription requests are disabled. To enable set env variable SUBSCRIPTION_ENABLED=true")
+		ctx.Done()
+		close(ch)
+		return ch, errors.New("GraphQL subscription requests are disabled. To enable set env variable SUBSCRIPTION_ENABLED=true")
+	}
 
 	// You can (and probably should) handle your channels in a central place outside of `schema.resolvers.go`.
 	// For this example we'll simply use a Goroutine with a simple loop.
