@@ -16,7 +16,7 @@ type Subscription {
   This subscription is experimental and must not be used by clients at this time.
   Returns a stream of `SearchResult` objects.
   """
-  search(input: [SearchInput]): [SearchResult]
+  experimentalSearch(input: [SearchInput]): [SearchResult]
 }
 
 """

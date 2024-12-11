@@ -71,7 +71,7 @@ type ComplexityRoot struct {
 	}
 
 	Subscription struct {
-		Search func(childComplexity int, input []*model.SearchInput) int
+		ExperimentalSearch func(childComplexity int, input []*model.SearchInput) int
 	}
 }
 
@@ -82,7 +82,7 @@ type QueryResolver interface {
 	Messages(ctx context.Context) ([]*model.Message, error)
 }
 type SubscriptionResolver interface {
-	Search(ctx context.Context, input []*model.SearchInput) (<-chan []*resolver.SearchResult, error)
+	ExperimentalSearch(ctx context.Context, input []*model.SearchInput) (<-chan []*resolver.SearchResult, error)
 }
 
 type executableSchema struct {
@@ -201,17 +201,17 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.SearchResult.Related(childComplexity), true
 
-	case "Subscription.search":
-		if e.complexity.Subscription.Search == nil {
+	case "Subscription.experimentalSearch":
+		if e.complexity.Subscription.ExperimentalSearch == nil {
 			break
 		}
 
-		args, err := ec.field_Subscription_search_args(context.TODO(), rawArgs)
+		args, err := ec.field_Subscription_experimentalSearch_args(context.TODO(), rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.complexity.Subscription.Search(childComplexity, args["input"].([]*model.SearchInput)), true
+		return e.complexity.Subscription.ExperimentalSearch(childComplexity, args["input"].([]*model.SearchInput)), true
 
 	}
 	return 0, false
@@ -303,7 +303,7 @@ type Subscription {
   This subscription is experimental and must not be used by clients at this time.
   Returns a stream of ` + "`" + `SearchResult` + "`" + ` objects.
   """
-  search(input: [SearchInput]): [SearchResult]
+  experimentalSearch(input: [SearchInput]): [SearchResult]
 }
 
 """
@@ -523,7 +523,7 @@ func (ec *executionContext) field_Query_search_args(ctx context.Context, rawArgs
 	return args, nil
 }
 
-func (ec *executionContext) field_Subscription_search_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+func (ec *executionContext) field_Subscription_experimentalSearch_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
 	var arg0 []*model.SearchInput
@@ -1290,8 +1290,8 @@ func (ec *executionContext) fieldContext_SearchResult_related(ctx context.Contex
 	return fc, nil
 }
 
-func (ec *executionContext) _Subscription_search(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
-	fc, err := ec.fieldContext_Subscription_search(ctx, field)
+func (ec *executionContext) _Subscription_experimentalSearch(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	fc, err := ec.fieldContext_Subscription_experimentalSearch(ctx, field)
 	if err != nil {
 		return nil
 	}
@@ -1304,7 +1304,7 @@ func (ec *executionContext) _Subscription_search(ctx context.Context, field grap
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Subscription().Search(rctx, fc.Args["input"].([]*model.SearchInput))
+		return ec.resolvers.Subscription().ExperimentalSearch(rctx, fc.Args["input"].([]*model.SearchInput))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1332,7 +1332,7 @@ func (ec *executionContext) _Subscription_search(ctx context.Context, field grap
 	}
 }
 
-func (ec *executionContext) fieldContext_Subscription_search(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Subscription_experimentalSearch(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Subscription",
 		Field:      field,
@@ -1357,7 +1357,7 @@ func (ec *executionContext) fieldContext_Subscription_search(ctx context.Context
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Subscription_search_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Subscription_experimentalSearch_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return
 	}
@@ -3492,8 +3492,8 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 	}
 
 	switch fields[0].Name {
-	case "search":
-		return ec._Subscription_search(ctx, fields[0])
+	case "experimentalSearch":
+		return ec._Subscription_experimentalSearch(ctx, fields[0])
 	default:
 		panic("unknown field " + strconv.Quote(fields[0].Name))
 	}

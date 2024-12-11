@@ -93,7 +93,7 @@ func new() *Config {
 		DevelopmentMode:     DEVELOPMENT_MODE,
 		Features: featureFlags{
 			FederatedSearch: getEnvAsBool("FEATURE_FEDERATED_SEARCH", false), // In Dev mode default to true.
-			SubscriptionEnabled: getEnvAsBool("SUBSCRIPTION_ENABLED", false),
+			SubscriptionEnabled: getEnvAsBool("FEATURE_SUBSCRIPTION", false),
 		},
 		Federation: federationConfig{
 			GlobalHubName:  getEnv("GLOBAL_HUB_NAME", "global-hub"),
@@ -115,8 +115,8 @@ func new() *Config {
 		// Setting default level to 0 to check if user has explicitly set this variable
 		// This will be updated to 1 for default searches and 3 for applications - unless set by the user
 		RelationLevel: getEnvAsInt("RELATION_LEVEL", 0),
-		SubscriptionPollInterval:   getEnvAsInt("SUBSCRIPTION_POLL_INTERVAL", 10),  // 10 seconds - default subscription poll interval
-		SubscriptionPollTimeout:    getEnvAsInt("SUBSCRIPTION_POLL_TIMEOUT", 5),  // 5 minutes - default subscription poll timeout
+		SubscriptionPollInterval:   getEnvAsInt("SUBSCRIPTION_POLL_INTERVAL", 10*1000),  // 10 seconds - default subscription poll interval
+		SubscriptionPollTimeout:    getEnvAsInt("SUBSCRIPTION_POLL_TIMEOUT", 5*60*1000),  // 5 minutes - default subscription poll timeout
 	}
 	conf.DBPass = url.QueryEscape(conf.DBPass)
 	return conf

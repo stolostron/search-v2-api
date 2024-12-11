@@ -17,16 +17,16 @@ func SearchSubscription(ctx context.Context, input []*model.SearchInput) (<-chan
 
 	// if not enabled via feature flag -> return error message
 	if !config.Cfg.Features.SubscriptionEnabled {
-		klog.Infof("GraphQL subscription requests are disabled. To enable set env variable SUBSCRIPTION_ENABLED=true")
+		klog.Infof("GraphQL subscription requests are disabled. To enable set env variable FEATURE_SUBSCRIPTION=true")
 		ctx.Done()
 		close(ch)
-		return ch, errors.New("GraphQL subscription requests are disabled. To enable set env variable SUBSCRIPTION_ENABLED=true")
+		return ch, errors.New("GraphQL subscription requests are disabled. To enable set env variable FEATURE_SUBSCRIPTION=true")
 	}
 
 	// You can (and probably should) handle your channels in a central place outside of `schema.resolvers.go`.
 	// For this example we'll simply use a Goroutine with a simple loop.
 	go func() {
-		timeout := time.After(time.Duration(config.Cfg.SubscriptionPollTimeout) * time.Minute)
+		timeout := time.After(time.Duration(config.Cfg.SubscriptionPollTimeout) * time.Millisecond)
 		// Handle deregistration of the channel here. Note the `defer`
 		defer close(ch)
 
@@ -55,7 +55,7 @@ func SearchSubscription(ctx context.Context, input []*model.SearchInput) (<-chan
 			}
 
 			// Wait SubscriptionPollInterval seconds for next search reuslt send.
-			time.Sleep(time.Duration(config.Cfg.SubscriptionPollInterval) * time.Second)
+			time.Sleep(time.Duration(config.Cfg.SubscriptionPollInterval) * time.Millisecond)
 		}
 	}()
 
