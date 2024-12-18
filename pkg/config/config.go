@@ -42,8 +42,8 @@ type Config struct {
 	QueryLimit               uint   // The default LIMIT to use on queries. Client can override.
 	RelationLevel            int    // The number of levels/hops for finding relationships for a particular resource
 	SlowLog                  int    // Logs when queries are slower than the specified time duration in ms. Default 300ms
-	SubscriptionPollInterval int    // Number of seconds between subscription polls
-	SubscriptionPollTimeout  int    // Minutes a subscription will stay open before timeout
+	SubscriptionRefreshInterval int    // Number of seconds between subscription polls
+	SubscriptionRefreshTimeout  int    // Minutes a subscription will stay open before timeout
 }
 
 // Define feature flags.
@@ -115,8 +115,8 @@ func new() *Config {
 		// Setting default level to 0 to check if user has explicitly set this variable
 		// This will be updated to 1 for default searches and 3 for applications - unless set by the user
 		RelationLevel: getEnvAsInt("RELATION_LEVEL", 0),
-		SubscriptionPollInterval:   getEnvAsInt("SUBSCRIPTION_POLL_INTERVAL", 10*1000),  // 10 seconds - default subscription poll interval
-		SubscriptionPollTimeout:    getEnvAsInt("SUBSCRIPTION_POLL_TIMEOUT", 5*60*1000),  // 5 minutes - default subscription poll timeout
+		SubscriptionRefreshInterval:   getEnvAsInt("SUBSCRIPTION_REFRESH_INTERVAL", 10*1000),  // 10 seconds - default subscription poll interval
+		SubscriptionRefreshTimeout:    getEnvAsInt("SUBSCRIPTION_REFRESH_TIMEOUT", 5*60*1000),  // 5 minutes - default subscription poll timeout
 	}
 	conf.DBPass = url.QueryEscape(conf.DBPass)
 	return conf

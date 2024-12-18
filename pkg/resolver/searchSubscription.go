@@ -26,7 +26,7 @@ func SearchSubscription(ctx context.Context, input []*model.SearchInput) (<-chan
 	// You can (and probably should) handle your channels in a central place outside of `schema.resolvers.go`.
 	// For this example we'll simply use a Goroutine with a simple loop.
 	go func() {
-		timeout := time.After(time.Duration(config.Cfg.SubscriptionPollTimeout) * time.Millisecond)
+		timeout := time.After(time.Duration(config.Cfg.SubscriptionRefreshTimeout) * time.Millisecond)
 		// Handle deregistration of the channel here. Note the `defer`
 		defer close(ch)
 
@@ -54,8 +54,8 @@ func SearchSubscription(ctx context.Context, input []*model.SearchInput) (<-chan
 				// Our message went through, do nothing 
 			}
 
-			// Wait SubscriptionPollInterval seconds for next search reuslt send.
-			time.Sleep(time.Duration(config.Cfg.SubscriptionPollInterval) * time.Millisecond)
+			// Wait SubscriptionRefreshInterval seconds for next search reuslt send.
+			time.Sleep(time.Duration(config.Cfg.SubscriptionRefreshInterval) * time.Millisecond)
 		}
 	}()
 
