@@ -41,7 +41,17 @@ func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) 
 	return resolver.Messages(ctx)
 }
 
+// ExperimentalSearch is the resolver for the experimentalSearch field.
+func (r *subscriptionResolver) ExperimentalSearch(ctx context.Context, input []*model.SearchInput) (<-chan []*resolver.SearchResult, error) {
+	klog.V(3).Infoln("Received search query subscription")
+	return resolver.SearchSubscription(ctx, input)
+}
+
 // Query returns generated.QueryResolver implementation.
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 
+// Subscription returns generated.SubscriptionResolver implementation.
+func (r *Resolver) Subscription() generated.SubscriptionResolver { return &subscriptionResolver{r} }
+
 type queryResolver struct{ *Resolver }
+type subscriptionResolver struct{ *Resolver }

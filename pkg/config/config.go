@@ -17,36 +17,39 @@ var Cfg = new()
 
 // Defines the configurable options for this microservice.
 type Config struct {
-	HubName             string //Display Name of the cluster where ACM is deployed
-	API_SERVER_URL      string // address for Kubernetes API Server
-	AuthCacheTTL        int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
-	SharedCacheTTL      int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
-	UserCacheTTL        int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
-	ContextPath         string
-	DBHost              string
-	DBMinConns          int32 // Overrides pgxpool.Config{ MinConns } Default: 0
-	DBMaxConns          int32 // Overrides pgxpool.Config{ MaxConns } Default: 10
-	DBMaxConnIdleTime   int   // Overrides pgxpool.Config{ MaxConnIdleTime } Default: 30 min
-	DBMaxConnLifeTime   int   // Overrides pgxpool.Config{ MaxConnLifetime } Default: 60 min
-	DBMaxConnLifeJitter int   // Overrides pgxpool.Config{ MaxConnLifetimeJitter } Default: 2 min
-	DBName              string
-	DBPass              string
-	DBPort              int
-	DBUser              string
-	DevelopmentMode     bool             // Indicates if running in local development mode.
-	Features            featureFlags     // Enable or disable features.
-	Federation          federationConfig // Federated search configuration.
-	HttpPort            int
-	PlaygroundMode      bool   // Enable the GraphQL Playground client.
-	PodNamespace        string // Kubernetes namespace where the pod is running.
-	QueryLimit          uint   // The default LIMIT to use on queries. Client can override.
-	RelationLevel       int    // The number of levels/hops for finding relationships for a particular resource
-	SlowLog             int    // Logs when queries are slower than the specified time duration in ms. Default 300ms
+	HubName                  string //Display Name of the cluster where ACM is deployed
+	API_SERVER_URL           string // address for Kubernetes API Server
+	AuthCacheTTL             int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
+	SharedCacheTTL           int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
+	UserCacheTTL             int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
+	ContextPath              string
+	DBHost                   string
+	DBMinConns               int32 // Overrides pgxpool.Config{ MinConns } Default: 0
+	DBMaxConns               int32 // Overrides pgxpool.Config{ MaxConns } Default: 10
+	DBMaxConnIdleTime        int   // Overrides pgxpool.Config{ MaxConnIdleTime } Default: 30 min
+	DBMaxConnLifeTime        int   // Overrides pgxpool.Config{ MaxConnLifetime } Default: 60 min
+	DBMaxConnLifeJitter      int   // Overrides pgxpool.Config{ MaxConnLifetimeJitter } Default: 2 min
+	DBName                   string
+	DBPass                   string
+	DBPort                   int
+	DBUser                   string
+	DevelopmentMode          bool             // Indicates if running in local development mode.
+	Features                 featureFlags     // Enable or disable features.
+	Federation               federationConfig // Federated search configuration.
+	HttpPort                 int
+	PlaygroundMode           bool   // Enable the GraphQL Playground client.
+	PodNamespace             string // Kubernetes namespace where the pod is running.
+	QueryLimit               uint   // The default LIMIT to use on queries. Client can override.
+	RelationLevel            int    // The number of levels/hops for finding relationships for a particular resource
+	SlowLog                  int    // Logs when queries are slower than the specified time duration in ms. Default 300ms
+	SubscriptionRefreshInterval int    // Number of seconds between subscription polls
+	SubscriptionRefreshTimeout  int    // Minutes a subscription will stay open before timeout
 }
 
 // Define feature flags.
 type featureFlags struct {
 	FederatedSearch bool // Enable federated search.
+	SubscriptionEnabled bool // enabled GraphQL Subscriptions
 }
 
 // Http Client Pool Transport settings for federated client pool.
@@ -89,6 +92,7 @@ func new() *Config {
 		DevelopmentMode:     DEVELOPMENT_MODE,
 		Features: featureFlags{
 			FederatedSearch: getEnvAsBool("FEATURE_FEDERATED_SEARCH", false), // In Dev mode default to true.
+			SubscriptionEnabled: getEnvAsBool("FEATURE_SUBSCRIPTION", false),
 		},
 		Federation: federationConfig{
 			GlobalHubName:  getEnv("GLOBAL_HUB_NAME", "global-hub"),
@@ -110,6 +114,8 @@ func new() *Config {
 		// Setting default level to 0 to check if user has explicitly set this variable
 		// This will be updated to 1 for default searches and 3 for applications - unless set by the user
 		RelationLevel: getEnvAsInt("RELATION_LEVEL", 0),
+		SubscriptionRefreshInterval:   getEnvAsInt("SUBSCRIPTION_REFRESH_INTERVAL", 10*1000),  // 10 seconds - default subscription poll interval
+		SubscriptionRefreshTimeout:    getEnvAsInt("SUBSCRIPTION_REFRESH_TIMEOUT", 5*60*1000),  // 5 minutes - default subscription poll timeout
 	}
 	conf.DBPass = url.QueryEscape(conf.DBPass)
 	return conf

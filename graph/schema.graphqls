@@ -5,6 +5,18 @@ Search Query API.
 """
 schema { 
   query: Query
+  subscription: Subscription
+}
+
+"""
+Subscriptions implemented by the Search Query API.
+"""
+type Subscription {
+  """
+  This subscription is experimental and must not be used by clients at this time.
+  Returns a stream of `SearchResult` objects.
+  """
+  experimentalSearch(input: [SearchInput]): [SearchResult]
 }
 
 """
@@ -60,7 +72,6 @@ input SearchFilter {
     """
     values: [String]!
   }
-
 
 """
 Input options to the search query.
