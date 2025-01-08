@@ -125,7 +125,7 @@ func buildRbacWhereClause(ctx context.Context, userrbac rbac.UserData, userInfo 
 // Example query: SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN
 // (lower('Pod')) AND lower(data->> 'cluster') IN (lower('local-cluster')) LIMIT 1000
 func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid bool) {
-	var limit int
+	var limit uint
 	var selectDs *goqu.SelectDataset
 	var whereDs []exp.Expression
 	var params []interface{}
@@ -192,7 +192,7 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 
 	// Get the query
 	if limit != 0 {
-		sql, params, err = selectDs.Where(whereDs...).Limit(uint(limit)).ToSQL()
+		sql, params, err = selectDs.Where(whereDs...).Limit(limit).ToSQL()
 	} else {
 		sql, params, err = selectDs.Where(whereDs...).ToSQL()
 	}
