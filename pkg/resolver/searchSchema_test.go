@@ -12,8 +12,9 @@ import (
 )
 
 func Test_SearchSchema_Query(t *testing.T) {
+	searchInput := &model.SearchInput{}
 	// Create a SearchSchemaResolver instance with a mock connection pool.
-	resolver, _ := newMockSearchSchema(t)
+	resolver, _ := newMockSearchSchema(t, searchInput, nil)
 
 	resolver.userData = rbac.UserData{CsResources: []rbac.Resource{}}
 	sql := `SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" WHERE ("cluster" = ANY ('{}')) LIMIT 100000) AS "schema"`
@@ -29,7 +30,7 @@ func Test_SearchSchema_Query(t *testing.T) {
 func Test_SearchSchema_Results(t *testing.T) {
 	// Create a SearchSchemaResolver instance with a mock connection pool.
 	searchInput := &model.SearchInput{}
-	resolver, mockPool := newMockSearchSchema(t)
+	resolver, mockPool := newMockSearchSchema(t, searchInput, nil)
 	csRes, nsRes, managedClusters := newUserData()
 	resolver.userData = rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
 
@@ -56,8 +57,9 @@ func Test_SearchSchema_Results(t *testing.T) {
 }
 
 func Test_SearchSchema_EmptyQueryNoUserData(t *testing.T) {
+	searchInput := &model.SearchInput{}
 	// Create a SearchSchemaResolver instance with a mock connection pool.
-	resolver, _ := newMockSearchSchema(t)
+	resolver, _ := newMockSearchSchema(t, searchInput, nil)
 
 	resolver.userData = rbac.UserData{}
 	resolver.query = "mock Query"
