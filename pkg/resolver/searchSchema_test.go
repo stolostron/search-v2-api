@@ -27,6 +27,23 @@ func Test_SearchSchema_Query(t *testing.T) {
 	}
 }
 
+func Test_SearchSchema_Query_WithFilters(t *testing.T) {
+	value1 := "openshift"
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1}}}}
+	// Create a SearchSchemaResolver instance with a mock connection pool.
+	resolver, _ := newMockSearchSchema(t, searchInput, nil)
+
+	resolver.userData = rbac.UserData{CsResources: []rbac.Resource{}}
+	sql := `SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" WHERE ("data"->'namespace'?('openshift') AND ("cluster" = ANY ('{}'))) LIMIT 100000) AS "schema"`
+	// Execute function
+	resolver.buildSearchSchemaQuery(context.TODO())
+
+	// Verify response
+	if resolver.query != sql {
+		t.Errorf("Expected sql query: %s but got %s", sql, resolver.query)
+	}
+}
+
 func Test_SearchSchema_Results(t *testing.T) {
 	// Create a SearchSchemaResolver instance with a mock connection pool.
 	searchInput := &model.SearchInput{}
