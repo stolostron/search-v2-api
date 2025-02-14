@@ -74,6 +74,38 @@ func Test_SearchSchema_Results(t *testing.T) {
 	AssertStringArrayEqual(t, result, expectedResult, "Search schema results doesn't match.")
 }
 
+func Test_SearchSchema_Results_WithFilter(t *testing.T) {
+	// Create a SearchSchemaResolver instance with a mock connection pool.
+	value1 := "openshift"
+	searchInput := &model.SearchInput{Filters: []*model.SearchFilter{{Property: "namespace", Values: []*string{&value1}}}}
+	propTypesMock := map[string]string{"namespace": "string"}
+
+	resolver, mockPool := newMockSearchSchema(t, searchInput, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+	csRes, nsRes, managedClusters := newUserData()
+	resolver.userData = rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: managedClusters}
+
+	expectedList := []string{"cluster", "kind", "label", "name", "namespace", "status"}
+
+	expectedRes := map[string]interface{}{
+		"allProperties": expectedList,
+	}
+
+	// Mock the database queries.
+	//SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" LIMIT 100000) AS "schema"
+	mockRows := newMockRowsWithoutRBAC("../resolver/mocks/mock.json", searchInput, " ", 0)
+	// Mock the database query
+	mockPool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" WHERE ("data"->'namespace'?('openshift') AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 100000) AS "schema"`),
+	).Return(mockRows, nil)
+	resolver.buildSearchSchemaQuery(context.TODO())
+	res, _ := resolver.searchSchemaResults(context.TODO())
+
+	result := stringArrayToPointer(res["allProperties"].([]string))
+	expectedResult := stringArrayToPointer(expectedRes["allProperties"].([]string))
+
+	AssertStringArrayEqual(t, result, expectedResult, "Search schema results doesn't match.")
+}
+
 func Test_SearchSchema_EmptyQueryNoUserData(t *testing.T) {
 	searchInput := &model.SearchInput{}
 	// Create a SearchSchemaResolver instance with a mock connection pool.
