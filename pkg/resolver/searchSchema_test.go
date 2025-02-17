@@ -22,9 +22,7 @@ func Test_SearchSchema_Query(t *testing.T) {
 	resolver.buildSearchSchemaQuery(context.TODO())
 
 	// Verify response
-	if resolver.query != sql {
-		t.Errorf("Expected sql query: %s but got %s", sql, resolver.query)
-	}
+	assert.Equalf(t, sql, resolver.query, "Expected sql query: %s but got %s", sql, resolver.query)
 }
 
 func Test_SearchSchema_Query_WithFilters(t *testing.T) {
@@ -37,12 +35,10 @@ func Test_SearchSchema_Query_WithFilters(t *testing.T) {
 	resolver.userData = rbac.UserData{CsResources: []rbac.Resource{}}
 	sql := `SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" WHERE ("data"->'namespace'?('openshift') AND ("cluster" = ANY ('{}'))) LIMIT 100000) AS "schema"`
 	// Execute function
-	resolver.buildSearchSchemaQuery(context.TODO())
+	resolver.buildSearchSchemaQuery(context.Background())
 
 	// Verify response
-	if resolver.query != sql {
-		t.Errorf("Expected sql query: %s but got %s", sql, resolver.query)
-	}
+	assert.Equalf(t, sql, resolver.query, "Expected sql query: %s but got %s", sql, resolver.query)
 }
 
 func Test_SearchSchema_Results(t *testing.T) {
@@ -97,8 +93,8 @@ func Test_SearchSchema_Results_WithFilter(t *testing.T) {
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(`SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" WHERE ("data"->'namespace'?('openshift') AND (("cluster" = ANY ('{"managed1","managed2"}')) OR ("data"?'_hubClusterResource' AND ((NOT("data"?'namespace') AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'nodes') OR (data->'apigroup'?'storage.k8s.io' AND data->'kind_plural'?'csinodes'))) OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))) LIMIT 100000) AS "schema"`),
 	).Return(mockRows, nil)
-	resolver.buildSearchSchemaQuery(context.TODO())
-	res, _ := resolver.searchSchemaResults(context.TODO())
+	resolver.buildSearchSchemaQuery(context.Background())
+	res, _ := resolver.searchSchemaResults(context.Background())
 
 	result := stringArrayToPointer(res["allProperties"].([]string))
 	expectedResult := stringArrayToPointer(expectedRes["allProperties"].([]string))
