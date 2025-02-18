@@ -38,7 +38,7 @@ func Test_SearchSchema_Query_WithFilters(t *testing.T) {
 	resolver.buildSearchSchemaQuery(context.Background())
 
 	// Verify response
-	assert.Equalf(t, sql, resolver.query, "Expected sql query: %s but got %s", sql, resolver.query)
+	assert.Equal(t, sql, resolver.query)
 }
 
 func Test_SearchSchema_Results(t *testing.T) {
