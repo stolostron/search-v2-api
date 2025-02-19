@@ -30,9 +30,9 @@ func (r *queryResolver) SearchComplete(ctx context.Context, property string, que
 }
 
 // SearchSchema is the resolver for the searchSchema field.
-func (r *queryResolver) SearchSchema(ctx context.Context) (map[string]interface{}, error) {
+func (r *queryResolver) SearchSchema(ctx context.Context, query *model.SearchInput) (map[string]interface{}, error) {
 	klog.V(3).Infoln("Received SearchSchema query")
-	return resolver.SearchSchemaResolver(ctx)
+	return resolver.SearchSchemaResolver(ctx, query)
 }
 
 // Messages is the resolver for the messages field.

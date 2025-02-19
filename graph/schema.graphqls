@@ -42,9 +42,11 @@ type Query {
   searchComplete(property: String!, query: SearchInput, limit: Int): [String]
 
   """
-  Returns all properties from resources currently in the index.
+  Returns all fields from resources currently in the index.
+  Optionally, a query can be included to filter the results.  
+  For example, if we want to only get fields for Pod resources, we can pass in a query with the filter `{property: kind, values:['Pod']}`
   """
-  searchSchema: Map
+  searchSchema(query: SearchInput): Map
 
   """
   Additional information about the service status or conditions found while processing the query.  

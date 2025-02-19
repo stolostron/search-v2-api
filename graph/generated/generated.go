@@ -55,7 +55,7 @@ type ComplexityRoot struct {
 		Messages       func(childComplexity int) int
 		Search         func(childComplexity int, input []*model.SearchInput) int
 		SearchComplete func(childComplexity int, property string, query *model.SearchInput, limit *int) int
-		SearchSchema   func(childComplexity int) int
+		SearchSchema   func(childComplexity int, query *model.SearchInput) int
 	}
 
 	SearchRelatedResult struct {
@@ -78,7 +78,7 @@ type ComplexityRoot struct {
 type QueryResolver interface {
 	Search(ctx context.Context, input []*model.SearchInput) ([]*resolver.SearchResult, error)
 	SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error)
-	SearchSchema(ctx context.Context) (map[string]interface{}, error)
+	SearchSchema(ctx context.Context, query *model.SearchInput) (map[string]interface{}, error)
 	Messages(ctx context.Context) ([]*model.Message, error)
 }
 type SubscriptionResolver interface {
@@ -157,7 +157,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		return e.complexity.Query.SearchSchema(childComplexity), true
+		args, err := ec.field_Query_searchSchema_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.SearchSchema(childComplexity, args["query"].(*model.SearchInput)), true
 
 	case "SearchRelatedResult.count":
 		if e.complexity.SearchRelatedResult.Count == nil {
@@ -329,9 +334,11 @@ type Query {
   searchComplete(property: String!, query: SearchInput, limit: Int): [String]
 
   """
-  Returns all properties from resources currently in the index.
+  Returns all fields from resources currently in the index.
+  Optionally, a query can be included to filter the results.  
+  For example, if we want to only get fields for Pod resources, we can pass a query with the filter ` + "`" + `{property: kind, values:['Pod']}` + "`" + `
   """
-  searchSchema: Map
+  searchSchema(query: SearchInput): Map
 
   """
   Additional information about the service status or conditions found while processing the query.  
@@ -505,6 +512,21 @@ func (ec *executionContext) field_Query_searchComplete_args(ctx context.Context,
 		}
 	}
 	args["limit"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_searchSchema_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 *model.SearchInput
+	if tmp, ok := rawArgs["query"]; ok {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("query"))
+		arg0, err = ec.unmarshalOSearchInput2ᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋgraphᚋmodelᚐSearchInput(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["query"] = arg0
 	return args, nil
 }
 
@@ -828,7 +850,7 @@ func (ec *executionContext) _Query_searchSchema(ctx context.Context, field graph
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().SearchSchema(rctx)
+		return ec.resolvers.Query().SearchSchema(rctx, fc.Args["query"].(*model.SearchInput))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -851,6 +873,17 @@ func (ec *executionContext) fieldContext_Query_searchSchema(ctx context.Context,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type Map does not have child fields")
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_searchSchema_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return
 	}
 	return fc, nil
 }
