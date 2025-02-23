@@ -13,7 +13,7 @@ require (
 	github.com/prometheus/client_golang v1.15.1
 	github.com/vektah/gqlparser/v2 v2.5.1
 	k8s.io/klog/v2 v2.100.1
-	k8s.io/utils v0.0.0-20230505201702-9f6742963106
+	k8s.io/utils v0.0.0-20241210054802-24370beab758
 )
 
 require (
