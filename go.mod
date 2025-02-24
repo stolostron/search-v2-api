@@ -9,7 +9,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/jackc/pgconn v1.14.3
 	github.com/jackc/pgproto3/v2 v2.3.3
-	github.com/jackc/pgx/v4 v4.18.2
+	github.com/jackc/pgx/v4 v4.18.3
 	github.com/prometheus/client_golang v1.15.1
 	github.com/vektah/gqlparser/v2 v2.5.1
 	k8s.io/klog/v2 v2.100.1
