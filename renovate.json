@@ -1,5 +1,25 @@
 {
+    "addLabels": ["ok-to-test"],
+    "autoApprove": true,
+    "automerge": true,
+    "automergeType": "branch",
+    "automergeSchedule":["* 0-3 * * *"],
+    "baseBranches": ["main"],
+    "packageRules": [
+        {
+            "enabled": true,
+            "groupName": "kubernetes packages",
+            "matchPackageNames": ["k8s.io/**"]
+        },
+        {
+            "enabled": true,
+            "groupName": "github.com packages",
+            "matchPackageNames": ["github.com/**"]
+        }
+    ],
+    "rebaseWhen": "behind-base-branch",
+    "recreateWhen": "never",
     "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-    "schedule": "before 8am on Tuesday",
+    "schedule": ["* 0-3 * * 1-5"],
     "timezone": "America/New_York"
 }
