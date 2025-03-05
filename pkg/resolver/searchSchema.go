@@ -6,6 +6,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/driftprogramming/pgxpoolmock"
+	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
@@ -17,17 +18,28 @@ type SearchSchema struct {
 	query    string
 	params   []interface{}
 	userData rbac.UserData
+	input     *model.SearchInput
+	propTypes map[string]string
 }
 
-func SearchSchemaResolver(ctx context.Context) (map[string]interface{}, error) {
+func SearchSchemaResolver(ctx context.Context, srchInput *model.SearchInput) (map[string]interface{}, error) {
 	userData, userDataErr := rbac.GetCache().GetUserData(ctx)
 	if userDataErr != nil {
 		return nil, userDataErr
 	}
+
+	// Check that shared cache has property types:
+	propTypes, err := rbac.GetCache().GetPropertyTypes(ctx, false)
+	if err != nil {
+		klog.Warningf("Error creating datatype map with err: [%s] ", err)
+	}
+
 	// Proceed if user's rbac data exists
 	searchSchemaResult := &SearchSchema{
-		pool:     db.GetConnPool(ctx),
-		userData: userData,
+		pool:      db.GetConnPool(ctx),
+		userData:  userData,
+		input:     srchInput,
+		propTypes: propTypes,
 	}
 	searchSchemaResult.buildSearchSchemaQuery(ctx)
 	return searchSchemaResult.searchSchemaResults(ctx)
@@ -53,14 +65,20 @@ func (s *SearchSchema) buildSearchSchemaQuery(ctx context.Context) {
 	ds := goqu.From(schemaTable)
 
 	//WHERE CLAUSE
-	var whereDs exp.ExpressionList
+	var whereDs []exp.Expression
+
+	// WHERE CLAUSE
+	if s.input != nil && len(s.input.Filters) > 0 {
+		whereDs, s.propTypes, _ = WhereClauseFilter(ctx, s.input, s.propTypes)
+	}
 
 	//get user info for logging
 	_, userInfo := rbac.GetCache().GetUserUID(ctx)
 
 	// if one of them is not nil, userData is not empty
 	if s.userData.CsResources != nil || s.userData.NsResources != nil || s.userData.ManagedClusters != nil {
-		whereDs = buildRbacWhereClause(ctx, s.userData, userInfo) // add rbac
+		whereDs = append(whereDs,
+			buildRbacWhereClause(ctx, s.userData, userInfo)) // add rbac
 	} else {
 		klog.Errorf("Error building search schema query: RBAC clause is required!"+
 			" None found for search schema query for user %s with uid %s ",
@@ -77,7 +95,7 @@ func (s *SearchSchema) buildSearchSchemaQuery(ctx context.Context) {
 	// Adding a LIMIT helps to speed up the query
 	// Adding a high number so as to get almost all the distinct properties from the database
 	if whereDs != nil {
-		selectDs = ds.SelectDistinct("prop").From(ds.Select(jsb).Where(whereDs).
+		selectDs = ds.SelectDistinct("prop").From(ds.Select(jsb).Where(whereDs...).
 			Limit(config.Cfg.QueryLimit * 100).As("schema"))
 	} else {
 		selectDs = ds.SelectDistinct("prop").From(ds.Select(jsb).
