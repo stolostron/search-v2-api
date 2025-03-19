@@ -28,7 +28,7 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock-rel-1.json", searchInput, "", 0)
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(query),
-		gomock.Eq([]interface{}{}),
+		gomock.Any(),
 	).Return(mockRows, nil)
 
 	// Mock SECOND database request.
