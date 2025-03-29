@@ -151,9 +151,8 @@ func (s *SearchResult) buildRelationsQuery() {
 		// add rbac
 		relQueryWithRbac = relQueryInnerJoin.Where(buildRbacWhereClause(s.context, s.userData, userInfo))
 	} else {
-		errorStr := fmt.Sprintf("RBAC clause is required! None found for relations query %+v for user %s with uid %s ",
-			s.input, userInfo.Username, userInfo.UID)
-		s.checkErrorBuildingQuery(fmt.Errorf(errorStr), "Error building search relations query")
+		s.checkErrorBuildingQuery(fmt.Errorf("RBAC clause is required! None found for relations query %+v for user %s with uid %s ",
+			s.input, userInfo.Username, userInfo.UID), "Error building search relations query")
 		return
 	}
 	sql, params, err := relQueryWithRbac.ToSQL()
@@ -309,7 +308,7 @@ func (s *SearchResult) filterRelatedUIDs(levelsMap map[string][]string) {
 	s.uids = []*string{}
 
 	// If relatedKinds filter is empty, include all.
-	if s.input.RelatedKinds == nil || len(s.input.RelatedKinds) == 0 {
+	if s.input.RelatedKinds == nil {
 		for _, values := range levelsMap {
 			s.uids = append(s.uids, stringArrayToPointer(values)...)
 		}
