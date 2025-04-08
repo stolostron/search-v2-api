@@ -1,10 +1,5 @@
 {
-    "addLabels": ["ok-to-test"],
-    "autoApprove": true,
-    "automerge": true,
-    "automergeType": "branch",
-    "automergeSchedule":["* 0-3 * * *"],
-    "baseBranches": ["main"],
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
     "packageRules": [
         {
             "enabled": true,
@@ -17,9 +12,6 @@
             "matchPackageNames": ["github.com/**"]
         }
     ],
-    "rebaseWhen": "behind-base-branch",
-    "recreateWhen": "never",
-    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-    "schedule": ["* 0-3 * * 1-5"],
+    "schedule": "before 8am on Tuesday",
     "timezone": "America/New_York"
 }
