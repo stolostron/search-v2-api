@@ -1,10 +1,7 @@
 FROM locustio/locust AS builder
 
 WORKDIR /go/src/github.com/stolostron/search-v2-api
-CMD pwd && ls
 COPY . .
-
-CMD pwd && ls
 
 ARG HOST="localhost"
 ARG N_USERS=3
