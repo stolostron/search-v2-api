@@ -10,8 +10,8 @@ FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 COPY --from=builder /go/src/github.com/stolostron/search-v2-api/main /bin/main
 
-ENV USER_UID=1001 \
-    USER_NAME=search-api
+ENV VCS_REF="$VCS_REF" \
+    USER_UID=1001
 
 EXPOSE 4010
 USER ${USER_UID}
