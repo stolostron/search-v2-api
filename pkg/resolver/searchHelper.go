@@ -524,14 +524,14 @@ func processOpValueMapManagedHub(key string, values []string) bool {
 	case "!:*", "!=:*":
 		match, err := partialMatchStringPattern(values)
 		if err != nil {
-			klog.Errorf("Error processing partial match for ManagedHub filter:", err)
+			klog.Error("Error processing partial match for ManagedHub filter:", err)
 			return false
 		}
 		result = !match // Return the inverse of match to indicate search should not proceed if there is a partial match
 	case "=:*":
 		match, err := partialMatchStringPattern(values)
 		if err != nil {
-			klog.Errorf("Error processing partial match for ManagedHub filter:", err)
+			klog.Error("Error processing partial match for ManagedHub filter:", err)
 			return false
 		}
 		result = match // Return match to indicate search should proceed if there is a partial match
