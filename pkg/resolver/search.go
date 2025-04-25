@@ -163,7 +163,8 @@ func (s *SearchResult) Uids() error {
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
 	return goqu.Or(
-		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
+		matchVMNamespaces(userrbac.VMNamespaces), // TODO
+		// matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
 		matchHubCluster(userrbac, userInfo),
 	)
 }

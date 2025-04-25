@@ -191,3 +191,14 @@ func matchManagedCluster(managedClusters []string) exp.BooleanExpression {
 	//managed clusters
 	return goqu.C("cluster").Eq(goqu.Any(pq.Array(managedClusters)))
 }
+
+// Match resources from the kubevirtProjects.
+// Resolves to:
+//	( cluster = 'a' AND data->>'namespace' IN ['ns-a', 'ns-b', ...] )
+
+func matchVMNamespaces(vmNamespaces []string) exp.ExpressionList {
+	// managed cluster + namespace
+	return goqu.And(
+		goqu.C("cluster").Eq("bare-metal"), //FIXME
+		goqu.L("???", goqu.L(`data->?`, "namespace"), goqu.Literal("?|"), pq.Array(vmNamespaces)))
+}

@@ -14,6 +14,8 @@ import (
 	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	v1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/client-go/rest"
@@ -27,6 +29,8 @@ type UserData struct {
 	CsResources     []Resource            // Cluster-scoped resources on hub the user has list access.
 	NsResources     map[string][]Resource // Namespaced resources on hub the user has list access.
 	ManagedClusters map[string]struct{}   // Managed clusters where the user has view access.
+
+	VMNamespaces []string
 }
 
 // Extend UserData with caching information.
@@ -38,6 +42,7 @@ type UserDataCache struct {
 	clustersCache cacheMetadata
 	csrCache      cacheMetadata
 	nsrCache      cacheMetadata
+	vmCache       cacheMetadata
 
 	// Client to external API to be replaced with a mock by unit tests.
 	authzClient v1.AuthorizationV1Interface
@@ -85,8 +90,8 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	// UserDataExists and its valid
 	if userDataExists && cachedUserData.isValid() {
 		klog.V(5).Info("Using user data from cache.")
-
 		return cachedUserData, nil
+
 	} else {
 		if cache.users == nil {
 			cache.users = map[string]*UserDataCache{}
@@ -97,6 +102,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 			clustersCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 			csrCache:      cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 			nsrCache:      cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+			vmCache:       cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 		}
 		if cache.users == nil {
 			cache.users = map[string]*UserDataCache{}
@@ -108,6 +114,9 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 			user.authzClient = authzClient
 		}
 	}
+
+	vmNamespaces := user.getVMNamespaces(ctx)
+	klog.Infof(">>> VM Namespaces: %+v", vmNamespaces)
 
 	// Before checking each namespace and clusterscoped resource, check if user has access to everything
 	userHasAllAccess, err := user.userHasAllAccess(ctx, cache)
@@ -122,7 +131,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 			userInfo.Username, userInfo.UID)
 	}
 
-	userDataCache, err := user.getNamespacedResources(cache, ctx, clientToken)
+	userDataCache, err := user.getNamespacedResources(cache, ctx)
 
 	// Get cluster scoped resource access for the user.
 	if err == nil {
@@ -202,6 +211,7 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 		CsResources:     userDataCache.GetCsResourcesCopy(),
 		NsResources:     userDataCache.GetNsResourcesCopy(),
 		ManagedClusters: userDataCache.GetManagedClustersCopy(),
+		VMNamespaces:    userDataCache.VMNamespaces, // TODO: Make copy.
 	}
 	return userAccess, nil
 }
@@ -389,8 +399,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 }
 
 // Equivalent to: oc auth can-i --list -n <iterate-each-namespace>
-func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Context,
-	clientToken string) (*UserDataCache, error) {
+func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Context) (*UserDataCache, error) {
 	defer metrics.SlowLog("UserDataCache::getNamespacedResources", 250*time.Millisecond)()
 
 	// Lock the cache
@@ -478,6 +487,37 @@ func (user *UserDataCache) getImpersonationClientSet() v1.AuthorizationV1Interfa
 		user.authzClient = clientset.AuthorizationV1()
 	}
 	return user.authzClient
+}
+
+func (user *UserDataCache) getVMNamespaces(ctx context.Context) []string {
+	// Build dynamic client impersonating the user
+	restConfig := config.GetClientConfig()
+	restConfig.Impersonate = *setImpersonationUserInfo(user.userInfo)
+	dynamicClient, err := dynamic.NewForConfig(restConfig)
+	if err != nil {
+		klog.Error("Error with creating a new dynamic client with impersonation config.", err.Error())
+		return nil
+	}
+
+	// Get KubevirtProjects
+	gvr := schema.GroupVersionResource{
+		Group:    "clusterview.open-cluster-management.io",
+		Version:  "v1",
+		Resource: "kubevirtprojects",
+	}
+	kubevirtProjects, err := dynamicClient.Resource(gvr).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		klog.Error("Error getting VM Namespaces", err)
+	}
+
+	klog.Infof(">> VMNamespaces from api: %+v", kubevirtProjects)
+
+	// Save to cache.
+	user.vmCache.lock.Lock()
+	defer user.vmCache.lock.Unlock()
+	user.VMNamespaces = []string{"bare-metal", "default"}
+
+	return user.VMNamespaces
 }
 
 func (user *UserDataCache) GetCsResourcesCopy() []Resource {

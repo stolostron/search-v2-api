@@ -87,7 +87,7 @@ ifeq (${QUERY}, schema)
 else ifeq (${QUERY}, searchComplete)
 	QUERY_STR='{"query":"query SearchComplete { searchComplete(property: \"kind\") }","variables":{} }'
 else ifeq (${QUERY}, search)
-	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { count items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
+	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { count items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["VirtualMachine"]}],"limit": 5}]}}'
 else ifeq (${QUERY}, searchAlias)
 	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { searchResult: search(input: $$input) { count items __typename } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
 else ifeq (${QUERY}, searchCount)
