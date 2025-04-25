@@ -382,7 +382,8 @@ spec:
     - name: workspace
     - name: git-auth
       optional: true
-  taskRunTemplate: {}
+  taskRunTemplate:
+    serviceAccountName: build-pipeline-search-v2-api-acm-211
   workspaces:
   - name: workspace
     volumeClaimTemplate:
