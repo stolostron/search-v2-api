@@ -114,6 +114,13 @@ endif
 	--header "Authorization: Bearer ${API_TOKEN}" --header 'Content-Type: application/json' \
 	--data-raw ${QUERY_STR} | jq
 
+
+API_TOKEN_USER=
+send-as-user:
+	curl --insecure --location --request POST ${SEARCH_API_URL} \
+	--header "Authorization: Bearer ${API_TOKEN_USER}" --header 'Content-Type: application/json' \
+	--data-raw ${QUERY_STR} | jq
+
 check-locust: ## Checks if Locust is installed in the system.
 ifeq (,$(shell which locust))
 	@echo The scale tests require Locust.io, but locust was not found.

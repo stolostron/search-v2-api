@@ -162,9 +162,16 @@ func (s *SearchResult) Uids() error {
 
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
+	if config.Cfg.Features.FineGrainedRbac {
+		klog.Info(">>> Using fine grained RBAC <<<")
+		return goqu.Or(
+			matchVMNamespaces(userrbac.VMNamespaces), // TODO
+			matchHubCluster(userrbac, userInfo),
+		)
+	}
+
 	return goqu.Or(
-		matchVMNamespaces(userrbac.VMNamespaces), // TODO
-		// matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
+		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
 		matchHubCluster(userrbac, userInfo),
 	)
 }

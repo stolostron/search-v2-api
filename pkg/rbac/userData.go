@@ -510,12 +510,17 @@ func (user *UserDataCache) getVMNamespaces(ctx context.Context) []string {
 		klog.Error("Error getting VM Namespaces", err)
 	}
 
-	klog.Infof(">> VMNamespaces from api: %+v", kubevirtProjects)
+	clusterNamespaces := make([]string, len(kubevirtProjects.Items))
+	for i, item := range kubevirtProjects.Items {
+		clusterNamespaces[i] = fmt.Sprintf("%s+%s", item.GetLabels()["cluster"], item.GetName())
+	}
 
 	// Save to cache.
 	user.vmCache.lock.Lock()
 	defer user.vmCache.lock.Unlock()
-	user.VMNamespaces = []string{"bare-metal", "default"}
+	user.VMNamespaces = clusterNamespaces
+	user.vmCache.updatedAt = time.Now()
+	klog.Info(">>>  VMNamespaces: ", user.VMNamespaces)
 
 	return user.VMNamespaces
 }

@@ -49,6 +49,7 @@ type Config struct {
 // Define feature flags.
 type featureFlags struct {
 	FederatedSearch     bool // Enable federated search.
+	FineGrainedRbac     bool // Enable fine-grained RBAC
 	SubscriptionEnabled bool // enabled GraphQL Subscriptions
 }
 
@@ -92,6 +93,7 @@ func new() *Config {
 		DevelopmentMode:     DEVELOPMENT_MODE,
 		Features: featureFlags{
 			FederatedSearch:     getEnvAsBool("FEATURE_FEDERATED_SEARCH", false), // In Dev mode default to true.
+			FineGrainedRbac:     getEnvAsBool("FEATURE_FINE_GAINED_RBAC", true),  // TODO: Change default.
 			SubscriptionEnabled: getEnvAsBool("FEATURE_SUBSCRIPTION", false),
 		},
 		Federation: federationConfig{
