@@ -115,7 +115,7 @@ endif
 	--data-raw ${QUERY_STR} | jq
 
 
-API_TOKEN_USER=
+API_TOKEN_USER ?=
 send-as-user:
 	curl --insecure --location --request POST ${SEARCH_API_URL} \
 	--header "Authorization: Bearer ${API_TOKEN_USER}" --header 'Content-Type: application/json' \

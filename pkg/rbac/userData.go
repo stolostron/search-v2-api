@@ -29,8 +29,7 @@ type UserData struct {
 	CsResources     []Resource            // Cluster-scoped resources on hub the user has list access.
 	NsResources     map[string][]Resource // Namespaced resources on hub the user has list access.
 	ManagedClusters map[string]struct{}   // Managed clusters where the user has view access.
-
-	VMNamespaces []string
+	VMNamespaces    []string
 }
 
 // Extend UserData with caching information.
@@ -91,7 +90,6 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	if userDataExists && cachedUserData.isValid() {
 		klog.V(5).Info("Using user data from cache.")
 		return cachedUserData, nil
-
 	} else {
 		if cache.users == nil {
 			cache.users = map[string]*UserDataCache{}
@@ -116,7 +114,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	}
 
 	vmNamespaces := user.getVMNamespaces(ctx)
-	klog.Infof(">>> VM Namespaces: %+v", vmNamespaces)
+	klog.Infof("+++ VM Namespaces: %+v", vmNamespaces)
 
 	// Before checking each namespace and clusterscoped resource, check if user has access to everything
 	userHasAllAccess, err := user.userHasAllAccess(ctx, cache)
@@ -520,7 +518,7 @@ func (user *UserDataCache) getVMNamespaces(ctx context.Context) []string {
 	defer user.vmCache.lock.Unlock()
 	user.VMNamespaces = clusterNamespaces
 	user.vmCache.updatedAt = time.Now()
-	klog.Info(">>>  VMNamespaces: ", user.VMNamespaces)
+	// klog.Info(">>>  VMNamespaces: ", user.VMNamespaces)
 
 	return user.VMNamespaces
 }
