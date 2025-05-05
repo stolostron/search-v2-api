@@ -29,7 +29,7 @@ type UserData struct {
 	CsResources     []Resource            // Cluster-scoped resources on hub the user has list access.
 	NsResources     map[string][]Resource // Namespaced resources on hub the user has list access.
 	ManagedClusters map[string]struct{}   // Managed clusters where the user has view access.
-	VMNamespaces    []string
+	RbacNamespaces  map[string][]string
 }
 
 // Extend UserData with caching information.
@@ -114,7 +114,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	}
 
 	vmNamespaces := user.getVMNamespaces(ctx)
-	klog.Infof("+++ VM Namespaces: %+v", vmNamespaces)
+	klog.Infof("+++ RBAC VM Namespaces: %+v", vmNamespaces)
 
 	// Before checking each namespace and clusterscoped resource, check if user has access to everything
 	userHasAllAccess, err := user.userHasAllAccess(ctx, cache)
@@ -209,7 +209,7 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 		CsResources:     userDataCache.GetCsResourcesCopy(),
 		NsResources:     userDataCache.GetNsResourcesCopy(),
 		ManagedClusters: userDataCache.GetManagedClustersCopy(),
-		VMNamespaces:    userDataCache.VMNamespaces, // TODO: Make copy.
+		RbacNamespaces:  userDataCache.RbacNamespaces, // TODO: Make copy.
 	}
 	return userAccess, nil
 }
@@ -487,7 +487,7 @@ func (user *UserDataCache) getImpersonationClientSet() v1.AuthorizationV1Interfa
 	return user.authzClient
 }
 
-func (user *UserDataCache) getVMNamespaces(ctx context.Context) []string {
+func (user *UserDataCache) getVMNamespaces(ctx context.Context) map[string][]string {
 	// Build dynamic client impersonating the user
 	restConfig := config.GetClientConfig()
 	restConfig.Impersonate = *setImpersonationUserInfo(user.userInfo)
@@ -508,19 +508,24 @@ func (user *UserDataCache) getVMNamespaces(ctx context.Context) []string {
 		klog.Error("Error getting VM Namespaces", err)
 	}
 
-	clusterNamespaces := make([]string, len(kubevirtProjects.Items))
-	for i, item := range kubevirtProjects.Items {
-		clusterNamespaces[i] = fmt.Sprintf("%s+%s", item.GetLabels()["cluster"], item.GetName())
+	ns := make(map[string][]string, 0)
+	for _, item := range kubevirtProjects.Items {
+		cluster := item.GetLabels()["cluster"]
+
+		if _, exists := ns[cluster]; !exists {
+			ns[cluster] = []string{item.GetName()}
+		} else {
+			ns[cluster] = append(ns[cluster], item.GetName())
+		}
 	}
 
 	// Save to cache.
 	user.vmCache.lock.Lock()
 	defer user.vmCache.lock.Unlock()
-	user.VMNamespaces = clusterNamespaces
+	user.RbacNamespaces = ns
 	user.vmCache.updatedAt = time.Now()
-	// klog.Info(">>>  VMNamespaces: ", user.VMNamespaces)
 
-	return user.VMNamespaces
+	return user.RbacNamespaces
 }
 
 func (user *UserDataCache) GetCsResourcesCopy() []Resource {

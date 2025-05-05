@@ -165,7 +165,7 @@ func buildRbacWhereClause(ctx context.Context, userrbac rbac.UserData, userInfo 
 	if config.Cfg.Features.FineGrainedRbac {
 		klog.Info(">>> Using fine grained RBAC <<<")
 		return goqu.Or(
-			matchVMNamespaces(userrbac.VMNamespaces), // TODO
+			matchVMNamespaces(userrbac.RbacNamespaces),
 			matchHubCluster(userrbac, userInfo),
 		)
 	}

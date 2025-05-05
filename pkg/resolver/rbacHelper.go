@@ -3,7 +3,6 @@ package resolver
 
 import (
 	"encoding/json"
-	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
@@ -198,25 +197,16 @@ func matchManagedCluster(managedClusters []string) exp.BooleanExpression {
 //
 //	(( cluster = 'a' AND data->>'namespace' IN ['ns-1', 'ns-2', ...] )
 //	OR ( cluster = 'b' AND data->>'namespace' IN ['ns-3', 'ns-4', ...] ) OR ...)
-func matchVMNamespaces(vmNamespaces []string) exp.ExpressionList {
+func matchVMNamespaces(ns map[string][]string) exp.ExpressionList {
 	// managed cluster + namespace
-	ns := make(map[string][]string, 0)
-	for _, s := range vmNamespaces {
-		tokens := strings.Split(s, "+")
-
-		if _, exists := ns[tokens[0]]; !exists {
-			ns[tokens[0]] = []string{tokens[1]}
-		} else {
-			ns[tokens[0]] = append(ns[tokens[0]], tokens[1])
-		}
-	}
 
 	// FIXME: Need to update this query to include multiple clusters and apigroup + kind
 	var result exp.ExpressionList
 	for key, val := range ns {
 		result = goqu.And(
 			goqu.C("cluster").Eq(key),
-			goqu.L("???", goqu.L(`data->?`, "namespace"), goqu.Literal("?|"), pq.Array(val)))
+			goqu.L("???", goqu.L(`data->?`, "namespace"), goqu.Literal("?|"), pq.Array(val)),
+			goqu.L("???", goqu.L(`data->?`, "apigroup"), goqu.Literal("?|"), pq.Array([]string{"kubevirt.io"})))
 	}
 
 	return result
