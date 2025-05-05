@@ -29,7 +29,7 @@ type UserData struct {
 	CsResources     []Resource            // Cluster-scoped resources on hub the user has list access.
 	NsResources     map[string][]Resource // Namespaced resources on hub the user has list access.
 	ManagedClusters map[string]struct{}   // Managed clusters where the user has view access.
-	RbacNamespaces  map[string][]string
+	RbacNamespaces  map[string][]string   // Fine-grained RBAC (cluster + namespace)
 }
 
 // Extend UserData with caching information.
@@ -41,7 +41,7 @@ type UserDataCache struct {
 	clustersCache cacheMetadata
 	csrCache      cacheMetadata
 	nsrCache      cacheMetadata
-	vmCache       cacheMetadata
+	rbacCache     cacheMetadata // Fine-grained RBAC (cluster + namespace)
 
 	// Client to external API to be replaced with a mock by unit tests.
 	authzClient v1.AuthorizationV1Interface
@@ -100,7 +100,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 			clustersCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 			csrCache:      cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 			nsrCache:      cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
-			vmCache:       cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+			rbacCache:     cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 		}
 		if cache.users == nil {
 			cache.users = map[string]*UserDataCache{}
@@ -113,8 +113,11 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 		}
 	}
 
-	vmNamespaces := user.getVMNamespaces(ctx)
-	klog.Infof("+++ RBAC VM Namespaces: %+v", vmNamespaces)
+	// This builds the fine-frained RBAC cache.
+	if config.Cfg.Features.FineGrainedRbac {
+		rbacNamespaces := user.getRbacV2Namespaces(ctx)
+		klog.Infof("+++ Using fine-grained RBAC. Namespaces: %+v", rbacNamespaces)
+	}
 
 	// Before checking each namespace and clusterscoped resource, check if user has access to everything
 	userHasAllAccess, err := user.userHasAllAccess(ctx, cache)
@@ -487,7 +490,7 @@ func (user *UserDataCache) getImpersonationClientSet() v1.AuthorizationV1Interfa
 	return user.authzClient
 }
 
-func (user *UserDataCache) getVMNamespaces(ctx context.Context) map[string][]string {
+func (user *UserDataCache) getRbacV2Namespaces(ctx context.Context) map[string][]string {
 	// Build dynamic client impersonating the user
 	restConfig := config.GetClientConfig()
 	restConfig.Impersonate = *setImpersonationUserInfo(user.userInfo)
@@ -520,10 +523,10 @@ func (user *UserDataCache) getVMNamespaces(ctx context.Context) map[string][]str
 	}
 
 	// Save to cache.
-	user.vmCache.lock.Lock()
-	defer user.vmCache.lock.Unlock()
+	user.rbacCache.lock.Lock()
+	defer user.rbacCache.lock.Unlock()
 	user.RbacNamespaces = ns
-	user.vmCache.updatedAt = time.Now()
+	user.rbacCache.updatedAt = time.Now()
 
 	return user.RbacNamespaces
 }

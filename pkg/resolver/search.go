@@ -163,7 +163,7 @@ func (s *SearchResult) Uids() error {
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
 	if config.Cfg.Features.FineGrainedRbac {
-		klog.Info(">>> Using fine grained RBAC <<<")
+		klog.Infof(">>> Using fine grained RBAC <<<  NAMESPACES: %+v", userrbac.RbacNamespaces)
 		return goqu.Or(
 			matchVMNamespaces(userrbac.RbacNamespaces),
 			matchHubCluster(userrbac, userInfo),
