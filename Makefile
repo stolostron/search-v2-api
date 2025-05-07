@@ -87,7 +87,7 @@ ifeq (${QUERY}, schema)
 else ifeq (${QUERY}, searchComplete)
 	QUERY_STR='{"query":"query SearchComplete { searchComplete(property: \"kind\") }","variables":{} }'
 else ifeq (${QUERY}, search)
-	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { count items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["VirtualMachine"]}],"limit": 5}]}}'
+	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 5}]}}'
 else ifeq (${QUERY}, searchAlias)
 	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { searchResult: search(input: $$input) { count items __typename } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["ConfigMap"]}],"limit": 3}]}}'
 else ifeq (${QUERY}, searchCount)
@@ -98,6 +98,8 @@ else ifeq (${QUERY}, searchRelated)
 	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { count related { kind count items } } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["Deployment"]}],"limit": 3}]}}'
 else ifeq (${QUERY}, searchRelatedAlias)
 	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { searchResult: search(input: $$input) { count related { kind count items } } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["Deployment"]}],"limit": 3}]}}'
+else ifeq (${QUERY}, vm)
+	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["VirtualMachine"]}],"limit": 5}]}}'
 endif
 
 send: ## Sends a graphQL request using cURL for development and testing. QUERY (alias Q) is a required parameter, values are: [schema|search|searchComplete|searchCount|messages].
