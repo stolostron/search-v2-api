@@ -192,22 +192,3 @@ func matchManagedCluster(managedClusters []string) exp.BooleanExpression {
 	return goqu.C("cluster").Eq(goqu.Any(pq.Array(managedClusters)))
 }
 
-// Match VirtualMachine namespaces.
-// Resolves to:
-//
-//	(( cluster = 'a' AND data->>'namespace' IN ['ns-1', 'ns-2', ...] )
-//	OR ( cluster = 'b' AND data->>'namespace' IN ['ns-3', 'ns-4', ...] ) OR ...)
-func matchVMNamespaces(ns map[string][]string) exp.ExpressionList {
-	// managed cluster + namespace
-
-	// FIXME: Need to update this query to include multiple clusters and apigroup + kind
-	var result exp.ExpressionList
-	for key, val := range ns {
-		result = goqu.And(
-			goqu.C("cluster").Eq(key),
-			goqu.L("???", goqu.L(`data->?`, "namespace"), goqu.Literal("?|"), pq.Array(val)),
-			goqu.L("???", goqu.L(`data->?`, "apigroup"), goqu.Literal("?|"), pq.Array([]string{"kubevirt.io"})))
-	}
-
-	return result
-}
