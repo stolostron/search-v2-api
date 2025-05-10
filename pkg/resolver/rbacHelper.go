@@ -163,7 +163,7 @@ func consolidateNsResources(nsResources map[string][]rbac.Resource) (map[string]
 // AND ((namespace=null AND apigroup AND kind) OR
 //	(namespace AND apigroup AND kind))
 
-func matchHubCluster(userrbac rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
+func matchHubClusterRbac(userrbac rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
 	if len(userrbac.CsResources) == 0 && len(userrbac.NsResources) == 0 {
 		// Do not match hub cluster if user doesn't have access to cluster scoped or namespace scoped resources on hub
 		return goqu.And()
@@ -191,4 +191,3 @@ func matchManagedCluster(managedClusters []string) exp.BooleanExpression {
 	//managed clusters
 	return goqu.C("cluster").Eq(goqu.Any(pq.Array(managedClusters)))
 }
-

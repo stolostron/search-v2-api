@@ -163,16 +163,16 @@ func (s *SearchResult) Uids() error {
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
 	if config.Cfg.Features.FineGrainedRbac {
-		klog.Infof(">>> Using fine grained RBAC <<<  NAMESPACES: %+v", userrbac.RbacNamespaces)
+		klog.Infof(">>> Using fine grained RBAC <<<  NAMESPACES: %+v", userrbac.FGRbacNamespaces)
 		return goqu.Or(
-			matchFineGrainedRbac(userrbac.RbacNamespaces),
-			matchHubCluster(userrbac, userInfo),
+			matchFineGrainedRbac(userrbac.FGRbacNamespaces),
+			matchHubClusterRbac(userrbac, userInfo),
 		)
 	}
 
 	return goqu.Or(
 		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
-		matchHubCluster(userrbac, userInfo),
+		matchHubClusterRbac(userrbac, userInfo),
 	)
 }
 
