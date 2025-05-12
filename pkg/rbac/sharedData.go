@@ -307,7 +307,7 @@ func (shared *SharedData) getManagedClusters(ctx context.Context) error {
 
 	for _, item := range resourceObj.Items {
 		// Add to list if it is not local-cluster
-		if item.GetName() != "local-cluster" {
+		if _, ok := item.GetLabels()["local-cluster"]; !ok {
 			managedClusters[item.GetName()] = struct{}{}
 		}
 	}
