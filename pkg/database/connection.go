@@ -16,7 +16,6 @@ import (
 
 var pool *pgxpool.Pool
 var timeLastPing time.Time
-var timeLastConnRequest time.Time
 
 // Checks new connection is healthy before using it.
 func afterConnect(ctx context.Context, c *pgx.Conn) error {
@@ -49,7 +48,7 @@ func initializePool(ctx context.Context) {
 
 	// Remove password from connection log.
 	redactedDbConn := strings.ReplaceAll(dbConnString, "password="+cfg.DBPass, "password=[REDACTED]")
-	klog.V(1).Infof("Initializing connection to PostgreSQL using: %s", redactedDbConn)
+	klog.Infof("Initializing connection to PostgreSQL using: %s", redactedDbConn)
 
 	config, configErr := pgxpool.ParseConfig(dbConnString)
 	if configErr != nil {
@@ -66,7 +65,7 @@ func initializePool(ctx context.Context) {
 	config.MaxConnLifetime = time.Duration(cfg.DBMaxConnLifeTime) * time.Millisecond
 	config.MinConns = int32(cfg.DBMinConns)
 
-	klog.V(1).Infof("Using pgxpool.Config %+v", config)
+	klog.Infof("Using pgxpool.Config %+v", config)
 
 	conn, err := pgxpool.ConnectConfig(ctx, config)
 	if err != nil {
@@ -75,12 +74,11 @@ func initializePool(ctx context.Context) {
 	} else {
 		klog.Info("Successfully connected to database!")
 	}
-	timeLastConnRequest = time.Now()
 	pool = conn
 }
 
 func GetConnPool(ctx context.Context) *pgxpool.Pool {
-	if pool == nil && time.Since(timeLastConnRequest) < time.Second {
+	if pool == nil {
 		initializePool(ctx)
 	}
 
