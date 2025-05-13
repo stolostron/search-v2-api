@@ -45,6 +45,9 @@ type UserDataCache struct {
 
 	// Client to external API to be replaced with a mock by unit tests.
 	authzClient v1.AuthorizationV1Interface
+
+	// Dynamic client
+	dynClient dynamic.Interface
 }
 
 // Get user's UID
@@ -113,12 +116,6 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 		}
 	}
 
-	// This builds the fine-frained RBAC cache.
-	if config.Cfg.Features.FineGrainedRbac {
-		rbacNamespaces := user.getFineGrainedRbacNamespaces(ctx)
-		klog.Infof("+++ Using fine-grained RBAC. Namespaces: %+v", rbacNamespaces)
-	}
-
 	// Before checking each namespace and clusterscoped resource, check if user has access to everything
 	userHasAllAccess, err := user.userHasAllAccess(ctx, cache)
 	if err != nil {
@@ -130,6 +127,13 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 		}
 		klog.V(5).Infof("User %s with uid %s doesn't have access to all resources. Checking individually",
 			userInfo.Username, userInfo.UID)
+	}
+
+	// This builds the fine-frained RBAC cache.
+	// TODO: Need to revisit if this is the correct location.
+	if config.Cfg.Features.FineGrainedRbac {
+		rbacNamespaces := user.getFineGrainedRbacNamespaces(ctx)
+		klog.Infof("+++ Using fine-grained RBAC. Namespaces: %+v", rbacNamespaces)
 	}
 
 	userDataCache, err := user.getNamespacedResources(cache, ctx)
@@ -170,6 +174,8 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		klog.V(5).Infof("User %s with uid %s has access to all resources.",
 			user.userInfo.Username, user.userInfo.UID)
 
+		// TODO: Fine-grained RBAC
+
 		return true, nil
 	} else if user.userAuthorizedListSSAR(ctx, impersClientSet,
 		"get", "search.open-cluster-management.io", "searches/allManagedData") {
@@ -192,6 +198,9 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		user.csrCache.err, user.nsrCache.err, user.clustersCache.err = nil, nil, nil
 		klog.V(5).Infof("User %s with uid %s is authorized to search/allManagedData which gives access to all managed cluster resources.",
 			user.userInfo.Username, user.userInfo.UID)
+
+		// TODO: Fine-grained RBAC
+
 		return true, nil
 	}
 	klog.V(6).Infof("User %s with uid %s does not have all access", user.userInfo.Username, user.userInfo.UID)
@@ -219,7 +228,7 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 
 // UserCache is valid if the clustersCache, csrCache, and nsrCache are valid
 func (user *UserDataCache) isValid() bool {
-	return user.csrCache.isValid() && user.nsrCache.isValid() && user.clustersCache.isValid() && user.fgRbacNsCache.isValid()
+	return user.csrCache.isValid() && user.nsrCache.isValid() && user.clustersCache.isValid() //&& user.fgRbacNsCache.isValid()
 }
 
 // Get cluster-scoped resources the user is authorized to list.
@@ -492,12 +501,15 @@ func (user *UserDataCache) getImpersonationClientSet() v1.AuthorizationV1Interfa
 
 func (user *UserDataCache) getFineGrainedRbacNamespaces(ctx context.Context) map[string][]string {
 	// Build dynamic client impersonating the user
-	restConfig := config.GetClientConfig()
-	restConfig.Impersonate = *setImpersonationUserInfo(user.userInfo)
-	dynamicClient, err := dynamic.NewForConfig(restConfig)
-	if err != nil {
-		klog.Error("Error with creating a new dynamic client with impersonation config.", err.Error())
-		return nil
+	if user.dynClient == nil {
+		restConfig := config.GetClientConfig()
+		restConfig.Impersonate = *setImpersonationUserInfo(user.userInfo)
+		dynamicClient, err := dynamic.NewForConfig(restConfig)
+		if err != nil {
+			klog.Error("Error with creating a new dynamic client with impersonation config.", err.Error())
+			return nil
+		}
+		user.dynClient = dynamicClient
 	}
 
 	// Get KubevirtProjects
@@ -506,7 +518,7 @@ func (user *UserDataCache) getFineGrainedRbacNamespaces(ctx context.Context) map
 		Version:  "v1",
 		Resource: "kubevirtprojects",
 	}
-	kubevirtProjects, err := dynamicClient.Resource(gvr).List(ctx, metav1.ListOptions{})
+	kubevirtProjects, err := user.dynClient.Resource(gvr).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		klog.Error("Error getting VM Namespaces", err)
 	}

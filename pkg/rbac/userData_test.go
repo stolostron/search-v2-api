@@ -12,8 +12,12 @@ import (
 	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	fakedynclient "k8s.io/client-go/dynamic/fake"
 	fake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
 
 	"k8s.io/client-go/rest"
 	testingk8s "k8s.io/client-go/testing"
@@ -851,4 +855,61 @@ func Test_updateUserManagedClusterList(t *testing.T) {
 		udc.updateUserManagedClusterList(mock_cache, ns)
 	}
 	assert.Equal(t, len(managedclusters), len(udc.ManagedClusters))
+}
+
+func Test_GetFineGrainedRbacNamespaces(t *testing.T) {
+	// Setup mock dependencies
+	testScheme := scheme.Scheme
+	gvrToListKind := map[schema.GroupVersionResource]string{
+		{Group: "clusterview.open-cluster-management.io", Version: "v1", Resource: "kubevirtprojects"}: "ProjectList",
+	}
+
+	mockDynamicClient := fakedynclient.NewSimpleDynamicClientWithCustomListKinds(testScheme,
+		gvrToListKind,
+		[]runtime.Object{
+			&unstructured.UnstructuredList{
+				Object: map[string]interface{}{
+					"apiVersion": "clusterview.open-cluster-management.io/v1",
+					"kind":       "KubevirtProject",
+				},
+				Items: []unstructured.Unstructured{
+					{
+						Object: map[string]interface{}{
+							"apiVersion": "clusterview.open-cluster-management.io/v1",
+							"kind":       "KubevirtProject",
+							"metadata": map[string]interface{}{
+								"name": "project-1",
+								"labels": map[string]interface{}{
+									"cluster": "cluster-1"},
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"apiVersion": "clusterview.open-cluster-management.io/v1",
+							"kind":       "KubevirtProject",
+							"metadata": map[string]interface{}{
+								"name": "project-2",
+								"labels": map[string]interface{}{
+									"cluster": "cluster-1"},
+							},
+						},
+					},
+				},
+			},
+		}...)
+
+	mockUserCache := &UserDataCache{
+		dynClient: mockDynamicClient,
+	}
+
+	// Call the function under test
+	namespaces := mockUserCache.getFineGrainedRbacNamespaces(context.Background())
+
+	// t.Log("namespaces: ", namespaces)
+	// klog.Info("\n\n>>>>\nnamespaces: ", namespaces)
+
+	// Assertions
+	assert.Equal(t, len(namespaces), 1)
+	assert.Equal(t, namespaces["cluster-1"], []string{"project-1", "project-2"})
 }

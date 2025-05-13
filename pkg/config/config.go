@@ -48,9 +48,9 @@ type Config struct {
 
 // Define feature flags.
 type featureFlags struct {
-	FederatedSearch     bool // Enable federated search.
-	FineGrainedRbac     bool // Enable fine-grained RBAC
-	SubscriptionEnabled bool // enabled GraphQL Subscriptions
+	FederatedSearch     bool // Enables federated search
+	FineGrainedRbac     bool // Enables fine-grained RBAC
+	SubscriptionEnabled bool // Enables GraphQL Subscriptions
 }
 
 // Http Client Pool Transport settings for federated client pool.
