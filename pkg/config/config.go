@@ -92,8 +92,8 @@ func new() *Config {
 		DBUser:              getEnv("DB_USER", ""),
 		DevelopmentMode:     DEVELOPMENT_MODE,
 		Features: featureFlags{
-			FederatedSearch:     getEnvAsBool("FEATURE_FEDERATED_SEARCH", false), // In Dev mode default to true.
-			FineGrainedRbac:     getEnvAsBool("FEATURE_FINE_GAINED_RBAC", true),  // TODO: Change default.
+			FederatedSearch:     getEnvAsBool("FEATURE_FEDERATED_SEARCH", false),  // In Dev mode default is true.
+			FineGrainedRbac:     getEnvAsBool("FEATURE_FINE_GRAINED_RBAC", false), // In Dev mode default is true.
 			SubscriptionEnabled: getEnvAsBool("FEATURE_SUBSCRIPTION", false),
 		},
 		Federation: federationConfig{

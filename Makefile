@@ -117,10 +117,10 @@ endif
 	--data-raw ${QUERY_STR} | jq
 
 
-API_TOKEN_USER ?=
+USER_API_TOKEN ?=
 send-as-user:
 	curl --insecure --location --request POST ${SEARCH_API_URL} \
-	--header "Authorization: Bearer ${API_TOKEN_USER}" --header 'Content-Type: application/json' \
+	--header "Authorization: Bearer ${USER_API_TOKEN}" --header 'Content-Type: application/json' \
 	--data-raw ${QUERY_STR} | jq
 
 check-locust: ## Checks if Locust is installed in the system.
