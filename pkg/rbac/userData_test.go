@@ -858,12 +858,12 @@ func Test_updateUserManagedClusterList(t *testing.T) {
 }
 
 func Test_GetFineGrainedRbacNamespaces(t *testing.T) {
-	// Setup mock dependencies
+	// Setup fake dynamic client to mock requests to
+	// kubevirtprojects.clusterview.open-cluster-management.io
 	testScheme := scheme.Scheme
 	gvrToListKind := map[schema.GroupVersionResource]string{
 		{Group: "clusterview.open-cluster-management.io", Version: "v1", Resource: "kubevirtprojects"}: "ProjectList",
 	}
-
 	mockDynamicClient := fakedynclient.NewSimpleDynamicClientWithCustomListKinds(testScheme,
 		gvrToListKind,
 		[]runtime.Object{
@@ -878,9 +878,9 @@ func Test_GetFineGrainedRbacNamespaces(t *testing.T) {
 							"apiVersion": "clusterview.open-cluster-management.io/v1",
 							"kind":       "KubevirtProject",
 							"metadata": map[string]interface{}{
-								"name": "project-1",
+								"name": "project-a1",
 								"labels": map[string]interface{}{
-									"cluster": "cluster-1"},
+									"cluster": "cluster-a"},
 							},
 						},
 					},
@@ -889,9 +889,9 @@ func Test_GetFineGrainedRbacNamespaces(t *testing.T) {
 							"apiVersion": "clusterview.open-cluster-management.io/v1",
 							"kind":       "KubevirtProject",
 							"metadata": map[string]interface{}{
-								"name": "project-2",
+								"name": "project-a2",
 								"labels": map[string]interface{}{
-									"cluster": "cluster-1"},
+									"cluster": "cluster-a"},
 							},
 						},
 					},
@@ -906,10 +906,7 @@ func Test_GetFineGrainedRbacNamespaces(t *testing.T) {
 	// Call the function under test
 	namespaces := mockUserCache.getFineGrainedRbacNamespaces(context.Background())
 
-	// t.Log("namespaces: ", namespaces)
-	// klog.Info("\n\n>>>>\nnamespaces: ", namespaces)
-
 	// Assertions
 	assert.Equal(t, len(namespaces), 1)
-	assert.Equal(t, namespaces["cluster-1"], []string{"project-1", "project-2"})
+	assert.Equal(t, namespaces["cluster-a"], []string{"project-a1", "project-a2"})
 }
