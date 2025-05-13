@@ -190,6 +190,8 @@ func matchManagedCluster(managedClusters []string) exp.BooleanExpression {
 
 	if len(managedClusters) == 1 && managedClusters[0] == "*" {
 		klog.V(2).Infof("user has access to all managed clusters")
+		// SQL with subquery tested to be ~33% faster compared to returning goqu.L("(data ? '_hubClusterResource')").Eq(false)
+		// so, intentionally going with larger query
 		return goqu.C("cluster").Neq(subQuery)
 	}
 	//managed clusters
