@@ -860,7 +860,7 @@ func Test_SearchResolver_SearchUserAllAccess(t *testing.T) {
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", 0)
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT "uid" FROM "search"."resources" WHERE (("data"->>'kind' ILIKE ANY ('{"template"}')) AND ("cluster" != 'local-cluster')) LIMIT 1000`),
+		gomock.Eq(`SELECT "uid" FROM "search"."resources" WHERE (("data"->>'kind' ILIKE ANY ('{"template"}')) AND ("cluster" NOT IN (SELECT "cluster" FROM "search"."resources" WHERE ((data ? '_hubClusterResource') IS TRUE) LIMIT 1))) LIMIT 1000`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 
