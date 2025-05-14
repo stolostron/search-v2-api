@@ -289,7 +289,6 @@ func Test_SearchResolver_ItemsWithNumOperator(t *testing.T) {
 	}
 	testAllOperators(t, testOperators)
 }
-
 func Test_SearchResolver_ItemsWithDateOperator(t *testing.T) {
 	//define schema table:
 	schemaTable := goqu.S("search").Table("resources")

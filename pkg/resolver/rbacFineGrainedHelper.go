@@ -64,7 +64,9 @@ func matchClusterAndNamespace(clusterNamespacesMap map[string][]string) exp.Expr
 	result := exp.NewExpressionList(exp.ExpressionListType(exp.OrType))
 
 	for cluster, namespaces := range clusterNamespacesMap {
-		if len(namespaces) == 1 && (namespaces[0] == "any" || namespaces[0] == "*") { // TODO: Pending PR to change any to *
+		// TODO: Pending PR to change any to *
+		// https://github.com/stolostron/multicloud-operators-foundation/pull/980
+		if len(namespaces) == 1 && (namespaces[0] == "any" || namespaces[0] == "*") {
 			result = result.Append(goqu.C("cluster").Eq(cluster))
 		} else {
 			result = result.Append(
