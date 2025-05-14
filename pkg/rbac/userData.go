@@ -147,7 +147,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 }
 
 func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (bool, error) {
-	klog.Infof("Checking if user %s with uid %s has all access", user.userInfo.Username, user.userInfo.UID) //TODO: V6
+	klog.V(6).Infof("Checking if user %s with uid %s has all access", user.userInfo.Username, user.userInfo.UID)
 	user.IsClusterAdmin = false
 	impersClientSet := user.getImpersonationClientSet()
 	if impersClientSet == nil {
@@ -181,7 +181,6 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		"get", "search.open-cluster-management.io", "searches/allManagedData") {
 		// Added to handle global hub search case.
 		// Refer to documentation https://github.com/stolostron/search-v2-operator/wiki/Global-Search-User-Configuration
-
 		user.csrCache.lock.Lock()
 		defer user.csrCache.lock.Unlock()
 		user.CsResources = []Resource{}
@@ -199,7 +198,6 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		user.csrCache.err, user.nsrCache.err, user.clustersCache.err = nil, nil, nil
 		klog.V(5).Infof("User %s with uid %s is authorized to search/allManagedData which gives access to all managed cluster resources.",
 			user.userInfo.Username, user.userInfo.UID)
-
 		return true, nil
 	}
 	klog.V(6).Infof("User %s with uid %s does not have all access", user.userInfo.Username, user.userInfo.UID)
