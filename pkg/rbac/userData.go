@@ -224,10 +224,10 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 	return userAccess, nil
 }
 
-// UserCache is valid if the clustersCache, csrCache, and nsrCache are valid
+// UserCache is valid if the clustersCache, csrCache, fgRbacNsCache, and nsrCache are valid.
 func (user *UserDataCache) isValid() bool {
 	return user.csrCache.isValid() && user.nsrCache.isValid() &&
-		user.clustersCache.isValid() // TODO: && user.fgRbacNsCache.isValid()
+		user.clustersCache.isValid() && user.fgRbacNsCache.isValid()
 }
 
 // Get cluster-scoped resources the user is authorized to list.
