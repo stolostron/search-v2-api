@@ -389,8 +389,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 }
 
 // Equivalent to: oc auth can-i --list -n <iterate-each-namespace>
-func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Context,
-	clientToken string) (*UserDataCache, error) {
+func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Context) (*UserDataCache, error) {
 	defer metrics.SlowLog("UserDataCache::getNamespacedResources", 250*time.Millisecond)()
 
 	// Lock the cache
