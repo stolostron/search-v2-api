@@ -122,7 +122,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 			userInfo.Username, userInfo.UID)
 	}
 
-	userDataCache, err := user.getNamespacedResources(cache, ctx, clientToken)
+	userDataCache, err := user.getNamespacedResources(ctx, cache)
 
 	// Get cluster scoped resource access for the user.
 	if err == nil {
@@ -389,8 +389,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 }
 
 // Equivalent to: oc auth can-i --list -n <iterate-each-namespace>
-func (user *UserDataCache) getNamespacedResources(cache *Cache, ctx context.Context,
-	clientToken string) (*UserDataCache, error) {
+func (user *UserDataCache) getNamespacedResources(ctx context.Context, cache *Cache) (*UserDataCache, error) {
 	defer metrics.SlowLog("UserDataCache::getNamespacedResources", 250*time.Millisecond)()
 
 	// Lock the cache
