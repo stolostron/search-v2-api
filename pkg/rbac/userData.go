@@ -27,9 +27,10 @@ const impersonationConfigCreationerror = "error creating clientset with imperson
 // Contains data about the resources the user is allowed to access.
 type UserData struct {
 	CsResources      []Resource            // Cluster-scoped resources on hub the user has list access.
+	IsClusterAdmin   bool                  // User is cluster-admin
+	FGRbacNamespaces map[string][]string   // Fine-grained RBAC (cluster + namespace)
 	NsResources      map[string][]Resource // Namespaced resources on hub the user has list access.
 	ManagedClusters  map[string]struct{}   // Managed clusters where the user has view access.
-	FGRbacNamespaces map[string][]string   // Fine-grained RBAC (cluster + namespace)
 }
 
 // Extend UserData with caching information.
@@ -102,8 +103,8 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 			userInfo:      userInfo,
 			clustersCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 			csrCache:      cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
-			nsrCache:      cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 			fgRbacNsCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+			nsrCache:      cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 		}
 		if cache.users == nil {
 			cache.users = map[string]*UserDataCache{}
@@ -130,10 +131,8 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	}
 
 	// This builds the fine-frained RBAC cache.
-	// TODO: Need to revisit if this is the correct location.
 	if config.Cfg.Features.FineGrainedRbac {
-		rbacNamespaces := user.getFineGrainedRbacNamespaces(ctx)
-		klog.Infof("+++ Using fine-grained RBAC. Namespaces: %+v", rbacNamespaces)
+		_ = user.getFineGrainedRbacNamespaces(ctx)
 	}
 
 	userDataCache, err := user.getNamespacedResources(cache, ctx)
@@ -148,14 +147,17 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 }
 
 func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (bool, error) {
-	klog.V(6).Infof("Checking if user %s with uid %s has all access", user.userInfo.Username, user.userInfo.UID)
+	klog.Infof("Checking if user %s with uid %s has all access", user.userInfo.Username, user.userInfo.UID) //TODO: V6
+	user.IsClusterAdmin = false
 	impersClientSet := user.getImpersonationClientSet()
 	if impersClientSet == nil {
 		klog.Warning(impersonationConfigCreationerror)
 		return false, errors.New(impersonationConfigCreationerror)
 	}
-	//If we have a new set of authorized list for the user reset the previous one
+	// If we have a new set of authorized list for the user reset the previous one
 	if user.userAuthorizedListSSAR(ctx, impersClientSet, "list", "*", "*") {
+		user.IsClusterAdmin = true
+
 		user.csrCache.lock.Lock()
 		defer user.csrCache.lock.Unlock()
 		user.CsResources = []Resource{{Apigroup: "*", Kind: "*"}}
@@ -174,13 +176,12 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		klog.V(5).Infof("User %s with uid %s has access to all resources.",
 			user.userInfo.Username, user.userInfo.UID)
 
-		// TODO: Fine-grained RBAC
-
 		return true, nil
 	} else if user.userAuthorizedListSSAR(ctx, impersClientSet,
 		"get", "search.open-cluster-management.io", "searches/allManagedData") {
 		// Added to handle global hub search case.
 		// Refer to documentation https://github.com/stolostron/search-v2-operator/wiki/Global-Search-User-Configuration
+
 		user.csrCache.lock.Lock()
 		defer user.csrCache.lock.Unlock()
 		user.CsResources = []Resource{}
@@ -198,8 +199,6 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		user.csrCache.err, user.nsrCache.err, user.clustersCache.err = nil, nil, nil
 		klog.V(5).Infof("User %s with uid %s is authorized to search/allManagedData which gives access to all managed cluster resources.",
 			user.userInfo.Username, user.userInfo.UID)
-
-		// TODO: Fine-grained RBAC
 
 		return true, nil
 	}
@@ -220,6 +219,7 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 	userAccess := UserData{
 		CsResources:      userDataCache.GetCsResourcesCopy(),
 		FGRbacNamespaces: userDataCache.GetFGRbacNamespacesCopy(),
+		IsClusterAdmin:   userDataCache.UserData.IsClusterAdmin,
 		NsResources:      userDataCache.GetNsResourcesCopy(),
 		ManagedClusters:  userDataCache.GetManagedClustersCopy(),
 	}
@@ -228,7 +228,8 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 
 // UserCache is valid if the clustersCache, csrCache, and nsrCache are valid
 func (user *UserDataCache) isValid() bool {
-	return user.csrCache.isValid() && user.nsrCache.isValid() && user.clustersCache.isValid() //&& user.fgRbacNsCache.isValid()
+	return user.csrCache.isValid() && user.nsrCache.isValid() &&
+		user.clustersCache.isValid() // TODO: && user.fgRbacNsCache.isValid()
 }
 
 // Get cluster-scoped resources the user is authorized to list.

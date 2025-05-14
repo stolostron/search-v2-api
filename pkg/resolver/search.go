@@ -162,14 +162,24 @@ func (s *SearchResult) Uids() error {
 
 // Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
 func buildRbacWhereClause(ctx context.Context, userrbac rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
-	if config.Cfg.Features.FineGrainedRbac {
-		klog.Infof(">>> Using fine grained RBAC <<<  NAMESPACES: %+v", userrbac.FGRbacNamespaces)
-		return goqu.Or(
-			matchFineGrainedRbac(userrbac.FGRbacNamespaces),
-			matchHubClusterRbac(userrbac, userInfo),
-		)
+	if userrbac.IsClusterAdmin {
+		klog.V(4).Info("User is cluster admin. Using empty RBAC where clause.")
+		return exp.NewExpressionList(exp.ExpressionListType(exp.OrType))
 	}
 
+	if config.Cfg.Features.FineGrainedRbac && len(userrbac.FGRbacNamespaces) > 0 {
+		klog.V(4).Infof("Using fine grained RBAC. Managed cluster namespaces: %+v", userrbac.FGRbacNamespaces)
+		return goqu.Or(
+			matchFineGrainedRbac(userrbac.FGRbacNamespaces),
+			matchHubClusterRbac(userrbac, userInfo))
+	}
+
+	if config.Cfg.Features.FineGrainedRbac && len(userrbac.FGRbacNamespaces) == 0 {
+		klog.V(4).Info("Using fine-grained RBAC. User is not authorized to any managed cluster namespace.")
+		return matchHubClusterRbac(userrbac, userInfo)
+	}
+
+	klog.V(4).Info("Using basic RBAC for managed clusters.")
 	return goqu.Or(
 		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
 		matchHubClusterRbac(userrbac, userInfo),
