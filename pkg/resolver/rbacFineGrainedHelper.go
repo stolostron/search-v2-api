@@ -44,12 +44,12 @@ func matchGroupKind(groupKind map[string][]string) exp.ExpressionList {
 
 	for group, kinds := range groupKind {
 		if len(kinds) == 0 {
-			result = result.Append(goqu.L("???", goqu.L(`data->?`, "apigroup"), goqu.Literal("?"), group))
+			result = result.Append(goqu.L("data->???", "apigroup", goqu.L("?"), group))
 		} else {
 			result = result.Append(
 				goqu.And(
-					goqu.L("???", goqu.L(`data->?`, "apigroup"), goqu.Literal("?"), group),
-					goqu.L("???", goqu.L(`data->?`, "kind"), goqu.Literal("?|"), pq.Array(kinds))),
+					goqu.L("data->???", "apigroup", goqu.L("?"), group),
+					goqu.L("data->???", "kind", goqu.L("?|"), pq.Array(kinds))),
 			)
 		}
 	}
@@ -72,7 +72,7 @@ func matchClusterAndNamespace(clusterNamespacesMap map[string][]string) exp.Expr
 			result = result.Append(
 				goqu.And(
 					goqu.C("cluster").Eq(cluster),
-					goqu.L("???", goqu.L(`data->?`, "namespace"), goqu.Literal("?|"), pq.Array(namespaces))),
+					goqu.L("data->???", "namespace", goqu.L("?|"), pq.Array(namespaces))),
 			)
 		}
 	}

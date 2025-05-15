@@ -21,7 +21,7 @@ func Test_matchFineGrainedRbac(t *testing.T) {
 
 	sql, _, err := goqu.From(goqu.S("search").Table("resources")).Select("uid").Where(result).ToSQL()
 
-	// TODO: This test fails because order of expressions is inconsistent.
+	// FIXME: This test fails because order of expressions is inconsistent.
 	// expectedSQL := `SELECT "uid" FROM "search"."resources" WHERE (((data->'apigroup'?'snapshot.kubevirt.io' AND data->'kind'?|'{"VirtualMachineSnapshot","VirtualMachineSnapshotContent","VirtualMachineRestore"}') OR (data->'apigroup'?'kubevirt.io' AND data->'kind'?|'{"VirtualMachine","VirtualMachineInstance","VirtualMachineInstancePreset","VirtualMachineInstanceReplicaset","VirtualMachineInstanceMigration"}') OR (data->'apigroup'?'clone.kubevirt.io' AND data->'kind'?|'{"VirtualMachineClone"}') OR (data->'apigroup'?'export.kubevirt.io' AND data->'kind'?|'{"VirtualMachineExport"}') OR (data->'apigroup'?'instancetype.kubevirt.io' AND data->'kind'?|'{"VirtualMachineInstancetype","VirtualMachineClusterInstancetype","VirtualMachinePreference","VirtualMachineClusterPreference"}') OR (data->'apigroup'?'migrations.kubevirt.io' AND data->'kind'?|'{"MigrationPolicy"}') OR (data->'apigroup'?'pool.kubevirt.io' AND data->'kind'?|'{"VirtualMachinePool"}')) AND (("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1","namespace-a2"}'))`
 
 	assert.Nil(t, err)
@@ -45,6 +45,7 @@ func Test_matchClusterAndNamespace(t *testing.T) {
 	assert.Equal(t, expectedSQL, sql)
 }
 
+// FIXME: This test fails intermittently because the order of expressions is inconsistent.
 func Test_matchClusterAndNamespace_anyNamespace(t *testing.T) {
 	clusterNamespaces := map[string][]string{
 		"cluster-a": []string{"namespace-a1", "namespace-a2"},
