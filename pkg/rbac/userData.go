@@ -499,13 +499,14 @@ func (user *UserDataCache) getImpersonationClientSet() v1.AuthorizationV1Interfa
 }
 
 func (user *UserDataCache) getFineGrainedRbacNamespaces(ctx context.Context) map[string][]string {
+	ns := make(map[string][]string, 0)
 	// Build dynamic client impersonating the user
 	if user.dynClient == nil {
 		restConfig := config.GetClientConfig()
 		restConfig.Impersonate = *setImpersonationUserInfo(user.userInfo)
 		dynamicClient, err := dynamic.NewForConfig(restConfig)
 		if err != nil {
-			klog.Error("Error with creating a new dynamic client with impersonation config.", err.Error())
+			klog.Error("Error creating a new dynamic client with impersonation config.", err.Error())
 			return nil
 		}
 		user.dynClient = dynamicClient
@@ -519,17 +520,16 @@ func (user *UserDataCache) getFineGrainedRbacNamespaces(ctx context.Context) map
 	}
 	kubevirtProjects, err := user.dynClient.Resource(gvr).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		klog.Error("Error getting VM Namespaces", err)
-	}
+		klog.Error("Error getting KubevirtProjects", err)
+	} else {
+		for _, item := range kubevirtProjects.Items {
+			cluster := item.GetLabels()["cluster"]
 
-	ns := make(map[string][]string, 0)
-	for _, item := range kubevirtProjects.Items {
-		cluster := item.GetLabels()["cluster"]
-
-		if _, exists := ns[cluster]; !exists {
-			ns[cluster] = []string{item.GetName()}
-		} else {
-			ns[cluster] = append(ns[cluster], item.GetName())
+			if _, exists := ns[cluster]; !exists {
+				ns[cluster] = []string{item.GetName()}
+			} else {
+				ns[cluster] = append(ns[cluster], item.GetName())
+			}
 		}
 	}
 

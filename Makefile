@@ -102,7 +102,7 @@ else ifeq (${QUERY}, vm)
 	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["VirtualMachine", "VirtualMachineSnapshot", "VirtualMachineInstance"]}],"limit": 10}]}}'
 endif
 
-send: ## Sends a graphQL request using cURL for development and testing. QUERY (alias Q) is a required parameter, values are: [schema|search|searchComplete|searchCount|messages].
+send: ## Sends a graphQL request using cURL for development and testing. QUERY (alias Q) is a required parameter, values are: [schema|search|searchComplete|searchCount|messages|vm].
 ifeq (${QUERY},)
 	@echo "QUERY (or Q) is required. Example: make send QUERY=searchComplete"
 	@echo "Valid QUERY values: schema, search, searchComplete, searchCount, messages"
