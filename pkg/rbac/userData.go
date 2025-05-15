@@ -130,7 +130,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 			userInfo.Username, userInfo.UID)
 	}
 
-	// This builds the fine-frained RBAC cache.
+	// This builds the fine-grained RBAC cache.
 	if config.Cfg.Features.FineGrainedRbac {
 		_ = user.getFineGrainedRbacNamespaces(ctx)
 	}
