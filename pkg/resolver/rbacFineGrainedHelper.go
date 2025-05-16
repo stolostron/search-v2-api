@@ -11,15 +11,15 @@ import (
 // Currently hardcoding the Kubevirt apigroup and kinds. A future iteration should update this
 // to read the ClusterRole resource to extract this information.
 var kubevirtResourcesMap = map[string][]string{
-	"kubevirt.io": {"VirtualMachine", "VirtualMachineInstance", "VirtualMachineInstancePreset",
-		"VirtualMachineInstanceReplicaset", "VirtualMachineInstanceMigration"},
+	"kubevirt.io": {"VirtualMachine", "VirtualMachineInstance", "VirtualMachineInstanceMigration",
+		"VirtualMachineInstancePreset", "VirtualMachineInstanceReplicaset"},
 	"clone.kubevirt.io":  {"VirtualMachineClone"},
 	"export.kubevirt.io": {"VirtualMachineExport"},
-	"instancetype.kubevirt.io": {"VirtualMachineInstancetype", "VirtualMachineClusterInstancetype",
-		"VirtualMachinePreference", "VirtualMachineClusterPreference"},
+	"instancetype.kubevirt.io": {"VirtualMachineClusterInstancetype", "VirtualMachineClusterPreference",
+		"VirtualMachineInstancetype", "VirtualMachinePreference"},
 	"migrations.kubevirt.io": {"MigrationPolicy"},
 	"pool.kubevirt.io":       {"VirtualMachinePool"},
-	"snapshot.kubevirt.io":   {"VirtualMachineSnapshot", "VirtualMachineSnapshotContent", "VirtualMachineRestore"},
+	"snapshot.kubevirt.io":   {"VirtualMachineRestore", "VirtualMachineSnapshot", "VirtualMachineSnapshotContent"},
 }
 
 // Match resources using fine-grained RBAC.
