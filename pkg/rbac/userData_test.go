@@ -12,8 +12,12 @@ import (
 	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	fakedynclient "k8s.io/client-go/dynamic/fake"
 	fake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
 
 	"k8s.io/client-go/rest"
 	testingk8s "k8s.io/client-go/testing"
@@ -138,6 +142,7 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 		UserData: UserData{ManagedClusters: managedclusters,
 			NsResources: nsresources},
 		csrCache:      cacheMetadata{updatedAt: time.Now()},
+		fgRbacNsCache: cacheMetadata{updatedAt: time.Now()},
 		nsrCache:      cacheMetadata{updatedAt: time.Now()},
 		clustersCache: cacheMetadata{updatedAt: time.Now()},
 	}
@@ -268,10 +273,11 @@ func Test_clusterScoped_usingCache(t *testing.T) {
 		UserData: UserData{
 			CsResources:     []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}},
 			ManagedClusters: map[string]struct{}{"some-namespace": {}}},
-		clustersCache: cacheMetadata{updatedAt: time.Now()},
 		// Using current time , GetUserData should have the same values as cache
-		csrCache: cacheMetadata{updatedAt: time.Now()},
-		nsrCache: cacheMetadata{updatedAt: time.Now()},
+		clustersCache: cacheMetadata{updatedAt: time.Now()},
+		fgRbacNsCache: cacheMetadata{updatedAt: time.Now()},
+		csrCache:      cacheMetadata{updatedAt: time.Now()},
+		nsrCache:      cacheMetadata{updatedAt: time.Now()},
 	}
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 
@@ -453,10 +459,11 @@ func Test_managedClusters_usingCache(t *testing.T) {
 			CsResources:     []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}},
 			ManagedClusters: map[string]struct{}{"some-managed-cluster": {}, "some-other-managed-cluster": {}},
 		},
-		clustersCache: cacheMetadata{updatedAt: time.Now()},
 		// Using current time , GetUserData should have the same values as cache
-		csrCache: cacheMetadata{updatedAt: time.Now()},
-		nsrCache: cacheMetadata{updatedAt: time.Now()},
+		clustersCache: cacheMetadata{updatedAt: time.Now()},
+		fgRbacNsCache: cacheMetadata{updatedAt: time.Now()},
+		csrCache:      cacheMetadata{updatedAt: time.Now()},
+		nsrCache:      cacheMetadata{updatedAt: time.Now()},
 	}
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 
@@ -625,6 +632,7 @@ func Test_getUserData(t *testing.T) {
 		},
 		// Using current time , GetUserData should have the same values as cache
 		clustersCache: cacheMetadata{updatedAt: time.Now()},
+		fgRbacNsCache: cacheMetadata{updatedAt: time.Now()},
 		csrCache:      cacheMetadata{updatedAt: time.Now()},
 		nsrCache:      cacheMetadata{updatedAt: time.Now()},
 	}
@@ -851,4 +859,58 @@ func Test_updateUserManagedClusterList(t *testing.T) {
 		udc.updateUserManagedClusterList(mock_cache, ns)
 	}
 	assert.Equal(t, len(managedclusters), len(udc.ManagedClusters))
+}
+
+func Test_GetFineGrainedRbacNamespaces(t *testing.T) {
+	// Setup fake dynamic client to mock requests to
+	// kubevirtprojects.clusterview.open-cluster-management.io
+	testScheme := scheme.Scheme
+	gvrToListKind := map[schema.GroupVersionResource]string{
+		{Group: "clusterview.open-cluster-management.io", Version: "v1", Resource: "kubevirtprojects"}: "ProjectList",
+	}
+	mockDynamicClient := fakedynclient.NewSimpleDynamicClientWithCustomListKinds(testScheme,
+		gvrToListKind,
+		[]runtime.Object{
+			&unstructured.UnstructuredList{
+				Object: map[string]interface{}{
+					"apiVersion": "clusterview.open-cluster-management.io/v1",
+					"kind":       "KubevirtProject",
+				},
+				Items: []unstructured.Unstructured{
+					{
+						Object: map[string]interface{}{
+							"apiVersion": "clusterview.open-cluster-management.io/v1",
+							"kind":       "KubevirtProject",
+							"metadata": map[string]interface{}{
+								"name": "project-a1",
+								"labels": map[string]interface{}{
+									"cluster": "cluster-a"},
+							},
+						},
+					},
+					{
+						Object: map[string]interface{}{
+							"apiVersion": "clusterview.open-cluster-management.io/v1",
+							"kind":       "KubevirtProject",
+							"metadata": map[string]interface{}{
+								"name": "project-a2",
+								"labels": map[string]interface{}{
+									"cluster": "cluster-a"},
+							},
+						},
+					},
+				},
+			},
+		}...)
+
+	mockUserCache := &UserDataCache{
+		dynClient: mockDynamicClient,
+	}
+
+	// Call the function under test
+	namespaces := mockUserCache.getFineGrainedRbacNamespaces(context.Background())
+
+	// Assertions
+	assert.Equal(t, len(namespaces), 1)
+	assert.Equal(t, namespaces["cluster-a"], []string{"project-a1", "project-a2"})
 }

@@ -63,6 +63,7 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 	}
 }
 
+// FIXME: Intermittent failure.
 func Test_SearchResolver_RelationshipsWithCluster(t *testing.T) {
 	config.Cfg.RelationLevel = 3
 

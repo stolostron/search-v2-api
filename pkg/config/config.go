@@ -48,8 +48,9 @@ type Config struct {
 
 // Define feature flags.
 type featureFlags struct {
-	FederatedSearch     bool // Enable federated search.
-	SubscriptionEnabled bool // enabled GraphQL Subscriptions
+	FederatedSearch     bool // Enables federated search
+	FineGrainedRbac     bool // Enables fine-grained RBAC
+	SubscriptionEnabled bool // Enables GraphQL Subscriptions
 }
 
 // Http Client Pool Transport settings for federated client pool.
@@ -91,7 +92,8 @@ func new() *Config {
 		DBUser:              getEnv("DB_USER", ""),
 		DevelopmentMode:     DEVELOPMENT_MODE,
 		Features: featureFlags{
-			FederatedSearch:     getEnvAsBool("FEATURE_FEDERATED_SEARCH", false), // In Dev mode default to true.
+			FederatedSearch:     getEnvAsBool("FEATURE_FEDERATED_SEARCH", false),  // In Dev mode default is true.
+			FineGrainedRbac:     getEnvAsBool("FEATURE_FINE_GRAINED_RBAC", false), // In Dev mode default is true.
 			SubscriptionEnabled: getEnvAsBool("FEATURE_SUBSCRIPTION", false),
 		},
 		Federation: federationConfig{
