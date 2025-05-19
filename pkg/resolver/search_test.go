@@ -13,6 +13,7 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/authentication/v1"
 )
 
 func Test_SearchResolver_Count(t *testing.T) {
@@ -1264,4 +1265,43 @@ func TestMatchesManagedHubFilter(t *testing.T) {
 			assert.Equal(t, tc.expectedRes, result)
 		})
 	}
+}
+
+func Test_buildRbacWhereClause_clusterAdmin(t *testing.T) {
+	mock_userData := rbac.UserData{IsClusterAdmin: true}
+
+	result := buildRbacWhereClause(context.Background(), mock_userData, v1.UserInfo{})
+
+	assert.Equal(t, 0, len(result.Expressions()))
+}
+
+func Test_buildRbacWhereClause_fineGrainedRBAC_noNamespaces(t *testing.T) {
+	config.Cfg.Features.FineGrainedRbac = true
+	mock_userData := rbac.UserData{IsClusterAdmin: false, NsResources: map[string][]rbac.Resource{"ns-1": []rbac.Resource{{Kind: "Pod"}}}}
+
+	result := buildRbacWhereClause(context.Background(), mock_userData, v1.UserInfo{})
+
+	sql, _, err := goqu.From("t").Where(result).ToSQL()
+
+	expectedSql := `SELECT * FROM "t" WHERE ("data"?'_hubClusterResource' AND (data->'namespace'?|'{"ns-1"}' AND (NOT("data"?'apigroup') AND data->'kind_plural'?'Pod')))`
+	assert.Nil(t, err)
+	assert.Equal(t, expectedSql, sql)
+}
+
+func Test_buildRbacWhereClause_fineGrainedRBAC(t *testing.T) {
+	config.Cfg.Features.FineGrainedRbac = true
+	mock_userData := rbac.UserData{IsClusterAdmin: false, FGRbacNamespaces: map[string][]string{"cluster-a": []string{"namespace-a1"}}}
+
+	result := buildRbacWhereClause(context.Background(), mock_userData, v1.UserInfo{})
+	sql, _, err := goqu.From("t").Where(result).ToSQL()
+
+	assert.Nil(t, err)
+	assert.Contains(t, sql, `(("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1"}')`)
+
+	// NOTE: We can't validate the entire expresionString because the order ot the expressions isn't
+	//      guaranteed. Leaving this here as it would improve this test if we could validate it consistently.
+	//
+	// expressionString := buildExpressionStringFrom(result)
+	// expectedExpression := `(((data->'apigroup'?'kubevirt.io' AND data->'kind'?|'{"VirtualMachine","VirtualMachineInstance","VirtualMachineInstanceMigration","VirtualMachineInstancePreset","VirtualMachineInstanceReplicaset"}') OR (data->'apigroup'?'clone.kubevirt.io' AND data->'kind'?|'{"VirtualMachineClone"}') OR (data->'apigroup'?'export.kubevirt.io' AND data->'kind'?|'{"VirtualMachineExport"}') OR (data->'apigroup'?'instancetype.kubevirt.io' AND data->'kind'?|'{"VirtualMachineClusterInstancetype","VirtualMachineClusterPreference","VirtualMachineInstancetype","VirtualMachinePreference"}') OR (data->'apigroup'?'migrations.kubevirt.io' AND data->'kind'?|'{"MigrationPolicy"}') OR (data->'apigroup'?'pool.kubevirt.io' AND data->'kind'?|'{"VirtualMachinePool"}') OR (data->'apigroup'?'snapshot.kubevirt.io' AND data->'kind'?|'{"VirtualMachineRestore","VirtualMachineSnapshot","VirtualMachineSnapshotContent"}')) AND (("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1"}'))`
+	// assert.Equal(t, expectedExpression, expressionString)
 }

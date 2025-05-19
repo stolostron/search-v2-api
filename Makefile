@@ -98,9 +98,11 @@ else ifeq (${QUERY}, searchRelated)
 	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { count related { kind count items } } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["Deployment"]}],"limit": 3}]}}'
 else ifeq (${QUERY}, searchRelatedAlias)
 	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { searchResult: search(input: $$input) { count related { kind count items } } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["Deployment"]}],"limit": 3}]}}'
+else ifeq (${QUERY}, vm)
+	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"kind","values":["VirtualMachine", "VirtualMachineSnapshot", "VirtualMachineInstance"]}],"limit": 10}]}}'
 endif
 
-send: ## Sends a graphQL request using cURL for development and testing. QUERY (alias Q) is a required parameter, values are: [schema|search|searchComplete|searchCount|messages].
+send: ## Sends a graphQL request using cURL for development and testing. QUERY (alias Q) is a required parameter, values are: [schema|search|searchComplete|searchCount|messages|vm].
 ifeq (${QUERY},)
 	@echo "QUERY (or Q) is required. Example: make send QUERY=searchComplete"
 	@echo "Valid QUERY values: schema, search, searchComplete, searchCount, messages"
@@ -112,6 +114,12 @@ endif
 	#
 	curl --insecure --location --request POST ${SEARCH_API_URL} \
 	--header "Authorization: Bearer ${API_TOKEN}" --header 'Content-Type: application/json' \
+	--data-raw ${QUERY_STR} | jq
+
+USER_API_TOKEN ?=
+send-as-user: ## Same as send, but using the token from USER_API_TOKEN
+	curl --insecure --location --request POST ${SEARCH_API_URL} \
+	--header "Authorization: Bearer ${USER_API_TOKEN}" --header 'Content-Type: application/json' \
 	--data-raw ${QUERY_STR} | jq
 
 check-locust: ## Checks if Locust is installed in the system.
