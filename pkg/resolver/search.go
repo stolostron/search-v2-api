@@ -136,12 +136,12 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	schemaTable := goqu.S("search").Table("resources")
 	ds := goqu.From(schemaTable)
 
-	if s.input.Keywords != nil {
+	if len(s.input.Keywords) > 0 {
 		jsb := goqu.L("jsonb_each_text(?)", goqu.C("data"))
 		ds = goqu.From(schemaTable, jsb)
 	}
 
-	if s.input != nil && (len(s.input.Filters) > 0 || s.input.Keywords != nil) {
+	if s.input != nil && (len(s.input.Filters) > 0 || len(s.input.Keywords) > 0) {
 		// WHERE CLAUSE
 		whereDs, s.propTypes, err = WhereClauseFilter(s.context, s.input, s.propTypes)
 		if err != nil {
@@ -280,7 +280,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 	var whereDs []exp.Expression
 	var err error
 
-	if input.Keywords != nil {
+	if len(input.Keywords) > 0 {
 		// Sample query: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data")
 		// WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' ILIKE ANY ('{"pod","deployment"}')))
 		keywords := pointerToStringArray(input.Keywords)
