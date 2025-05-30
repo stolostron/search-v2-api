@@ -87,6 +87,10 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 
 		// WHERE CLAUSE
 		if s.input != nil && len(s.input.Filters) > 0 {
+			if len(s.input.Keywords) > 0 {
+				jsb := goqu.L("jsonb_each_text(?)", goqu.C("data"))
+				ds = goqu.From(schemaTable, jsb)
+			}
 			whereDs, s.propTypes, _ = WhereClauseFilter(ctx, s.input, s.propTypes)
 		}
 
