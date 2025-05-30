@@ -513,7 +513,7 @@ func Test_SearchResolver_Keywords(t *testing.T) {
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", 0)
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources", jsonb_each_text("data") WHERE (("value" ILIKE '%Template%') AND ("cluster" = ANY ('{}'))) LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources", jsonb_each_text("data") WHERE (EXISTS (SELECT 1 FROM jsonb_each_text("data") WHERE "value" LIKE '%Template%') AND ("cluster" = ANY ('{}'))) LIMIT 10`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 

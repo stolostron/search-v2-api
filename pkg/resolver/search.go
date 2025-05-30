@@ -347,12 +347,12 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 	var err error
 
 	if len(input.Keywords) > 0 {
-		// Sample query: SELECT COUNT("uid") FROM "search"."resources", jsonb_each_text("data")
-		// WHERE (("value" LIKE '%dns%') AND ("data"->>'kind' ILIKE ANY ('{"pod","deployment"}')))
+		// Sample query: SELECT COUNT("uid") FROM "search"."resources"
+		// WHERE (EXISTS (SELECT 1 FROM jsonb_each_text("data") WHERE "value" LIKE '%dns%')) AND ("data"->>'kind' ILIKE ANY ('{"pod","deployment"}')))
 		keywords := PointerToStringArray(input.Keywords)
 		for _, key := range keywords {
 			key = "%" + key + "%"
-			whereDs = append(whereDs, goqu.L(`"value"`).ILike(key).Expression())
+			whereDs = append(whereDs, goqu.L(`EXISTS (SELECT 1 FROM jsonb_each_text("data") WHERE "value" LIKE ?)`, key).Expression())
 		}
 	}
 
