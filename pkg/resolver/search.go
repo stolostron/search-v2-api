@@ -372,7 +372,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 				propTypeMapNew, err := getPropertyType(ctx, true) // Refresh the property type cache.
 				propTypeMap = propTypeMapNew
 				dataType, dataTypeInMap = propTypeMap[filter.Property]
-				klog.Infof("For filter prop: %s, datatype is :%s dataTypeInMap: %t\n", filter.Property,
+				klog.V(1).Infof("For filter prop: %s, datatype is :%s dataTypeInMap: %t\n", filter.Property,
 					dataType, dataTypeInMap)
 				if err != nil {
 					klog.Errorf("Error creating property type map with err: [%s]", err)
