@@ -374,11 +374,23 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 				dataType, dataTypeInMap = propTypeMap[filter.Property]
 				klog.Infof("For filter prop: %s, datatype is :%s dataTypeInMap: %t\n", filter.Property,
 					dataType, dataTypeInMap)
-				if err != nil || !dataTypeInMap {
-					klog.Errorf("Error creating property type map with err: [%s] or datatype for  [%s] not found in map",
-						err, filter.Property)
+				if err != nil {
+					klog.Errorf("Error creating property type map with err: [%s]", err)
 					return whereDs, propTypeMap, fmt.Errorf("error [%s] fetching data type for property: [%s]",
 						err, filter.Property)
+				}
+				if !dataTypeInMap {
+					klog.Infof("Input property type [%s] doesn't exist, setting false condition to return 0 results", filter.Property)
+					// search=> explain analyze select * from search.resources where 1 = 0;
+					//                                     QUERY PLAN
+					//------------------------------------------------------------------------------------
+					// Result  (cost=0.00..0.00 rows=0 width=0) (actual time=0.001..0.001 rows=0 loops=1)
+					//   One-Time Filter: false
+					// Planning Time: 0.060 ms
+					// Execution Time: 0.008 ms
+					// (4 rows)
+					whereDs = append(whereDs, goqu.L("1 = 0").Expression())
+					return whereDs, propTypeMap, err
 				}
 			}
 
