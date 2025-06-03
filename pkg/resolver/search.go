@@ -380,7 +380,7 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 						err, filter.Property)
 				}
 				if !dataTypeInMap {
-					klog.Infof("Input property type [%s] doesn't exist, setting false condition to return 0 results", filter.Property)
+					klog.V(1).Infof("Input property type [%s] doesn't exist, setting false condition to return 0 results", filter.Property)
 					// search=> explain analyze select * from search.resources where 1 = 0;
 					//                                     QUERY PLAN
 					//------------------------------------------------------------------------------------
