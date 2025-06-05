@@ -878,26 +878,38 @@ func Test_GetFineGrainedRbacNamespaces(t *testing.T) {
 				},
 				Items: []unstructured.Unstructured{
 					{
-						Object: map[string]interface{}{
+						Object: map[string]any{
 							"apiVersion": "clusterview.open-cluster-management.io/v1",
 							"kind":       "KubevirtProject",
-							"metadata": map[string]interface{}{
-								"name": "project-a1",
-								"labels": map[string]interface{}{
+							"metadata": map[string]any{
+								"name": "0000-0000-0000-1111",
+								"labels": map[string]any{
 									"cluster": "cluster-a",
 									"project": "project-a1"},
 							},
 						},
 					},
 					{
-						Object: map[string]interface{}{
+						Object: map[string]any{
 							"apiVersion": "clusterview.open-cluster-management.io/v1",
 							"kind":       "KubevirtProject",
-							"metadata": map[string]interface{}{
-								"name": "project-a2",
-								"labels": map[string]interface{}{
+							"metadata": map[string]any{
+								"name": "0000-0000-0000-2222",
+								"labels": map[string]any{
 									"cluster": "cluster-a",
 									"project": "project-a2"},
+							},
+						},
+					},
+					{
+						Object: map[string]any{
+							"apiVersion": "clusterview.open-cluster-management.io/v1",
+							"kind":       "KubevirtProject",
+							"metadata": map[string]any{
+								"name": "0000-0000-0000-3333",
+								"labels": map[string]any{
+									"cluster": "cluster-b",
+									"project": "all_projects"},
 							},
 						},
 					},
@@ -910,9 +922,10 @@ func Test_GetFineGrainedRbacNamespaces(t *testing.T) {
 	}
 
 	// Call the function under test
-	namespaces := mockUserCache.getFineGrainedRbacNamespaces(context.Background())
+	clusters := mockUserCache.getFineGrainedRbacNamespaces(context.Background())
 
 	// Assertions
-	assert.Equal(t, len(namespaces), 1)
-	assert.Equal(t, namespaces["cluster-a"], []string{"project-a1", "project-a2"})
+	assert.Equal(t, 2, len(clusters))
+	assert.Equal(t, []string{"project-a1", "project-a2"}, clusters["cluster-a"])
+	assert.Equal(t, []string{"*"}, clusters["cluster-b"])
 }

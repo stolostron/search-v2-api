@@ -526,7 +526,11 @@ func (user *UserDataCache) getFineGrainedRbacNamespaces(ctx context.Context) map
 			cluster := item.GetLabels()["cluster"]
 			project := item.GetLabels()["project"]
 
-			if _, exists := ns[cluster]; !exists {
+			if project == "all_projects" {
+				// Replace 'all_projects' with * to align better with existing code.
+				// When user has access to all projects, there shouldn't be other individual namespaces.
+				ns[cluster] = []string{"*"}
+			} else if _, exists := ns[cluster]; !exists {
 				ns[cluster] = []string{project}
 			} else {
 				ns[cluster] = append(ns[cluster], project)
