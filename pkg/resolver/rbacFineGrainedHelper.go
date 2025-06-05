@@ -5,6 +5,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/lib/pq"
+	"k8s.io/klog/v2"
 )
 
 // TODO: Allow to expand this hard-coded list with an env variable.
@@ -31,6 +32,9 @@ func matchFineGrainedRbac(clusterNamespacesMap map[string][]string) exp.Expressi
 	result := goqu.And(
 		matchGroupKind(kubevirtResourcesMap),
 		matchClusterAndNamespace(clusterNamespacesMap))
+
+	sql, _, _ := goqu.From("t").Where(result).ToSQL()
+	klog.Info("Query is using fine-grained RBAC.  Query is: ", sql)
 
 	return result
 }

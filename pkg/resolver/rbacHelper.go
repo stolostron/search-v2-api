@@ -2,15 +2,43 @@
 package resolver
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/lib/pq"
+	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	v1 "k8s.io/api/authentication/v1"
 	"k8s.io/klog/v2"
 )
+
+// Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
+func buildRbacWhereClause(ctx context.Context, userrbac rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
+	if userrbac.IsClusterAdmin {
+		klog.Info("User is cluster admin. Using empty RBAC where clause.")
+		return exp.NewExpressionList(exp.ExpressionListType(exp.OrType))
+	}
+
+	if config.Cfg.Features.FineGrainedRbac && len(userrbac.FGRbacNamespaces) > 0 {
+		klog.Infof("Using fine grained RBAC. Managed cluster namespaces: %+v", userrbac.FGRbacNamespaces)
+		return goqu.Or(
+			matchFineGrainedRbac(userrbac.FGRbacNamespaces),
+			matchHubClusterRbac(userrbac, userInfo))
+	}
+
+	if config.Cfg.Features.FineGrainedRbac && len(userrbac.FGRbacNamespaces) == 0 {
+		klog.Info("Using fine-grained RBAC. User is not authorized to any managed cluster namespace.")
+		return matchHubClusterRbac(userrbac, userInfo)
+	}
+
+	klog.Info("Using basic RBAC for managed clusters.")
+	return goqu.Or(
+		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
+		matchHubClusterRbac(userrbac, userInfo),
+	)
+}
 
 // function to loop through resources and build the where clause
 // Resolves to something similar to:
