@@ -144,7 +144,7 @@ func (s *SearchResult) Related(ctx context.Context) ([]SearchRelatedResult, erro
 	if len(s.uids) > 0 {
 		r = s.getRelationResolvers(ctx)
 	} else {
-		klog.V(1).Info("No uids selected for query:Related()")
+		klog.V(5).Info("No uids selected for query:Related()")
 	}
 
 	return r, nil

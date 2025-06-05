@@ -33,9 +33,10 @@ func matchFineGrainedRbac(clusterNamespacesMap map[string][]string) exp.Expressi
 		matchGroupKind(kubevirtResourcesMap),
 		matchClusterAndNamespace(clusterNamespacesMap))
 
-	sql, _, _ := goqu.From("t").Where(result).ToSQL()
-	klog.Info("Query is using fine-grained RBAC.  Query is: ", sql)
-
+	if klog.V(4).Enabled() {
+		sql, _, _ := goqu.From("t").Where(result).ToSQL()
+		klog.V(4).Info("Fine-grained RBAC query is: ", sql)
+	}
 	return result
 }
 
