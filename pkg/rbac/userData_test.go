@@ -884,7 +884,8 @@ func Test_GetFineGrainedRbacNamespaces(t *testing.T) {
 							"metadata": map[string]interface{}{
 								"name": "project-a1",
 								"labels": map[string]interface{}{
-									"cluster": "cluster-a"},
+									"cluster": "cluster-a",
+									"project": "project-a1"},
 							},
 						},
 					},
@@ -895,7 +896,8 @@ func Test_GetFineGrainedRbacNamespaces(t *testing.T) {
 							"metadata": map[string]interface{}{
 								"name": "project-a2",
 								"labels": map[string]interface{}{
-									"cluster": "cluster-a"},
+									"cluster": "cluster-a",
+									"project": "project-a2"},
 							},
 						},
 					},

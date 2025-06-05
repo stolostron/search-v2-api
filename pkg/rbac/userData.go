@@ -524,11 +524,12 @@ func (user *UserDataCache) getFineGrainedRbacNamespaces(ctx context.Context) map
 	} else {
 		for _, item := range kubevirtProjects.Items {
 			cluster := item.GetLabels()["cluster"]
+			project := item.GetLabels()["project"]
 
 			if _, exists := ns[cluster]; !exists {
-				ns[cluster] = []string{item.GetName()}
+				ns[cluster] = []string{project}
 			} else {
-				ns[cluster] = append(ns[cluster], item.GetName())
+				ns[cluster] = append(ns[cluster], project)
 			}
 		}
 	}
