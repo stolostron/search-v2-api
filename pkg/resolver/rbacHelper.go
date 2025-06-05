@@ -2,15 +2,43 @@
 package resolver
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/lib/pq"
+	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	v1 "k8s.io/api/authentication/v1"
 	"k8s.io/klog/v2"
 )
+
+// Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
+func buildRbacWhereClause(ctx context.Context, userrbac rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
+	if userrbac.IsClusterAdmin {
+		klog.V(3).Info("User is cluster admin. Using empty RBAC where clause.")
+		return exp.NewExpressionList(exp.ExpressionListType(exp.OrType))
+	}
+
+	if config.Cfg.Features.FineGrainedRbac && len(userrbac.FGRbacNamespaces) > 0 {
+		klog.V(3).Infof("Using fine grained RBAC. Managed cluster namespaces: %+v", userrbac.FGRbacNamespaces)
+		return goqu.Or(
+			matchFineGrainedRbac(userrbac.FGRbacNamespaces),
+			matchHubClusterRbac(userrbac, userInfo))
+	}
+
+	if config.Cfg.Features.FineGrainedRbac && len(userrbac.FGRbacNamespaces) == 0 {
+		klog.V(3).Info("Using fine-grained RBAC. User is not authorized to any managed cluster namespace.")
+		return matchHubClusterRbac(userrbac, userInfo)
+	}
+
+	klog.V(3).Info("Using basic RBAC for managed clusters.")
+	return goqu.Or(
+		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
+		matchHubClusterRbac(userrbac, userInfo),
+	)
+}
 
 // function to loop through resources and build the where clause
 // Resolves to something similar to:
@@ -102,7 +130,7 @@ func matchNamespacedResources(nsResources map[string][]rbac.Resource, userInfo v
 		consolidateNsList, keys, jsonMarshalErr := consolidateNsResources(nsResources)
 		whereNsDs = make([]exp.Expression, len(consolidateNsList))
 		if jsonMarshalErr == nil {
-			klog.V(2).Info("Using consolidated namespace list")
+			klog.V(3).Info("Using consolidated namespace list")
 			for count, resources := range keys {
 				namespaces := consolidateNsList[resources]
 				resList := []rbac.Resource{}
@@ -118,7 +146,7 @@ func matchNamespacedResources(nsResources map[string][]rbac.Resource, userInfo v
 		}
 		// if consolidating namespaces, doesn't work, proceed as usual without consolidation
 		if jsonMarshalErr != nil || unMarshalErr != nil {
-			klog.V(2).Info("Using non-consolidated namespace list")
+			klog.V(3).Info("Using non-consolidated namespace list")
 			whereNsDs = make([]exp.Expression, len(nsResources))
 			for nsCount, namespace := range namespaces {
 				whereNsDs[nsCount] = goqu.And(goqu.L("???", goqu.L(`data->?`, "namespace"),

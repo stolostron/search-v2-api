@@ -16,7 +16,6 @@ import (
 	db "github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/metrics"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
-	v1 "k8s.io/api/authentication/v1"
 	"k8s.io/klog/v2"
 )
 
@@ -145,7 +144,7 @@ func (s *SearchResult) Related(ctx context.Context) ([]SearchRelatedResult, erro
 	if len(s.uids) > 0 {
 		r = s.getRelationResolvers(ctx)
 	} else {
-		klog.V(1).Info("No uids selected for query:Related()")
+		klog.V(5).Info("No uids selected for query:Related()")
 	}
 
 	return r, nil
@@ -158,32 +157,6 @@ func (s *SearchResult) Uids() error {
 		return err
 	}
 	return s.resolveUids()
-}
-
-// Build where clause with rbac by combining clusterscoped, namespace scoped and managed cluster access
-func buildRbacWhereClause(ctx context.Context, userrbac rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
-	if userrbac.IsClusterAdmin {
-		klog.V(4).Info("User is cluster admin. Using empty RBAC where clause.")
-		return exp.NewExpressionList(exp.ExpressionListType(exp.OrType))
-	}
-
-	if config.Cfg.Features.FineGrainedRbac && len(userrbac.FGRbacNamespaces) > 0 {
-		klog.V(4).Infof("Using fine grained RBAC. Managed cluster namespaces: %+v", userrbac.FGRbacNamespaces)
-		return goqu.Or(
-			matchFineGrainedRbac(userrbac.FGRbacNamespaces),
-			matchHubClusterRbac(userrbac, userInfo))
-	}
-
-	if config.Cfg.Features.FineGrainedRbac && len(userrbac.FGRbacNamespaces) == 0 {
-		klog.V(4).Info("Using fine-grained RBAC. User is not authorized to any managed cluster namespace.")
-		return matchHubClusterRbac(userrbac, userInfo)
-	}
-
-	klog.V(4).Info("Using basic RBAC for managed clusters.")
-	return goqu.Or(
-		matchManagedCluster(getKeys(userrbac.ManagedClusters)), // goqu.I("cluster").In([]string{"clusterNames", ....})
-		matchHubClusterRbac(userrbac, userInfo),
-	)
 }
 
 // Example query: SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'kind') IN
