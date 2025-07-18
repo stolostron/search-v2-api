@@ -147,7 +147,7 @@ func ApplyRBACToFilter(ctx context.Context, filter NotificationFilter) (Notifica
 	klog.V(3).Info("Applying RBAC constraints to notification filter")
 
 	// Apply cluster filtering
-	if userData.ManagedClusters != nil && len(userData.ManagedClusters) > 0 {
+	if len(userData.ManagedClusters) > 0 {
 		allowedClusters := make([]string, 0, len(userData.ManagedClusters))
 		for cluster := range userData.ManagedClusters {
 			allowedClusters = append(allowedClusters, cluster)
@@ -171,7 +171,7 @@ func ApplyRBACToFilter(ctx context.Context, filter NotificationFilter) (Notifica
 	}
 
 	// Apply namespace filtering for hub cluster resources
-	if userData.NsResources != nil && len(userData.NsResources) > 0 {
+	if len(userData.NsResources) > 0 {
 		allowedNamespaces := make([]string, 0)
 		for namespace := range userData.NsResources {
 			// Add namespace if not already present

@@ -107,7 +107,10 @@ func (l *Listener) Stop() {
 	l.wg.Wait()
 
 	if l.conn != nil {
-		l.conn.Close(context.Background())
+		err := l.conn.Close(context.Background())
+		if err != nil {
+			klog.Errorf("Failed to close connection to PostgreSQL for notifications: %v", err)
+		}
 	}
 
 	l.subscriptionsMu.Lock()
@@ -203,7 +206,10 @@ func (l *Listener) reconnect() error {
 	klog.Info("Attempting to reconnect to PostgreSQL for notifications...")
 
 	if l.conn != nil {
-		l.conn.Close(context.Background())
+		err := l.conn.Close(context.Background())
+		if err != nil {
+			klog.Errorf("Failed to close connection to PostgreSQL for notifications: %v", err)
+		}
 	}
 
 	if err := l.connect(); err != nil {
