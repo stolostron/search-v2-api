@@ -39,6 +39,10 @@ type Config struct {
 	HttpPort                    int
 	PlaygroundMode              bool   // Enable the GraphQL Playground client.
 	PodNamespace                string // Kubernetes namespace where the pod is running.
+	NotificationChannelName     string // PostgreSQL notification channel name. Default: search_resources_changes
+	NotificationBufferSize      int    // Buffer size for notification channels. Default: 1000
+	NotificationReconnectDelay  int    // Delay in milliseconds before reconnecting to PostgreSQL LISTEN. Default: 5000
+	NotificationMaxRetries      int    // Maximum retry attempts for failed notifications. Default: 3
 	QueryLimit                  uint   // The default LIMIT to use on queries. Client can override. Default: 1000
 	RelationLevel               int    // The number of levels/hops for finding relationships for a particular resource
 	SlowLog                     int    // Logs queries slower than the specified duration in ms. Default: 300ms
@@ -51,6 +55,7 @@ type featureFlags struct {
 	FederatedSearch     bool // Enables federated search
 	FineGrainedRbac     bool // Enables fine-grained RBAC
 	SubscriptionEnabled bool // Enables GraphQL Subscriptions
+	NotificationEnabled bool // Enables PostgreSQL LISTEN/NOTIFY for real-time updates
 }
 
 // Http Client Pool Transport settings for federated client pool.
@@ -94,7 +99,8 @@ func new() *Config {
 		Features: featureFlags{
 			FederatedSearch:     getEnvAsBool("FEATURE_FEDERATED_SEARCH", false),  // In Dev mode default is true.
 			FineGrainedRbac:     getEnvAsBool("FEATURE_FINE_GRAINED_RBAC", false), // In Dev mode default is true.
-			SubscriptionEnabled: getEnvAsBool("FEATURE_SUBSCRIPTION", false),
+			SubscriptionEnabled: getEnvAsBool("FEATURE_SUBSCRIPTION", true),
+			NotificationEnabled: getEnvAsBool("FEATURE_NOTIFICATION", true),
 		},
 		Federation: federationConfig{
 			GlobalHubName:  getEnv("GLOBAL_HUB_NAME", "global-hub"),
@@ -118,6 +124,10 @@ func new() *Config {
 		RelationLevel:               getEnvAsInt("RELATION_LEVEL", 0),
 		SubscriptionRefreshInterval: getEnvAsInt("SUBSCRIPTION_REFRESH_INTERVAL", 10*1000),  // 10 seconds
 		SubscriptionRefreshTimeout:  getEnvAsInt("SUBSCRIPTION_REFRESH_TIMEOUT", 5*60*1000), // 5 minutes
+		NotificationChannelName:     getEnv("NOTIFICATION_CHANNEL_NAME", "search_resources_changes"),
+		NotificationBufferSize:      getEnvAsInt("NOTIFICATION_BUFFER_SIZE", 1000),
+		NotificationReconnectDelay:  getEnvAsInt("NOTIFICATION_RECONNECT_DELAY", 5000),
+		NotificationMaxRetries:      getEnvAsInt("NOTIFICATION_MAX_RETRIES", 3),
 	}
 	conf.DBPass = url.QueryEscape(conf.DBPass)
 	return conf
