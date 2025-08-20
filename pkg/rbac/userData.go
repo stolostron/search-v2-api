@@ -367,10 +367,6 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 								return
 							}
 							currRes := Resource{Apigroup: api, Kind: res}
-							// Skip sub-resources. Database only has resources, not sub-resources
-							// if strings.Contains(currRes.Kind, "/") {
-							// 	continue
-							// }
 							// to avoid duplicates, check before appending to nsResources
 							if _, found := trackResources[currRes]; !found {
 								user.NsResources[ns] = append(user.NsResources[ns], currRes)
