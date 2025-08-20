@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -344,6 +345,10 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 		for _, verb := range rule.Verbs {
 			if verb == "list" || verb == "*" {
 				for _, res := range rule.Resources {
+					// Skip sub-resources. Database only has resources, not sub-resources
+					if strings.Contains(res, "/") {
+						continue
+					}
 					for _, api := range rule.APIGroups {
 						// Add the resource if it is not cluster scoped
 						// fail-safe mechanism to avoid whitelist - TODO: incorporate whitelist
@@ -362,7 +367,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 								return
 							}
 							currRes := Resource{Apigroup: api, Kind: res}
-							//to avoid duplicates, check before appending to nsResources
+							// to avoid duplicates, check before appending to nsResources
 							if _, found := trackResources[currRes]; !found {
 								user.NsResources[ns] = append(user.NsResources[ns], currRes)
 								trackResources[currRes] = struct{}{}

@@ -87,6 +87,11 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 					APIGroups: []string{"k8s.io"},
 					Resources: []string{"nodes1", "nodes2"},
 				},
+				{
+					Verbs:     []string{"list"},
+					APIGroups: []string{""},
+					Resources: []string{"pod/status"},
+				},
 			},
 		},
 	}
@@ -106,18 +111,12 @@ func Test_getNamespaces_emptyCache(t *testing.T) {
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 	result, err := mock_cache.GetUserDataCache(ctx, fs.AuthorizationV1())
 
-	if len(result.NsResources) != 1 ||
-		result.NsResources["some-namespace"][0].Apigroup != "k8s.io" ||
-		result.NsResources["some-namespace"][1].Apigroup != "k8s.io" ||
-		result.NsResources["some-namespace"][0].Kind != "nodes1" ||
-		result.NsResources["some-namespace"][1].Kind != "nodes2" {
-		t.Errorf("Cache does not have expected namespace resources ")
-
-	}
-	if err != nil {
-		t.Error("Unexpected error while obtaining namespaces.", err)
-	}
-
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(result.NsResources))
+	assert.Equal(t, "nodes1", result.NsResources["some-namespace"][0].Kind)
+	assert.Equal(t, "nodes2", result.NsResources["some-namespace"][1].Kind)
+	assert.Equal(t, "k8s.io", result.NsResources["some-namespace"][0].Apigroup)
+	assert.Equal(t, "k8s.io", result.NsResources["some-namespace"][1].Apigroup)
 }
 
 func Test_getNamespaces_usingCache(t *testing.T) {
