@@ -97,7 +97,7 @@ func (s *SearchResult) buildRelationsQuery() {
 		Where(goqu.Ex{"sourceid": s.uids})
 	baseDest := goqu.From(schema.Table("edges").As("e")).
 		Select(selectBase...).
-		Where(goqu.Ex{"sourceid": s.uids})
+		Where(goqu.Ex{"destid": s.uids})
 	baseTerm := baseSource.UnionAll(baseDest)
 
 	// Recursive term
