@@ -101,29 +101,15 @@ func (s *SearchResult) buildRelationsQuery() {
 	baseTerm := baseSource.UnionAll(baseDest)
 
 	// Recursive term
-	recursiveSource := goqu.From(schema.Table("edges").As("e")).
+	recursiveTerm := goqu.From(schema.Table("edges").As("e")).
 		InnerJoin(goqu.T("search_graph").As("sg"),
-			goqu.On(goqu.Ex{"sg.sourceid": srcDestIds})).
+			goqu.On(goqu.ExOr{"sg.destid": srcDestIds, "sg.sourceid": srcDestIds})).
 		Select(selectNext...).
 		// Limiting up to default level 3 as it should suffice for application relations
-		Where(goqu.Ex{
-			"sg.level": goqu.Op{"Lte": s.level},
+		Where(goqu.Ex{"sg.level": goqu.Op{"Lte": s.level},
 			// Avoid getting nodes and channels in recursion to prevent pulling all relations for node and channel
 			"e.destkind":   goqu.Op{"neq": excludeResources},
-			"e.sourcekind": goqu.Op{"neq": excludeResources},
-		})
-	recursiveDest := goqu.From(schema.Table("edges").As("e")).
-		InnerJoin(goqu.T("search_graph").As("sg"),
-			goqu.On(goqu.Ex{"sg.destid": srcDestIds})).
-		Select(selectNext...).
-		// Limiting up to default level 3 as it should suffice for application relations
-		Where(goqu.Ex{
-			"sg.level": goqu.Op{"Lte": s.level},
-			// Avoid getting nodes and channels in recursion to prevent pulling all relations for node and channel
-			"e.destkind":   goqu.Op{"neq": excludeResources},
-			"e.sourcekind": goqu.Op{"neq": excludeResources},
-		})
-	recursiveTerm := recursiveSource.UnionAll(recursiveDest)
+			"e.sourcekind": goqu.Op{"neq": excludeResources}})
 	var searchGraphQ *goqu.SelectDataset
 
 	if s.level > 1 {
@@ -132,7 +118,7 @@ func (s *SearchResult) buildRelationsQuery() {
 		searchGraphQ = goqu.From("search_graph").
 			WithRecursive("search_graph(level, sourceid, destid,  sourcekind, destkind, cluster, path)",
 				baseTerm.
-					UnionAll(recursiveTerm)).
+					Union(recursiveTerm)).
 			SelectDistinct("level", "sourceid", "destid", "sourcekind", "destkind", "cluster", "path")
 	} else {
 		searchGraphQ = baseTerm // Query without recursion since it is only level 1
