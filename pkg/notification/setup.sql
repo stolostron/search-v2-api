@@ -10,20 +10,16 @@ CREATE OR REPLACE FUNCTION search.notify_resources_change()
 RETURNS trigger AS $$
 DECLARE
     notification_payload json;
-    old_data_json json;
     new_data_json json;
 BEGIN
     -- Prepare the old and new data as JSON
-    IF TG_OP = 'DELETE' THEN
-        old_data_json := OLD.data;
-        new_data_json := NULL;
-    ELSIF TG_OP = 'INSERT' THEN
-        old_data_json := NULL;
-        new_data_json := NEW.data;
-    ELSIF TG_OP = 'UPDATE' THEN
-        old_data_json := OLD.data;
-        new_data_json := NEW.data;
-    END IF;
+    -- IF TG_OP = 'DELETE' THEN
+    --     new_data_json := NULL;
+    -- ELSIF TG_OP = 'INSERT' THEN
+    --     new_data_json := NEW.data;
+    -- ELSIF TG_OP = 'UPDATE' THEN
+    --     new_data_json := NEW.data;
+    -- END IF;
 
     -- Build the notification payload
     notification_payload := json_build_object(
@@ -31,8 +27,7 @@ BEGIN
         'table', TG_TABLE_NAME,
         'uid', COALESCE(NEW.uid, OLD.uid),
         'cluster', COALESCE(NEW.cluster, OLD.cluster),
-        'old_data', old_data_json,
-        'new_data', new_data_json,
+        'new_data', NEW.data, --new_data_json,
         'timestamp', EXTRACT(EPOCH FROM NOW())::bigint
     );
 
@@ -60,7 +55,6 @@ CREATE OR REPLACE FUNCTION search.notify_resources_change_filtered()
 RETURNS trigger AS $$
 DECLARE
     notification_payload json;
-    old_data_json json;
     new_data_json json;
     resource_kind text;
     should_notify boolean := false;
@@ -68,16 +62,13 @@ BEGIN
     -- Determine if we should send a notification based on resource kind
     IF TG_OP = 'DELETE' THEN
         resource_kind := OLD.data->>'kind';
-        old_data_json := OLD.data;
-        new_data_json := NULL;
+        -- new_data_json := NULL;
     ELSIF TG_OP = 'INSERT' THEN
         resource_kind := NEW.data->>'kind';
-        old_data_json := NULL;
-        new_data_json := NEW.data;
+        -- new_data_json := NEW.data;
     ELSIF TG_OP = 'UPDATE' THEN
         resource_kind := NEW.data->>'kind';
-        old_data_json := OLD.data;
-        new_data_json := NEW.data;
+        -- new_data_json := NEW.data;
     END IF;
 
     -- Filter by resource kinds (uncomment and modify as needed)
@@ -100,8 +91,7 @@ BEGIN
             'table', TG_TABLE_NAME,
             'uid', COALESCE(NEW.uid, OLD.uid),
             'cluster', COALESCE(NEW.cluster, OLD.cluster),
-            'old_data', old_data_json,
-            'new_data', new_data_json,
+            'new_data', NEW.data, --new_data_json,
             'timestamp', EXTRACT(EPOCH FROM NOW())::bigint
         );
 

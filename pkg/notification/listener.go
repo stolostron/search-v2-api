@@ -20,7 +20,6 @@ type NotificationPayload struct {
 	Table     string                 `json:"table"`     // Table name
 	UID       string                 `json:"uid"`       // Resource UID
 	Cluster   string                 `json:"cluster"`   // Cluster name
-	OldData   map[string]interface{} `json:"old_data,omitempty"`
 	NewData   map[string]interface{} `json:"new_data,omitempty"`
 	// Timestamp time.Time              `json:"timestamp"`
 }
@@ -54,6 +53,9 @@ type Listener struct {
 	cancel          context.CancelFunc
 	wg              sync.WaitGroup
 	channelName     string
+	eventCount      int
+	eventLog        []time.Time
+	lastPrint       time.Time
 }
 
 // NotificationManager is a singleton instance for managing notifications
@@ -224,6 +226,27 @@ func (l *Listener) reconnect() error {
 	return nil
 }
 
+// Print rate of events per minute from list of times
+func (l *Listener) printRate() {
+	if len(l.eventLog) == 0 {
+		return
+	}
+	if l.lastPrint.IsZero() {
+		l.lastPrint = time.Now()
+		return
+	}
+	// Skip if less than 5 seconds since last print.
+	if time.Since(l.lastPrint) < time.Second*5 {
+		return
+	}
+	secondsElapsed := time.Since(l.lastPrint).Seconds()
+	events := len(l.eventLog)
+
+	klog.Infof("+++ Rate: %.2f events/second  \t[Received %d events in last %.2f seconds]", float64(events)/secondsElapsed, events, secondsElapsed)
+	l.eventLog = []time.Time{}
+	l.lastPrint = time.Now()
+}
+
 // processNotification parses and distributes notifications to subscribers
 func (l *Listener) processNotification(notification *pgconn.Notification) {
 	klog.V(5).Infof("Received notification on channel %s: %s", notification.Channel, notification.Payload)
@@ -234,6 +257,11 @@ func (l *Listener) processNotification(notification *pgconn.Notification) {
 		klog.Infof("Notification payload: %v", notification.Payload)
 		return
 	}
+
+	l.eventCount++
+	l.eventLog = append(l.eventLog, time.Now())
+	l.printRate()
+	// klog.Infof("Processing notification (%d) OPERATION: [%s] UID: [%s]", l.count, payload.Operation, payload.UID)
 
 	l.subscriptionsMu.RLock()
 	defer l.subscriptionsMu.RUnlock()
@@ -246,7 +274,7 @@ func (l *Listener) processNotification(notification *pgconn.Notification) {
 		if l.matchesFilter(payload, sub.Filter) {
 			select {
 			case sub.Channel <- payload:
-				klog.V(4).Infof("Received notification for subscription %s", sub.ID)
+				klog.V(1).Infof("Received notification for subscription %s", sub.ID)
 			default:
 				klog.Warningf("Subscription %s channel is full, dropping notification", sub.ID)
 			}
@@ -286,9 +314,10 @@ func (l *Listener) matchesFilter(payload NotificationPayload, filter Notificatio
 
 	// Get the data to check (new data for INSERT/UPDATE, old data for DELETE)
 	var dataToCheck map[string]interface{}
-	if payload.Operation == "DELETE" && payload.OldData != nil {
-		dataToCheck = payload.OldData
-	} else if payload.NewData != nil {
+	// if payload.Operation == "DELETE" && payload.OldData != nil {
+	// 	dataToCheck = payload.OldData
+	// } else
+	if payload.NewData != nil {
 		dataToCheck = payload.NewData
 	} else {
 		return false

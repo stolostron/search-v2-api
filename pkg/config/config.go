@@ -127,7 +127,7 @@ func new() *Config {
 		NotificationChannelName:     getEnv("NOTIFICATION_CHANNEL_NAME", "search_resources_changes"),
 		NotificationBufferSize:      getEnvAsInt("NOTIFICATION_BUFFER_SIZE", 1000),
 		NotificationReconnectDelay:  getEnvAsInt("NOTIFICATION_RECONNECT_DELAY", 5000),
-		NotificationMaxRetries:      getEnvAsInt("NOTIFICATION_MAX_RETRIES", 3),
+		NotificationMaxRetries:      getEnvAsInt("NOTIFICATION_MAX_RETRIES", 60),
 	}
 	conf.DBPass = url.QueryEscape(conf.DBPass)
 	return conf

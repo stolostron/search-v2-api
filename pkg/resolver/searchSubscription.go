@@ -127,8 +127,6 @@ func realTimeSearchSubscription(ctx context.Context, input []*model.SearchInput,
 		}()
 
 		timeout := time.After(time.Duration(config.Cfg.SubscriptionRefreshTimeout) * time.Millisecond)
-		lastSearchTime := time.Now()
-		searchThrottleInterval := time.Duration(config.Cfg.SubscriptionRefreshInterval) * time.Millisecond
 
 		// Send initial search results
 		klog.V(3).Info("Sending initial search results for real-time subscription")
@@ -146,6 +144,7 @@ func realTimeSearchSubscription(ctx context.Context, input []*model.SearchInput,
 			}
 		}
 
+		eventCount := 0
 		for {
 			select {
 			case <-ctx.Done():
@@ -162,21 +161,9 @@ func realTimeSearchSubscription(ctx context.Context, input []*model.SearchInput,
 					return
 				}
 
-				klog.V(4).Infof("Received notification for subscription %s: %s on %s",
-					subscriptionID, notificationPayload.Operation, notificationPayload.UID)
-
-				// Throttle search queries to avoid overwhelming the system
-				if time.Since(lastSearchTime) < searchThrottleInterval {
-					klog.V(4).Info("Throttling search query due to rapid notifications")
-					continue
-				}
-
-				// Execute new search based on notification
-				searchResult, err := Search(ctx, input)
-				if err != nil {
-					klog.Errorf("Error occurred during real-time search subscription: %s", err)
-					continue
-				}
+				klog.V(4).Infof("Received notification for: %s Action:[%s] kind:[%s] name:[%s] namespace:[%s] cluster:[%s]",
+					subscriptionID, notificationPayload.Operation, notificationPayload.NewData["kind"],
+					notificationPayload.NewData["name"], notificationPayload.NewData["namespace"], notificationPayload.Cluster)
 
 				// Send updated results
 				select {
@@ -185,8 +172,11 @@ func realTimeSearchSubscription(ctx context.Context, input []*model.SearchInput,
 				case <-timeout:
 					return
 				case ch <- searchResult:
-					lastSearchTime = time.Now()
 					klog.V(4).Infof("Sent updated search results for subscription %s", subscriptionID)
+				default:
+					eventCount++
+					klog.V(4).Infof("Received %d events for subscription %s", eventCount, subscriptionID)
+					continue
 				}
 			}
 		}
