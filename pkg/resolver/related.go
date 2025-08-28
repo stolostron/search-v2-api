@@ -38,11 +38,15 @@ func (s *SearchResult) buildRelationsQuery() {
 	unnest(array[sourcekind, destkind, 'Cluster']) AS "kind"
 		FROM (
 			WITH RECURSIVE search_graph(level, sourceid, destid,  sourcekind, destkind, cluster) AS
-			(SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster"
-			 FROM "search"."edges" AS "e"
-			 WHERE (("destid" IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc' )) OR
-						("sourceid" IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc'))
-				   )
+			(
+	         	SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster"
+			 	FROM "search"."edges" AS "e"
+			 	WHERE (("destid" IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc' ))
+		     	UNION ALL
+	         	SELECT 1 AS "level", "sourceid", "destid", "sourcekind", "destkind", "cluster"
+			 	FROM "search"."edges" AS "e"
+			 	WHERE (("sourceid" IN ('local-cluster/108a77a2-159c-4621-ae1e-7a3649000ebc' ))
+	        )
 					   UNION
 			 (SELECT level+1 AS "level", "e"."sourceid", "e"."destid", "e"."sourcekind", "e"."destkind", "e"."cluster"
 			  FROM "search"."edges" AS "e"
@@ -92,16 +96,20 @@ func (s *SearchResult) buildRelationsQuery() {
 	excludeResources := []interface{}{"Node", "Channel"}
 
 	// Non-recursive term
-	baseTerm := goqu.From(schema.Table("edges").As("e")).
+	baseSource := goqu.From(schema.Table("edges").As("e")).
 		Select(selectBase...).
-		Where(goqu.ExOr{"sourceid": (s.uids), "destid": (s.uids)})
+		Where(goqu.Ex{"sourceid": s.uids})
+	baseDest := goqu.From(schema.Table("edges").As("e")).
+		Select(selectBase...).
+		Where(goqu.Ex{"destid": s.uids})
+	baseTerm := baseSource.UnionAll(baseDest)
 
 	// Recursive term
 	recursiveTerm := goqu.From(schema.Table("edges").As("e")).
 		InnerJoin(goqu.T("search_graph").As("sg"),
 			goqu.On(goqu.ExOr{"sg.destid": srcDestIds, "sg.sourceid": srcDestIds})).
 		Select(selectNext...).
-		// Limiting upto default level 3 as it should suffice for application relations
+		// Limiting up to default level 3 as it should suffice for application relations
 		Where(goqu.Ex{"sg.level": goqu.Op{"Lte": s.level},
 			// Avoid getting nodes and channels in recursion to prevent pulling all relations for node and channel
 			"e.destkind":   goqu.Op{"neq": excludeResources},
