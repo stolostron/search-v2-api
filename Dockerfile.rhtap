@@ -19,6 +19,7 @@ USER ${USER_UID}
 ENTRYPOINT ["/bin/main"]
 
 LABEL com.redhat.component="acm-search-api-container" \
+      url="https://github.com/stolostron/search-v2-api" \
       description="Search api service" \      
       maintainer="acm-contact@redhat.com" \
       name="search-api" \
