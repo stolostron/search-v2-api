@@ -21,28 +21,49 @@ func livenessProbe(w http.ResponseWriter, r *http.Request) {
 
 // ReadinessProbe checks if rbac cache and database are available.
 func readinessProbe(w http.ResponseWriter, r *http.Request) {
-	klog.V(5).Info("readinessProbe")
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
-	pool := database.GetConnPool(ctx)
-	if pool == nil {
-		http.Error(w, "Database pool not initialized", http.StatusServiceUnavailable)
-		return
-	}
-	if err := pool.Ping(ctx); err != nil {
-		http.Error(w, "Database unavailable", http.StatusServiceUnavailable)
-		return
-	}
+	dbDone := make(chan error, 1)
+	go func() {
 
-	// Check RBAC cache
-	cache := rbac.GetCache()
-	if cache == nil {
-		http.Error(w, "RBAC cache not initialized", http.StatusServiceUnavailable)
-		return
-	}
-	if !cache.IsHealthy() {
-		http.Error(w, "RBAC cache unavailable", http.StatusServiceUnavailable)
+		// context timeout disregarded in new connection constructor: https://pkg.go.dev/github.com/jackc/pgx/v4/pgxpool@v4.18.3#ConnectConfig
+		pool := database.GetConnPool(ctx)
+		if pool == nil {
+			dbDone <- fmt.Errorf("database pool not initialized")
+			return
+		}
+		// context timeout respected: https://pkg.go.dev/github.com/jackc/puddle@v1.3.0#Pool.Acquire
+		dbDone <- pool.Ping(ctx)
+	}()
+
+	cacheDone := make(chan error, 1)
+	go func() {
+		cache := rbac.GetCache()
+		if cache == nil {
+			cacheDone <- fmt.Errorf("RBAC cache not initialized")
+			return
+		}
+		if !cache.IsHealthy() {
+			cacheDone <- fmt.Errorf("RBAC cache unavailable")
+			return
+		}
+		cacheDone <- nil
+	}()
+
+	select {
+	case err := <-dbDone:
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+	case err := <-cacheDone:
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+	case <-ctx.Done():
+		http.Error(w, "Readiness probe timed out", http.StatusServiceUnavailable)
 		return
 	}
 
