@@ -27,14 +27,13 @@ func readinessProbe(w http.ResponseWriter, r *http.Request) {
 	dbDone := make(chan error, 1)
 	go func() {
 
-		// context timeout disregarded in new connection constructor: https://pkg.go.dev/github.com/jackc/pgx/v4/pgxpool@v4.18.3#ConnectConfig
-		pool := database.GetConnPool(ctx)
+		// pass background context to avoid timing out of this request initializes pool
+		pool := database.GetConnPool(context.Background())
 		if pool == nil {
 			dbDone <- fmt.Errorf("database pool not initialized")
 			return
 		}
-		// context timeout respected: https://pkg.go.dev/github.com/jackc/puddle@v1.3.0#Pool.Acquire
-		dbDone <- pool.Ping(ctx)
+		dbDone <- pool.Ping(context.Background())
 	}()
 
 	cacheDone := make(chan error, 1)
