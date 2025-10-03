@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/stolostron/search-v2-api/pkg/database"
@@ -23,48 +24,64 @@ func livenessProbe(w http.ResponseWriter, r *http.Request) {
 func readinessProbe(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
+	var wg sync.WaitGroup
+	errCh := make(chan error, 2)
 
-	dbDone := make(chan error, 1)
+	wg.Add(1)
 	go func() {
-
+		defer wg.Done()
 		// pass background context to avoid timing out of this request initializes pool
 		pool := database.GetConnPool(context.Background())
 		if pool == nil {
-			dbDone <- fmt.Errorf("database pool not initialized")
+			errCh <- fmt.Errorf("database pool not initialized")
 			return
 		}
-		dbDone <- pool.Ping(context.Background())
+		errCh <- pool.Ping(context.Background())
 	}()
 
-	cacheDone := make(chan error, 1)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		cache := rbac.GetCache()
 		if cache == nil {
-			cacheDone <- fmt.Errorf("RBAC cache not initialized")
+			errCh <- fmt.Errorf("RBAC cache not initialized")
 			return
 		}
 		if !cache.IsHealthy() {
-			cacheDone <- fmt.Errorf("RBAC cache unavailable")
+			errCh <- fmt.Errorf("RBAC cache unavailable")
 			return
 		}
-		cacheDone <- nil
+		errCh <- nil
+	}()
+
+	// block for errs in goroutine to permit timeout to return in case either checks hang
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
 	}()
 
 	select {
-	case err := <-dbDone:
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusServiceUnavailable)
-			return
+	case <-done:
+		close(errCh)
+		combinedErr := ""
+		// build one err string for all failed readiness sub checks ; separated
+		for e := range errCh {
+			if e != nil {
+				if combinedErr == "" {
+					combinedErr = e.Error()
+				} else {
+					combinedErr = fmt.Sprintf("%s; %v", combinedErr, e)
+				}
+			}
 		}
-	case err := <-cacheDone:
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusServiceUnavailable)
-			return
+		if combinedErr != "" {
+			http.Error(w, combinedErr, http.StatusServiceUnavailable)
 		}
+
+		fmt.Fprint(w, "OK")
 	case <-ctx.Done():
 		http.Error(w, "Readiness probe timed out", http.StatusServiceUnavailable)
 		return
 	}
-
-	fmt.Fprint(w, "OK")
 }
