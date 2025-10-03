@@ -70,3 +70,28 @@ func GetCache() *Cache {
 	}
 	return &cacheInst
 }
+
+// IsHealthy checks if the RBAC cache is in a healthy state
+func (c *Cache) IsHealthy() bool {
+	// Check if database connection is initialized
+	if !c.GetDbConnInitialized() {
+		klog.V(3).Info("RBAC cache unhealthy: database connection not initialized")
+		return false
+	}
+
+	// Check if we have a database pool
+	if c.pool == nil {
+		klog.V(3).Info("RBAC cache unhealthy: database pool is nil")
+		return false
+	}
+
+	// Check if shared data has been populated
+	hasData := c.shared.managedClusters != nil && c.shared.namespaces != nil
+
+	if !hasData {
+		klog.V(3).Info("RBAC cache unhealthy: shared data not initialized")
+		return false
+	}
+
+	return true
+}

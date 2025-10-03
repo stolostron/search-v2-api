@@ -32,7 +32,7 @@ func main() {
 	// Establish the database connection.
 	database.GetConnPool(ctx)
 
-	// Start process to watch the RBAC config andd update the cache.
+	// Start process to watch the RBAC config and update the cache.
 	go rbac.GetCache().StartBackgroundValidation(ctx)
 
 	server.StartAndListen()
