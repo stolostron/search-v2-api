@@ -302,7 +302,7 @@ func (user *UserDataCache) userAuthorizedListSSAR(ctx context.Context, authzClie
 	result, err := authzClient.SelfSubjectAccessReviews().Create(ctx, accessCheck, metav1.CreateOptions{})
 
 	if err != nil && strings.Contains(err.Error(), "would exceed context deadline") {
-		klog.V(5).Infof("Error creating SelfSubjectAccessReviews.", err)
+		klog.V(5).Infof("Error creating SelfSubjectAccessReviews: %v", err)
 	} else if err != nil {
 		klog.Error("Error creating SelfSubjectAccessReviews.", err)
 	} else {
