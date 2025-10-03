@@ -40,11 +40,16 @@ func isContextError(err error) bool {
 	if err == nil {
 		return false
 	}
+
 	errMsg := err.Error()
-	return errors.Is(err, context.DeadlineExceeded) ||
+	if errors.Is(err, context.DeadlineExceeded) ||
 		errors.Is(err, context.Canceled) ||
 		errMsg == "context deadline exceeded" ||
-		errMsg == "context canceled"
+		errMsg == "context canceled" {
+		klog.V(1).Info(err.Error())
+		return true
+	}
+	return false
 }
 
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
@@ -54,7 +59,7 @@ func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, e
 
 	select {
 	case <-ctx.Done():
-		return srchResult, errors.New("context exceeded deadline")
+		return srchResult, errors.New("Timeout processing the request.")
 	default:
 	}
 
