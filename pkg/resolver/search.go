@@ -3,6 +3,7 @@ package resolver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -34,10 +35,29 @@ type SearchResult struct {
 
 const ErrorMsg string = "Error building Search query:"
 
+// isContextError checks if an error is a context timeout or cancellation error
+func isContextError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	return errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, context.Canceled) ||
+		errMsg == "context deadline exceeded" ||
+		errMsg == "context canceled"
+}
+
 func Search(ctx context.Context, input []*model.SearchInput) ([]*SearchResult, error) {
 	defer metrics.SlowLog("SearchResolver", 0)()
 	// For each input, create a SearchResult resolver.
 	srchResult := make([]*SearchResult, len(input))
+
+	select {
+	case <-ctx.Done():
+		return srchResult, errors.New("context exceeded deadline")
+	default:
+	}
+
 	userData, userDataErr := rbac.GetCache().GetUserData(ctx)
 	if userDataErr != nil {
 		return srchResult, userDataErr
@@ -115,8 +135,9 @@ func (s *SearchResult) Items() ([]map[string]interface{}, error) {
 		return nil, err
 	}
 	r, e := s.resolveItems()
-	if e != nil {
-		s.checkErrorBuildingQuery(e, "Error resolving items.")
+	if e != nil && !isContextError(e) {
+		// Only log non-timeout errors to reduce verbosity
+		klog.Error("Error resolving items. ", e)
 	}
 	return r, e
 }
@@ -348,7 +369,10 @@ func WhereClauseFilter(ctx context.Context, input *model.SearchInput,
 				klog.V(3).Infof("For filter prop: %s, datatype is :%s dataTypeInMap: %t\n", filter.Property,
 					dataType, dataTypeInMap)
 				if err != nil {
-					klog.Errorf("Error creating property type map with err: [%s]", err)
+					// Only log full error for non-timeout cases
+					if !isContextError(err) {
+						klog.Errorf("Error creating property type map with err: [%s]", err)
+					}
 					return whereDs, propTypeMap, fmt.Errorf("error [%s] fetching data type for property: [%s]",
 						err, filter.Property)
 				}

@@ -260,6 +260,14 @@ func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache 
 	wg := sync.WaitGroup{}
 	lock := sync.Mutex{}
 	for res := range clusterScopedResources {
+		select {
+		case <-ctx.Done():
+			klog.Warning("Context canceled. stopping remaining SSAR checks. Examine frequency of requests and request timeout config.")
+			wg.Wait()
+			user.csrCache.err = errors.New("context exceeded deadline performing SSAR")
+			return user, user.csrCache.err
+		default:
+		}
 		wg.Add(1)
 		go func(group, kind string) {
 			defer wg.Done()
@@ -293,7 +301,9 @@ func (user *UserDataCache) userAuthorizedListSSAR(ctx context.Context, authzClie
 	}
 	result, err := authzClient.SelfSubjectAccessReviews().Create(ctx, accessCheck, metav1.CreateOptions{})
 
-	if err != nil {
+	if err != nil && strings.Contains(err.Error(), "would exceed context deadline") {
+		klog.V(5).Infof("Error creating SelfSubjectAccessReviews.", err)
+	} else if err != nil {
 		klog.Error("Error creating SelfSubjectAccessReviews.", err)
 	} else {
 		klog.V(6).Infof("SelfSubjectAccessReviews API result for resource %s group %s : %v\n",
