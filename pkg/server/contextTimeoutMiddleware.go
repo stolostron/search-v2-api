@@ -2,11 +2,11 @@ package server
 
 import (
 	"context"
-	"github.com/gorilla/websocket"
-	"github.com/stolostron/search-v2-api/pkg/config"
 	"net/http"
 	"time"
 
+	"github.com/gorilla/websocket"
+	"github.com/stolostron/search-v2-api/pkg/config"
 	klog "k8s.io/klog/v2"
 )
 

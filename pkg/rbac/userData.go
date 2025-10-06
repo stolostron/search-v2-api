@@ -260,14 +260,6 @@ func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache 
 	wg := sync.WaitGroup{}
 	lock := sync.Mutex{}
 	for res := range clusterScopedResources {
-		select {
-		case <-ctx.Done():
-			klog.Warning("Context canceled. stopping remaining SSAR checks. Examine frequency of requests and request timeout config.")
-			wg.Wait()
-			user.csrCache.err = errors.New("context exceeded deadline performing SSAR")
-			return user, user.csrCache.err
-		default:
-		}
 		wg.Add(1)
 		go func(group, kind string) {
 			defer wg.Done()
@@ -279,7 +271,20 @@ func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache 
 			}
 		}(res.Apigroup, res.Kind)
 	}
-	wg.Wait() // Wait for all requests to complete.
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	// Wait for all requests to complete or request context to timeout and return
+	select {
+	case <-ctx.Done():
+		return user, ctx.Err()
+	case <-done:
+		klog.V(7).Info("All goroutines managed by UserDataCache::getClusterScopedResources completed.")
+	}
 
 	uid, userInfo := cache.GetUserUID(ctx)
 	klog.V(7).Infof("User %s with uid: %s has access to these cluster scoped res: %+v \n", userInfo.Username, uid,
@@ -301,9 +306,7 @@ func (user *UserDataCache) userAuthorizedListSSAR(ctx context.Context, authzClie
 	}
 	result, err := authzClient.SelfSubjectAccessReviews().Create(ctx, accessCheck, metav1.CreateOptions{})
 
-	if err != nil && strings.Contains(err.Error(), "would exceed context deadline") {
-		klog.V(5).Infof("Error creating SelfSubjectAccessReviews: %v", err)
-	} else if err != nil {
+	if err != nil {
 		klog.Error("Error creating SelfSubjectAccessReviews.", err)
 	} else {
 		klog.V(6).Infof("SelfSubjectAccessReviews API result for resource %s group %s : %v\n",
@@ -454,7 +457,20 @@ func (user *UserDataCache) getNamespacedResources(ctx context.Context, cache *Ca
 			user.getSSRRforNamespace(ctx, cache, namespace, &lock)
 		}(ns)
 	}
-	wg.Wait() // Wait for all go routines to complete.
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	// Wait for all goroutines to complete or request context to timeout and return
+	select {
+	case <-ctx.Done():
+		return user, ctx.Err()
+	case <-done:
+		klog.V(7).Info("All goroutines managed by UserDataCache::getNamespacedResources completed.")
+	}
 
 	uid, userInfo := cache.GetUserUID(ctx)
 	klog.V(7).Infof("User %s with uid: %s has access to these namespace scoped res: %+v \n", userInfo.Username, uid,

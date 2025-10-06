@@ -228,6 +228,13 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 		defer rows.Close()
 
 		for rows.Next() {
+			// have observed completed queries in pg_stat_activity with wait_event_type='Client', wait_event='ClientRead', and state='idle', confirm ctx not expired during rows read
+			// https://www.postgresql.org/docs/current/monitoring-stats.html#MONITORING-PG-STAT-ACTIVITY-VIEW
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
 			var kind, apigroup string
 			err := rows.Scan(&apigroup, &kind)
 			if err != nil {
