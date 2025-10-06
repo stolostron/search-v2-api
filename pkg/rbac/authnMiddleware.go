@@ -13,7 +13,7 @@ type ContextKey string
 
 const ContextAuthTokenKey ContextKey = "authToken"
 
-// verifies token (userid) with the TokenReview:
+// AuthenticateUser verifies token (userid) with the TokenReview:
 func AuthenticateUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// if there is cookie available use that else use the authorization header:

@@ -37,6 +37,10 @@ lint: ## Run lint and gosec tools.
 test: ## Run unit tests.
 	go test ./... -v -coverprofile cover.out
 
+.PHONY: test-race
+test-race: ## Run unit tests with race check
+	go test -race ./... -v -coverprofile cover.out
+
 coverage: test ## Run unit tests and show code coverage.
 	go tool cover -html=cover.out -o=cover.html
 	open cover.html

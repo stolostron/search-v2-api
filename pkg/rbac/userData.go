@@ -271,7 +271,20 @@ func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache 
 			}
 		}(res.Apigroup, res.Kind)
 	}
-	wg.Wait() // Wait for all requests to complete.
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	// Wait for all requests to complete or request context to timeout and return
+	select {
+	case <-ctx.Done():
+		return user, ctx.Err()
+	case <-done:
+		klog.V(7).Info("All goroutines managed by UserDataCache::getClusterScopedResources completed.")
+	}
 
 	uid, userInfo := cache.GetUserUID(ctx)
 	klog.V(7).Infof("User %s with uid: %s has access to these cluster scoped res: %+v \n", userInfo.Username, uid,
@@ -444,7 +457,20 @@ func (user *UserDataCache) getNamespacedResources(ctx context.Context, cache *Ca
 			user.getSSRRforNamespace(ctx, cache, namespace, &lock)
 		}(ns)
 	}
-	wg.Wait() // Wait for all go routines to complete.
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	// Wait for all goroutines to complete or request context to timeout and return
+	select {
+	case <-ctx.Done():
+		return user, ctx.Err()
+	case <-done:
+		klog.V(7).Info("All goroutines managed by UserDataCache::getNamespacedResources completed.")
+	}
 
 	uid, userInfo := cache.GetUserUID(ctx)
 	klog.V(7).Infof("User %s with uid: %s has access to these namespace scoped res: %+v \n", userInfo.Username, uid,
