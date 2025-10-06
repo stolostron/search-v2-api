@@ -19,7 +19,7 @@ func Test_Cache_DBConn(t *testing.T) {
 
 	assert.Equal(t, result, false)
 
-	c.setDbConnInitialized(true)
+	c.SetDbConnInitialized(true)
 
 	assert.Equal(t, c.dbConnInitialized, true)
 }
