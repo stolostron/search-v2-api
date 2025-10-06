@@ -33,8 +33,29 @@ func (c *Cache) GetDbConnInitialized() bool {
 	return c.dbConnInitialized
 }
 
-func (c *Cache) setDbConnInitialized(initialized bool) {
+func (c *Cache) SetDbConnInitialized(initialized bool) {
 	c.dbConnInitialized = initialized
+}
+
+// NewMockCacheForTesting creates a new Cache instance with minimal initialization for testing.
+// This is exported specifically for use in tests that need a functional cache mock.
+func NewMockCacheForTesting(healthy bool, pool pgxpoolmock.PgxPool) *Cache {
+	cache := &Cache{
+		tokenReviews:     map[string]*tokenReviewCache{},
+		tokenReviewsLock: sync.Mutex{},
+		users:            map[string]*UserDataCache{},
+		usersLock:        sync.Mutex{},
+		shared: SharedData{
+			disabledClusters: map[string]struct{}{},
+			managedClusters:  map[string]struct{}{"test-cluster": {}}, // Add at least one cluster
+			namespaces:       []string{"default"},                     // Add at least one namespace
+			pool:             pool,
+		},
+		pool:              pool,
+		dbConnInitialized: healthy,
+	}
+
+	return cache
 }
 
 // Initialize the cache as a singleton instance.
@@ -61,12 +82,12 @@ func GetCache() *Cache {
 	// We need a better way to maintain this connection.
 	if pool := db.GetConnPool(ctx); pool == nil {
 		klog.Error("Unable to get a healthy database connection. Setting dbConnInitialized to false.")
-		cacheInst.setDbConnInitialized(false)
+		cacheInst.SetDbConnInitialized(false)
 	} else {
 		cacheInst.pool = pool
 		cacheInst.shared.pool = pool
 		klog.V(5).Info("Able to get a healthy database connection. Setting dbConnInitialized to true.")
-		cacheInst.setDbConnInitialized(true)
+		cacheInst.SetDbConnInitialized(true)
 	}
 	return &cacheInst
 }
@@ -85,7 +106,11 @@ func (c *Cache) IsHealthy() bool {
 		return false
 	}
 
-	// Check if shared data has been populated
+	// we must acquire locks on mcCache and nsCache to ensure we read the correct up to cate cache objects as they are uninitialized and reinitialized every request
+	c.shared.mcCache.lock.Lock()
+	defer c.shared.mcCache.lock.Unlock()
+	c.shared.nsCache.lock.Lock()
+	defer c.shared.nsCache.lock.Unlock()
 	hasData := c.shared.managedClusters != nil && c.shared.namespaces != nil
 
 	if !hasData {

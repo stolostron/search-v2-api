@@ -14,6 +14,40 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// Pinger is an interface for anything that can ping
+type Pinger interface {
+	Ping(ctx context.Context) error
+}
+
+// PoolGetter is an interface for getting database connection pools
+type PoolGetter interface {
+	GetConnPool(ctx context.Context) Pinger
+}
+
+// CacheGetter is an interface for getting RBAC cache
+type CacheGetter interface {
+	GetCache() *rbac.Cache
+}
+
+// defaultPoolGetter implements PoolGetter using the database package
+type defaultPoolGetter struct{}
+
+func (d *defaultPoolGetter) GetConnPool(ctx context.Context) Pinger {
+	return database.GetConnPool(ctx)
+}
+
+// defaultCacheGetter implements CacheGetter using the rbac package
+type defaultCacheGetter struct{}
+
+func (d *defaultCacheGetter) GetCache() *rbac.Cache {
+	return rbac.GetCache()
+}
+
+var (
+	poolGetter  PoolGetter  = &defaultPoolGetter{}
+	cacheGetter CacheGetter = &defaultCacheGetter{}
+)
+
 // LivenessProbe is used to check if this service is alive.
 func livenessProbe(w http.ResponseWriter, r *http.Request) {
 	klog.V(5).Info("livenessProbe")
@@ -22,6 +56,11 @@ func livenessProbe(w http.ResponseWriter, r *http.Request) {
 
 // ReadinessProbe checks if rbac cache and database are available.
 func readinessProbe(w http.ResponseWriter, r *http.Request) {
+	readinessProbeWithDeps(w, r, poolGetter, cacheGetter)
+}
+
+// readinessProbeWithDeps allows dependency injection for testing
+func readinessProbeWithDeps(w http.ResponseWriter, r *http.Request, pg PoolGetter, cg CacheGetter) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 	var wg sync.WaitGroup
@@ -30,8 +69,8 @@ func readinessProbe(w http.ResponseWriter, r *http.Request) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		// pass background context to avoid timing out of this request initializes pool
-		pool := database.GetConnPool(context.Background())
+		// pass background context to avoid timing out if this request initializes pool
+		pool := pg.GetConnPool(context.Background())
 		if pool == nil {
 			errCh <- fmt.Errorf("database pool not initialized")
 			return
@@ -42,7 +81,7 @@ func readinessProbe(w http.ResponseWriter, r *http.Request) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		cache := rbac.GetCache()
+		cache := cg.GetCache()
 		if cache == nil {
 			errCh <- fmt.Errorf("RBAC cache not initialized")
 			return
@@ -77,6 +116,7 @@ func readinessProbe(w http.ResponseWriter, r *http.Request) {
 		}
 		if combinedErr != "" {
 			http.Error(w, combinedErr, http.StatusServiceUnavailable)
+			return
 		}
 
 		fmt.Fprint(w, "OK")
