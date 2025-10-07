@@ -27,11 +27,11 @@ type SharedData struct {
 	propTypes        map[string]string
 
 	// Metadata to manage the state of the cached data.
-	csrCache    cacheMetadata
-	dcCache     cacheMetadata
-	mcCache     cacheMetadata
-	nsCache     cacheMetadata
-	propTypeErr error // Capture errors retrieving property types
+	csrCache cacheMetadata // csResourcesMap
+	dcCache  cacheMetadata // disabledClusters
+	mcCache  cacheMetadata // managedClusters
+	nsCache  cacheMetadata // namespaces
+	ptCache  cacheMetadata // propTypes
 
 	// Clients to external APIs to be replaced with a mock by unit tests.
 	dynamicClient dynamic.Interface
@@ -105,7 +105,7 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 	klog.Info("Successfully fetched property types from the database.")
 	//cache results:
 	shared.propTypes = propTypeMap
-	shared.propTypeErr = err
+	shared.ptCache.err = err
 
 	return propTypeMap, err
 }
@@ -114,8 +114,10 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 //
 //	refresh - forces cached data to refresh from database.
 func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[string]string, error) {
+	cache.shared.ptCache.lock.Lock()
+	defer cache.shared.ptCache.lock.Unlock()
 	// check if propTypes data in cache and not nil and return
-	if len(cache.shared.propTypes) > 0 && cache.shared.propTypeErr == nil && !refresh {
+	if len(cache.shared.propTypes) > 0 && cache.shared.ptCache.err == nil && !refresh {
 		propTypesMap := cache.shared.propTypes
 		return propTypesMap, nil
 
