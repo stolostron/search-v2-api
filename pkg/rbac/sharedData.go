@@ -104,6 +104,8 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 
 	klog.Info("Successfully fetched property types from the database.")
 	//cache results:
+	shared.ptCache.lock.Lock()
+	defer shared.ptCache.lock.Unlock()
 	shared.propTypes = propTypeMap
 	shared.ptCache.err = err
 
@@ -114,8 +116,6 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 //
 //	refresh - forces cached data to refresh from database.
 func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[string]string, error) {
-	cache.shared.ptCache.lock.Lock()
-	defer cache.shared.ptCache.lock.Unlock()
 	// check if propTypes data in cache and not nil and return
 	if len(cache.shared.propTypes) > 0 && cache.shared.ptCache.err == nil && !refresh {
 		propTypesMap := cache.shared.propTypes
