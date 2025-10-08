@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/golang/mock/gomock"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 )
@@ -87,11 +86,8 @@ func TestReadinessProbe_Success(t *testing.T) {
 		pingErr: nil,
 	}
 
-	// Create mock pool for cache (doesn't need to do anything, just needs to exist)
-	mockCachePool := pgxpoolmock.NewMockPgxPool(ctrl)
-
 	// Create mock cache with healthy state using the test helper
-	mockCache := rbac.NewMockCacheForTesting(true, mockCachePool)
+	mockCache := newMockCacheForTesting(true)
 
 	mockPG := &mockPoolGetter{pinger: mockPing}
 	mockCG := &mockCacheGetter{cache: mockCache}
@@ -123,11 +119,8 @@ func TestReadinessProbe_DBDown(t *testing.T) {
 		pingErr: errors.New("database connection failed"),
 	}
 
-	// Create mock pool for cache
-	mockCachePool := pgxpoolmock.NewMockPgxPool(ctrl)
-
 	// Create mock cache with healthy state
-	mockCache := rbac.NewMockCacheForTesting(true, mockCachePool)
+	mockCache := newMockCacheForTesting(true)
 
 	mockPG := &mockPoolGetter{pinger: mockPing}
 	mockCG := &mockCacheGetter{cache: mockCache}
@@ -161,7 +154,7 @@ func TestReadinessProbe_CacheUnhealthy(t *testing.T) {
 	}
 
 	// Create mock cache with unhealthy state (pass nil pool to make it unhealthy)
-	mockCache := rbac.NewMockCacheForTesting(false, nil)
+	mockCache := newMockCacheForTesting(false)
 
 	mockPG := &mockPoolGetter{pinger: mockPing}
 	mockCG := &mockCacheGetter{cache: mockCache}
@@ -195,11 +188,8 @@ func TestReadinessProbe_Timeout(t *testing.T) {
 		pingDelay: 5 * time.Second, // Longer than the 2s timeout in readinessProbeWithDeps
 	}
 
-	// Create mock pool for cache
-	mockCachePool := pgxpoolmock.NewMockPgxPool(ctrl)
-
 	// Create mock cache with healthy state
-	mockCache := rbac.NewMockCacheForTesting(true, mockCachePool)
+	mockCache := newMockCacheForTesting(true)
 
 	mockPG := &mockPoolGetter{pinger: mockPing}
 	mockCG := &mockCacheGetter{cache: mockCache}
@@ -230,7 +220,7 @@ func TestReadinessProbe_DBAndCacheDown(t *testing.T) {
 	}
 
 	// Create mock cache with unhealthy state
-	mockCache := rbac.NewMockCacheForTesting(false, nil)
+	mockCache := newMockCacheForTesting(false)
 
 	mockPG := &mockPoolGetter{pinger: mockPing}
 	mockCG := &mockCacheGetter{cache: mockCache}
@@ -262,4 +252,10 @@ func TestReadinessProbe_DBAndCacheDown(t *testing.T) {
 	if !strings.Contains(body, ";") {
 		t.Errorf("Expected combined error with semicolon separator, got '%s'", body)
 	}
+}
+
+func newMockCacheForTesting(healthy bool) *rbac.Cache {
+	cache := rbac.GetCache()
+	cache.SetDbConnInitialized(healthy)
+	return cache
 }
