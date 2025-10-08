@@ -37,27 +37,6 @@ func (c *Cache) SetDbConnInitialized(initialized bool) {
 	c.dbConnInitialized = initialized
 }
 
-// NewMockCacheForTesting creates a new Cache instance with minimal initialization for testing.
-// This is exported specifically for use in tests that need a functional cache mock.
-func NewMockCacheForTesting(healthy bool, pool pgxpoolmock.PgxPool) *Cache {
-	cache := &Cache{
-		tokenReviews:     map[string]*tokenReviewCache{},
-		tokenReviewsLock: sync.Mutex{},
-		users:            map[string]*UserDataCache{},
-		usersLock:        sync.Mutex{},
-		shared: SharedData{
-			disabledClusters: map[string]struct{}{},
-			managedClusters:  map[string]struct{}{"test-cluster": {}}, // Add at least one cluster
-			namespaces:       []string{"default"},                     // Add at least one namespace
-			pool:             pool,
-		},
-		pool:              pool,
-		dbConnInitialized: healthy,
-	}
-
-	return cache
-}
-
 // Initialize the cache as a singleton instance.
 var cacheInst = Cache{
 	tokenReviews:     map[string]*tokenReviewCache{},
