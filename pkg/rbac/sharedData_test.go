@@ -484,10 +484,16 @@ func Test_GetPropertyTypes_ConcurrentAccess(t *testing.T) {
 		}()
 	}
 
-	// Wait for all readers to complete and check for errors
+	// Wait for all readers to complete and check for errors or timeout if goroutines are slow to acquire lock and/or work
+	timeout := time.After(500 * time.Millisecond)
 	for i := 0; i < numReaders; i++ {
-		if err := <-done; err != nil {
-			t.Error(err)
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Error(err)
+			}
+		case <-timeout:
+			t.Error("timeout waiting for goroutines to work")
 		}
 	}
 }
@@ -606,10 +612,16 @@ func Test_GetPropertyTypes_RWMutexLocking(t *testing.T) {
 		done <- nil
 	}()
 
-	// Wait for all goroutines and check for errors
+	// Wait for all goroutines and check for errors or timeout if goroutines are slow to acquire lock and/or work
+	timeout := time.After(500 * time.Millisecond)
 	for i := 0; i < 11; i++ {
-		if err := <-done; err != nil {
-			t.Error(err)
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Error(err)
+			}
+		case <-timeout:
+			t.Error("timeout waiting for goroutines to work")
 		}
 	}
 }
