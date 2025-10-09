@@ -120,7 +120,11 @@ func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[str
 
 	// check if propTypes data in cache and not nil and return
 	if len(cache.shared.propTypes) > 0 && cache.shared.ptCache.err == nil && !refresh {
-		propTypesMap := cache.shared.propTypes
+		// copy cache.shared.propTypes map to avoid sharing reference
+		propTypesMap := make(map[string]string, len(cache.shared.propTypes))
+		for k, v := range cache.shared.propTypes {
+			propTypesMap[k] = v
+		}
 		defer cache.shared.ptCache.lock.RUnlock()
 		return propTypesMap, nil
 
