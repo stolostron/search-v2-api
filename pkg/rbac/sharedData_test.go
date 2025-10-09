@@ -436,7 +436,7 @@ func Test_Messages_Query(t *testing.T) {
 	}
 }
 
-// 🤖 Test concurrent access to GetPropertyTypes using RWMutex
+// [AI] Test concurrent access to GetPropertyTypes using RWMutex
 func Test_GetPropertyTypes_ConcurrentAccess(t *testing.T) {
 	ctx := context.Background()
 	mockpool, mock_cache := mockResourcesListCache(t)
@@ -492,7 +492,7 @@ func Test_GetPropertyTypes_ConcurrentAccess(t *testing.T) {
 	}
 }
 
-// 🤖 Test that GetPropertyTypes returns a copy, not a reference
+// [AI] Test that GetPropertyTypes returns a copy, not a reference
 func Test_GetPropertyTypes_ReturnsCopy(t *testing.T) {
 	ctx := context.Background()
 	mockpool, mock_cache := mockResourcesListCache(t)
@@ -544,7 +544,7 @@ func Test_GetPropertyTypes_ReturnsCopy(t *testing.T) {
 	}
 }
 
-// 🤖 Test proper RWMutex lock acquisition with concurrent reads and writes
+// [AI] Test proper RWMutex lock acquisition with concurrent reads and writes
 func Test_GetPropertyTypes_RWMutexLocking(t *testing.T) {
 	ctx := context.Background()
 	mockpool, mock_cache := mockResourcesListCache(t)
@@ -614,7 +614,7 @@ func Test_GetPropertyTypes_RWMutexLocking(t *testing.T) {
 	}
 }
 
-// 🤖 Test that ptCache lock is properly used
+// [AI] Test that ptCache lock is properly used
 func Test_GetPropertyTypes_LockUsage(t *testing.T) {
 	ctx := context.Background()
 	mockpool, mock_cache := mockResourcesListCache(t)
