@@ -27,11 +27,11 @@ type SharedData struct {
 	propTypes        map[string]string
 
 	// Metadata to manage the state of the cached data.
-	csrCache    cacheMetadata
-	dcCache     cacheMetadata
-	mcCache     cacheMetadata
-	nsCache     cacheMetadata
-	propTypeErr error // Capture errors retrieving property types
+	csrCache cacheMetadata // csResourcesMap
+	dcCache  cacheMetadata // disabledClusters
+	mcCache  cacheMetadata // managedClusters
+	nsCache  cacheMetadata // namespaces
+	ptCache  cacheMetadata // propTypes
 
 	// Clients to external APIs to be replaced with a mock by unit tests.
 	dynamicClient dynamic.Interface
@@ -104,8 +104,10 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 
 	klog.Info("Successfully fetched property types from the database.")
 	//cache results:
+	shared.ptCache.lock.Lock()
+	defer shared.ptCache.lock.Unlock()
 	shared.propTypes = propTypeMap
-	shared.propTypeErr = err
+	shared.ptCache.err = err
 
 	return propTypeMap, err
 }
@@ -114,13 +116,22 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 //
 //	refresh - forces cached data to refresh from database.
 func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[string]string, error) {
+	cache.shared.ptCache.lock.RLock()
+
 	// check if propTypes data in cache and not nil and return
-	if len(cache.shared.propTypes) > 0 && cache.shared.propTypeErr == nil && !refresh {
-		propTypesMap := cache.shared.propTypes
+	if len(cache.shared.propTypes) > 0 && cache.shared.ptCache.err == nil && !refresh {
+		// copy cache.shared.propTypes map to avoid sharing reference
+		propTypesMap := make(map[string]string, len(cache.shared.propTypes))
+		for k, v := range cache.shared.propTypes {
+			propTypesMap[k] = v
+		}
+		defer cache.shared.ptCache.lock.RUnlock()
 		return propTypesMap, nil
 
 	} else {
 		klog.V(6).Info("Getting property types from database.")
+		// If we have to modify cache.shared.ptCache, we have to first release the read lock, we can't wait for the defer
+		cache.shared.ptCache.lock.RUnlock()
 		// run query to refresh data
 		propTypes, err := cache.shared.getPropertyTypes(ctx)
 		if err != nil {

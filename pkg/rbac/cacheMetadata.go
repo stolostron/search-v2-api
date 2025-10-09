@@ -11,7 +11,7 @@ import (
 // Common fields to manage a cached data field.
 type cacheMetadata struct {
 	err       error         // Error while retrieving the data from external API.
-	lock      sync.Mutex    // Locks the data field while requesting the latest data.
+	lock      sync.RWMutex  // Locks the data field while requesting the latest data.
 	updatedAt time.Time     // Time when the data field was last updated.
 	ttl       time.Duration // Time-to-live, time duration for which this cache is valid.
 }

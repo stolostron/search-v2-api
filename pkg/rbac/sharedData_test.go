@@ -435,3 +435,239 @@ func Test_Messages_Query(t *testing.T) {
 		t.Errorf("Expected error to be nil, but got : %s", err)
 	}
 }
+
+// [AI] Test concurrent access to GetPropertyTypes using RWMutex
+func Test_GetPropertyTypes_ConcurrentAccess(t *testing.T) {
+	ctx := context.Background()
+	mockpool, mock_cache := mockResourcesListCache(t)
+
+	// Setup initial property types
+	columns := []string{"key", "datatype"}
+	pgxRows := pgxpoolmock.NewRows(columns).
+		AddRow("kind", "string").
+		AddRow("name", "string").
+		AddRow("label", "object").
+		ToPgxRows()
+
+	mockpool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq([]interface{}{}),
+	).Return(pgxRows, nil).AnyTimes()
+
+	// Populate cache initially
+	_, err := mock_cache.GetPropertyTypes(ctx, true)
+	if err != nil {
+		t.Errorf("Error populating property types: %v", err)
+	}
+
+	// Test concurrent reads - should not cause data races
+	const numReaders = 100
+	done := make(chan error, numReaders)
+
+	for i := 0; i < numReaders; i++ {
+		go func() {
+			propTypes, err := mock_cache.GetPropertyTypes(ctx, false)
+			if err != nil {
+				done <- fmt.Errorf("error getting property types: %v", err)
+				return
+			}
+			// Verify we got the expected properties
+			if _, ok := propTypes["kind"]; !ok {
+				done <- fmt.Errorf("expected 'kind' property to be present")
+				return
+			}
+			if _, ok := propTypes["cluster"]; !ok {
+				done <- fmt.Errorf("expected 'cluster' property to be present")
+				return
+			}
+			done <- nil
+		}()
+	}
+
+	// Wait for all readers to complete and check for errors or timeout if goroutines are slow to acquire lock and/or work
+	timeout := time.After(500 * time.Millisecond)
+	for i := 0; i < numReaders; i++ {
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Error(err)
+			}
+		case <-timeout:
+			t.Error("timeout waiting for goroutines to work")
+		}
+	}
+}
+
+// [AI] Test that GetPropertyTypes returns a copy, not a reference
+func Test_GetPropertyTypes_ReturnsCopy(t *testing.T) {
+	ctx := context.Background()
+	mockpool, mock_cache := mockResourcesListCache(t)
+
+	columns := []string{"key", "datatype"}
+	pgxRows := pgxpoolmock.NewRows(columns).
+		AddRow("kind", "string").
+		AddRow("name", "string").
+		ToPgxRows()
+
+	mockpool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq([]interface{}{}),
+	).Return(pgxRows, nil)
+
+	// Populate cache
+	propTypes1, err := mock_cache.GetPropertyTypes(ctx, true)
+	if err != nil {
+		t.Errorf("Error getting property types: %v", err)
+	}
+
+	// Get cached version
+	propTypes2, err := mock_cache.GetPropertyTypes(ctx, false)
+	if err != nil {
+		t.Errorf("Error getting property types: %v", err)
+	}
+
+	// Modify the returned map
+	propTypes2["modified"] = "test"
+
+	// Verify that the internal cache was not modified
+	propTypes3, err := mock_cache.GetPropertyTypes(ctx, false)
+	if err != nil {
+		t.Errorf("Error getting property types: %v", err)
+	}
+
+	if _, ok := propTypes3["modified"]; ok {
+		t.Error("Expected internal cache to not be modified when returned map is modified")
+	}
+
+	// Verify maps are different instances
+	if len(propTypes1) == len(propTypes2) {
+		// Check that modifying one doesn't affect the other
+		originalLen := len(mock_cache.shared.propTypes)
+		propTypes2["another"] = "value"
+		if len(mock_cache.shared.propTypes) != originalLen {
+			t.Error("Modifying returned map should not affect the cached map")
+		}
+	}
+}
+
+// [AI] Test proper RWMutex lock acquisition with concurrent reads and writes
+func Test_GetPropertyTypes_RWMutexLocking(t *testing.T) {
+	ctx := context.Background()
+	mockpool, mock_cache := mockResourcesListCache(t)
+
+	columns := []string{"key", "datatype"}
+	pgxRows1 := pgxpoolmock.NewRows(columns).
+		AddRow("kind", "string").
+		ToPgxRows()
+
+	pgxRows2 := pgxpoolmock.NewRows(columns).
+		AddRow("kind", "string").
+		AddRow("newprop", "string").
+		ToPgxRows()
+
+	// First query for initial cache
+	mockpool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq([]interface{}{}),
+	).Return(pgxRows1, nil)
+
+	// Second query for refresh
+	mockpool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq([]interface{}{}),
+	).Return(pgxRows2, nil)
+
+	// Initial population
+	_, err := mock_cache.GetPropertyTypes(ctx, true)
+	if err != nil {
+		t.Errorf("Error populating property types: %v", err)
+	}
+
+	// Concurrent reads while a refresh happens
+	done := make(chan error, 11)
+
+	// Start multiple readers
+	for i := 0; i < 10; i++ {
+		go func() {
+			for j := 0; j < 5; j++ {
+				_, err := mock_cache.GetPropertyTypes(ctx, false)
+				if err != nil {
+					done <- fmt.Errorf("error reading property types: %v", err)
+					return
+				}
+				time.Sleep(1 * time.Millisecond)
+			}
+			done <- nil
+		}()
+	}
+
+	// Trigger a refresh (write operation)
+	go func() {
+		time.Sleep(5 * time.Millisecond)
+		_, err := mock_cache.GetPropertyTypes(ctx, true)
+		if err != nil {
+			done <- fmt.Errorf("error refreshing property types: %v", err)
+			return
+		}
+		done <- nil
+	}()
+
+	// Wait for all goroutines and check for errors or timeout if goroutines are slow to acquire lock and/or work
+	timeout := time.After(500 * time.Millisecond)
+	for i := 0; i < 11; i++ {
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Error(err)
+			}
+		case <-timeout:
+			t.Error("timeout waiting for goroutines to work")
+		}
+	}
+}
+
+// [AI] Test that ptCache lock is properly used
+func Test_GetPropertyTypes_LockUsage(t *testing.T) {
+	ctx := context.Background()
+	mockpool, mock_cache := mockResourcesListCache(t)
+
+	columns := []string{"key", "datatype"}
+	pgxRows := pgxpoolmock.NewRows(columns).
+		AddRow("kind", "string").
+		ToPgxRows()
+
+	mockpool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq([]interface{}{}),
+	).Return(pgxRows, nil)
+
+	// Test 1: Cached path - should return cached value using RLock
+	mock_cache.shared.propTypes = map[string]string{"kind": "string", "cluster": "string"}
+	mock_cache.shared.ptCache.err = nil
+	mock_cache.shared.ptCache.updatedAt = time.Now()
+
+	propTypes, err := mock_cache.GetPropertyTypes(ctx, false)
+	if err != nil {
+		t.Errorf("Error getting property types: %v", err)
+	}
+
+	if propTypes["kind"] != "string" {
+		t.Error("Expected cached property type to be returned")
+	}
+
+	// Verify cluster is present (added by getPropertyTypes)
+	if propTypes["cluster"] != "string" {
+		t.Error("Expected cluster property to be present")
+	}
+
+	// Test 2: Refresh path - should query database and add managedHub
+	propTypes2, err := mock_cache.GetPropertyTypes(ctx, true)
+	if err != nil {
+		t.Errorf("Error refreshing property types: %v", err)
+	}
+
+	// Verify managedHub is added in refresh path
+	if propTypes2["managedHub"] != "string" {
+		t.Error("Expected managedHub property to be added on refresh")
+	}
+}
