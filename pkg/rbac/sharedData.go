@@ -68,12 +68,20 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 	// data expression to get value and key
 	jsb := goqu.L("jsonb_each(?)", goqu.C("data"))
 
-	// select from these datasets
-	ds := goqu.From(schemaTable, jsb)
+	// jsonb_type of returns: object, array, string, number, boolean, and null. Enhance by trying to add 'timestamp' type when strings match ISO 8601 timestamp format
+	caseExpr := goqu.Case().
+		When(
+			goqu.And(
+				goqu.L("jsonb_typeof(value) = 'string'"),
+				// matches "2025-10-13T15:42:00 -> permits milliseconds and different timezones at end
+				goqu.L(`value::text ~ '^"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}'`),
+			),
+			"timestamp",
+		).Else(goqu.L("jsonb_typeof(value)"))
 
-	// select statement with orderby and distinct clause
-	selectDs = ds.Select(goqu.L("key"), goqu.L("jsonb_typeof(?)",
-		goqu.C("value")).As("datatype")).Distinct()
+	selectDs = goqu.From(schemaTable, jsb).
+		Select(goqu.L("key"), caseExpr.As("datatype")).
+		Distinct()
 
 	query, params, err := selectDs.ToSQL()
 	if err != nil {

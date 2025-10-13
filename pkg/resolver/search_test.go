@@ -365,7 +365,7 @@ func testAllOperators(t *testing.T, testOperators []TestOperatorItem) {
 	for _, currTest := range testOperators {
 		csRes, nsRes, mc := newUserData()
 		ud := rbac.UserData{CsResources: csRes, NsResources: nsRes, ManagedClusters: mc}
-		propTypesMock := map[string]string{"current": "number", "created": "string"}
+		propTypesMock := map[string]string{"current": "number", "created": "timestamp"}
 		// Create a SearchResolver instance with a mock connection pool.
 		resolver, mockPool := newMockSearchResolver(t, currTest.searchInput, nil, ud, propTypesMock)
 		// Mock the database queries.
