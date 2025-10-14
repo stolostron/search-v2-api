@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
+	"github.com/stretchr/testify/assert"
 )
 
 // [AI] Test that regular (non-websocket) HTTP requests get the RequestTimeout applied
@@ -38,26 +39,18 @@ func TestRequestTimeout_RegularRequest(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	// Verify the next handler was called
-	if rr.Code != http.StatusOK {
-		t.Errorf("Expected status OK, got %v", rr.Code)
-	}
+	assert.Equal(t, http.StatusOK, rr.Code, "Expected status %d, got %d", http.StatusOK, rr.Code)
 
 	// Verify the context has a deadline
-	if capturedCtx == nil {
-		t.Fatal("Context was not captured")
-	}
+	assert.NotNil(t, capturedCtx, "Context was not captured")
 
 	deadline, ok := capturedCtx.Deadline()
-	if !ok {
-		t.Fatal("Expected context to have a deadline, but it doesn't")
-	}
+	assert.True(t, ok, "Expected context to have a deadline, but it doesn't")
 
 	// Verify the deadline is approximately 5 seconds from now with some tolerance for test execution time
 	expectedDeadline := time.Now().Add(time.Duration(cfg.RequestTimeout) * time.Millisecond)
 	timeDiff := deadline.Sub(expectedDeadline).Abs()
-	if timeDiff > 1*time.Second {
-		t.Errorf("Expected deadline around %v, got %v (diff: %v)", expectedDeadline, deadline, timeDiff)
-	}
+	assert.LessOrEqual(t, timeDiff, 1*time.Second, "Expected deadline around %v, got %v (diff: %v)", expectedDeadline, deadline, timeDiff)
 }
 
 // [AI] Test that websocket requests get the StreamRequestTimeout applied
@@ -89,33 +82,25 @@ func TestRequestTimeout_WebSocketRequest(t *testing.T) {
 	handler.ServeHTTP(rr, req)
 
 	// Verify the next handler was called
-	if rr.Code != http.StatusOK {
-		t.Errorf("Expected status OK, got %v", rr.Code)
-	}
+	assert.Equal(t, http.StatusOK, rr.Code, "Expected status %d, got %d", http.StatusOK, rr.Code)
 
 	// Verify the context has a deadline
-	if capturedCtx == nil {
-		t.Fatal("Context was not captured")
-	}
+	assert.NotNil(t, capturedCtx, "Context was not captured")
 
 	deadline, ok := capturedCtx.Deadline()
-	if !ok {
-		t.Fatal("Expected context to have a deadline, but it doesn't")
-	}
+	assert.True(t, ok, "Expected context to have a deadline, but it doesn't")
 
 	// Verify the deadline is approximately 10 seconds from now (StreamRequestTimeout) with some tolerance for test execution time
 	expectedDeadline := time.Now().Add(time.Duration(cfg.StreamRequestTimeout) * time.Millisecond)
 	timeDiff := deadline.Sub(expectedDeadline).Abs()
-	if timeDiff > 1*time.Second {
-		t.Errorf("Expected deadline around %v, got %v (diff: %v)", expectedDeadline, deadline, timeDiff)
-	}
+	assert.LessOrEqual(t, timeDiff, 1*time.Second, "Expected deadline around %v, got %v (diff: %v)", expectedDeadline, deadline, timeDiff)
 }
 
 // [AI] Test that the context timeout actually expires for regular (non-websocket) HTTP requests
 func TestRequestTimeout_ContextExpires(t *testing.T) {
 	cfg := config.Config{
-		RequestTimeout:       100, // 100ms
-		StreamRequestTimeout: 200, // 200ms
+		RequestTimeout:       10, // 10ms
+		StreamRequestTimeout: 20, // 20ms
 	}
 
 	// Create a handler that sleeps longer than the timeout
@@ -126,11 +111,9 @@ func TestRequestTimeout_ContextExpires(t *testing.T) {
 		// Check if context expired
 		select {
 		case <-r.Context().Done():
-			if r.Context().Err() != context.DeadlineExceeded {
-				t.Errorf("Expected context.DeadlineExceeded, got %v", r.Context().Err())
-			}
+			assert.Equal(t, context.DeadlineExceeded, r.Context().Err(), "Expected context.DeadlineExceeded, got %v", r.Context().Err())
 		default:
-			t.Error("Expected context to be done, but it wasn't")
+			assert.Fail(t, "Expected context to be done, but it wasn't")
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -151,8 +134,8 @@ func TestRequestTimeout_ContextExpires(t *testing.T) {
 // [AI] Test that context timeout expires for websocket requests
 func TestRequestTimeout_WebSocketContextExpires(t *testing.T) {
 	cfg := config.Config{
-		RequestTimeout:       100, // 100ms
-		StreamRequestTimeout: 150, // 150ms for quick test
+		RequestTimeout:       10, // 10ms
+		StreamRequestTimeout: 20, // 20ms
 	}
 
 	// Create a handler that sleeps longer than the stream timeout
@@ -163,11 +146,9 @@ func TestRequestTimeout_WebSocketContextExpires(t *testing.T) {
 		// Check if context expired
 		select {
 		case <-r.Context().Done():
-			if r.Context().Err() != context.DeadlineExceeded {
-				t.Errorf("Expected context.DeadlineExceeded, got %v", r.Context().Err())
-			}
+			assert.Equal(t, context.DeadlineExceeded, r.Context().Err(), "Expected context.DeadlineExceeded, got %v", r.Context().Err())
 		default:
-			t.Error("Expected context to be done, but it wasn't")
+			assert.Fail(t, "Expected context to be done, but it wasn't")
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -216,19 +197,14 @@ func TestRequestTimeout_IndependentContexts(t *testing.T) {
 	}
 
 	// Verify we captured two contexts
-	if len(contexts) != 2 {
-		t.Fatalf("Expected 2 contexts, got %d", len(contexts))
-	}
+	assert.Len(t, contexts, 2, "Expected 2 contexts")
 
 	// Verify the contexts are different instances
-	if contexts[0] == contexts[1] {
-		t.Error("Expected independent contexts, but they are the same instance")
-	}
+	assert.NotEqual(t, contexts[0], contexts[1], "Expected independent contexts, but they are the same instance")
 
 	// Verify both have deadlines
 	for i, ctx := range contexts {
-		if _, ok := ctx.Deadline(); !ok {
-			t.Errorf("Context %d should have a deadline", i)
-		}
+		_, ok := ctx.Deadline()
+		assert.True(t, ok, "Context %d should have a deadline", i)
 	}
 }
