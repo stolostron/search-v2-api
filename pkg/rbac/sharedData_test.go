@@ -67,7 +67,7 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 	).Return(pgxRows, nil)
 
 	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq(`SELECT DISTINCT key, CASE  WHEN (jsonb_typeof(value) = 'string' AND value::text ~ '^"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}') THEN 'timestamp' ELSE jsonb_typeof(value) END AS "datatype" FROM "search"."resources", jsonb_each("data")`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows1, nil)
 
@@ -108,7 +108,7 @@ func Test_getResouces_usingCache(t *testing.T) {
 	).Return(pgxRows, nil)
 
 	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq(`SELECT DISTINCT key, CASE  WHEN (jsonb_typeof(value) = 'string' AND value::text ~ '^"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}') THEN 'timestamp' ELSE jsonb_typeof(value) END AS "datatype" FROM "search"."resources", jsonb_each("data")`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows1, nil)
 
@@ -162,7 +162,7 @@ func Test_getResources_expiredCache(t *testing.T) {
 	).Return(pgxRows, nil)
 
 	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq(`SELECT DISTINCT key, CASE  WHEN (jsonb_typeof(value) = 'string' AND value::text ~ '^"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}') THEN 'timestamp' ELSE jsonb_typeof(value) END AS "datatype" FROM "search"."resources", jsonb_each("data")`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows1, nil)
 
@@ -450,7 +450,7 @@ func Test_GetPropertyTypes_ConcurrentAccess(t *testing.T) {
 		ToPgxRows()
 
 	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq(`SELECT DISTINCT key, CASE  WHEN (jsonb_typeof(value) = 'string' AND value::text ~ '^"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}') THEN 'timestamp' ELSE jsonb_typeof(value) END AS "datatype" FROM "search"."resources", jsonb_each("data")`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil).AnyTimes()
 
@@ -510,7 +510,7 @@ func Test_GetPropertyTypes_ReturnsCopy(t *testing.T) {
 		ToPgxRows()
 
 	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq(`SELECT DISTINCT key, CASE  WHEN (jsonb_typeof(value) = 'string' AND value::text ~ '^"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}') THEN 'timestamp' ELSE jsonb_typeof(value) END AS "datatype" FROM "search"."resources", jsonb_each("data")`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
@@ -567,13 +567,13 @@ func Test_GetPropertyTypes_RWMutexLocking(t *testing.T) {
 
 	// First query for initial cache
 	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq(`SELECT DISTINCT key, CASE  WHEN (jsonb_typeof(value) = 'string' AND value::text ~ '^"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}') THEN 'timestamp' ELSE jsonb_typeof(value) END AS "datatype" FROM "search"."resources", jsonb_each("data")`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows1, nil)
 
 	// Second query for refresh
 	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq(`SELECT DISTINCT key, CASE  WHEN (jsonb_typeof(value) = 'string' AND value::text ~ '^"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}') THEN 'timestamp' ELSE jsonb_typeof(value) END AS "datatype" FROM "search"."resources", jsonb_each("data")`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows2, nil)
 
@@ -637,7 +637,7 @@ func Test_GetPropertyTypes_LockUsage(t *testing.T) {
 		ToPgxRows()
 
 	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT key, jsonb_typeof("value") AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq(`SELECT DISTINCT key, CASE  WHEN (jsonb_typeof(value) = 'string' AND value::text ~ '^"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}') THEN 'timestamp' ELSE jsonb_typeof(value) END AS "datatype" FROM "search"."resources", jsonb_each("data")`),
 		gomock.Eq([]interface{}{}),
 	).Return(pgxRows, nil)
 
