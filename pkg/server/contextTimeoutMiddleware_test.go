@@ -162,8 +162,6 @@ func TestRequestTimeout_WebSocketContextExpires(t *testing.T) {
 	req := httptest.NewRequest("GET", "/searchapi/graphql", nil)
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "websocket")
-	req.Header.Set("Sec-WebSocket-Version", "13")
-	req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
 
 	rr := httptest.NewRecorder()
 
