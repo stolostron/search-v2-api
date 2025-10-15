@@ -41,9 +41,10 @@ type Config struct {
 	PodNamespace                string // Kubernetes namespace where the pod is running.
 	QueryLimit                  uint   // The default LIMIT to use on queries. Client can override. Default: 1000
 	RelationLevel               int    // The number of levels/hops for finding relationships for a particular resource
-	SlowLog                     int    // Logs queries slower than the specified duration in ms. Default: 300ms
-	SubscriptionRefreshInterval int    // Duration in seconds between subscription polls.        Default: 10 seconds
-	SubscriptionRefreshTimeout  int    // Minutes a subscription will stay open before timeout.  Default: 5 minutes
+	SlowLog                     int    // Logs queries slower than the specified duration in ms.      Default: 300ms
+	SubscriptionRefreshInterval int    // Duration in seconds between subscription polls.             Default: 10 seconds
+	SubscriptionRefreshTimeout  int    // Minutes a subscription will stay open before timeout.       Default: 5 minutes
+	RequestTimeout              int    // Seconds a request will process before timing out.           Default: 2 minutes
 }
 
 // Define feature flags.
@@ -118,6 +119,7 @@ func new() *Config {
 		RelationLevel:               getEnvAsInt("RELATION_LEVEL", 0),
 		SubscriptionRefreshInterval: getEnvAsInt("SUBSCRIPTION_REFRESH_INTERVAL", 10*1000),  // 10 seconds
 		SubscriptionRefreshTimeout:  getEnvAsInt("SUBSCRIPTION_REFRESH_TIMEOUT", 5*60*1000), // 5 minutes
+		RequestTimeout:              getEnvAsInt("REQUEST_TIMEOUT", 2*60*1000),              // 2 minutes
 	}
 	conf.DBPass = url.QueryEscape(conf.DBPass)
 	return conf
