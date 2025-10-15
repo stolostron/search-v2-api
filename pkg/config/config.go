@@ -45,7 +45,6 @@ type Config struct {
 	SubscriptionRefreshInterval int    // Duration in seconds between subscription polls.             Default: 10 seconds
 	SubscriptionRefreshTimeout  int    // Minutes a subscription will stay open before timeout.       Default: 5 minutes
 	RequestTimeout              int    // Seconds a request will process before timing out.           Default: 2 minutes
-	StreamRequestTimeout        int    // Seconds a streaming request will process before timing out. Default: 10 minutes
 }
 
 // Define feature flags.

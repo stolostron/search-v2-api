@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// TimeoutHandler adds a timeout to the request context to prevent unbounded connection growth
+// TimeoutHandler wraps http next handler with timeout handler to prevent unbound request/connection growth
 func TimeoutHandler(timeout time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

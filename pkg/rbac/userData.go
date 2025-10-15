@@ -271,7 +271,7 @@ func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache 
 			}
 		}(res.Apigroup, res.Kind)
 	}
-	wg.Wait()
+	wg.Wait() // Wait for all go routines to complete.
 
 	uid, userInfo := cache.GetUserUID(ctx)
 	klog.V(7).Infof("User %s with uid: %s has access to these cluster scoped res: %+v \n", userInfo.Username, uid,
@@ -444,7 +444,7 @@ func (user *UserDataCache) getNamespacedResources(ctx context.Context, cache *Ca
 			user.getSSRRforNamespace(ctx, cache, namespace, &lock)
 		}(ns)
 	}
-	wg.Wait()
+	wg.Wait() // Wait for all go routines to complete.
 
 	uid, userInfo := cache.GetUserUID(ctx)
 	klog.V(7).Infof("User %s with uid: %s has access to these namespace scoped res: %+v \n", userInfo.Username, uid,
