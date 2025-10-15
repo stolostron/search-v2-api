@@ -121,7 +121,6 @@ func new() *Config {
 		SubscriptionRefreshInterval: getEnvAsInt("SUBSCRIPTION_REFRESH_INTERVAL", 10*1000),  // 10 seconds
 		SubscriptionRefreshTimeout:  getEnvAsInt("SUBSCRIPTION_REFRESH_TIMEOUT", 5*60*1000), // 5 minutes
 		RequestTimeout:              getEnvAsInt("REQUEST_TIMEOUT", 2*60*1000),              // 2 minutes
-		StreamRequestTimeout:        getEnvAsInt("STREAM_REQUEST_TIMEOUT", 10*60*1000),      // 10 minutes
 	}
 	conf.DBPass = url.QueryEscape(conf.DBPass)
 	return conf

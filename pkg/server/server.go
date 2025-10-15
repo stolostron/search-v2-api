@@ -60,7 +60,7 @@ func StartAndListen() {
 	// Add authentication middleware to the /searchapi (ContextPath) subroute.
 	apiSubrouter := router.PathPrefix(config.Cfg.ContextPath).Subrouter()
 
-	apiSubrouter.Use(RequestTimeout(*config.Cfg))
+	apiSubrouter.Use(TimeoutHandler(time.Duration(config.Cfg.RequestTimeout)))
 	apiSubrouter.Use(metrics.PrometheusMiddleware)
 	apiSubrouter.Use(rbac.CheckDBAvailability)
 	apiSubrouter.Use(rbac.AuthenticateUser)
