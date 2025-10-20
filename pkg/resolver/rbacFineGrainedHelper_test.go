@@ -35,7 +35,7 @@ func Test_matchFineGrainedRbac(t *testing.T) {
 
 	sort.Strings(expStrings)
 	expressionString := strings.Join(expStrings, " AND ")
-	expectedExpression := `(("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1","namespace-a2"}') AND (data->'apigroup'?'clone.kubevirt.io' AND data->'kind'?|'{"VirtualMachineClone"}') OR (data->'apigroup'?'export.kubevirt.io' AND data->'kind'?|'{"VirtualMachineExport"}') OR (data->'apigroup'?'instancetype.kubevirt.io' AND data->'kind'?|'{"VirtualMachineClusterInstancetype","VirtualMachineClusterPreference","VirtualMachineInstancetype","VirtualMachinePreference"}') OR (data->'apigroup'?'kubevirt.io' AND data->'kind'?|'{"VirtualMachine","VirtualMachineInstance","VirtualMachineInstanceMigration","VirtualMachineInstancePreset","VirtualMachineInstanceReplicaset"}') OR (data->'apigroup'?'migrations.kubevirt.io' AND data->'kind'?|'{"MigrationPolicy"}') OR (data->'apigroup'?'pool.kubevirt.io' AND data->'kind'?|'{"VirtualMachinePool"}') OR (data->'apigroup'?'snapshot.kubevirt.io' AND data->'kind'?|'{"VirtualMachineRestore","VirtualMachineSnapshot","VirtualMachineSnapshotContent"}')`
+	expectedExpression := `(("cluster" = 'cluster-a') AND data->'kind'?'Namespace' AND data->'name'?|'{"namespace-a1","namespace-a2"}') OR (("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1","namespace-a2"}') AND (data->'apigroup'?'clone.kubevirt.io' AND data->'kind'?|'{"VirtualMachineClone"}') OR (data->'apigroup'?'export.kubevirt.io' AND data->'kind'?|'{"VirtualMachineExport"}') OR (data->'apigroup'?'instancetype.kubevirt.io' AND data->'kind'?|'{"VirtualMachineClusterInstancetype","VirtualMachineClusterPreference","VirtualMachineInstancetype","VirtualMachinePreference"}') OR (data->'apigroup'?'kubevirt.io' AND data->'kind'?|'{"VirtualMachine","VirtualMachineInstance","VirtualMachineInstanceMigration","VirtualMachineInstancePreset","VirtualMachineInstanceReplicaset"}') OR (data->'apigroup'?'migrations.kubevirt.io' AND data->'kind'?|'{"MigrationPolicy"}') OR (data->'apigroup'?'pool.kubevirt.io' AND data->'kind'?|'{"VirtualMachinePool"}') OR (data->'apigroup'?'snapshot.kubevirt.io' AND data->'kind'?|'{"VirtualMachineRestore","VirtualMachineSnapshot","VirtualMachineSnapshotContent"}')`
 
 	assert.Equal(t, expectedExpression, expressionString)
 }
@@ -47,13 +47,11 @@ func Test_matchClusterAndNamespace(t *testing.T) {
 
 	result := matchClusterAndNamespace(clusterNamespaces)
 
-	sql, args, err := goqu.From("t").Where(result).ToSQL()
+	expressionString := buildExpressionStringFrom(result)
 
-	expectedSQL := `SELECT * FROM "t" WHERE (("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1","namespace-a2"}')`
+	expectedExpression := `(("cluster" = 'cluster-a') AND data->'kind'?'Namespace' AND data->'name'?|'{"namespace-a1","namespace-a2"}') OR (("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1","namespace-a2"}')`
 
-	assert.Nil(t, err)
-	assert.Equal(t, 0, len(args))
-	assert.Equal(t, expectedSQL, sql)
+	assert.Equal(t, expectedExpression, expressionString)
 }
 
 func Test_matchClusterAndNamespace_anyNamespace(t *testing.T) {
@@ -66,7 +64,7 @@ func Test_matchClusterAndNamespace_anyNamespace(t *testing.T) {
 
 	expressionString := buildExpressionStringFrom(result)
 
-	expectedExpression := `("cluster" = 'cluster-b') OR (("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1","namespace-a2"}')`
+	expectedExpression := `("cluster" = 'cluster-b') OR (("cluster" = 'cluster-a') AND data->'kind'?'Namespace' AND data->'name'?|'{"namespace-a1","namespace-a2"}') OR (("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1","namespace-a2"}')`
 
 	assert.Equal(t, expectedExpression, expressionString)
 }
