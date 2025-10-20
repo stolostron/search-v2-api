@@ -26,6 +26,7 @@ var kubevirtResourcesMap = map[string][]string{
 // Match resources using fine-grained RBAC.
 // Resolves to:
 // data->'apigroup' ? 'kubevirt.io' AND data->>'kind' ? 'VirtualMachine' OR ...
+//
 //	AND (( cluster = 'a' AND data->'namespace' IN ['ns-1', 'ns-2', ...] )
 //	OR ( cluster = 'b' AND data->'namespace' IN ['ns-3', 'ns-4', ...] ) OR ...)
 func matchFineGrainedRbac(clusterNamespacesMap map[string][]string) exp.ExpressionList {
@@ -76,6 +77,13 @@ func matchClusterAndNamespace(clusterNamespacesMap map[string][]string) exp.Expr
 				goqu.And(
 					goqu.C("cluster").Eq(cluster),
 					goqu.L("data->???", "namespace", goqu.L("?|"), pq.Array(namespaces))),
+			)
+
+			// Match the Namespace resources.
+			result = result.Append(goqu.And(
+				goqu.C("cluster").Eq(cluster),
+				goqu.L("data->???", "kind", goqu.L("?"), "Namespace"),
+				goqu.L("data->???", "name", goqu.L("?|"), pq.Array(namespaces))),
 			)
 		}
 	}
