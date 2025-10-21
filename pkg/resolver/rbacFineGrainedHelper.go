@@ -30,13 +30,19 @@ var kubevirtResourcesMap = map[string][]string{
 //	AND (( cluster = 'a' AND data->'namespace' IN ['ns-1', 'ns-2', ...] )
 //	OR ( cluster = 'b' AND data->'namespace' IN ['ns-3', 'ns-4', ...] ) OR ...)
 func matchFineGrainedRbac(clusterNamespacesMap map[string][]string) exp.ExpressionList {
-	result := goqu.And(
-		matchGroupKind(kubevirtResourcesMap),
-		matchClusterAndNamespace(clusterNamespacesMap))
+	result := goqu.Or(
+		// Match the Namespace objects.
+		matchNamespaceObject(clusterNamespacesMap),
+		// Match namespaced resources.
+		goqu.And(
+			matchGroupKind(kubevirtResourcesMap),
+			matchClusterAndNamespace(clusterNamespacesMap),
+		),
+	)
 
 	if klog.V(4).Enabled() {
 		sql, _, _ := goqu.From("t").Where(result).ToSQL()
-		klog.V(4).Info("Fine-grained RBAC query is: ", sql)
+		klog.V(4).Info("Fine-grained RBAC clause is: ", sql)
 	}
 	return result
 }
@@ -78,14 +84,47 @@ func matchClusterAndNamespace(clusterNamespacesMap map[string][]string) exp.Expr
 					goqu.C("cluster").Eq(cluster),
 					goqu.L("data->???", "namespace", goqu.L("?|"), pq.Array(namespaces))),
 			)
+		}
+	}
+	return result
+}
 
-			// Match the Namespace resources.
-			result = result.Append(goqu.And(
+// Match Namespace objects.
+// Resolves to:
+// (data->'apigroup' ? ” AND data->'kind' ? 'Namespace')
+// AND (( cluster = 'a' AND data->>'name' IN ['ns-1', 'ns-2', ...] )
+// OR ( cluster = 'b' AND data->>'name' IN ['ns-3', 'ns-4', ...] ) OR ...)
+func matchNamespaceObject(clusterNamespacesMap map[string][]string) exp.ExpressionList {
+	match := exp.NewExpressionList(exp.ExpressionListType(exp.OrType))
+	clustersWithAllNamespaces := []string{}
+
+	for cluster, namespaces := range clusterNamespacesMap {
+		if len(namespaces) == 1 && namespaces[0] == "*" {
+			// Save cluster names to build the clause later.
+			clustersWithAllNamespaces = append(clustersWithAllNamespaces, cluster)
+		} else {
+			// Match Namespaces by name.
+			match = match.Append(goqu.And(
 				goqu.C("cluster").Eq(cluster),
-				goqu.L("data->???", "kind", goqu.L("?"), "Namespace"),
 				goqu.L("data->???", "name", goqu.L("?|"), pq.Array(namespaces))),
 			)
 		}
 	}
+	if len(clustersWithAllNamespaces) > 0 {
+		match = match.Append(
+			goqu.C("cluster").In(clustersWithAllNamespaces),
+		)
+	}
+
+	result := goqu.And(
+		goqu.L("data->???", "apigroup", goqu.L("?"), ""),
+		goqu.L("data->???", "kind", goqu.L("?"), "Namespace"),
+		match)
+
+	if klog.V(4).Enabled() {
+		sql, _, _ := goqu.From("t").Where(result).ToSQL()
+		klog.V(4).Info("Fine-grained RBAC: Namespaces objects clause is: ", sql)
+	}
+
 	return result
 }
