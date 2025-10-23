@@ -15,7 +15,7 @@ import (
 
 func Test_matchFineGrainedRbac(t *testing.T) {
 	clusterNamespaces := map[string][]string{
-		"cluster-a": []string{"namespace-a1", "namespace-a2"},
+		"cluster-a": {"namespace-a1", "namespace-a2"},
 	}
 
 	result := matchFineGrainedRbac(clusterNamespaces)
@@ -39,7 +39,7 @@ func Test_matchFineGrainedRbac(t *testing.T) {
 
 func Test_matchClusterAndNamespace(t *testing.T) {
 	clusterNamespaces := map[string][]string{
-		"cluster-a": []string{"namespace-a1", "namespace-a2"},
+		"cluster-a": {"namespace-a1", "namespace-a2"},
 	}
 
 	result := matchClusterAndNamespace(clusterNamespaces)
