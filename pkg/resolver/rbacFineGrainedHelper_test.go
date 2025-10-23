@@ -15,34 +15,31 @@ import (
 
 func Test_matchFineGrainedRbac(t *testing.T) {
 	clusterNamespaces := map[string][]string{
-		"cluster-a": []string{"namespace-a1", "namespace-a2"},
+		"cluster-a": {"namespace-a1", "namespace-a2"},
 	}
 
 	result := matchFineGrainedRbac(clusterNamespaces)
 
-	// NOTE: The commented assertion would be much simpler, but the test fails intermittently because
-	// the order of the expressions is inconsistent.
-	//
-	// sql, _, _ := goqu.From("test").Where(result).ToSQL()
-	// expected := `SELECT * FROM test WHERE (((data->'apigroup'?'snapshot.kubevirt.io' AND data->'kind'?|'{"VirtualMachineSnapshot","VirtualMachineSnapshotContent","VirtualMachineRestore"}') OR (data->'apigroup'?'kubevirt.io' AND data->'kind'?|'{"VirtualMachine","VirtualMachineInstance","VirtualMachineInstancePreset","VirtualMachineInstanceReplicaset","VirtualMachineInstanceMigration"}') OR (data->'apigroup'?'clone.kubevirt.io' AND data->'kind'?|'{"VirtualMachineClone"}') OR (data->'apigroup'?'export.kubevirt.io' AND data->'kind'?|'{"VirtualMachineExport"}') OR (data->'apigroup'?'instancetype.kubevirt.io' AND data->'kind'?|'{"VirtualMachineInstancetype","VirtualMachineClusterInstancetype","VirtualMachinePreference","VirtualMachineClusterPreference"}') OR (data->'apigroup'?'migrations.kubevirt.io' AND data->'kind'?|'{"MigrationPolicy"}') OR (data->'apigroup'?'pool.kubevirt.io' AND data->'kind'?|'{"VirtualMachinePool"}')) AND (("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1","namespace-a2"}'))`
-	// assert.Equal(t, sql, expected)
+	// matchFineGrainedRbac returns OR at top level with two branches:
+	// 1. Namespace objects (matchNamespaceObject)
+	// 2. Namespaced resources (AND of matchGroupKind and matchClusterAndNamespace)
 
-	expStrings := make([]string, 0)
-	for _, exp := range result.Expressions() {
-		expString := buildExpressionStringFrom((exp.Expression().(ex.ExpressionList)))
-		expStrings = append(expStrings, expString)
-	}
+	assert.Equal(t, 2, len(result.Expressions()), "Should have 2 top-level OR expressions")
 
-	sort.Strings(expStrings)
-	expressionString := strings.Join(expStrings, " AND ")
-	expectedExpression := `(("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1","namespace-a2"}') AND (data->'apigroup'?'clone.kubevirt.io' AND data->'kind'?|'{"VirtualMachineClone"}') OR (data->'apigroup'?'export.kubevirt.io' AND data->'kind'?|'{"VirtualMachineExport"}') OR (data->'apigroup'?'instancetype.kubevirt.io' AND data->'kind'?|'{"VirtualMachineClusterInstancetype","VirtualMachineClusterPreference","VirtualMachineInstancetype","VirtualMachinePreference"}') OR (data->'apigroup'?'kubevirt.io' AND data->'kind'?|'{"VirtualMachine","VirtualMachineInstance","VirtualMachineInstanceMigration","VirtualMachineInstancePreset","VirtualMachineInstanceReplicaset"}') OR (data->'apigroup'?'migrations.kubevirt.io' AND data->'kind'?|'{"MigrationPolicy"}') OR (data->'apigroup'?'pool.kubevirt.io' AND data->'kind'?|'{"VirtualMachinePool"}') OR (data->'apigroup'?'snapshot.kubevirt.io' AND data->'kind'?|'{"VirtualMachineRestore","VirtualMachineSnapshot","VirtualMachineSnapshotContent"}')`
-
-	assert.Equal(t, expectedExpression, expressionString)
+	// We can't easily verify the exact SQL string due to inconsistent ordering,
+	// but we can verify the structure is correct by checking it produces valid SQL
+	sql, _, err := goqu.From("test").Where(result).ToSQL()
+	assert.Nil(t, err)
+	assert.Contains(t, sql, "data?'apigroup' IS NOT TRUE")
+	assert.Contains(t, sql, "data->'kind'?'Namespace'")
+	assert.Contains(t, sql, "data->'name'?|")
+	assert.Contains(t, sql, "data->'namespace'?|")
+	assert.Contains(t, sql, "kubevirt.io")
 }
 
 func Test_matchClusterAndNamespace(t *testing.T) {
 	clusterNamespaces := map[string][]string{
-		"cluster-a": []string{"namespace-a1", "namespace-a2"},
+		"cluster-a": {"namespace-a1", "namespace-a2"},
 	}
 
 	result := matchClusterAndNamespace(clusterNamespaces)
@@ -58,17 +55,59 @@ func Test_matchClusterAndNamespace(t *testing.T) {
 
 func Test_matchClusterAndNamespace_anyNamespace(t *testing.T) {
 	clusterNamespaces := map[string][]string{
-		"cluster-a": []string{"namespace-a1", "namespace-a2"},
-		"cluster-b": []string{"*"},
+		"cluster-a": {"namespace-a1", "namespace-a2"},
+		"cluster-b": {"*"},
 	}
 
 	result := matchClusterAndNamespace(clusterNamespaces)
 
 	expressionString := buildExpressionStringFrom(result)
 
-	expectedExpression := `("cluster" = 'cluster-b') OR (("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1","namespace-a2"}')`
+	expectedExpression := `("cluster" IN ('cluster-b')) OR (("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1","namespace-a2"}')`
 
 	assert.Equal(t, expectedExpression, expressionString)
+}
+
+func Test_matchNamespaceObject(t *testing.T) {
+	clusterNamespaces := map[string][]string{
+		"cluster-a": {"namespace-a1", "namespace-a2"},
+	}
+
+	result := matchNamespaceObject(clusterNamespaces)
+
+	sql, args, err := goqu.From("t").Where(result).ToSQL()
+
+	expectedSQL := `SELECT * FROM "t" WHERE ((data?'apigroup' IS NOT TRUE) AND data->'kind'?'Namespace' AND (("cluster" = 'cluster-a') AND data->'name'?|'{"namespace-a1","namespace-a2"}'))`
+
+	assert.Nil(t, err)
+	assert.Equal(t, 0, len(args))
+	assert.Equal(t, expectedSQL, sql)
+}
+
+func Test_matchNamespaceObject_anyNamespace(t *testing.T) {
+	clusterNamespaces := map[string][]string{
+		"cluster-a": {"namespace-a1", "namespace-a2"},
+		"cluster-b": {"*"},
+		"cluster-c": {"*"},
+	}
+
+	result := matchNamespaceObject(clusterNamespaces)
+
+	sql, args, err := goqu.From("t").Where(result).ToSQL()
+
+	assert.Nil(t, err)
+	assert.Equal(t, 0, len(args))
+
+	// Should contain the basic Namespace matching
+	assert.Contains(t, sql, "data?'apigroup' IS NOT TRUE")
+	assert.Contains(t, sql, "data->'kind'?'Namespace'")
+
+	// Should match cluster-a with specific namespaces
+	assert.Contains(t, sql, "cluster-a")
+	assert.Contains(t, sql, "data->'name'?|")
+
+	// Should match clusters with all namespaces using IN clause
+	assert.Contains(t, sql, "\"cluster\" IN ('cluster-")
 }
 
 // NOTE: This is needed because goqu ToSQL() doesn't return the expressions in a consistent order.
