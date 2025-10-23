@@ -30,7 +30,7 @@ func Test_matchFineGrainedRbac(t *testing.T) {
 	// but we can verify the structure is correct by checking it produces valid SQL
 	sql, _, err := goqu.From("test").Where(result).ToSQL()
 	assert.Nil(t, err)
-	assert.Contains(t, sql, "data->'apigroup'?''")
+	assert.Contains(t, sql, "data?'apigroup' IS NOT TRUE")
 	assert.Contains(t, sql, "data->'kind'?'Namespace'")
 	assert.Contains(t, sql, "data->'name'?|")
 	assert.Contains(t, sql, "data->'namespace'?|")
@@ -55,29 +55,29 @@ func Test_matchClusterAndNamespace(t *testing.T) {
 
 func Test_matchClusterAndNamespace_anyNamespace(t *testing.T) {
 	clusterNamespaces := map[string][]string{
-		"cluster-a": []string{"namespace-a1", "namespace-a2"},
-		"cluster-b": []string{"*"},
+		"cluster-a": {"namespace-a1", "namespace-a2"},
+		"cluster-b": {"*"},
 	}
 
 	result := matchClusterAndNamespace(clusterNamespaces)
 
 	expressionString := buildExpressionStringFrom(result)
 
-	expectedExpression := `("cluster" = 'cluster-b') OR (("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1","namespace-a2"}')`
+	expectedExpression := `("cluster" IN ('cluster-b')) OR (("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1","namespace-a2"}')`
 
 	assert.Equal(t, expectedExpression, expressionString)
 }
 
 func Test_matchNamespaceObject(t *testing.T) {
 	clusterNamespaces := map[string][]string{
-		"cluster-a": []string{"namespace-a1", "namespace-a2"},
+		"cluster-a": {"namespace-a1", "namespace-a2"},
 	}
 
 	result := matchNamespaceObject(clusterNamespaces)
 
 	sql, args, err := goqu.From("t").Where(result).ToSQL()
 
-	expectedSQL := `SELECT * FROM "t" WHERE (data->'apigroup'?'' AND data->'kind'?'Namespace' AND (("cluster" = 'cluster-a') AND data->'name'?|'{"namespace-a1","namespace-a2"}'))`
+	expectedSQL := `SELECT * FROM "t" WHERE ((data?'apigroup' IS NOT TRUE) AND data->'kind'?'Namespace' AND (("cluster" = 'cluster-a') AND data->'name'?|'{"namespace-a1","namespace-a2"}'))`
 
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(args))
@@ -86,9 +86,9 @@ func Test_matchNamespaceObject(t *testing.T) {
 
 func Test_matchNamespaceObject_anyNamespace(t *testing.T) {
 	clusterNamespaces := map[string][]string{
-		"cluster-a": []string{"namespace-a1", "namespace-a2"},
-		"cluster-b": []string{"*"},
-		"cluster-c": []string{"*"},
+		"cluster-a": {"namespace-a1", "namespace-a2"},
+		"cluster-b": {"*"},
+		"cluster-c": {"*"},
 	}
 
 	result := matchNamespaceObject(clusterNamespaces)
@@ -99,7 +99,7 @@ func Test_matchNamespaceObject_anyNamespace(t *testing.T) {
 	assert.Equal(t, 0, len(args))
 
 	// Should contain the basic Namespace matching
-	assert.Contains(t, sql, "data->'apigroup'?''")
+	assert.Contains(t, sql, "data?'apigroup' IS NOT TRUE")
 	assert.Contains(t, sql, "data->'kind'?'Namespace'")
 
 	// Should match cluster-a with specific namespaces

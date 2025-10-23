@@ -41,8 +41,8 @@ func matchFineGrainedRbac(clusterNamespacesMap map[string][]string) exp.Expressi
 	)
 
 	if klog.V(4).Enabled() {
-		sql, _, _ := goqu.From("t").Where(result).ToSQL()
-		klog.V(4).Info("Fine-grained RBAC clause is: ", sql)
+		sql, _, err := goqu.From("t").Where(result).ToSQL()
+		klog.V(4).Info("Fine-grained RBAC clause is: ", sql, " error: ", err)
 	}
 	return result
 }
@@ -73,11 +73,11 @@ func matchGroupKind(groupKind map[string][]string) exp.ExpressionList {
 // (( cluster = 'a' AND data->>'namespace' IN ['ns-1', 'ns-2', ...] )
 // OR ( cluster = 'b' AND data->>'namespace' IN ['ns-3', 'ns-4', ...] ) OR ...)
 func matchClusterAndNamespace(clusterNamespacesMap map[string][]string) exp.ExpressionList {
-	result := exp.NewExpressionList(exp.ExpressionListType(exp.OrType))
-
+	result := goqu.Or()
+	clustersWithAllNamespaces := []string{}
 	for cluster, namespaces := range clusterNamespacesMap {
 		if len(namespaces) == 1 && namespaces[0] == "*" {
-			result = result.Append(goqu.C("cluster").Eq(cluster))
+			clustersWithAllNamespaces = append(clustersWithAllNamespaces, cluster)
 		} else {
 			result = result.Append(
 				goqu.And(
@@ -86,16 +86,23 @@ func matchClusterAndNamespace(clusterNamespacesMap map[string][]string) exp.Expr
 			)
 		}
 	}
+	if len(clustersWithAllNamespaces) > 0 {
+		result = result.Append(goqu.C("cluster").In(clustersWithAllNamespaces))
+	}
 	return result
 }
 
 // Match Namespace objects.
 // Resolves to:
-// (data->'apigroup' ? ” AND data->'kind' ? 'Namespace')
+// data?'apigroup' IS NOT TRUE) AND data->'kind'?'Namespace'
 // AND (( cluster = 'a' AND data->>'name' IN ['ns-1', 'ns-2', ...] )
 // OR ( cluster = 'b' AND data->>'name' IN ['ns-3', 'ns-4', ...] ) OR ...)
 func matchNamespaceObject(clusterNamespacesMap map[string][]string) exp.ExpressionList {
-	match := exp.NewExpressionList(exp.ExpressionListType(exp.OrType))
+	result := goqu.And(
+		goqu.L("data??", goqu.L("?"), "apigroup").IsNotTrue(),
+		goqu.L("data->???", "kind", goqu.L("?"), "Namespace"))
+
+	match := goqu.Or()
 	clustersWithAllNamespaces := []string{}
 
 	for cluster, namespaces := range clusterNamespacesMap {
@@ -116,15 +123,7 @@ func matchNamespaceObject(clusterNamespacesMap map[string][]string) exp.Expressi
 		)
 	}
 
-	result := goqu.And(
-		goqu.L("data->???", "apigroup", goqu.L("?"), ""),
-		goqu.L("data->???", "kind", goqu.L("?"), "Namespace"),
-		match)
-
-	if klog.V(4).Enabled() {
-		sql, _, _ := goqu.From("t").Where(result).ToSQL()
-		klog.V(4).Info("Fine-grained RBAC: Namespaces objects clause is: ", sql)
-	}
+	result = result.Append(match)
 
 	return result
 }
