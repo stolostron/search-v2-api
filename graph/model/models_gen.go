@@ -2,6 +2,14 @@
 
 package model
 
+// Event returned by watch subscription.
+type Event struct {
+	UID       string         `json:"uid"`
+	Operation string         `json:"operation"`
+	Data      map[string]any `json:"data"`
+	Timestamp string         `json:"timestamp"`
+}
+
 // A message is used to communicate conditions detected while executing a query on the server.
 type Message struct {
 	// Unique identifier to be used by clients to process the message independently of locale or grammatical changes.
@@ -11,6 +19,10 @@ type Message struct {
 	Kind *string `json:"kind,omitempty"`
 	// Message text.
 	Description *string `json:"description,omitempty"`
+}
+
+// Queries supported by the Search Query API.
+type Query struct {
 }
 
 // Defines a key/value to filter results.
@@ -45,4 +57,8 @@ type SearchInput struct {
 	// If empty, all relationships will be included.
 	// This filter is used with the 'related' field on SearchResult.
 	RelatedKinds []*string `json:"relatedKinds,omitempty"`
+}
+
+// Subscriptions implemented by the Search Query API.
+type Subscription struct {
 }

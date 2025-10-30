@@ -17,6 +17,11 @@ type Subscription {
   Returns a stream of `SearchResult` objects.
   """
   experimentalSearch(input: [SearchInput]): [SearchResult]
+  
+  """
+  Receive events from changes to the indexed data.
+  """
+  watch(input: SearchInput): Event
 }
 
 """
@@ -107,6 +112,15 @@ input SearchInput {
     """
     relatedKinds: [String]
   }
+"""
+Event returned by watch subscription.
+"""
+type Event {
+  uid: String!
+  operation: String!
+  data: Map!
+  timestamp: String!
+}
 
 """
 Data returned by the search query.

@@ -18,5 +18,6 @@ func init() {
 	DEVELOPMENT_MODE = true
 	os.Setenv("FEATURE_FEDERATED_SEARCH", "true")
 	os.Setenv("FEATURE_FINE_GRAINED_RBAC", "true")
+	os.Setenv("FEATURE_SUBSCRIPTION", "true")
 	Cfg = new()
 }
