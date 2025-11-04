@@ -4,71 +4,63 @@ package resolver
 import (
 	"context"
 	"errors"
-	"strconv"
-	"time"
 
 	klog "k8s.io/klog/v2"
 
+	"github.com/google/uuid"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
+	"github.com/stolostron/search-v2-api/pkg/database"
 )
 
 func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *model.Event, error) {
-	ch := make(chan *model.Event)
+	receive := make(chan *model.Event)
+	result := make(chan *model.Event)
 
 	// if not enabled via feature flag -> return error message
 	if !config.Cfg.Features.SubscriptionEnabled {
 		klog.Infof("GraphQL subscription requests are disabled. To enable set env variable FEATURE_SUBSCRIPTION=true")
 		ctx.Done()
-		close(ch)
-		return ch, errors.New("GraphQL subscription requests are disabled. To enable set env variable FEATURE_SUBSCRIPTION=true")
+		defer close(result)
+		return result, errors.New("GraphQL subscription requests are disabled. To enable set env variable FEATURE_SUBSCRIPTION=true")
 	}
 
-	// TODO: Get event from database.
 	go func() {
-		i := 0
+		uid := uuid.New().String()[:8]
+		database.RegisterSubscriptionAndListen(ctx, uid, receive)
+		defer database.UnregisterSubscription(uid)
+
+		klog.Infof("Subscription watch(%s) registered with database listener.", uid)
+
+		// Forward events from the subscription channel to the client channel
+		defer close(result)
+		defer close(receive)
 		for {
-			i++
 			select {
 			case <-ctx.Done():
-				klog.V(3).Info("Watch subscription closed.")
+				klog.V(3).Infof("Subscription watch(%s) closed by client.", uid)
 				return
-			default:
-				klog.V(1).Info("Sending mock event for watch subscription")
-				// TODO: Get event from database
-				// Sending mock event for now
-
-				ch <- &model.Event{
-					UID:       "0000-" + strconv.Itoa(i),
-					Operation: "CREATE",
-					Data: map[string]interface{}{
-						"name":       "test-" + strconv.Itoa(i),
-						"namespace":  "default",
-						"kind":       "MockedKind",
-						"apiVersion": "v1",
-						"apiGroup":   "mock.io",
-					},
-					Timestamp: time.Now().Format(time.RFC3339),
+			case event, ok := <-receive:
+				if !ok {
+					// Subscription channel was closed
+					klog.V(3).Infof("Subscription watch(%s) channel closed.", uid)
+					return
 				}
-
-				if i%5 == 0 {
-					ch <- &model.Event{
-						UID:       "0000-" + strconv.Itoa(i-1),
-						Operation: "DELETE",
-						Data: map[string]interface{}{
-							"name":       "test-" + strconv.Itoa(i-1),
-							"namespace":  "default",
-							"kind":       "MockedKind",
-							"apiVersion": "v1",
-							"apiGroup":   "mock.io",
-						},
-						Timestamp: time.Now().Format(time.RFC3339),
-					}
+				// Send event to client
+				select {
+				case result <- event:
+					// TODO: Should filter events based on the input filter.
+					klog.Infof("Subscription watch(%s) sent event (UID: %s, Operation: %s) to client", uid, event.UID, event.Operation)
+				case <-ctx.Done():
+					klog.V(3).Infof("Subscription watch(%s) closed while sending event.", uid)
+					return
+				default:
+					klog.V(3).Infof("Subscription watch(%s) channel buffer is full, dropping event.", uid)
+					return
 				}
 			}
-			time.Sleep(time.Duration(1000 * time.Millisecond))
 		}
 	}()
 
-	return ch, nil
+	return result, nil
 }

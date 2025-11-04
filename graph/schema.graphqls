@@ -118,8 +118,9 @@ Event returned by watch subscription.
 type Event {
   uid: String!
   operation: String!
-  data: Map!
-  timestamp: String!
+  new_data: Map
+  old_data: Map
+  timestampFIXME: String!
 }
 
 """

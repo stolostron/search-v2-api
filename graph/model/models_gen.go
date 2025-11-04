@@ -4,10 +4,11 @@ package model
 
 // Event returned by watch subscription.
 type Event struct {
-	UID       string         `json:"uid"`
-	Operation string         `json:"operation"`
-	Data      map[string]any `json:"data"`
-	Timestamp string         `json:"timestamp"`
+	UID            string         `json:"uid"`
+	Operation      string         `json:"operation"`
+	NewData        map[string]any `json:"new_data,omitempty"`
+	OldData        map[string]any `json:"old_data,omitempty"`
+	TimestampFixme string         `json:"timestampFIXME"`
 }
 
 // A message is used to communicate conditions detected while executing a query on the server.

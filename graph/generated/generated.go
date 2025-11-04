@@ -48,10 +48,11 @@ type DirectiveRoot struct {
 
 type ComplexityRoot struct {
 	Event struct {
-		Data      func(childComplexity int) int
-		Operation func(childComplexity int) int
-		Timestamp func(childComplexity int) int
-		UID       func(childComplexity int) int
+		NewData        func(childComplexity int) int
+		OldData        func(childComplexity int) int
+		Operation      func(childComplexity int) int
+		TimestampFixme func(childComplexity int) int
+		UID            func(childComplexity int) int
 	}
 
 	Message struct {
@@ -115,24 +116,30 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	_ = ec
 	switch typeName + "." + field {
 
-	case "Event.data":
-		if e.complexity.Event.Data == nil {
+	case "Event.new_data":
+		if e.complexity.Event.NewData == nil {
 			break
 		}
 
-		return e.complexity.Event.Data(childComplexity), true
+		return e.complexity.Event.NewData(childComplexity), true
+	case "Event.old_data":
+		if e.complexity.Event.OldData == nil {
+			break
+		}
+
+		return e.complexity.Event.OldData(childComplexity), true
 	case "Event.operation":
 		if e.complexity.Event.Operation == nil {
 			break
 		}
 
 		return e.complexity.Event.Operation(childComplexity), true
-	case "Event.timestamp":
-		if e.complexity.Event.Timestamp == nil {
+	case "Event.timestampFIXME":
+		if e.complexity.Event.TimestampFixme == nil {
 			break
 		}
 
-		return e.complexity.Event.Timestamp(childComplexity), true
+		return e.complexity.Event.TimestampFixme(childComplexity), true
 	case "Event.uid":
 		if e.complexity.Event.UID == nil {
 			break
@@ -489,8 +496,9 @@ Event returned by watch subscription.
 type Event {
   uid: String!
   operation: String!
-  data: Map!
-  timestamp: String!
+  new_data: Map
+  old_data: Map
+  timestampFIXME: String!
 }
 
 """
@@ -746,23 +754,23 @@ func (ec *executionContext) fieldContext_Event_operation(_ context.Context, fiel
 	return fc, nil
 }
 
-func (ec *executionContext) _Event_data(ctx context.Context, field graphql.CollectedField, obj *model.Event) (ret graphql.Marshaler) {
+func (ec *executionContext) _Event_new_data(ctx context.Context, field graphql.CollectedField, obj *model.Event) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Event_data,
+		ec.fieldContext_Event_new_data,
 		func(ctx context.Context) (any, error) {
-			return obj.Data, nil
+			return obj.NewData, nil
 		},
 		nil,
-		ec.marshalNMap2map,
+		ec.marshalOMap2map,
 		true,
-		true,
+		false,
 	)
 }
 
-func (ec *executionContext) fieldContext_Event_data(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Event_new_data(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Event",
 		Field:      field,
@@ -775,14 +783,43 @@ func (ec *executionContext) fieldContext_Event_data(_ context.Context, field gra
 	return fc, nil
 }
 
-func (ec *executionContext) _Event_timestamp(ctx context.Context, field graphql.CollectedField, obj *model.Event) (ret graphql.Marshaler) {
+func (ec *executionContext) _Event_old_data(ctx context.Context, field graphql.CollectedField, obj *model.Event) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Event_timestamp,
+		ec.fieldContext_Event_old_data,
 		func(ctx context.Context) (any, error) {
-			return obj.Timestamp, nil
+			return obj.OldData, nil
+		},
+		nil,
+		ec.marshalOMap2map,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Event_old_data(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Event",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Map does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Event_timestampFIXME(ctx context.Context, field graphql.CollectedField, obj *model.Event) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Event_timestampFIXME,
+		func(ctx context.Context) (any, error) {
+			return obj.TimestampFixme, nil
 		},
 		nil,
 		ec.marshalNString2string,
@@ -791,7 +828,7 @@ func (ec *executionContext) _Event_timestamp(ctx context.Context, field graphql.
 	)
 }
 
-func (ec *executionContext) fieldContext_Event_timestamp(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Event_timestampFIXME(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Event",
 		Field:      field,
@@ -1427,10 +1464,12 @@ func (ec *executionContext) fieldContext_Subscription_watch(ctx context.Context,
 				return ec.fieldContext_Event_uid(ctx, field)
 			case "operation":
 				return ec.fieldContext_Event_operation(ctx, field)
-			case "data":
-				return ec.fieldContext_Event_data(ctx, field)
-			case "timestamp":
-				return ec.fieldContext_Event_timestamp(ctx, field)
+			case "new_data":
+				return ec.fieldContext_Event_new_data(ctx, field)
+			case "old_data":
+				return ec.fieldContext_Event_old_data(ctx, field)
+			case "timestampFIXME":
+				return ec.fieldContext_Event_timestampFIXME(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Event", field.Name)
 		},
@@ -3006,13 +3045,12 @@ func (ec *executionContext) _Event(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "data":
-			out.Values[i] = ec._Event_data(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "timestamp":
-			out.Values[i] = ec._Event_timestamp(ctx, field, obj)
+		case "new_data":
+			out.Values[i] = ec._Event_new_data(ctx, field, obj)
+		case "old_data":
+			out.Values[i] = ec._Event_old_data(ctx, field, obj)
+		case "timestampFIXME":
+			out.Values[i] = ec._Event_timestampFIXME(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -3687,28 +3725,6 @@ func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v any) (
 func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.SelectionSet, v bool) graphql.Marshaler {
 	_ = sel
 	res := graphql.MarshalBoolean(v)
-	if res == graphql.Null {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
-		}
-	}
-	return res
-}
-
-func (ec *executionContext) unmarshalNMap2map(ctx context.Context, v any) (map[string]any, error) {
-	res, err := graphql.UnmarshalMap(v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalNMap2map(ctx context.Context, sel ast.SelectionSet, v map[string]any) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	_ = sel
-	res := graphql.MarshalMap(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
