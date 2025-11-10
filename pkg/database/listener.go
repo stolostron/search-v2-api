@@ -179,7 +179,6 @@ func (l *Listener) listen() {
 					len(l.subscriptions), notification)
 
 				l.mu.RLock()
-				defer l.mu.RUnlock()
 				for _, sub := range l.subscriptions {
 					var notificationPayload model.Event
 					err := json.Unmarshal([]byte(notification.Payload), &notificationPayload)
@@ -198,6 +197,7 @@ func (l *Listener) listen() {
 						sub.Channel <- &notificationPayload
 					}
 				}
+				l.mu.RUnlock()
 			}
 		}
 	}
@@ -225,4 +225,14 @@ func (l *Listener) handleConnectionError() {
 	} else {
 		klog.Info("Successfully reconnected to database")
 	}
+}
+
+// ResetListenerForTesting resets the listener singleton for testing purposes
+// This should only be called from test code
+func ResetListenerForTesting() {
+	listenerOnce = sync.Once{}
+	if listenerInstance != nil && listenerInstance.cancel != nil {
+		listenerInstance.cancel()
+	}
+	listenerInstance = nil
 }
