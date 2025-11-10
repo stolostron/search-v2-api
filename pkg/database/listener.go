@@ -19,7 +19,6 @@ var (
 	channelName      = "search_resources_changes"
 	listenerInstance *Listener
 	listenerOnce     sync.Once
-	reconnectDelay   = 5 * time.Second // FIXME use config
 )
 
 type Subscription struct {
@@ -216,7 +215,7 @@ func (l *Listener) handleConnectionError() {
 	l.mu.Unlock()
 
 	// Wait before reconnecting
-	time.Sleep(reconnectDelay)
+	time.Sleep(time.Duration(config.Cfg.DBReconnectDelay) * time.Second)
 
 	l.mu.Lock()
 	defer l.mu.Unlock()

@@ -33,6 +33,7 @@ type Config struct {
 	DBPass                      string
 	DBPort                      int
 	DBUser                      string
+	DBReconnectDelay            int              // Duration in seconds between reconnect attempts. Default: 5 seconds
 	DevelopmentMode             bool             // Indicates if running in local development mode.
 	Features                    featureFlags     // Enable or disable features.
 	Federation                  federationConfig // Federated search configuration.
@@ -90,6 +91,7 @@ func new() *Config {
 		DBPass:              getEnv("DB_PASS", ""),
 		DBPort:              getEnvAsInt("DB_PORT", 5432),
 		DBUser:              getEnv("DB_USER", ""),
+		DBReconnectDelay:    getEnvAsInt("DB_RECONNECT_DELAY", 5),
 		DevelopmentMode:     DEVELOPMENT_MODE,
 		Features: featureFlags{
 			FederatedSearch:     getEnvAsBool("FEATURE_FEDERATED_SEARCH", false),  // In Dev mode default is true.
