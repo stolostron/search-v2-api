@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -93,6 +94,19 @@ func (l *Listener) Start() error {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 
+	// FIXME: We should create the trigger from the search-v2-operator.
+	// Register the trigger defined in listernerTrigger.sql
+	listenerTriggerSQL, err := os.ReadFile("pkg/database/listenerTrigger.sql")
+	if err != nil {
+		return fmt.Errorf("failed to read listener trigger SQL: %w", err)
+	}
+	_, err = l.conn.Exec(l.ctx, string(listenerTriggerSQL))
+	if err != nil {
+		return fmt.Errorf("failed to create trigger: %w", err)
+	} else {
+		klog.Info("Successfully created postgres TRIGGER to NOTIFY the listener.")
+	}
+
 	l.started = true
 	go l.listen()
 	klog.Info("Subscription listener started successfully")
@@ -149,7 +163,7 @@ func (l *Listener) listen() {
 		default:
 			// Wait for notification with timeout
 			klog.Info("Waiting for notification...")
-			notification, err := l.conn.WaitForNotification(l.ctx) // FIXME panics when connection is lost.
+			notification, err := l.conn.WaitForNotification(l.ctx) // FIXME: this panics when connection is lost.
 
 			if err != nil {
 				if l.ctx.Err() != nil {
