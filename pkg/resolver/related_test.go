@@ -31,8 +31,8 @@ func Test_SearchResolver_Relationships(t *testing.T) {
 		gomock.Any(),
 	).Return(mockRows, nil)
 
-	// Mock SECOND database request.
-	query2 := `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("uid" IN ('local-cluster/411e30e4-f773-41a6-b745-24c93c173f45', 'local-cluster/30c35f12-320a-417f-98d1-fbee28a4b2a6')) LIMIT 1000`
+	// Mock SECOND database request. UIDs are sorted alphabetically for stable ordering.
+	query2 := `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("uid" IN ('local-cluster/30c35f12-320a-417f-98d1-fbee28a4b2a6', 'local-cluster/411e30e4-f773-41a6-b745-24c93c173f45')) LIMIT 1000`
 	mockRows2 := newMockRows("./mocks/mock-related-test.json")
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(query2),
@@ -83,8 +83,8 @@ func Test_SearchResolver_RelationshipsWithCluster(t *testing.T) {
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 
-	// Mock the SECOND database request.
-	query2 := `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("uid" IN ('local-cluster/411e30e4-f773-41a6-b745-24c93c173f45', 'local-cluster/30c35f12-320a-417f-98d1-fbee28a4b2a6')) LIMIT 1000`
+	// Mock the SECOND database request. UIDs are sorted alphabetically for stable ordering.
+	query2 := `SELECT "uid", "cluster", "data" FROM "search"."resources" WHERE ("uid" IN ('local-cluster/30c35f12-320a-417f-98d1-fbee28a4b2a6', 'local-cluster/411e30e4-f773-41a6-b745-24c93c173f45')) LIMIT 1000`
 	mockRows2 := newMockRows("./mocks/mock-related-test.json")
 	mockPool.EXPECT().Query(gomock.Any(),
 		gomock.Eq(query2),

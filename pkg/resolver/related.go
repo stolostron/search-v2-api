@@ -317,9 +317,13 @@ func (s *SearchResult) filterRelatedUIDs(levelsMap map[string][]string) {
 
 	// If relatedKinds filter is empty, include all.
 	if len(s.input.RelatedKinds) == 0 {
+		// Collect all UIDs into a temporary slice to sort them for stable ordering
+		allUids := []string{}
 		for _, values := range levelsMap {
-			s.uids = append(s.uids, stringArrayToPointer(values)...)
+			allUids = append(allUids, values...)
 		}
+		sort.Strings(allUids) //stabilize unit tests
+		s.uids = stringArrayToPointer(allUids)
 	} else {
 		// Only include UIDs of related items that match the relatedKinds filter.
 		kinds := getKeys(levelsMap)
