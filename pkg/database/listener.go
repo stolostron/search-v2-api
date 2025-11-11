@@ -52,7 +52,9 @@ func RegisterSubscriptionAndListen(ctx context.Context, uid string, notifyChanne
 			cancel:        listenCancel,
 			started:       false,
 		}
-		listenerInstance.Start()
+		if err := listenerInstance.Start(); err != nil {
+			klog.Errorf("Failed to start listener: %v", err)
+		}
 	})
 
 	sub := &Subscription{
@@ -136,7 +138,9 @@ func (l *Listener) connect() error {
 	// Start listening to the channel
 	_, err = conn.Exec(l.ctx, fmt.Sprintf("LISTEN %s", channelName))
 	if err != nil {
-		conn.Close(l.ctx)
+		if err := conn.Close(l.ctx); err != nil {
+			klog.Errorf("Failed to close connection: %v", err)
+		}
 		return fmt.Errorf("unable to listen to channel %s: %w", channelName, err)
 	}
 
@@ -149,7 +153,9 @@ func (l *Listener) connect() error {
 func (l *Listener) listen() {
 	defer func() {
 		if l.conn != nil {
-			l.conn.Close(context.Background())
+			if err := l.conn.Close(context.Background()); err != nil {
+				klog.Errorf("Failed to close connection: %v", err)
+			}
 		}
 		klog.Info("Subscription listener stopped")
 	}()
@@ -209,7 +215,9 @@ func (l *Listener) handleConnectionError() {
 
 	l.mu.Lock()
 	if l.conn != nil {
-		l.conn.Close(context.Background())
+		if err := l.conn.Close(context.Background()); err != nil {
+			klog.Errorf("Failed to close connection: %v", err)
+		}
 		l.conn = nil
 	}
 	l.mu.Unlock()

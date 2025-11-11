@@ -4,7 +4,6 @@ package rbac
 import (
 	"context"
 	"net/http"
-	"os"
 	"strings"
 
 	"k8s.io/klog/v2"
@@ -29,7 +28,7 @@ func AuthenticateUser(next http.Handler) http.Handler {
 			// Remove the keyword "Bearer " if it exists in the header.
 			clientToken = strings.Replace(clientToken, "Bearer ", "", 1)
 		}
-		clientToken = os.Getenv("AUTH_TOKEN") // DO NOT MERGE WITH THIS CHANGE !!!
+		// clientToken = os.Getenv("AUTH_TOKEN") // FIXME: DO NOT MERGE WITH THIS CHANGE !!!
 		// Retrieving and verifying the token
 		if clientToken == "" {
 			klog.V(4).Info("Request didn't have a valid authentication token.")

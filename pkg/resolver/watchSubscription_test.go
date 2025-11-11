@@ -314,9 +314,8 @@ func TestWatchSubscription_RapidContextCancellation(t *testing.T) {
 	case _, ok := <-resultChan:
 		if ok {
 			t.Log("Received event before closure")
-		} else {
-			// Channel closed, as expected
 		}
+		// Channel closed, as expected
 	case <-time.After(2 * time.Second):
 		// Timeout is acceptable
 	}
