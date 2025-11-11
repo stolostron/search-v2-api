@@ -271,7 +271,7 @@ func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache 
 			}
 		}(res.Apigroup, res.Kind)
 	}
-	wg.Wait() // Wait for all requests to complete.
+	wg.Wait() // Wait for all go routines to complete.
 
 	uid, userInfo := cache.GetUserUID(ctx)
 	klog.V(7).Infof("User %s with uid: %s has access to these cluster scoped res: %+v \n", userInfo.Username, uid,
