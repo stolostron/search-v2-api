@@ -19,6 +19,7 @@ var (
 	channelName      = "search_resources_changes"
 	listenerInstance *Listener
 	listenerOnce     sync.Once
+	listenerMu       sync.Mutex // Protects listenerOnce and listenerInstance during reset
 )
 
 type Subscription struct {
@@ -42,6 +43,7 @@ type Listener struct {
 func RegisterSubscriptionAndListen(ctx context.Context, uid string, notifyChannel chan *model.Event) {
 
 	// Iniialize the listener instance if not already initialized.
+	listenerMu.Lock()
 	listenerOnce.Do(func() {
 		listenCtx := context.Background() // FIXME: use context from main.
 		listenCtx, listenCancel := context.WithCancel(listenCtx)
@@ -56,28 +58,40 @@ func RegisterSubscriptionAndListen(ctx context.Context, uid string, notifyChanne
 			klog.Errorf("Failed to start listener: %v", err)
 		}
 	})
+	listenerMu.Unlock()
 
 	sub := &Subscription{
 		ID:      uid,
 		Channel: notifyChannel,
 		Context: ctx,
 	}
+
+	listenerInstance.mu.Lock()
 	listenerInstance.subscriptions = append(listenerInstance.subscriptions, sub)
+	listenerInstance.mu.Unlock()
 }
 
 func UnregisterSubscription(uid string) {
-	listenerInstance.mu.Lock()
-	defer listenerInstance.mu.Unlock()
-	for i, sub := range listenerInstance.subscriptions {
+	listenerMu.Lock()
+	listener := listenerInstance
+	listenerMu.Unlock()
+
+	if listener == nil {
+		return
+	}
+
+	listener.mu.Lock()
+	defer listener.mu.Unlock()
+	for i, sub := range listener.subscriptions {
 		if sub.ID == uid {
-			listenerInstance.subscriptions = append(listenerInstance.subscriptions[:i], listenerInstance.subscriptions[i+1:]...)
+			listener.subscriptions = append(listener.subscriptions[:i], listener.subscriptions[i+1:]...)
 		}
 	}
-	klog.Infof("Unregistered subscription %s, %d subscriptions remaining.", uid, len(listenerInstance.subscriptions))
+	klog.Infof("Unregistered subscription %s, %d subscriptions remaining.", uid, len(listener.subscriptions))
 
-	if len(listenerInstance.subscriptions) == 0 {
+	if len(listener.subscriptions) == 0 {
 		klog.Info("No more activesubscriptions, shutting down listener.")
-		listenerInstance.cancel()
+		listener.cancel()
 	}
 }
 
@@ -181,10 +195,10 @@ func (l *Listener) listen() {
 			}
 
 			if notification != nil {
+				l.mu.RLock()
 				klog.Infof("Received postgres event, forwarding to %d subscriptions. %+v ",
 					len(l.subscriptions), notification)
 
-				l.mu.RLock()
 				for _, sub := range l.subscriptions {
 					var notificationPayload model.Event
 					err := json.Unmarshal([]byte(notification.Payload), &notificationPayload)
@@ -238,9 +252,17 @@ func (l *Listener) handleConnectionError() {
 // ResetListenerForTesting resets the listener singleton for testing purposes
 // This should only be called from test code
 func ResetListenerForTesting() {
-	listenerOnce = sync.Once{}
+	listenerMu.Lock()
+	defer listenerMu.Unlock()
+
+	// Cancel the listener context if it exists
 	if listenerInstance != nil && listenerInstance.cancel != nil {
 		listenerInstance.cancel()
+		// Give the listener goroutine time to shut down
+		time.Sleep(50 * time.Millisecond)
 	}
+
+	// Reset the singleton
+	listenerOnce = sync.Once{}
 	listenerInstance = nil
 }

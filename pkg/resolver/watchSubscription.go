@@ -49,7 +49,10 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 				// Send event to client
 				select {
 				case result <- event:
-					// TODO: Should filter events based on the input filter.
+					// TODO ================================================================
+					//   1. Filter events based on the input filter. ACM-24574
+					//   2. Filter events for user's RBAC permissions. ACM-26248
+					// TODO ================================================================
 					klog.Infof("Subscription watch(%s) sent event (UID: %s, Operation: %s) to client", uid, event.UID, event.Operation)
 				case <-ctx.Done():
 					klog.V(3).Infof("Subscription watch(%s) closed while sending event.", uid)
