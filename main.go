@@ -36,4 +36,7 @@ func main() {
 	go rbac.GetCache().StartBackgroundValidation(ctx)
 
 	server.StartAndListen()
+
+	// Stop the Postgres listener.
+	database.StopPostgresListener()
 }

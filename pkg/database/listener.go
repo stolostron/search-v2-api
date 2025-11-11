@@ -44,8 +44,9 @@ func RegisterSubscriptionAndListen(ctx context.Context, uid string, notifyChanne
 
 	// Iniialize the listener instance if not already initialized.
 	listenerMu.Lock()
+	defer listenerMu.Unlock()
 	listenerOnce.Do(func() {
-		listenCtx := context.Background() // FIXME: use context from main.
+		listenCtx := context.Background()
 		listenCtx, listenCancel := context.WithCancel(listenCtx)
 		listenerInstance = &Listener{
 			subscriptions: make([]*Subscription, 0),
@@ -58,7 +59,6 @@ func RegisterSubscriptionAndListen(ctx context.Context, uid string, notifyChanne
 			klog.Errorf("Failed to start listener: %v", err)
 		}
 	})
-	listenerMu.Unlock()
 
 	sub := &Subscription{
 		ID:      uid,
@@ -67,8 +67,9 @@ func RegisterSubscriptionAndListen(ctx context.Context, uid string, notifyChanne
 	}
 
 	listenerInstance.mu.Lock()
+	defer listenerInstance.mu.Unlock()
 	listenerInstance.subscriptions = append(listenerInstance.subscriptions, sub)
-	listenerInstance.mu.Unlock()
+	klog.Infof("Registered subscription %s, %d subscriptions total.", uid, len(listenerInstance.subscriptions))
 }
 
 func UnregisterSubscription(uid string) {
@@ -90,8 +91,9 @@ func UnregisterSubscription(uid string) {
 	klog.Infof("Unregistered subscription %s, %d subscriptions remaining.", uid, len(listener.subscriptions))
 
 	if len(listener.subscriptions) == 0 {
-		klog.Info("No more activesubscriptions, shutting down listener.")
+		klog.Info("No more active subscriptions, shutting down listener.")
 		listener.cancel()
+		// FIXME? Do I need to unreference the listener instance?
 	}
 }
 
@@ -109,7 +111,7 @@ func (l *Listener) Start() error {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	// FIXME: We should create the trigger from the search-v2-operator.
+	// FIXME: We should move this TRIGGER to the search-v2-operator.
 	// Register the trigger defined in listernerTrigger.sql
 	listenerTriggerSQL, err := os.ReadFile("pkg/database/listenerTrigger.sql")
 	if err != nil {
@@ -159,29 +161,30 @@ func (l *Listener) connect() error {
 	}
 
 	l.conn = conn
-	klog.V(2).Infof("Successfully listening to Postgres channel: %s", channelName)
+	klog.V(2).Infof("Listening to Postgres channel: %s", channelName)
 	return nil
 }
 
 // listen is the main goroutine that receives notifications and forwards them
 func (l *Listener) listen() {
 	defer func() {
+		klog.Info("Subscription listener shutting down...")
 		if l.conn != nil {
 			if err := l.conn.Close(context.Background()); err != nil {
 				klog.Errorf("Failed to close connection: %v", err)
 			}
 		}
-		klog.Info("Subscription listener stopped")
+		klog.Info("Subscription listener stopped.")
 	}()
 
 	for {
 		select {
 		case <-l.ctx.Done():
-			klog.Info("Listener context cancelled, shutting down")
+			klog.Info("Listener context cancelled, shutting down.")
 			return
 		default:
 			// Wait for notification with timeout
-			klog.Info("Waiting for notification...")
+			klog.V(3).Infof("Waiting for notification on: %s", channelName)
 			notification, err := l.conn.WaitForNotification(l.ctx) // FIXME: this panics when connection is lost.
 
 			if err != nil {
@@ -265,4 +268,17 @@ func ResetListenerForTesting() {
 	// Reset the singleton
 	listenerOnce = sync.Once{}
 	listenerInstance = nil
+}
+
+func StopPostgresListener() {
+	listenerMu.Lock()
+	defer listenerMu.Unlock()
+
+	if listenerInstance != nil && listenerInstance.cancel != nil {
+		listenerInstance.cancel()
+	}
+
+	listenerInstance = nil
+	listenerOnce = sync.Once{}
+	klog.Info("Postgres listener stopped.")
 }
