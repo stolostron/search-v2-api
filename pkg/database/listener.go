@@ -93,7 +93,6 @@ func UnregisterSubscription(uid string) {
 	if len(listener.subscriptions) == 0 {
 		klog.Info("No more active subscriptions, shutting down listener.")
 		listener.cancel()
-		// FIXME? Do I need to unreference the listener instance?
 	}
 }
 
