@@ -38,7 +38,7 @@ BEGIN
     );
 
     -- Send the notification
-    PERFORM pg_notify('search_resources_changes', notification_payload::text);
+    PERFORM pg_notify('search_resources_notify', notification_payload::text);
 
     -- Return the appropriate record
     IF TG_OP = 'DELETE' THEN

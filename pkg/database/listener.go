@@ -15,8 +15,11 @@ import (
 	"k8s.io/klog/v2"
 )
 
+const (
+	channelName = "search_resources_notify"
+)
+
 var (
-	channelName      = "search_resources_changes"
 	listenerInstance *Listener
 	listenerOnce     sync.Once
 	listenerMu       sync.Mutex // Protects listenerOnce and listenerInstance during reset
@@ -110,7 +113,7 @@ func (l *Listener) Start() error {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	// FIXME: We should move this TRIGGER to the search-v2-operator.
+	// TODO: We should move this TRIGGER to the search-v2-operator.
 	// Register the trigger defined in listernerTrigger.sql
 	listenerTriggerSQL, err := os.ReadFile("pkg/database/listenerTrigger.sql")
 	if err != nil {
@@ -184,9 +187,14 @@ func (l *Listener) listen() {
 			klog.V(2).Info("Listener context cancelled, shutting down.")
 			return
 		default:
+			if l.conn == nil {
+				// Connection lost, attempt to reconnect.
+				l.handleConnectionError()
+				continue
+			}
 			// Wait for notification with timeout
 			klog.V(3).Infof("Waiting for notification on: %s", channelName)
-			notification, err := l.conn.WaitForNotification(l.ctx) // FIXME: this panics when connection is lost.
+			notification, err := l.conn.WaitForNotification(l.ctx)
 
 			if err != nil {
 				if l.ctx.Err() != nil {
@@ -214,8 +222,6 @@ func (l *Listener) listen() {
 					select {
 					case <-sub.Context.Done():
 						klog.V(3).Infof("Subscription %s context is done, skipping", sub.ID)
-						// FIXME: remove subscription from list.
-
 						continue
 					default:
 						sub.Channel <- &notificationPayload
