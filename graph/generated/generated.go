@@ -48,11 +48,11 @@ type DirectiveRoot struct {
 
 type ComplexityRoot struct {
 	Event struct {
-		NewData        func(childComplexity int) int
-		OldData        func(childComplexity int) int
-		Operation      func(childComplexity int) int
-		TimestampFixme func(childComplexity int) int
-		UID            func(childComplexity int) int
+		NewData   func(childComplexity int) int
+		OldData   func(childComplexity int) int
+		Operation func(childComplexity int) int
+		Timestamp func(childComplexity int) int
+		UID       func(childComplexity int) int
 	}
 
 	Message struct {
@@ -134,12 +134,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Event.Operation(childComplexity), true
-	case "Event.timestampFIXME":
-		if e.complexity.Event.TimestampFixme == nil {
+	case "Event.timestamp":
+		if e.complexity.Event.Timestamp == nil {
 			break
 		}
 
-		return e.complexity.Event.TimestampFixme(childComplexity), true
+		return e.complexity.Event.Timestamp(childComplexity), true
 	case "Event.uid":
 		if e.complexity.Event.UID == nil {
 			break
@@ -494,11 +494,11 @@ input SearchInput {
 Event returned by watch subscription.
 """
 type Event {
-  uid: String!
+  uid: ID!
   operation: String!
   new_data: Map
   old_data: Map
-  timestampFIXME: String!
+  timestamp: Date!
 }
 
 """
@@ -560,6 +560,11 @@ type Message {
 Map of strings. Used to hold data for a result item.
 """
 scalar Map
+
+"""
+Date format YYYY-MM-DDTHH:mm:ss.SSSZ as defined by RFC3339.
+"""
+scalar Date
 `, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
@@ -706,7 +711,7 @@ func (ec *executionContext) _Event_uid(ctx context.Context, field graphql.Collec
 			return obj.UID, nil
 		},
 		nil,
-		ec.marshalNString2string,
+		ec.marshalNID2string,
 		true,
 		true,
 	)
@@ -719,7 +724,7 @@ func (ec *executionContext) fieldContext_Event_uid(_ context.Context, field grap
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
+			return nil, errors.New("field of type ID does not have child fields")
 		},
 	}
 	return fc, nil
@@ -812,30 +817,30 @@ func (ec *executionContext) fieldContext_Event_old_data(_ context.Context, field
 	return fc, nil
 }
 
-func (ec *executionContext) _Event_timestampFIXME(ctx context.Context, field graphql.CollectedField, obj *model.Event) (ret graphql.Marshaler) {
+func (ec *executionContext) _Event_timestamp(ctx context.Context, field graphql.CollectedField, obj *model.Event) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Event_timestampFIXME,
+		ec.fieldContext_Event_timestamp,
 		func(ctx context.Context) (any, error) {
-			return obj.TimestampFixme, nil
+			return obj.Timestamp, nil
 		},
 		nil,
-		ec.marshalNString2string,
+		ec.marshalNDate2string,
 		true,
 		true,
 	)
 }
 
-func (ec *executionContext) fieldContext_Event_timestampFIXME(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Event_timestamp(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Event",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
+			return nil, errors.New("field of type Date does not have child fields")
 		},
 	}
 	return fc, nil
@@ -1468,8 +1473,8 @@ func (ec *executionContext) fieldContext_Subscription_watch(ctx context.Context,
 				return ec.fieldContext_Event_new_data(ctx, field)
 			case "old_data":
 				return ec.fieldContext_Event_old_data(ctx, field)
-			case "timestampFIXME":
-				return ec.fieldContext_Event_timestampFIXME(ctx, field)
+			case "timestamp":
+				return ec.fieldContext_Event_timestamp(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Event", field.Name)
 		},
@@ -3049,8 +3054,8 @@ func (ec *executionContext) _Event(ctx context.Context, sel ast.SelectionSet, ob
 			out.Values[i] = ec._Event_new_data(ctx, field, obj)
 		case "old_data":
 			out.Values[i] = ec._Event_old_data(ctx, field, obj)
-		case "timestampFIXME":
-			out.Values[i] = ec._Event_timestampFIXME(ctx, field, obj)
+		case "timestamp":
+			out.Values[i] = ec._Event_timestamp(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -3725,6 +3730,38 @@ func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v any) (
 func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.SelectionSet, v bool) graphql.Marshaler {
 	_ = sel
 	res := graphql.MarshalBoolean(v)
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return res
+}
+
+func (ec *executionContext) unmarshalNDate2string(ctx context.Context, v any) (string, error) {
+	res, err := graphql.UnmarshalString(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNDate2string(ctx context.Context, sel ast.SelectionSet, v string) graphql.Marshaler {
+	_ = sel
+	res := graphql.MarshalString(v)
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return res
+}
+
+func (ec *executionContext) unmarshalNID2string(ctx context.Context, v any) (string, error) {
+	res, err := graphql.UnmarshalID(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNID2string(ctx context.Context, sel ast.SelectionSet, v string) graphql.Marshaler {
+	_ = sel
+	res := graphql.MarshalID(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")

@@ -28,7 +28,9 @@ func AuthenticateUser(next http.Handler) http.Handler {
 			// Remove the keyword "Bearer " if it exists in the header.
 			clientToken = strings.Replace(clientToken, "Bearer ", "", 1)
 		}
-		// clientToken = os.Getenv("AUTH_TOKEN") // FIXME: DO NOT MERGE WITH THIS CHANGE !!!
+		// FIXME: DO NOT MERGE WITH THIS CHANGE !!!
+		// HOW CAN I get the token from the websocket connection?
+		//clientToken = os.Getenv("AUTH_TOKEN")
 		// Retrieving and verifying the token
 		if clientToken == "" {
 			klog.V(4).Info("Request didn't have a valid authentication token.")

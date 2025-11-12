@@ -34,7 +34,7 @@ BEGIN
         'cluster', COALESCE(NEW.cluster, OLD.cluster),
         'new_data', new_data_json,
         'old_data', old_data_json,
-        'timestamp', EXTRACT(EPOCH FROM NOW())::bigint
+        'timestamp', NOW()
     );
 
     -- Send the notification

@@ -116,11 +116,11 @@ input SearchInput {
 Event returned by watch subscription.
 """
 type Event {
-  uid: String!
+  uid: ID!
   operation: String!
   new_data: Map
   old_data: Map
-  timestampFIXME: String!
+  timestamp: Date!
 }
 
 """
@@ -182,3 +182,8 @@ type Message {
 Map of strings. Used to hold data for a result item.
 """
 scalar Map
+
+"""
+Date format YYYY-MM-DDTHH:mm:ss.SSSZ as defined by RFC3339.
+"""
+scalar Date

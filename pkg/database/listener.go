@@ -173,6 +173,8 @@ func (l *Listener) listen() {
 				klog.Errorf("Failed to close connection: %v", err)
 			}
 		}
+		listenerInstance = nil
+		listenerOnce = sync.Once{}
 		klog.Info("Subscription listener stopped.")
 	}()
 
