@@ -167,7 +167,7 @@ func (l *Listener) connect() error {
 // listen is the main goroutine that receives notifications and forwards them
 func (l *Listener) listen() {
 	defer func() {
-		klog.Info("Subscription listener shutting down...")
+		klog.V(1).Info("Subscription listener shutting down...")
 		if l.conn != nil {
 			if err := l.conn.Close(context.Background()); err != nil {
 				klog.Errorf("Failed to close connection: %v", err)
@@ -179,7 +179,7 @@ func (l *Listener) listen() {
 	for {
 		select {
 		case <-l.ctx.Done():
-			klog.Info("Listener context cancelled, shutting down.")
+			klog.V(2).Info("Listener context cancelled, shutting down.")
 			return
 		default:
 			// Wait for notification with timeout
@@ -198,8 +198,8 @@ func (l *Listener) listen() {
 
 			if notification != nil {
 				l.mu.RLock()
-				klog.Infof("Received postgres event, forwarding to %d subscriptions. %+v ",
-					len(l.subscriptions), notification)
+				klog.V(3).Infof("Received postgres event, forwarding to %d subscriptions.",
+					len(l.subscriptions))
 
 				for _, sub := range l.subscriptions {
 					var notificationPayload model.Event

@@ -16,11 +16,7 @@ import (
 func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *model.Event, error) {
 	receive := make(chan *model.Event)
 	result := make(chan *model.Event)
-	defer func() {
-		klog.Info("Closing result and receive channels.")
-		close(result)
-		close(receive)
-	}()
+
 	// if not enabled via feature flag -> return error message
 	if !config.Cfg.Features.SubscriptionEnabled {
 		klog.Infof("GraphQL subscription feature is disabled. To enable set env variable FEATURE_SUBSCRIPTION=true")
@@ -32,6 +28,12 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 		uid := uuid.New().String()[:8] // Random UID for logging purposes.
 		database.RegisterSubscriptionAndListen(ctx, uid, receive)
 		defer database.UnregisterSubscription(uid)
+
+		defer func() {
+			klog.V(3).Info("Closing result and receive channels.")
+			close(result)
+			close(receive)
+		}()
 
 		// Forward events from the subscription channel to the client channel
 		for {
@@ -52,7 +54,7 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 				// TODO ======================================================
 				select {
 				case result <- event:
-					klog.Infof("Subscription watch(%s) sent event (UID: %s, Operation: %s) to client", uid, event.UID, event.Operation)
+					klog.V(3).Infof("Subscription watch(%s) sent event (UID: %s, Operation: %s) to client", uid, event.UID, event.Operation)
 					continue
 				case <-ctx.Done():
 					klog.V(3).Infof("Subscription watch(%s) closed while sending event.", uid)
