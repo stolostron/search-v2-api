@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net/http"
@@ -21,7 +22,7 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 )
 
-func StartAndListen() {
+func StartAndListen(ctx context.Context) {
 	port := config.Cfg.HttpPort
 
 	// Configure TLS
@@ -84,4 +85,15 @@ func StartAndListen() {
 	if serverErr != nil {
 		klog.Fatal("Server process ended with error. ", serverErr)
 	}
+
+	// Wait for cancel signal
+	<-ctx.Done()
+	klog.Warning("Stopping the server.")
+	ctxWithTimeout, ctxCancel := context.WithTimeout(context.Background(), time.Duration(5*time.Second))
+	if err := srv.Shutdown(ctxWithTimeout); err != nil {
+		klog.Error("Encountered error stopping the server. ", err)
+	} else {
+		klog.Warning("Server stopped.")
+	}
+	ctxCancel()
 }

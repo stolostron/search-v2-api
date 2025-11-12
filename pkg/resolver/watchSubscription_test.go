@@ -47,7 +47,7 @@ func TestWatchSubscription_Enabled(t *testing.T) {
 	config.Cfg.Features.SubscriptionEnabled = true
 
 	// Reset database listener singleton for clean test
-	database.ResetListenerForTesting()
+	database.StopPostgresListener()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -89,7 +89,7 @@ func TestWatchSubscription_ContextCancellation(t *testing.T) {
 	config.Cfg.Features.SubscriptionEnabled = true
 
 	// Reset database listener singleton for clean test
-	database.ResetListenerForTesting()
+	database.StopPostgresListener()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	input := &model.SearchInput{}
@@ -126,7 +126,7 @@ func TestWatchSubscription_MultipleSubscriptions(t *testing.T) {
 	config.Cfg.Features.SubscriptionEnabled = true
 
 	// Reset database listener singleton for clean test
-	database.ResetListenerForTesting()
+	database.StopPostgresListener()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -177,7 +177,7 @@ func TestWatchSubscription_EventForwarding(t *testing.T) {
 	config.Cfg.Features.SubscriptionEnabled = true
 
 	// Reset database listener singleton for clean test
-	database.ResetListenerForTesting()
+	database.StopPostgresListener()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -233,7 +233,7 @@ func TestWatchSubscription_ChannelBufferHandling(t *testing.T) {
 	config.Cfg.Features.SubscriptionEnabled = true
 
 	// Reset database listener singleton for clean test
-	database.ResetListenerForTesting()
+	database.StopPostgresListener()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -269,7 +269,7 @@ func TestWatchSubscription_NilInput(t *testing.T) {
 	config.Cfg.Features.SubscriptionEnabled = true
 
 	// Reset database listener singleton for clean test
-	database.ResetListenerForTesting()
+	database.StopPostgresListener()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -296,7 +296,7 @@ func TestWatchSubscription_RapidContextCancellation(t *testing.T) {
 	config.Cfg.Features.SubscriptionEnabled = true
 
 	// Reset database listener singleton for clean test
-	database.ResetListenerForTesting()
+	database.StopPostgresListener()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	input := &model.SearchInput{}
@@ -333,7 +333,7 @@ func TestWatchSubscription_FilterInput(t *testing.T) {
 	config.Cfg.Features.SubscriptionEnabled = true
 
 	// Reset database listener singleton for clean test
-	database.ResetListenerForTesting()
+	database.StopPostgresListener()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()

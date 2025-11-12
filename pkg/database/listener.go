@@ -252,9 +252,7 @@ func (l *Listener) handleConnectionError() {
 	}
 }
 
-// ResetListenerForTesting resets the listener singleton for testing purposes
-// This should only be called from test code
-func ResetListenerForTesting() {
+func StopPostgresListener() {
 	listenerMu.Lock()
 	defer listenerMu.Unlock()
 
@@ -263,19 +261,6 @@ func ResetListenerForTesting() {
 		listenerInstance.cancel()
 		// Give the listener goroutine time to shut down
 		time.Sleep(50 * time.Millisecond)
-	}
-
-	// Reset the singleton
-	listenerOnce = sync.Once{}
-	listenerInstance = nil
-}
-
-func StopPostgresListener() {
-	listenerMu.Lock()
-	defer listenerMu.Unlock()
-
-	if listenerInstance != nil && listenerInstance.cancel != nil {
-		listenerInstance.cancel()
 	}
 
 	listenerInstance = nil
