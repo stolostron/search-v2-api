@@ -14,6 +14,10 @@ import (
 	"k8s.io/klog/v2"
 )
 
+var (
+	retryDelay = time.Duration(5) * time.Second
+)
+
 // Holds the objects needed to watch a kubernetes resource and trigger an action when a change is detected.
 type watchResource struct {
 	dynamicClient dynamic.Interface
@@ -71,7 +75,7 @@ func (w watchResource) start(ctx context.Context) {
 		watch, watchError := w.dynamicClient.Resource(w.gvr).Watch(ctx, metav1.ListOptions{})
 		if watchError != nil {
 			klog.Warningf("Error watching %s, waiting 5 seconds before retry. Error: %s", w.gvr.String(), watchError)
-			time.Sleep(5 * time.Second) // Wait before retrying.
+			time.Sleep(retryDelay) // Wait before retrying.
 			continue
 		}
 
@@ -79,6 +83,7 @@ func (w watchResource) start(ctx context.Context) {
 		klog.V(2).Infof("Watching resource: %s", w.gvr.String())
 
 		for {
+			breakLoop := false
 			select {
 			case <-ctx.Done():
 				klog.V(2).Info("Stopped watching resource. ", w.gvr.String())
@@ -111,8 +116,13 @@ func (w watchResource) start(ctx context.Context) {
 				default:
 					klog.V(2).Infof("Unexpected event, waiting 5 seconds and restarting watch for %s", w.gvr.String())
 					watch.Stop()
-					time.Sleep(5 * time.Second)
+					time.Sleep(retryDelay)
+					breakLoop = true
 				}
+			}
+			if breakLoop {
+				klog.Warningf("Restarting watch for %s", w.gvr.String())
+				break
 			}
 		}
 	}
