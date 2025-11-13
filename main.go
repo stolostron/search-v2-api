@@ -31,7 +31,6 @@ func main() {
 		klog.Fatal(configError)
 	}
 
-	ctx := context.Background()
 	ctx, exitRoutines := context.WithCancel(context.Background())
 
 	// Establish the database connection.
