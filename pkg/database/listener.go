@@ -34,25 +34,25 @@ type Subscription struct {
 // Listener manages the single goroutine that listens for Postgres events
 type Listener struct {
 	mu            sync.RWMutex
-	subscriptions []*Subscription
+	subscriptions map[string]*Subscription
 	conn          *pgx.Conn
 	ctx           context.Context
 	cancel        context.CancelFunc
 	started       bool
 }
 
-// RegisterSubscriptionAndListen registers a channel to send events received from the database.
-// It is used to send events to the subscription resolver.
-func RegisterSubscriptionAndListen(ctx context.Context, uid string, notifyChannel chan *model.Event) {
+// RegisterSubscription registers a channel to forward events received from the database.
+// Starts the listener if not already started.
+func RegisterSubscription(ctx context.Context, subID string, notifyChannel chan *model.Event) {
 
-	// Iniialize the listener instance if not already initialized.
+	// Initialize the listener instance if not already initialized.
 	listenerMu.Lock()
 	defer listenerMu.Unlock()
 	listenerOnce.Do(func() {
 		listenCtx := context.Background()
 		listenCtx, listenCancel := context.WithCancel(listenCtx)
 		listenerInstance = &Listener{
-			subscriptions: make([]*Subscription, 0),
+			subscriptions: make(map[string]*Subscription),
 			conn:          nil,
 			ctx:           listenCtx,
 			cancel:        listenCancel,
@@ -64,18 +64,18 @@ func RegisterSubscriptionAndListen(ctx context.Context, uid string, notifyChanne
 	})
 
 	sub := &Subscription{
-		ID:      uid,
+		ID:      subID,
 		Channel: notifyChannel,
 		Context: ctx,
 	}
 
 	listenerInstance.mu.Lock()
 	defer listenerInstance.mu.Unlock()
-	listenerInstance.subscriptions = append(listenerInstance.subscriptions, sub)
-	klog.Infof("Registered subscription %s, %d subscriptions total.", uid, len(listenerInstance.subscriptions))
+	listenerInstance.subscriptions[subID] = sub
+	klog.Infof("Registered subscription %s. (%d active subscriptions)", subID, len(listenerInstance.subscriptions))
 }
 
-func UnregisterSubscription(uid string) {
+func UnregisterSubscription(subID string) {
 	listenerMu.Lock()
 	listener := listenerInstance
 	listenerMu.Unlock()
@@ -86,12 +86,9 @@ func UnregisterSubscription(uid string) {
 
 	listener.mu.Lock()
 	defer listener.mu.Unlock()
-	for i, sub := range listener.subscriptions {
-		if sub.ID == uid {
-			listener.subscriptions = append(listener.subscriptions[:i], listener.subscriptions[i+1:]...)
-		}
-	}
-	klog.Infof("Unregistered subscription %s, %d subscriptions remaining.", uid, len(listener.subscriptions))
+
+	delete(listener.subscriptions, subID)
+	klog.Infof("Unregistered subscription %s. (%d active subscriptions)", subID, len(listener.subscriptions))
 
 	if len(listener.subscriptions) == 0 {
 		klog.Info("No more active subscriptions, shutting down listener.")

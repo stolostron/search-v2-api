@@ -42,7 +42,7 @@ func (m *MockPgxConn) Exec(ctx context.Context, sql string, arguments ...interfa
 }
 
 // [AI]
-func TestRegisterSubscriptionAndListen(t *testing.T) {
+func TestRegisterSubscription(t *testing.T) {
 	// Reset the singleton for testing
 	listenerOnce = sync.Once{}
 	listenerInstance = nil
@@ -54,14 +54,14 @@ func TestRegisterSubscriptionAndListen(t *testing.T) {
 	uid := "test-uid-123"
 
 	// Register subscription - this should initialize the listener
-	RegisterSubscriptionAndListen(ctx, uid, notifyChannel)
+	RegisterSubscription(ctx, uid, notifyChannel)
 
 	// Verify listener was initialized
 	assert.NotNil(t, listenerInstance, "Listener instance should be initialized")
 	assert.NotNil(t, listenerInstance.subscriptions, "Subscriptions list should be initialized")
 	assert.Equal(t, 1, len(listenerInstance.subscriptions), "Should have 1 subscription")
-	assert.Equal(t, uid, listenerInstance.subscriptions[0].ID, "Subscription ID should match")
-	assert.Equal(t, notifyChannel, listenerInstance.subscriptions[0].Channel, "Subscription channel should match")
+	assert.Equal(t, uid, listenerInstance.subscriptions[uid].ID, "Subscription ID should match")
+	assert.Equal(t, notifyChannel, listenerInstance.subscriptions[uid].Channel, "Subscription channel should match")
 
 	// Clean up
 	close(notifyChannel)
@@ -79,12 +79,12 @@ func TestRegisterMultipleSubscriptions(t *testing.T) {
 	// Register first subscription
 	notifyChannel1 := make(chan *model.Event, 100)
 	uid1 := "test-uid-1"
-	RegisterSubscriptionAndListen(ctx, uid1, notifyChannel1)
+	RegisterSubscription(ctx, uid1, notifyChannel1)
 
 	// Register second subscription
 	notifyChannel2 := make(chan *model.Event, 100)
 	uid2 := "test-uid-2"
-	RegisterSubscriptionAndListen(ctx, uid2, notifyChannel2)
+	RegisterSubscription(ctx, uid2, notifyChannel2)
 
 	// Verify both subscriptions exist
 	assert.Equal(t, 2, len(listenerInstance.subscriptions), "Should have 2 subscriptions")
@@ -106,11 +106,11 @@ func TestUnregisterSubscription(t *testing.T) {
 	// Register subscriptions
 	notifyChannel1 := make(chan *model.Event, 100)
 	uid1 := "test-uid-1"
-	RegisterSubscriptionAndListen(ctx, uid1, notifyChannel1)
+	RegisterSubscription(ctx, uid1, notifyChannel1)
 
 	notifyChannel2 := make(chan *model.Event, 100)
 	uid2 := "test-uid-2"
-	RegisterSubscriptionAndListen(ctx, uid2, notifyChannel2)
+	RegisterSubscription(ctx, uid2, notifyChannel2)
 
 	assert.Equal(t, 2, len(listenerInstance.subscriptions), "Should have 2 subscriptions")
 
@@ -119,7 +119,7 @@ func TestUnregisterSubscription(t *testing.T) {
 
 	// Verify only one subscription remains
 	assert.Equal(t, 1, len(listenerInstance.subscriptions), "Should have 1 subscription after unregister")
-	assert.Equal(t, uid2, listenerInstance.subscriptions[0].ID, "Remaining subscription should be uid2")
+	assert.Equal(t, uid2, listenerInstance.subscriptions[uid2].ID, "Remaining subscription should be uid2")
 
 	// Clean up
 	close(notifyChannel1)
@@ -138,7 +138,7 @@ func TestUnregisterLastSubscription(t *testing.T) {
 	// Register a subscription
 	notifyChannel := make(chan *model.Event, 100)
 	uid := "test-uid-1"
-	RegisterSubscriptionAndListen(ctx, uid, notifyChannel)
+	RegisterSubscription(ctx, uid, notifyChannel)
 
 	assert.Equal(t, 1, len(listenerInstance.subscriptions), "Should have 1 subscription")
 
@@ -184,7 +184,7 @@ func TestListenerStartAlreadyStarted(t *testing.T) {
 	defer cancel()
 
 	listener := &Listener{
-		subscriptions: make([]*Subscription, 0),
+		subscriptions: make(map[string]*Subscription),
 		conn:          nil,
 		ctx:           ctx,
 		cancel:        cancel,
@@ -208,7 +208,7 @@ func TestUnregisterNonExistentSubscription(t *testing.T) {
 	// Register a subscription
 	notifyChannel := make(chan *model.Event, 100)
 	uid := "test-uid-1"
-	RegisterSubscriptionAndListen(ctx, uid, notifyChannel)
+	RegisterSubscription(ctx, uid, notifyChannel)
 
 	assert.Equal(t, 1, len(listenerInstance.subscriptions), "Should have 1 subscription")
 
@@ -233,7 +233,7 @@ func TestListenerContextCancellation(t *testing.T) {
 	// Register a subscription
 	notifyChannel := make(chan *model.Event, 100)
 	uid := "test-uid-1"
-	RegisterSubscriptionAndListen(ctx, uid, notifyChannel)
+	RegisterSubscription(ctx, uid, notifyChannel)
 
 	// Verify listener context is not done initially
 	select {
@@ -292,7 +292,7 @@ func TestMultipleConcurrentRegistrations(t *testing.T) {
 			defer wg.Done()
 			channels[index] = make(chan *model.Event, 100)
 			uid := "test-uid-" + string(rune(index))
-			RegisterSubscriptionAndListen(ctx, uid, channels[index])
+			RegisterSubscription(ctx, uid, channels[index])
 		}(i)
 	}
 
@@ -321,7 +321,7 @@ func TestListenerListenContextCancellation(t *testing.T) {
 	// Register a subscription
 	notifyChannel := make(chan *model.Event, 100)
 	uid := "test-listen-cancel"
-	RegisterSubscriptionAndListen(ctx, uid, notifyChannel)
+	RegisterSubscription(ctx, uid, notifyChannel)
 
 	// Give the listener goroutine time to start
 	time.Sleep(50 * time.Millisecond)
@@ -359,13 +359,13 @@ func TestListenerWithCancelledSubscriptionContext(t *testing.T) {
 	// Register first subscription with active context
 	notifyChannel1 := make(chan *model.Event, 100)
 	uid1 := "test-active-sub"
-	RegisterSubscriptionAndListen(ctx, uid1, notifyChannel1)
+	RegisterSubscription(ctx, uid1, notifyChannel1)
 
 	// Register second subscription with context that we'll cancel
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	notifyChannel2 := make(chan *model.Event, 100)
 	uid2 := "test-cancelled-sub"
-	RegisterSubscriptionAndListen(ctx2, uid2, notifyChannel2)
+	RegisterSubscription(ctx2, uid2, notifyChannel2)
 
 	// Verify both subscriptions exist
 	assert.Equal(t, 2, len(listenerInstance.subscriptions), "Should have 2 subscriptions")
@@ -403,19 +403,19 @@ func TestListenerMultipleSubscriptionsForwarding(t *testing.T) {
 	for i := 0; i < numSubs; i++ {
 		channels[i] = make(chan *model.Event, 100)
 		uids[i] = "test-multi-" + string(rune('A'+i))
-		RegisterSubscriptionAndListen(ctx, uids[i], channels[i])
+		RegisterSubscription(ctx, uids[i], channels[i])
 	}
 
 	// Verify all subscriptions were registered
 	assert.Equal(t, numSubs, len(listenerInstance.subscriptions), "Should have all subscriptions")
 
 	// Verify each subscription has correct properties
-	for i, sub := range listenerInstance.subscriptions {
+	for _, sub := range listenerInstance.subscriptions {
 		assert.NotNil(t, sub.Channel, "Subscription channel should not be nil")
 		assert.NotNil(t, sub.Context, "Subscription context should not be nil")
 		assert.NotEmpty(t, sub.ID, "Subscription ID should not be empty")
 		assert.Contains(t, uids, sub.ID, "Subscription ID should be in expected list")
-		t.Logf("Subscription %d: ID=%s", i, sub.ID)
+		t.Logf("Subscription: ID=%s", sub.ID)
 	}
 
 	// Clean up
@@ -456,7 +456,7 @@ func TestConcurrentRegisterUnregister(t *testing.T) {
 			defer wg.Done()
 			channel := make(chan *model.Event, 100)
 			uid := "concurrent-" + string(rune(index))
-			RegisterSubscriptionAndListen(ctx, uid, channel)
+			RegisterSubscription(ctx, uid, channel)
 
 			// Small delay
 			time.Sleep(10 * time.Millisecond)
@@ -498,7 +498,7 @@ func TestSubscriptionIDUniqueness(t *testing.T) {
 	for i := 0; i < numSubs; i++ {
 		channels[i] = make(chan *model.Event, 100)
 		uids[i] = "unique-" + string(rune('A'+i))
-		RegisterSubscriptionAndListen(ctx, uids[i], channels[i])
+		RegisterSubscription(ctx, uids[i], channels[i])
 	}
 
 	// Verify all IDs are unique
@@ -529,7 +529,7 @@ func TestListenerStateAfterInit(t *testing.T) {
 
 	notifyChannel := make(chan *model.Event, 100)
 	uid := "test-state"
-	RegisterSubscriptionAndListen(ctx, uid, notifyChannel)
+	RegisterSubscription(ctx, uid, notifyChannel)
 
 	// Verify listener state
 	assert.NotNil(t, listenerInstance, "Listener should be initialized")
@@ -539,7 +539,7 @@ func TestListenerStateAfterInit(t *testing.T) {
 
 	// Verify subscription state
 	assert.Equal(t, 1, len(listenerInstance.subscriptions), "Should have 1 subscription")
-	sub := listenerInstance.subscriptions[0]
+	sub := listenerInstance.subscriptions[uid]
 	assert.Equal(t, uid, sub.ID, "Subscription ID should match")
 	assert.Equal(t, notifyChannel, sub.Channel, "Subscription channel should match")
 	assert.Equal(t, ctx, sub.Context, "Subscription context should match")
@@ -559,7 +559,7 @@ func TestRepeatedUnregistration(t *testing.T) {
 
 	notifyChannel := make(chan *model.Event, 100)
 	uid := "test-repeated-unreg"
-	RegisterSubscriptionAndListen(ctx, uid, notifyChannel)
+	RegisterSubscription(ctx, uid, notifyChannel)
 
 	assert.Equal(t, 1, len(listenerInstance.subscriptions), "Should have 1 subscription")
 

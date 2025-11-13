@@ -13,54 +13,55 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/database"
 )
 
+// WatchSubscriptions implements the GraphQL watch subscription resolver.
 func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *model.Event, error) {
-	receive := make(chan *model.Event)
-	result := make(chan *model.Event)
+	result := make(chan *model.Event)   // Channel to send events to the client.
+	receiver := make(chan *model.Event) // Channel to receive events from the database.
 
-	// if not enabled via feature flag -> return error message
+	// Check if the feature flag is enabled. If not, return an error.
 	if !config.Cfg.Features.SubscriptionEnabled {
-		klog.Infof("GraphQL subscription feature is disabled. To enable set env variable FEATURE_SUBSCRIPTION=true")
+		klog.Info("GraphQL subscription feature is disabled. To enable set env variable FEATURE_SUBSCRIPTION=true")
 		ctx.Done()
 		return result, errors.New("GraphQL subscription feature is disabled. To enable set env variable FEATURE_SUBSCRIPTION=true")
 	}
 
 	go func() {
-		uid := uuid.New().String()[:8] // Random UID for logging purposes.
-		database.RegisterSubscriptionAndListen(ctx, uid, receive)
-		defer database.UnregisterSubscription(uid)
+		subID := uuid.New().String()[:8] // Random UID to identify the subscription internally.
+		database.RegisterSubscription(ctx, subID, receiver)
+		defer database.UnregisterSubscription(subID)
 
 		defer func() {
-			klog.V(3).Info("Closing result and receive channels.")
+			klog.V(2).Infof("Closed subscription watch(%s).", subID)
 			close(result)
-			close(receive)
+			close(receiver)
 		}()
 
-		// Forward events from the subscription channel to the client channel
+		// Receive events from the database (receiver), filter, and send to the client (result).
 		for {
 			select {
 			case <-ctx.Done():
-				klog.V(3).Infof("Subscription watch(%s) closed by client.", uid)
+				klog.V(3).Infof("Subscription watch(%s) closed by client.", subID)
 				return
-			case event, ok := <-receive:
+			case event, ok := <-receiver:
+				// If the receiver channel is closed, return.
 				if !ok {
-					// Subscription channel was closed.
-					klog.V(3).Infof("Subscription watch(%s) channel closed.", uid)
+					klog.V(3).Infof("Subscription watch(%s) channel closed.", subID)
 					return
 				}
-				// Filter and send event to client
+				// Filter event and send to client.
 				// TODO ======================================================
 				//   1. Filter events based on the input filter. ACM-24574
 				//   2. Filter events for user's RBAC permissions. ACM-26248
 				// TODO ======================================================
 				select {
 				case result <- event:
-					klog.V(3).Infof("Subscription watch(%s) sent event (UID: %s, Operation: %s) to client", uid, event.UID, event.Operation)
+					klog.V(3).Infof("Subscription watch(%s) sent event (UID: %s, Operation: %s) to client", subID, event.UID, event.Operation)
 					continue
 				case <-ctx.Done():
-					klog.V(3).Infof("Subscription watch(%s) closed while sending event.", uid)
+					klog.V(3).Infof("Subscription watch(%s) closed while sending event.", subID)
 					return
 				default:
-					klog.V(3).Infof("Subscription watch(%s) channel buffer is full, dropping event.", uid)
+					klog.V(3).Infof("Subscription watch(%s) channel buffer is full, dropping event.", subID)
 					return
 				}
 			}
