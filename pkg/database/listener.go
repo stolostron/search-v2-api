@@ -244,7 +244,7 @@ func (l *Listener) handleConnectionError() {
 	l.mu.Unlock()
 
 	// Wait before reconnecting
-	time.Sleep(time.Duration(config.Cfg.DBReconnectDelay) * time.Second)
+	time.Sleep(time.Duration(config.Cfg.DBReconnectDelay) * time.Millisecond)
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
