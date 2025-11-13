@@ -4,6 +4,7 @@ package rbac
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -122,13 +123,13 @@ func Test_watchResource_start_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Track if callbacks were called
-	addCalled := false
+	var addCalled atomic.Bool
 
 	watchRes := watchResource{
 		dynamicClient: fakeDynamicClient,
 		gvr:           schema.GroupVersionResource{Resource: "namespaces", Group: "", Version: "v1"},
 		onAdd: func(obj *unstructured.Unstructured) {
-			addCalled = true
+			addCalled.Store(true)
 		},
 		onModify: nil,
 		onDelete: nil,
@@ -156,7 +157,7 @@ func Test_watchResource_start_ContextCancellation(t *testing.T) {
 	}
 
 	// Note: addCalled might be false if no events were sent before cancellation
-	assert.False(t, addCalled, "No events should be processed before cancellation")
+	assert.False(t, addCalled.Load(), "No events should be processed before cancellation")
 }
 
 // [AI] Test watchResource.start() with ADDED event

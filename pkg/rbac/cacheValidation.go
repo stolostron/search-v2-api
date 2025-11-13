@@ -4,7 +4,6 @@ package rbac
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -84,7 +83,7 @@ func (w watchResource) start(ctx context.Context) {
 		klog.V(2).Infof("Watching resource: %s", w.gvr.String())
 
 		for {
-			var breakLoop atomic.Bool
+			breakLoop := false
 			select {
 			case <-ctx.Done():
 				klog.V(2).Info("Stopped watching resource. ", w.gvr.String())
@@ -118,10 +117,10 @@ func (w watchResource) start(ctx context.Context) {
 					klog.V(2).Infof("Unexpected event, waiting 5 seconds and restarting watch for %s", w.gvr.String())
 					watch.Stop()
 					time.Sleep(retryDelay)
-					breakLoop.Store(true)
+					breakLoop = true
 				}
 			}
-			if breakLoop.Load() {
+			if breakLoop {
 				klog.Warningf("Restarting watch for %s", w.gvr.String())
 				break
 			}
