@@ -79,6 +79,7 @@ func (w watchResource) start(ctx context.Context) {
 		klog.V(2).Infof("Watching resource: %s", w.gvr.String())
 
 		for {
+			breakLoop := false
 			select {
 			case <-ctx.Done():
 				klog.V(2).Info("Stopped watching resource. ", w.gvr.String())
@@ -112,7 +113,12 @@ func (w watchResource) start(ctx context.Context) {
 					klog.V(2).Infof("Unexpected event, waiting 5 seconds and restarting watch for %s", w.gvr.String())
 					watch.Stop()
 					time.Sleep(5 * time.Second)
+					breakLoop = true
 				}
+			}
+			if breakLoop {
+				klog.Warningf("Restarting watch for %s", w.gvr.String())
+				break
 			}
 		}
 	}
