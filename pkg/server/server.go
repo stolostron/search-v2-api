@@ -67,10 +67,20 @@ func StartAndListen(ctx context.Context) {
 	apiSubrouter.Use(rbac.AuthenticateUser)
 	apiSubrouter.Use(rbac.AuthorizeUser)
 
-	defaultSrv := handler.NewDefaultServer(generated.NewExecutableSchema(
-		generated.Config{Resolvers: &graph.Resolver{}}))
-	defaultSrv.AddTransport(&transport.Websocket{})
-	apiSubrouter.Handle("/graphql", defaultSrv)
+	graphqlSrv := handler.New(generated.NewExecutableSchema(
+		generated.Config{Resolvers: &graph.Resolver{}}),
+	)
+	// Add transports to the graphQLSrv
+	graphqlSrv.AddTransport(transport.Options{})
+	graphqlSrv.AddTransport(transport.GET{})
+	graphqlSrv.AddTransport(transport.POST{})
+	graphqlSrv.AddTransport(transport.MultipartForm{})
+	graphqlSrv.AddTransport(transport.Websocket{
+		InitFunc:  WebSocketInitFunc(),
+		CloseFunc: WebSocketCloseFunc(),
+		ErrorFunc: WebSocketErrorFunc(),
+	})
+	apiSubrouter.Handle("/graphql", graphqlSrv)
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),

@@ -16,6 +16,14 @@ const ContextAuthTokenKey ContextKey = "authToken"
 // AuthenticateUser verifies token (userid) with the TokenReview:
 func AuthenticateUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		// Skip authentication middleware for WebSocket connections
+		if r.Header.Get("Upgrade") == "websocket" {
+			klog.V(1).Info("Skipping authentication middleware for WebSocket connection.")
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		// if there is cookie available use that else use the authorization header:
 		var clientToken string
 		cookie, err := r.Cookie("acm-access-token-cookie")
@@ -28,9 +36,6 @@ func AuthenticateUser(next http.Handler) http.Handler {
 			// Remove the keyword "Bearer " if it exists in the header.
 			clientToken = strings.Replace(clientToken, "Bearer ", "", 1)
 		}
-		// FIXME: DO NOT MERGE WITH THIS CHANGE !!!
-		// HOW CAN I get the token from the websocket connection?
-		//clientToken = os.Getenv("AUTH_TOKEN")
 		// Retrieving and verifying the token
 		if clientToken == "" {
 			klog.V(4).Info("Request didn't have a valid authentication token.")

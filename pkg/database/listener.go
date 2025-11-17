@@ -72,7 +72,7 @@ func RegisterSubscription(ctx context.Context, subID string, notifyChannel chan 
 	listenerInstance.mu.Lock()
 	defer listenerInstance.mu.Unlock()
 	listenerInstance.subscriptions[subID] = sub
-	klog.Infof("Registered subscription %s. (%d active subscriptions)", subID, len(listenerInstance.subscriptions))
+	klog.Infof("Registered subscription [%s]. (%d active subscriptions)", subID, len(listenerInstance.subscriptions))
 }
 
 func UnregisterSubscription(subID string) {

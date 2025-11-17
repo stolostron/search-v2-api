@@ -15,11 +15,7 @@ func PrometheusMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		klog.V(5).Infof("Received request. User-Agent: %s RemoteAddr: %s", r.UserAgent(), r.RemoteAddr)
 
-		// NOTE: This problem started unexpectedly after working for a while.
-		//       This fixes the problem, but it's not clear why it started happening.
 		// Skip Prometheus instrumentation for WebSocket upgrades
-		// The promhttp handler wraps the ResponseWriter in a way that doesn't implement http.Hijacker,
-		// which is required for WebSocket upgrades
 		if r.Header.Get("Upgrade") == "websocket" {
 			klog.V(5).Info("Skipping Prometheus instrumentation for WebSocket upgrade")
 			next.ServeHTTP(w, r)

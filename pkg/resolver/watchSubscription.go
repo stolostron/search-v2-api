@@ -26,7 +26,14 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 	}
 
 	go func() {
-		subID := uuid.New().String()[:8] // Random UID to identify the subscription internally.
+		// Get WebSocket connection ID from the context
+		subID, ok := ctx.Value("ws-connection-id").(string)
+		if !ok {
+			// FIXME: Should get the subscription ID from the context.
+			subID = uuid.New().String()[:8]
+			klog.Errorf("FIXME:Failed to get WebSocket connection ID from context. Generating a new one: %s", subID)
+		}
+
 		database.RegisterSubscription(ctx, subID, receiver)
 		defer database.UnregisterSubscription(subID)
 
