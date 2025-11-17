@@ -21,7 +21,7 @@ func Test_PrometheusInstrumentation(t *testing.T) {
 	// Validate the collected metrics.
 
 	collectedMetrics, _ := PromRegistry.Gather() // use the prometheus registry to confirm metrics have been scraped.
-	assert.Equal(t, 2, len(collectedMetrics))    // Validate total metrics collected.
+	assert.Equal(t, 5, len(collectedMetrics))    // Validate total metrics collected.
 
 	// METRIC 1: search_api_db_connection_failed
 	assert.Equal(t, "search_api_db_connection_failed", collectedMetrics[0].GetName())
@@ -36,4 +36,10 @@ func Test_PrometheusInstrumentation(t *testing.T) {
 
 	// METRIC 3: search_api_db_query_duration
 	// Not generated in this scenario because there's no queries triggered by this test.
+
+	// METRIC 4: search_api_subscriptions_active
+	assert.Equal(t, "search_api_subscriptions_active", collectedMetrics[3].GetName())
+
+	// METRIC 5: search_api_websocket_connections_total
+	assert.Equal(t, "search_api_websocket_connections_total", collectedMetrics[4].GetName())
 }
