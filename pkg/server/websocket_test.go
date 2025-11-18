@@ -366,11 +366,13 @@ func TestWebSocketContextValueConstant(t *testing.T) {
 	assert.Equal(t, testID, retrievedID)
 
 	// Test that using string key doesn't work (by design - different type)
+	//nolint:staticcheck // SA1029: intentionally testing incorrect usage
 	ctx2 := context.WithValue(context.Background(), "ws-connection-id", testID)
 	retrievedID2 := getConnectionID(ctx2)
 	assert.Equal(t, "unknown", retrievedID2, "String key should not match wsContextKey type")
 
 	// Test that WSConnectionIDKey as string also doesn't match (same reason)
+	//nolint:staticcheck // SA1029: intentionally testing incorrect usage
 	ctx3 := context.WithValue(context.Background(), WSConnectionIDKey, testID)
 	retrievedID3 := getConnectionID(ctx3)
 	assert.Equal(t, "unknown", retrievedID3, "String constant key should not match wsContextKey type")
