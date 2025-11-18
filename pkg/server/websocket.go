@@ -154,18 +154,16 @@ func extractAuthToken(payload transport.InitPayload) (string, error) {
 	if val, ok := payload["Authorization"]; ok {
 		if token, ok := val.(string); ok && token != "" {
 			// Remove "Bearer " prefix if present
+			token = strings.Replace(token, "Bearer", "", 1)
+			token = strings.Replace(token, "bearer", "", 1)
 			token = strings.TrimSpace(token)
-			token = strings.TrimPrefix(token, "Bearer")
-			token = strings.TrimPrefix(token, "bearer")
-			token = strings.TrimSpace(token)
-			klog.Infof("Extracted Authorization token: [%s]", token)
 			if token != "" {
-				klog.V(5).Infof("Found Authorization token in connection payload.")
+				klog.V(5).Infof("Found Authorization token in init connection payload.")
 				return token, nil
 			}
 		}
 	}
-	return "", fmt.Errorf("no Authorization token found in connection payload")
+	return "", fmt.Errorf("no Authorization token found in init connection payload")
 }
 
 // getConnectionID retrieves the connection ID from context
@@ -177,12 +175,13 @@ func getConnectionID(ctx context.Context) string {
 }
 
 // WebSocketErrorFunc creates the error function for WebSocket connections
-// This function is called when a WebSocket connection error occurs and:
+// This function is called when a WebSocket connection error occurs.
 // 1. Logs the error
 // 2. Records error metrics
 func WebSocketErrorFunc() func(context.Context, error) {
 	return func(ctx context.Context, err error) {
 		connectionID := getConnectionID(ctx)
 		klog.Errorf("WebSocket connection [%s] error: %v", connectionID, err)
+		metrics.WebSocketConnectionsFailed.WithLabelValues("websocket_error").Inc()
 	}
 }
