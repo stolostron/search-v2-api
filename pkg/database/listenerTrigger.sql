@@ -32,8 +32,8 @@ BEGIN
         'operation', TG_OP,
         'uid', COALESCE(NEW.uid, OLD.uid),
         'cluster', COALESCE(NEW.cluster, OLD.cluster),
-        'new_data', new_data_json,
-        'old_data', old_data_json,
+        'newData', new_data_json,
+        'oldData', old_data_json,
         'timestamp', NOW()
     );
 
