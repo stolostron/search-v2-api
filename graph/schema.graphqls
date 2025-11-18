@@ -113,13 +113,29 @@ input SearchInput {
     relatedKinds: [String]
   }
 """
-Event returned by watch subscription.
+Event represents a changed resource in the search index.
 """
 type Event {
+  """
+  Kubernetes resource UID.
+  """
   uid: ID!
+  """
+  Values: INSERT, UPDATE, or DELETE
+  """
   operation: String!
-  new_data: Map
-  old_data: Map
+  """
+  New data recorded on the search index.
+  """
+  newData: Map
+  """
+  Previous resource data from the search index.
+  """
+  oldData: Map
+  """
+  Time the change event is registered in the search index.
+  Note there's a delay from the time the resource changed in kubernetes.
+  """
   timestamp: Date!
 }
 

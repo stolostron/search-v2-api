@@ -116,13 +116,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	_ = ec
 	switch typeName + "." + field {
 
-	case "Event.new_data":
+	case "Event.newData":
 		if e.complexity.Event.NewData == nil {
 			break
 		}
 
 		return e.complexity.Event.NewData(childComplexity), true
-	case "Event.old_data":
+	case "Event.oldData":
 		if e.complexity.Event.OldData == nil {
 			break
 		}
@@ -491,13 +491,29 @@ input SearchInput {
     relatedKinds: [String]
   }
 """
-Event returned by watch subscription.
+Event represents a changed resource in the search index.
 """
 type Event {
+  """
+  Kubernetes resource UID.
+  """
   uid: ID!
+  """
+  Values: INSERT, UPDATE, or DELETE
+  """
   operation: String!
-  new_data: Map
-  old_data: Map
+  """
+  New data recorded on the search index.
+  """
+  newData: Map
+  """
+  Previous resource data from the search index.
+  """
+  oldData: Map
+  """
+  Time the change event is registered in the search index.
+  Note there's a delay from the time the resource changed in kubernetes.
+  """
   timestamp: Date!
 }
 
@@ -759,12 +775,12 @@ func (ec *executionContext) fieldContext_Event_operation(_ context.Context, fiel
 	return fc, nil
 }
 
-func (ec *executionContext) _Event_new_data(ctx context.Context, field graphql.CollectedField, obj *model.Event) (ret graphql.Marshaler) {
+func (ec *executionContext) _Event_newData(ctx context.Context, field graphql.CollectedField, obj *model.Event) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Event_new_data,
+		ec.fieldContext_Event_newData,
 		func(ctx context.Context) (any, error) {
 			return obj.NewData, nil
 		},
@@ -775,7 +791,7 @@ func (ec *executionContext) _Event_new_data(ctx context.Context, field graphql.C
 	)
 }
 
-func (ec *executionContext) fieldContext_Event_new_data(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Event_newData(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Event",
 		Field:      field,
@@ -788,12 +804,12 @@ func (ec *executionContext) fieldContext_Event_new_data(_ context.Context, field
 	return fc, nil
 }
 
-func (ec *executionContext) _Event_old_data(ctx context.Context, field graphql.CollectedField, obj *model.Event) (ret graphql.Marshaler) {
+func (ec *executionContext) _Event_oldData(ctx context.Context, field graphql.CollectedField, obj *model.Event) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Event_old_data,
+		ec.fieldContext_Event_oldData,
 		func(ctx context.Context) (any, error) {
 			return obj.OldData, nil
 		},
@@ -804,7 +820,7 @@ func (ec *executionContext) _Event_old_data(ctx context.Context, field graphql.C
 	)
 }
 
-func (ec *executionContext) fieldContext_Event_old_data(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Event_oldData(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Event",
 		Field:      field,
@@ -1469,10 +1485,10 @@ func (ec *executionContext) fieldContext_Subscription_watch(ctx context.Context,
 				return ec.fieldContext_Event_uid(ctx, field)
 			case "operation":
 				return ec.fieldContext_Event_operation(ctx, field)
-			case "new_data":
-				return ec.fieldContext_Event_new_data(ctx, field)
-			case "old_data":
-				return ec.fieldContext_Event_old_data(ctx, field)
+			case "newData":
+				return ec.fieldContext_Event_newData(ctx, field)
+			case "oldData":
+				return ec.fieldContext_Event_oldData(ctx, field)
 			case "timestamp":
 				return ec.fieldContext_Event_timestamp(ctx, field)
 			}
@@ -3050,10 +3066,10 @@ func (ec *executionContext) _Event(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "new_data":
-			out.Values[i] = ec._Event_new_data(ctx, field, obj)
-		case "old_data":
-			out.Values[i] = ec._Event_old_data(ctx, field, obj)
+		case "newData":
+			out.Values[i] = ec._Event_newData(ctx, field, obj)
+		case "oldData":
+			out.Values[i] = ec._Event_oldData(ctx, field, obj)
 		case "timestamp":
 			out.Values[i] = ec._Event_timestamp(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

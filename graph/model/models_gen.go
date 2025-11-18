@@ -2,13 +2,19 @@
 
 package model
 
-// Event returned by watch subscription.
+// Event represents a changed resource in the search index.
 type Event struct {
-	UID       string         `json:"uid"`
-	Operation string         `json:"operation"`
-	NewData   map[string]any `json:"new_data,omitempty"`
-	OldData   map[string]any `json:"old_data,omitempty"`
-	Timestamp string         `json:"timestamp"`
+	// Kubernetes resource UID.
+	UID string `json:"uid"`
+	// Values: INSERT, UPDATE, or DELETE
+	Operation string `json:"operation"`
+	// New data recorded on the search index.
+	NewData map[string]any `json:"newData,omitempty"`
+	// Previous resource data from the search index.
+	OldData map[string]any `json:"oldData,omitempty"`
+	// Time the change event is registered in the search index.
+	// Note there's a delay from the time the resource changed in kubernetes.
+	Timestamp string `json:"timestamp"`
 }
 
 // A message is used to communicate conditions detected while executing a query on the server.
