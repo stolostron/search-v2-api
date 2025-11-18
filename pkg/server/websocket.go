@@ -130,11 +130,10 @@ func WebSocketCloseFunc() func(context.Context, int) {
 		connInfo, exists := activeConnections[connectionID]
 		if exists {
 			delete(activeConnections, connectionID)
+			// Update metrics
+			metrics.SubscriptionsActive.Dec()
 		}
 		activeConnectionsMutex.Unlock()
-
-		// Update metrics
-		metrics.SubscriptionsActive.Dec()
 
 		if exists {
 			// Record connection duration
