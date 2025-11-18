@@ -23,17 +23,17 @@ func TestExtractAuthToken(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name: "Authentication field with Bearer prefix",
+			name: "Authorization field with Bearer prefix",
 			payload: transport.InitPayload{
-				"Authentication": "Bearer test-token-123",
+				"Authorization": "Bearer test-token-123",
 			},
 			expectToken: "test-token-123",
 			expectError: false,
 		},
 		{
-			name: "Authentication field without Bearer prefix",
+			name: "Authorization field without Bearer prefix",
 			payload: transport.InitPayload{
-				"Authentication": "test-token-456",
+				"Authorization": "test-token-456",
 			},
 			expectToken: "test-token-456",
 			expectError: false,
@@ -41,13 +41,13 @@ func TestExtractAuthToken(t *testing.T) {
 		{
 			name: "lowercase bearer prefix",
 			payload: transport.InitPayload{
-				"Authentication": "bearer test-token-789",
+				"Authorization": "bearer test-token-789",
 			},
 			expectToken: "test-token-789",
 			expectError: false,
 		},
 		{
-			name:        "missing Authentication field",
+			name:        "missing Authorization field",
 			payload:     transport.InitPayload{},
 			expectToken: "",
 			expectError: true,
@@ -55,7 +55,7 @@ func TestExtractAuthToken(t *testing.T) {
 		{
 			name: "empty token",
 			payload: transport.InitPayload{
-				"Authentication": "",
+				"Authorization": "",
 			},
 			expectToken: "",
 			expectError: true,
@@ -63,7 +63,7 @@ func TestExtractAuthToken(t *testing.T) {
 		{
 			name: "Bearer with spaces",
 			payload: transport.InitPayload{
-				"Authentication": "  Bearer  test-token-spaces  ",
+				"Authorization": "  Bearer  test-token-spaces  ",
 			},
 			expectToken: "test-token-spaces",
 			expectError: false,
@@ -71,7 +71,7 @@ func TestExtractAuthToken(t *testing.T) {
 		{
 			name: "only Bearer prefix",
 			payload: transport.InitPayload{
-				"Authentication": "Bearer ",
+				"Authorization": "Bearer ",
 			},
 			expectToken: "",
 			expectError: true,
@@ -79,7 +79,7 @@ func TestExtractAuthToken(t *testing.T) {
 		{
 			name: "only whitespace",
 			payload: transport.InitPayload{
-				"Authentication": "   ",
+				"Authorization": "   ",
 			},
 			expectToken: "",
 			expectError: true,
@@ -112,7 +112,7 @@ func TestExtractAuthTokenEdgeCases(t *testing.T) {
 		{
 			name: "nil value",
 			payload: transport.InitPayload{
-				"Authentication": nil,
+				"Authorization": nil,
 			},
 			expectError: true,
 			description: "nil value should result in error",
@@ -120,7 +120,7 @@ func TestExtractAuthTokenEdgeCases(t *testing.T) {
 		{
 			name: "numeric value",
 			payload: transport.InitPayload{
-				"Authentication": 12345,
+				"Authorization": 12345,
 			},
 			expectError: true,
 			description: "numeric value should result in error",
@@ -128,26 +128,26 @@ func TestExtractAuthTokenEdgeCases(t *testing.T) {
 		{
 			name: "boolean value",
 			payload: transport.InitPayload{
-				"Authentication": true,
+				"Authorization": true,
 			},
 			expectError: true,
 			description: "boolean value should result in error",
 		},
 		{
-			name: "wrong field name - Authorization",
+			name: "wrong field name - Authentication",
 			payload: transport.InitPayload{
-				"Authorization": "test-token",
+				"Authentication": "test-token",
 			},
 			expectError: true,
 			description: "Wrong field name (Authorization vs Authentication) should fail",
 		},
 		{
-			name: "case sensitive - authentication",
+			name: "case sensitive - authorization",
 			payload: transport.InitPayload{
-				"authentication": "test-token",
+				"authorization": "test-token",
 			},
 			expectError: true,
-			description: "lowercase 'authentication' should not be found (case sensitive)",
+			description: "lowercase 'authorization' should not be found (case sensitive)",
 		},
 	}
 

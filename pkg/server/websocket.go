@@ -150,23 +150,23 @@ func WebSocketCloseFunc() func(context.Context, int) {
 	}
 }
 
-// extractAuthToken extracts the Authentication token from the init payload
+// extractAuthToken extracts the Authorization token from the init payload
 func extractAuthToken(payload transport.InitPayload) (string, error) {
-	if val, ok := payload["Authentication"]; ok {
+	if val, ok := payload["Authorization"]; ok {
 		if token, ok := val.(string); ok && token != "" {
 			// Remove "Bearer " prefix if present
 			token = strings.TrimSpace(token)
 			token = strings.TrimPrefix(token, "Bearer")
 			token = strings.TrimPrefix(token, "bearer")
 			token = strings.TrimSpace(token)
-			klog.Infof("Extracted authentication token: [%s]", token)
+			klog.Infof("Extracted Authorization token: [%s]", token)
 			if token != "" {
-				klog.V(5).Infof("Found authentication token in connection payload.")
+				klog.V(5).Infof("Found Authorization token in connection payload.")
 				return token, nil
 			}
 		}
 	}
-	return "", fmt.Errorf("no authentication token found in connection payload")
+	return "", fmt.Errorf("no Authorization token found in connection payload")
 }
 
 // getConnectionID retrieves the connection ID from context
