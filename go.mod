@@ -90,3 +90,5 @@ require (
 	k8s.io/client-go v0.27.2
 	open-cluster-management.io/api v0.8.0
 )
+
+replace github.com/imdario/mergo => dario.cat/mergo v1.0.2
