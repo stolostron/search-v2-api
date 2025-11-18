@@ -397,7 +397,9 @@ type Subscription {
   experimentalSearch(input: [SearchInput]): [SearchResult]
   
   """
-  Receive events from changes to the indexed data.
+  Watch changes to the data in the search index. An event is generated for each change 
+  matching the input filters. User's permissions (RBAC) are applied each event resource.
+  Events are generated from the search index and don't match the changes on Kubernetes. 
   """
   watch(input: SearchInput): Event
 }
