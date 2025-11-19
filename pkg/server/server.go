@@ -76,9 +76,12 @@ func StartAndListen(ctx context.Context) {
 	graphqlSrv.AddTransport(transport.POST{})
 	graphqlSrv.AddTransport(transport.MultipartForm{})
 	graphqlSrv.AddTransport(transport.Websocket{
-		InitFunc:  WebSocketInitFunc(),
-		CloseFunc: WebSocketCloseFunc(),
-		ErrorFunc: WebSocketErrorFunc(),
+		InitFunc:              WebSocketInitFunc(),
+		CloseFunc:             WebSocketCloseFunc(),
+		ErrorFunc:             WebSocketErrorFunc(),
+		KeepAlivePingInterval: 10 * time.Second,
+		PingPongInterval:      10 * time.Second,
+		MissingPongOk:         true,
 	})
 	apiSubrouter.Handle("/graphql", graphqlSrv)
 
