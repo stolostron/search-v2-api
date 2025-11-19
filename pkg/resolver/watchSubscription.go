@@ -25,15 +25,14 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 		return result, errors.New("GraphQL subscription feature is disabled. To enable set env variable FEATURE_SUBSCRIPTION=true")
 	}
 
-	go func() {
-		// Get WebSocket connection ID from the context
-		subID, ok := ctx.Value("ws-connection-id").(string)
-		if !ok {
-			// FIXME: Should get the subscription ID from the context.
-			subID = uuid.New().String()[:8]
-			klog.Errorf("FIXME:Failed to get WebSocket connection ID from context. Generating a new one: %s", subID)
-		}
+	// Get WebSocket connection ID from the context. If not found, generate a new one.
+	subID, ok := ctx.Value("ws-connection-id").(string)
+	if !ok {
+		subID = uuid.New().String()[:8]
+		klog.Errorf("Failed to get WebSocket connection ID from context. Generating a new one: %s", subID)
+	}
 
+	go func() {
 		database.RegisterSubscription(ctx, subID, receiver)
 		defer database.UnregisterSubscription(subID)
 

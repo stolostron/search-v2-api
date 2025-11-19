@@ -102,9 +102,9 @@ func WebSocketInitFunc() func(context.Context, transport.InitPayload) (context.C
 			connectionID, len(activeConnections))
 
 		// Add metadata to context
-		ctx = context.WithValue(ctx, wsContextKeyConnectionID, connectionID)
-		ctx = context.WithValue(ctx, wsContextKeyConnectedAt, connectedAt)
-		ctx = context.WithValue(ctx, wsContextKeyAuthenticated, true)
+		ctx = context.WithValue(ctx, string(wsContextKeyConnectionID), connectionID)
+		ctx = context.WithValue(ctx, string(wsContextKeyConnectedAt), connectedAt)
+		ctx = context.WithValue(ctx, string(wsContextKeyAuthenticated), true)
 
 		// Add the auth token to context using the same key as the HTTP middleware
 		// This ensures subscription resolvers can access the token the same way
