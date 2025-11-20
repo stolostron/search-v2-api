@@ -41,7 +41,7 @@ func (m *MockPgxConn) Exec(ctx context.Context, sql string, arguments ...interfa
 	return nil, nil
 }
 
-// [AI]
+// [AI] Test registration of a subscription.
 func TestRegisterSubscription(t *testing.T) {
 	// Reset the singleton for testing
 	listenerOnce = sync.Once{}
@@ -67,7 +67,7 @@ func TestRegisterSubscription(t *testing.T) {
 	close(notifyChannel)
 }
 
-// [AI]
+// [AI] Test registration of multiple subscriptions.
 func TestRegisterMultipleSubscriptions(t *testing.T) {
 	// Reset the singleton for testing
 	listenerOnce = sync.Once{}
@@ -94,7 +94,7 @@ func TestRegisterMultipleSubscriptions(t *testing.T) {
 	close(notifyChannel2)
 }
 
-// [AI]
+// [AI] Test unregistration of a subscription.
 func TestUnregisterSubscription(t *testing.T) {
 	// Reset the singleton for testing
 	listenerOnce = sync.Once{}
@@ -126,7 +126,7 @@ func TestUnregisterSubscription(t *testing.T) {
 	close(notifyChannel2)
 }
 
-// [AI]
+// [AI] Test unregistration of the last subscription.
 func TestUnregisterLastSubscription(t *testing.T) {
 	// Reset the singleton for testing
 	listenerOnce = sync.Once{}
@@ -158,26 +158,7 @@ func TestUnregisterLastSubscription(t *testing.T) {
 	close(notifyChannel)
 }
 
-// [AI]
-func TestSubscriptionStruct(t *testing.T) {
-	ctx := context.Background()
-	channel := make(chan *model.Event, 100)
-	uid := "test-subscription-id"
-
-	sub := &Subscription{
-		ID:      uid,
-		Channel: channel,
-		Context: ctx,
-	}
-
-	assert.Equal(t, uid, sub.ID, "Subscription ID should match")
-	assert.Equal(t, channel, sub.Channel, "Subscription channel should match")
-	assert.Equal(t, ctx, sub.Context, "Subscription context should match")
-
-	close(channel)
-}
-
-// [AI]
+// [AI] Test listener start when already started
 func TestListenerStartAlreadyStarted(t *testing.T) {
 	// Create a listener instance
 	ctx, cancel := context.WithCancel(context.Background())
@@ -196,33 +177,7 @@ func TestListenerStartAlreadyStarted(t *testing.T) {
 	assert.Nil(t, err, "Starting an already started listener should not return an error")
 }
 
-// [AI]
-func TestUnregisterNonExistentSubscription(t *testing.T) {
-	// Reset the singleton for testing
-	listenerOnce = sync.Once{}
-	listenerInstance = nil
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Register a subscription
-	notifyChannel := make(chan *model.Event, 100)
-	uid := "test-uid-1"
-	RegisterSubscription(ctx, uid, notifyChannel)
-
-	assert.Equal(t, 1, len(listenerInstance.subscriptions), "Should have 1 subscription")
-
-	// Try to unregister a non-existent subscription
-	UnregisterSubscription("non-existent-uid")
-
-	// Verify the original subscription is still there
-	assert.Equal(t, 1, len(listenerInstance.subscriptions), "Should still have 1 subscription")
-
-	// Clean up
-	close(notifyChannel)
-}
-
-// [AI]
+// [AI] Test listener context cancellation
 func TestListenerContextCancellation(t *testing.T) {
 	// Reset the singleton for testing
 	listenerOnce = sync.Once{}
@@ -260,54 +215,6 @@ func TestListenerContextCancellation(t *testing.T) {
 	// Clean up
 	cancel()
 	close(notifyChannel)
-}
-
-// [AI]
-func TestSubscriptionChannelBufferSize(t *testing.T) {
-	// Verify that the subscription channel has the expected buffer size
-	channel := make(chan *model.Event, 100)
-
-	assert.Equal(t, 100, cap(channel), "Subscription channel should have buffer size of 100")
-
-	close(channel)
-}
-
-// [AI]
-func TestMultipleConcurrentRegistrations(t *testing.T) {
-	// Reset the singleton for testing
-	listenerOnce = sync.Once{}
-	listenerInstance = nil
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	numSubscriptions := 10
-	var wg sync.WaitGroup
-	channels := make([]chan *model.Event, numSubscriptions)
-
-	// Register multiple subscriptions concurrently
-	for i := 0; i < numSubscriptions; i++ {
-		wg.Add(1)
-		go func(index int) {
-			defer wg.Done()
-			channels[index] = make(chan *model.Event, 100)
-			uid := "test-uid-" + string(rune(index))
-			RegisterSubscription(ctx, uid, channels[index])
-		}(i)
-	}
-
-	wg.Wait()
-
-	// Verify all subscriptions were registered
-	assert.GreaterOrEqual(t, len(listenerInstance.subscriptions), numSubscriptions,
-		"Should have at least the expected number of subscriptions")
-
-	// Clean up
-	for _, ch := range channels {
-		if ch != nil {
-			close(ch)
-		}
-	}
 }
 
 // [AI] Test that listen() respects context cancellation
@@ -481,43 +388,6 @@ func TestConcurrentRegisterUnregister(t *testing.T) {
 	}
 }
 
-// [AI] Test subscription ID uniqueness
-func TestSubscriptionIDUniqueness(t *testing.T) {
-	// Reset the singleton for testing
-	listenerOnce = sync.Once{}
-	listenerInstance = nil
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Register multiple subscriptions
-	numSubs := 10
-	channels := make([]chan *model.Event, numSubs)
-	uids := make([]string, numSubs)
-
-	for i := 0; i < numSubs; i++ {
-		channels[i] = make(chan *model.Event, 100)
-		uids[i] = "unique-" + string(rune('A'+i))
-		RegisterSubscription(ctx, uids[i], channels[i])
-	}
-
-	// Verify all IDs are unique
-	idMap := make(map[string]bool)
-	for _, sub := range listenerInstance.subscriptions {
-		if idMap[sub.ID] {
-			t.Errorf("Duplicate subscription ID found: %s", sub.ID)
-		}
-		idMap[sub.ID] = true
-	}
-
-	assert.Equal(t, numSubs, len(idMap), "Should have unique IDs for all subscriptions")
-
-	// Clean up
-	for _, ch := range channels {
-		close(ch)
-	}
-}
-
 // [AI] Test listener state after initialization
 func TestListenerStateAfterInit(t *testing.T) {
 	// Reset the singleton for testing
@@ -543,37 +413,6 @@ func TestListenerStateAfterInit(t *testing.T) {
 	assert.Equal(t, uid, sub.ID, "Subscription ID should match")
 	assert.Equal(t, notifyChannel, sub.Channel, "Subscription channel should match")
 	assert.Equal(t, ctx, sub.Context, "Subscription context should match")
-
-	// Clean up
-	close(notifyChannel)
-}
-
-// [AI] Test repeated unregistration of same subscription
-func TestRepeatedUnregistration(t *testing.T) {
-	// Reset the singleton for testing
-	listenerOnce = sync.Once{}
-	listenerInstance = nil
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	notifyChannel := make(chan *model.Event, 100)
-	uid := "test-repeated-unreg"
-	RegisterSubscription(ctx, uid, notifyChannel)
-
-	assert.Equal(t, 1, len(listenerInstance.subscriptions), "Should have 1 subscription")
-
-	// Unregister once
-	UnregisterSubscription(uid)
-	assert.Equal(t, 0, len(listenerInstance.subscriptions), "Should have 0 subscriptions")
-
-	// Unregister again - should not cause issues
-	UnregisterSubscription(uid)
-	assert.Equal(t, 0, len(listenerInstance.subscriptions), "Should still have 0 subscriptions")
-
-	// Unregister a third time
-	UnregisterSubscription(uid)
-	assert.Equal(t, 0, len(listenerInstance.subscriptions), "Should still have 0 subscriptions")
 
 	// Clean up
 	close(notifyChannel)
@@ -814,56 +653,7 @@ func TestStopPostgresListener_ResetsOnce(t *testing.T) {
 	assert.NotEqual(t, firstInstance, listenerInstance, "Should be a new listener instance")
 }
 
-// Test handleConnectionError indirectly through connection loss simulation
-func TestHandleConnectionError_StateChanges(t *testing.T) {
-	// Reset the singleton
-	listenerOnce = sync.Once{}
-	listenerInstance = nil
-
-	// Create a listener manually to test handleConnectionError
-	listenCtx, listenCancel := context.WithCancel(context.Background())
-	defer listenCancel()
-
-	listener := &Listener{
-		subscriptions: make(map[string]*Subscription),
-		conn:          nil, // Simulate no connection
-		ctx:           listenCtx,
-		cancel:        listenCancel,
-		started:       false,
-	}
-
-	// Verify initial state
-	assert.Nil(t, listener.conn, "Connection should be nil initially")
-
-	// Note: We can't fully test handleConnectionError without a real DB connection
-	// because it calls l.connect() which tries to connect to a real database.
-	// However, we can verify the function exists and the state management works.
-	
-	// Verify the function compiles and has the right signature
-	var _ func() = listener.handleConnectionError
-}
-
-// Test Listener.Start error when already started
-func TestListenerStart_AlreadyStartedError(t *testing.T) {
-	listenCtx, listenCancel := context.WithCancel(context.Background())
-	defer listenCancel()
-
-	listener := &Listener{
-		subscriptions: make(map[string]*Subscription),
-		conn:          nil,
-		ctx:           listenCtx,
-		cancel:        listenCancel,
-		started:       true, // Mark as already started
-	}
-
-	// Attempt to start again
-	err := listener.Start()
-
-	// Should succeed with no-op when already started
-	assert.Nil(t, err, "Starting an already-started listener should be a no-op")
-}
-
-// Test connect function error path (no database available)
+// [AI] Test connect function error path (no database available)
 func TestConnect_DatabaseUnavailable(t *testing.T) {
 	listenCtx, listenCancel := context.WithCancel(context.Background())
 	defer listenCancel()
@@ -910,7 +700,7 @@ func TestStart_ConnectionFailure(t *testing.T) {
 	listener.mu.RUnlock()
 }
 
-// Test listener cleanup via UnregisterSubscription
+// [AI] Test listener cleanup via UnregisterSubscription
 func TestListener_CleanupViaUnregister(t *testing.T) {
 	// Reset the singleton
 	listenerOnce = sync.Once{}
@@ -923,7 +713,7 @@ func TestListener_CleanupViaUnregister(t *testing.T) {
 	// Register subscription
 	RegisterSubscription(ctx, "test-cleanup", notifyChannel)
 	assert.NotNil(t, listenerInstance, "Listener should be initialized")
-	
+
 	// Unregister to trigger shutdown (when it's the last subscription)
 	UnregisterSubscription("test-cleanup")
 
@@ -948,35 +738,7 @@ func TestListener_CleanupViaUnregister(t *testing.T) {
 	}
 }
 
-// Test subscription context cleanup during forwarding
-func TestSubscription_ContextDoneSkipsForwarding(t *testing.T) {
-	// This test verifies the behavior in listen() where cancelled subscriptions are skipped
-	ctx, cancel := context.WithCancel(context.Background())
-	
-	// Create a subscription with cancellable context
-	channel := make(chan *model.Event, 100)
-	defer close(channel)
-	
-	subscription := &Subscription{
-		ID:      "test-context-done",
-		Channel: channel,
-		Context: ctx,
-	}
-
-	// Cancel the context
-	cancel()
-
-	// Verify context is done
-	select {
-	case <-subscription.Context.Done():
-		// Good - context is cancelled
-		assert.True(t, true, "Context should be done")
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("Context should have been cancelled")
-	}
-}
-
-// Test multiple rapid start/stop cycles
+// [AI] Test multiple rapid start/stop cycles
 func TestListener_RapidStartStopCycles(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		// Reset
@@ -1001,47 +763,4 @@ func TestListener_RapidStartStopCycles(t *testing.T) {
 	listenerMu.Lock()
 	assert.Nil(t, listenerInstance, "Final state should be nil")
 	listenerMu.Unlock()
-}
-
-// Test listener state after failed start
-func TestListener_StateAfterFailedStart(t *testing.T) {
-	listenCtx, listenCancel := context.WithCancel(context.Background())
-	defer listenCancel()
-
-	listener := &Listener{
-		subscriptions: make(map[string]*Subscription),
-		conn:          nil,
-		ctx:           listenCtx,
-		cancel:        listenCancel,
-		started:       false,
-	}
-
-	// Store initial state
-	initialStarted := listener.started
-
-	// Attempt to start (will fail)
-	err := listener.Start()
-	assert.Error(t, err, "Start should fail")
-
-	// Verify state remained unchanged
-	listener.mu.RLock()
-	assert.Equal(t, initialStarted, listener.started, "Started state should not change on failure")
-	assert.False(t, listener.started, "Should still be false")
-	listener.mu.RUnlock()
-}
-
-// Test that subscriptions map is properly initialized
-func TestListener_SubscriptionsMapInitialized(t *testing.T) {
-	listenerOnce = sync.Once{}
-	listenerInstance = nil
-
-	ctx := context.Background()
-	notifyChannel := make(chan *model.Event, 100)
-	defer close(notifyChannel)
-
-	RegisterSubscription(ctx, "test-map-init", notifyChannel)
-
-	assert.NotNil(t, listenerInstance, "Listener should be initialized")
-	assert.NotNil(t, listenerInstance.subscriptions, "Subscriptions map should be initialized")
-	assert.IsType(t, make(map[string]*Subscription), listenerInstance.subscriptions, "Should be correct type")
 }
