@@ -764,3 +764,46 @@ func TestListener_RapidStartStopCycles(t *testing.T) {
 	assert.Nil(t, listenerInstance, "Final state should be nil")
 	listenerMu.Unlock()
 }
+
+// Test listen() function
+func TestListen(t *testing.T) {
+	listenCtx, listenCancel := context.WithCancel(context.Background())
+
+	listener := &Listener{
+		ctx:           listenCtx,
+		cancel:        listenCancel,
+		started:       false,
+		subscriptions: make(map[string]*Subscription),
+	}
+
+	// Start the listener
+	go listener.listen()
+	time.Sleep(50 * time.Millisecond)
+
+	// Cancel the context
+	listenCancel()
+	time.Sleep(50 * time.Millisecond)
+	assert.Nil(t, listenerInstance, "Listener instance should be nil")
+}
+
+// Test listen() function with cancelled context
+func TestListen_withCancelledContext(t *testing.T) {
+	listenCtx, listenCancel := context.WithCancel(context.Background())
+
+	listener := &Listener{
+		ctx:           listenCtx,
+		cancel:        listenCancel,
+		started:       false,
+		subscriptions: make(map[string]*Subscription),
+	}
+	// Cancel the context before starting the listener
+	listenCancel()
+	time.Sleep(50 * time.Millisecond)
+	assert.Nil(t, listenerInstance, "Listener instance should be nil")
+
+	// Start the listener
+	go listener.listen()
+	time.Sleep(50 * time.Millisecond)
+
+	assert.Nil(t, listenerInstance, "Listener instance should be nil")
+}

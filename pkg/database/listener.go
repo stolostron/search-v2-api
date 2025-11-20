@@ -259,6 +259,7 @@ func (l *Listener) handleConnectionError() {
 	}
 }
 
+// StopPostgresListener stops the Postgres listenerInstance.
 func StopPostgresListener() {
 	listenerMu.Lock()
 	defer listenerMu.Unlock()
