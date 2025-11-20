@@ -26,7 +26,7 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 	}
 
 	// Get WebSocket connection ID from the context. If not found, generate a new one.
-	subID, ok := ctx.Value("ws-connection-id").(string)
+	subID, ok := ctx.Value(config.WSContextKeyConnectionID).(string)
 	if !ok {
 		subID = uuid.New().String()[:8]
 		klog.Errorf("Failed to get WebSocket connection ID from context. Generating a new one: %s", subID)

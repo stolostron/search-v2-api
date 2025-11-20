@@ -10,23 +10,10 @@ import (
 
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/google/uuid"
+	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/metrics"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"k8s.io/klog/v2"
-)
-
-// ContextKey type for WebSocket-specific context keys
-type wsContextKey string
-
-const (
-	// Context keys for WebSocket connections
-	wsContextKeyConnectionID  wsContextKey = "ws-connection-id"
-	wsContextKeyConnectedAt   wsContextKey = "ws-connected-at"
-	wsContextKeyAuthenticated wsContextKey = "ws-authenticated"
-
-	// WSConnectionIDKey is the exported string constant for the connection ID context key
-	// Use this in other packages to avoid import cycles: ctx.Value("ws-connection-id")
-	WSConnectionIDKey = string(wsContextKeyConnectionID)
 )
 
 // Connection tracking
@@ -102,9 +89,9 @@ func WebSocketInitFunc() func(context.Context, transport.InitPayload) (context.C
 			connectionID, len(activeConnections))
 
 		// Add metadata to context
-		ctx = context.WithValue(ctx, string(wsContextKeyConnectionID), connectionID)
-		ctx = context.WithValue(ctx, string(wsContextKeyConnectedAt), connectedAt)
-		ctx = context.WithValue(ctx, string(wsContextKeyAuthenticated), true)
+		ctx = context.WithValue(ctx, config.WSContextKeyConnectionID, connectionID)
+		ctx = context.WithValue(ctx, config.WSContextKeyConnectedAt, connectedAt)
+		ctx = context.WithValue(ctx, config.WSContextKeyAuthenticated, true)
 
 		// Add the auth token to context using the same key as the HTTP middleware
 		// This ensures subscription resolvers can access the token the same way
@@ -168,7 +155,7 @@ func extractAuthToken(payload transport.InitPayload) (string, error) {
 
 // getConnectionID retrieves the connection ID from context
 func getConnectionID(ctx context.Context) string {
-	if id, ok := ctx.Value(wsContextKeyConnectionID).(string); ok {
+	if id, ok := ctx.Value(config.WSContextKeyConnectionID).(string); ok {
 		return id
 	}
 	return "unknown"

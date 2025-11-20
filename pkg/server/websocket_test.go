@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler/transport"
+	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/metrics"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"github.com/stretchr/testify/assert"
@@ -116,17 +117,17 @@ func TestGetConnectionID(t *testing.T) {
 		},
 		{
 			name:     "context with connection ID",
-			ctx:      context.WithValue(context.Background(), wsContextKeyConnectionID, "test-123"),
+			ctx:      context.WithValue(context.Background(), config.WSContextKeyConnectionID, "test-123"),
 			expected: "test-123",
 		},
 		{
 			name:     "context with empty connection ID",
-			ctx:      context.WithValue(context.Background(), wsContextKeyConnectionID, ""),
+			ctx:      context.WithValue(context.Background(), config.WSContextKeyConnectionID, ""),
 			expected: "",
 		},
 		{
 			name:     "context with wrong type",
-			ctx:      context.WithValue(context.Background(), wsContextKeyConnectionID, 12345),
+			ctx:      context.WithValue(context.Background(), config.WSContextKeyConnectionID, 12345),
 			expected: "unknown",
 		},
 	}
@@ -256,20 +257,20 @@ func TestWebSocketContextKeys(t *testing.T) {
 
 	// Test connection ID
 	testID := "test-connection-123"
-	ctx = context.WithValue(ctx, wsContextKeyConnectionID, testID)
+	ctx = context.WithValue(ctx, config.WSContextKeyConnectionID, testID)
 	retrievedID := getConnectionID(ctx)
 	assert.Equal(t, testID, retrievedID)
 
 	// Test connected at
 	now := time.Now()
-	ctx = context.WithValue(ctx, wsContextKeyConnectedAt, now)
-	retrievedTime, ok := ctx.Value(wsContextKeyConnectedAt).(time.Time)
+	ctx = context.WithValue(ctx, config.WSContextKeyConnectedAt, now)
+	retrievedTime, ok := ctx.Value(config.WSContextKeyConnectedAt).(time.Time)
 	assert.True(t, ok)
 	assert.Equal(t, now, retrievedTime)
 
 	// Test authenticated
-	ctx = context.WithValue(ctx, wsContextKeyAuthenticated, true)
-	authenticated, ok := ctx.Value(wsContextKeyAuthenticated).(bool)
+	ctx = context.WithValue(ctx, config.WSContextKeyAuthenticated, true)
+	authenticated, ok := ctx.Value(config.WSContextKeyAuthenticated).(bool)
 	assert.True(t, ok)
 	assert.True(t, authenticated)
 
@@ -291,7 +292,7 @@ func TestWebSocketCloseFunc(t *testing.T) {
 	// Setup a tracked connection
 	connectionID := "test-close-conn"
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, wsContextKeyConnectionID, connectionID)
+	ctx = context.WithValue(ctx, config.WSContextKeyConnectionID, connectionID)
 
 	connInfo := &wsConnectionInfo{
 		ID:          connectionID,
@@ -316,7 +317,7 @@ func TestWebSocketCloseFunc(t *testing.T) {
 	assert.Equal(t, 0, finalCount)
 
 	// Test closing a connection that wasn't tracked
-	ctxUntracked := context.WithValue(context.Background(), wsContextKeyConnectionID, "untracked-conn")
+	ctxUntracked := context.WithValue(context.Background(), config.WSContextKeyConnectionID, "untracked-conn")
 	closeFunc(ctxUntracked, 1001)
 
 	// Should not panic and should still have 0 connections
