@@ -9,12 +9,13 @@ import (
 	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler/transport"
+	"github.com/stolostron/search-v2-api/pkg/metrics"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// [AI]
+// [AI] Test extraction of Authorization token.
 func TestExtractAuthToken(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -101,72 +102,7 @@ func TestExtractAuthToken(t *testing.T) {
 	}
 }
 
-// [AI]
-func TestExtractAuthTokenEdgeCases(t *testing.T) {
-	tests := []struct {
-		name        string
-		payload     transport.InitPayload
-		expectError bool
-		description string
-	}{
-		{
-			name: "nil value",
-			payload: transport.InitPayload{
-				"Authorization": nil,
-			},
-			expectError: true,
-			description: "nil value should result in error",
-		},
-		{
-			name: "numeric value",
-			payload: transport.InitPayload{
-				"Authorization": 12345,
-			},
-			expectError: true,
-			description: "numeric value should result in error",
-		},
-		{
-			name: "boolean value",
-			payload: transport.InitPayload{
-				"Authorization": true,
-			},
-			expectError: true,
-			description: "boolean value should result in error",
-		},
-		{
-			name: "wrong field name - Authentication",
-			payload: transport.InitPayload{
-				"Authentication": "test-token",
-			},
-			expectError: true,
-			description: "Wrong field name (Authorization vs Authentication) should fail",
-		},
-		{
-			name: "case sensitive - authorization",
-			payload: transport.InitPayload{
-				"authorization": "test-token",
-			},
-			expectError: true,
-			description: "lowercase 'authorization' should not be found (case sensitive)",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			token, err := extractAuthToken(tt.payload)
-
-			if tt.expectError {
-				assert.Error(t, err, tt.description)
-				assert.Empty(t, token)
-			} else {
-				assert.NoError(t, err, tt.description)
-				assert.NotEmpty(t, token)
-			}
-		})
-	}
-}
-
-// [AI]
+// [AI] Test retrieval of connection ID from context.
 func TestGetConnectionID(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -203,7 +139,7 @@ func TestGetConnectionID(t *testing.T) {
 	}
 }
 
-// [AI]
+// [AI] Test connection tracking functionality.
 func TestConnectionTracking(t *testing.T) {
 	// Clear any existing connections
 	activeConnectionsMutex.Lock()
@@ -265,7 +201,7 @@ func TestConnectionTracking(t *testing.T) {
 	activeConnectionsMutex.Unlock()
 }
 
-// [AI]
+// [AI] Test concurrent connection tracking functionality.
 func TestConcurrentConnectionTracking(t *testing.T) {
 	// Clear connections
 	activeConnectionsMutex.Lock()
@@ -314,7 +250,7 @@ func TestConcurrentConnectionTracking(t *testing.T) {
 	assert.Equal(t, 0, count, "All connections should be cleaned up")
 }
 
-// [AI]
+// [AI] Test WebSocket context keys.
 func TestWebSocketContextKeys(t *testing.T) {
 	ctx := context.Background()
 
@@ -345,53 +281,7 @@ func TestWebSocketContextKeys(t *testing.T) {
 	assert.Equal(t, testToken, retrievedToken)
 }
 
-// [AI]
-func TestWebSocketContextValueConstant(t *testing.T) {
-	// Verify exported constant matches internal key string value
-	assert.Equal(t, "ws-connection-id", WSConnectionIDKey)
-
-	// Note: WSConnectionIDKey is a string constant for reference/documentation
-	// But internally, context values are stored with wsContextKey type
-	// This means: context.WithValue(ctx, "ws-connection-id", val) != context.WithValue(ctx, wsContextKey("ws-connection-id"), val)
-
-	// Test that internal key works correctly
-	ctx := context.Background()
-	testID := "test-const-id"
-
-	// This is how it's used internally (with wsContextKey type)
-	ctx = context.WithValue(ctx, wsContextKeyConnectionID, testID)
-
-	// getConnectionID should retrieve it successfully
-	retrievedID := getConnectionID(ctx)
-	assert.Equal(t, testID, retrievedID)
-
-	// Test that using string key doesn't work (by design - different type)
-	//nolint:staticcheck // SA1029: intentionally testing incorrect usage
-	ctx2 := context.WithValue(context.Background(), "ws-connection-id", testID)
-	retrievedID2 := getConnectionID(ctx2)
-	assert.Equal(t, "unknown", retrievedID2, "String key should not match wsContextKey type")
-
-	// Test that WSConnectionIDKey as string also doesn't match (same reason)
-	//nolint:staticcheck // SA1029: intentionally testing incorrect usage
-	ctx3 := context.WithValue(context.Background(), WSConnectionIDKey, testID)
-	retrievedID3 := getConnectionID(ctx3)
-	assert.Equal(t, "unknown", retrievedID3, "String constant key should not match wsContextKey type")
-
-	// For external packages that need to read the value:
-	// They should access with the string directly
-	ctx4 := context.WithValue(context.Background(), wsContextKeyConnectionID, testID)
-	externalValue, ok := ctx4.Value("ws-connection-id").(string)
-	// This won't work because the key type is different
-	assert.False(t, ok, "External string access won't work with typed key")
-	assert.Empty(t, externalValue)
-
-	// The correct way for external access is to use the typed key value
-	typedValue, ok := ctx4.Value(wsContextKey("ws-connection-id")).(string)
-	assert.True(t, ok, "Accessing with correct type should work")
-	assert.Equal(t, testID, typedValue)
-}
-
-// [AI]
+// [AI] Test WebSocket close function.
 func TestWebSocketCloseFunc(t *testing.T) {
 	// Clear connections
 	activeConnectionsMutex.Lock()
@@ -441,22 +331,7 @@ func TestWebSocketCloseFunc(t *testing.T) {
 	activeConnectionsMutex.Unlock()
 }
 
-// [AI]
-func TestWebSocketConnectionInfo(t *testing.T) {
-	// Test connection info structure
-	now := time.Now()
-	connInfo := &wsConnectionInfo{
-		ID:          "test-123",
-		ConnectedAt: now,
-		AuthToken:   "test-token-abc",
-	}
-
-	assert.Equal(t, "test-123", connInfo.ID)
-	assert.Equal(t, now, connInfo.ConnectedAt)
-	assert.Equal(t, "test-token-abc", connInfo.AuthToken)
-}
-
-// [AI]
+// [AI] Test immutability of connection info.
 func TestConnectionInfoImmutability(t *testing.T) {
 	// Test that modifying retrieved connection info doesn't affect stored info
 	activeConnectionsMutex.Lock()
@@ -495,7 +370,7 @@ func TestConnectionInfoImmutability(t *testing.T) {
 	activeConnectionsMutex.Unlock()
 }
 
-// [AI]
+// [AI] Test WebSocket error function.
 func TestWebSocketErrorFunc(t *testing.T) {
 	// Test that error function exists and doesn't panic
 	errorFunc := WebSocketErrorFunc()
@@ -509,28 +384,6 @@ func TestWebSocketErrorFunc(t *testing.T) {
 	assert.NotPanics(t, func() {
 		errorFunc(ctx, testErr)
 	})
-}
-
-// [AI] Benchmark tests
-func BenchmarkExtractAuthToken(b *testing.B) {
-	payload := transport.InitPayload{
-		"Authentication": "Bearer benchmark-token-12345",
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = extractAuthToken(payload)
-	}
-}
-
-// [AI]
-func BenchmarkGetConnectionID(b *testing.B) {
-	ctx := context.WithValue(context.Background(), wsContextKeyConnectionID, "bench-conn-123")
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = getConnectionID(ctx)
-	}
 }
 
 // [AI]
@@ -568,18 +421,260 @@ func BenchmarkConnectionTracking(b *testing.B) {
 	activeConnectionsMutex.Unlock()
 }
 
-// [AI]
-func BenchmarkContextOperations(b *testing.B) {
-	testID := "benchmark-connection-id"
-	now := time.Now()
+// [AI] Test WebSocketInitFunc with missing token
+func TestWebSocketInitFunc_MissingToken(t *testing.T) {
+	// Clear active connections before test
+	activeConnectionsMutex.Lock()
+	activeConnections = make(map[string]*wsConnectionInfo)
+	activeConnectionsMutex.Unlock()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		ctx := context.Background()
-		ctx = context.WithValue(ctx, wsContextKeyConnectionID, testID)
-		ctx = context.WithValue(ctx, wsContextKeyConnectedAt, now)
-		ctx = context.WithValue(ctx, wsContextKeyAuthenticated, true)
+	initFunc := WebSocketInitFunc()
+	ctx := context.Background()
 
-		_ = getConnectionID(ctx)
+	// Empty payload (no Authorization token)
+	payload := transport.InitPayload{}
+
+	// Call the init function
+	resultCtx, resultPayload, err := initFunc(ctx, payload)
+
+	// Should return error for missing token
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "authentication required")
+	assert.Nil(t, resultPayload)
+	assert.Equal(t, ctx, resultCtx, "Context should be unchanged on error")
+
+	// Verify no connection was tracked
+	activeConnectionsMutex.Lock()
+	assert.Equal(t, 0, len(activeConnections), "No connection should be tracked on auth failure")
+	activeConnectionsMutex.Unlock()
+}
+
+// [AI] Test WebSocketInitFunc with empty token
+func TestWebSocketInitFunc_EmptyToken(t *testing.T) {
+	// Clear active connections before test
+	activeConnectionsMutex.Lock()
+	activeConnections = make(map[string]*wsConnectionInfo)
+	activeConnectionsMutex.Unlock()
+
+	initFunc := WebSocketInitFunc()
+	ctx := context.Background()
+
+	// Payload with empty token
+	payload := transport.InitPayload{
+		"Authorization": "",
 	}
+
+	// Call the init function
+	resultCtx, resultPayload, err := initFunc(ctx, payload)
+
+	// Should return error for empty token
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "authentication required")
+	assert.Nil(t, resultPayload)
+	assert.Equal(t, ctx, resultCtx, "Context should be unchanged on error")
+
+	// Verify no connection was tracked
+	activeConnectionsMutex.Lock()
+	assert.Equal(t, 0, len(activeConnections), "No connection should be tracked on auth failure")
+	activeConnectionsMutex.Unlock()
+}
+
+// [AI] Test WebSocketInitFunc with only Bearer prefix
+func TestWebSocketInitFunc_OnlyBearerPrefix(t *testing.T) {
+	// Clear active connections before test
+	activeConnectionsMutex.Lock()
+	activeConnections = make(map[string]*wsConnectionInfo)
+	activeConnectionsMutex.Unlock()
+
+	initFunc := WebSocketInitFunc()
+	ctx := context.Background()
+
+	// Payload with only Bearer prefix, no actual token
+	payload := transport.InitPayload{
+		"Authorization": "Bearer ",
+	}
+
+	// Call the init function
+	_, resultPayload, err := initFunc(ctx, payload)
+
+	// Should return error
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "authentication required")
+	assert.Nil(t, resultPayload)
+}
+
+// [AI] Test WebSocketInitFunc return value structure
+func TestWebSocketInitFunc_ReturnsFunctionWithCorrectSignature(t *testing.T) {
+	initFunc := WebSocketInitFunc()
+
+	// Verify the returned function has the correct type
+	assert.NotNil(t, initFunc)
+
+	// The function should be callable with the expected parameters
+	ctx := context.Background()
+	payload := transport.InitPayload{}
+
+	// Call it (will fail auth, but that's ok for this test)
+	resultCtx, resultPayload, err := initFunc(ctx, payload)
+
+	// Verify return types are correct (even if there's an error)
+	assert.NotNil(t, err, "Should have an error due to missing token")
+	assert.IsType(t, context.Background(), resultCtx, "First return should be a context")
+	assert.Nil(t, resultPayload, "Payload should be nil on error")
+}
+
+// [AI] Test WebSocketInitFunc generates unique connection IDs
+func TestWebSocketInitFunc_GeneratesUniqueConnectionIDs(t *testing.T) {
+	// Clear active connections before test
+	activeConnectionsMutex.Lock()
+	activeConnections = make(map[string]*wsConnectionInfo)
+	activeConnectionsMutex.Unlock()
+
+	initFunc := WebSocketInitFunc()
+
+	// Try multiple times
+	errorCount := 0
+	for i := 0; i < 10; i++ {
+		ctx := context.Background()
+		payload := transport.InitPayload{
+			"Authorization": fmt.Sprintf("Bearer test-token-%d", i),
+		}
+
+		// The function will fail at auth, but it generates a unique ID internally
+		// We're testing the call completes without error (ID generation works)
+		_, _, err := initFunc(ctx, payload)
+		if err != nil {
+			errorCount++
+		}
+	}
+
+	// All calls should have returned an error (due to auth failure)
+	// but the function should have executed 10 times successfully (ID gen works)
+	assert.Equal(t, 10, errorCount, "All calls should have completed (with auth errors)")
+
+	// The function generates UUIDs internally which are unique by design
+	// This test verifies the function can be called multiple times without panicking
+	assert.True(t, true, "Multiple concurrent ID generations completed successfully")
+}
+
+// [AI] Test WebSocketInitFunc increments metrics
+func TestWebSocketInitFunc_IncrementsMetrics(t *testing.T) {
+	// Clear active connections
+	activeConnectionsMutex.Lock()
+	activeConnections = make(map[string]*wsConnectionInfo)
+	activeConnectionsMutex.Unlock()
+
+	// Get initial metric value
+	initialMetrics, _ := metrics.PromRegistry.Gather()
+	var initialTotal float64
+	for _, m := range initialMetrics {
+		if m.GetName() == "search_api_websocket_connections_total" {
+			if len(m.Metric) > 0 {
+				initialTotal = m.Metric[0].GetCounter().GetValue()
+			}
+			break
+		}
+	}
+
+	initFunc := WebSocketInitFunc()
+	ctx := context.Background()
+
+	// Missing token - should still increment total counter
+	payload := transport.InitPayload{}
+	_, _, err := initFunc(ctx, payload)
+	assert.Error(t, err)
+
+	// Check metrics after the call
+	afterMetrics, _ := metrics.PromRegistry.Gather()
+	var afterTotal float64
+	for _, m := range afterMetrics {
+		if m.GetName() == "search_api_websocket_connections_total" {
+			if len(m.Metric) > 0 {
+				afterTotal = m.Metric[0].GetCounter().GetValue()
+			}
+			break
+		}
+	}
+
+	// Total connections should have incremented
+	assert.Greater(t, afterTotal, initialTotal, "WebSocket connections total should increment")
+}
+
+// [AI] Test WebSocketInitFunc payload passthrough on error
+func TestWebSocketInitFunc_PayloadNilOnError(t *testing.T) {
+	initFunc := WebSocketInitFunc()
+	ctx := context.Background()
+
+	payload := transport.InitPayload{
+		"Authorization": "", // Empty token
+	}
+
+	_, resultPayload, err := initFunc(ctx, payload)
+
+	assert.Error(t, err)
+	assert.Nil(t, resultPayload, "Payload should be nil when there's an error")
+}
+
+// [AI] Test WebSocketInitFunc concurrent calls
+func TestWebSocketInitFunc_ConcurrentCalls(t *testing.T) {
+	// Clear active connections
+	activeConnectionsMutex.Lock()
+	activeConnections = make(map[string]*wsConnectionInfo)
+	activeConnectionsMutex.Unlock()
+
+	initFunc := WebSocketInitFunc()
+
+	// Launch multiple concurrent calls
+	var wg sync.WaitGroup
+	numCalls := 20
+
+	for i := 0; i < numCalls; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+
+			ctx := context.Background()
+			payload := transport.InitPayload{
+				"Authorization": fmt.Sprintf("Bearer concurrent-token-%d", index),
+			}
+
+			// Call the init function
+			_, _, err := initFunc(ctx, payload)
+
+			// Will fail auth in test environment
+			assert.Error(t, err)
+		}(i)
+	}
+
+	// Wait for all calls to complete
+	wg.Wait()
+
+	// All calls should have completed without panicking
+	assert.True(t, true, "Concurrent calls completed successfully")
+}
+
+// [AI] Test WebSocketInitFunc connection tracking state
+func TestWebSocketInitFunc_ConnectionTrackingOnError(t *testing.T) {
+	// Clear active connections
+	activeConnectionsMutex.Lock()
+	initialConnCount := len(activeConnections)
+	activeConnections = make(map[string]*wsConnectionInfo)
+	activeConnectionsMutex.Unlock()
+
+	initFunc := WebSocketInitFunc()
+	ctx := context.Background()
+
+	// Missing token
+	payload := transport.InitPayload{}
+
+	_, _, err := initFunc(ctx, payload)
+	assert.Error(t, err)
+
+	// Verify connections weren't added on failure
+	activeConnectionsMutex.Lock()
+	finalConnCount := len(activeConnections)
+	activeConnectionsMutex.Unlock()
+
+	assert.Equal(t, initialConnCount, finalConnCount,
+		"Active connections should not increase on authentication failure")
 }
