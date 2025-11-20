@@ -34,10 +34,10 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 
 	go func() {
 		database.RegisterSubscription(ctx, subID, receiver)
-		defer database.UnregisterSubscription(subID)
 
 		defer func() {
 			klog.V(2).Infof("Closed subscription watch(%s).", subID)
+			database.UnregisterSubscription(subID)
 			close(result)
 			close(receiver)
 		}()
