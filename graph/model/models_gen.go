@@ -2,6 +2,21 @@
 
 package model
 
+// Event represents a changed resource in the search index.
+type Event struct {
+	// Kubernetes resource UID.
+	UID string `json:"uid"`
+	// Values: INSERT, UPDATE, or DELETE
+	Operation string `json:"operation"`
+	// New data recorded on the search index.
+	NewData map[string]any `json:"newData,omitempty"`
+	// Previous resource data from the search index.
+	OldData map[string]any `json:"oldData,omitempty"`
+	// Time the change event is registered in the search index.
+	// Note there's a delay from the time the resource changed in kubernetes.
+	Timestamp string `json:"timestamp"`
+}
+
 // A message is used to communicate conditions detected while executing a query on the server.
 type Message struct {
 	// Unique identifier to be used by clients to process the message independently of locale or grammatical changes.
@@ -11,6 +26,10 @@ type Message struct {
 	Kind *string `json:"kind,omitempty"`
 	// Message text.
 	Description *string `json:"description,omitempty"`
+}
+
+// Queries supported by the Search Query API.
+type Query struct {
 }
 
 // Defines a key/value to filter results.
@@ -45,4 +64,8 @@ type SearchInput struct {
 	// If empty, all relationships will be included.
 	// This filter is used with the 'related' field on SearchResult.
 	RelatedKinds []*string `json:"relatedKinds,omitempty"`
+}
+
+// Subscriptions implemented by the Search Query API.
+type Subscription struct {
 }

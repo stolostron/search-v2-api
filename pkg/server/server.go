@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net/http"
@@ -21,7 +22,7 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 )
 
-func StartAndListen() {
+func StartAndListen(ctx context.Context) {
 	port := config.Cfg.HttpPort
 
 	// Configure TLS
@@ -66,10 +67,23 @@ func StartAndListen() {
 	apiSubrouter.Use(rbac.AuthenticateUser)
 	apiSubrouter.Use(rbac.AuthorizeUser)
 
-	defaultSrv := handler.NewDefaultServer(generated.NewExecutableSchema(
-		generated.Config{Resolvers: &graph.Resolver{}}))
-	defaultSrv.AddTransport(&transport.Websocket{})
-	apiSubrouter.Handle("/graphql", defaultSrv)
+	graphqlSrv := handler.New(generated.NewExecutableSchema(
+		generated.Config{Resolvers: &graph.Resolver{}}),
+	)
+	// Add transports to the graphQLSrv
+	graphqlSrv.AddTransport(transport.Options{})
+	graphqlSrv.AddTransport(transport.GET{})
+	graphqlSrv.AddTransport(transport.POST{})
+	graphqlSrv.AddTransport(transport.MultipartForm{})
+	graphqlSrv.AddTransport(transport.Websocket{
+		InitFunc:              WebSocketInitFunc(),
+		CloseFunc:             WebSocketCloseFunc(),
+		ErrorFunc:             WebSocketErrorFunc(),
+		KeepAlivePingInterval: 10 * time.Second,
+		PingPongInterval:      10 * time.Second,
+		MissingPongOk:         true,
+	})
+	apiSubrouter.Handle("/graphql", graphqlSrv)
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
@@ -84,4 +98,15 @@ func StartAndListen() {
 	if serverErr != nil {
 		klog.Fatal("Server process ended with error. ", serverErr)
 	}
+
+	// Wait for cancel signal
+	<-ctx.Done()
+	klog.Warning("Stopping the server.")
+	ctxWithTimeout, ctxCancel := context.WithTimeout(context.Background(), time.Duration(5*time.Second))
+	if err := srv.Shutdown(ctxWithTimeout); err != nil {
+		klog.Error("Encountered error stopping the server. ", err)
+	} else {
+		klog.Warning("Server stopped.")
+	}
+	ctxCancel()
 }
