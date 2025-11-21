@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgconn"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/database"
@@ -353,4 +354,32 @@ func TestWatchSubscription_FilterInput(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	cancel()
+}
+
+func TestSubscriptionWithMockedDatabase(t *testing.T) {
+	// Save original config value
+	originalEnabled := config.Cfg.Features.SubscriptionEnabled
+	defer func() {
+		config.Cfg.Features.SubscriptionEnabled = originalEnabled
+	}()
+
+	// Enable subscription feature
+	config.Cfg.Features.SubscriptionEnabled = true
+
+	// Reset database listener singleton for clean test
+	database.StopPostgresListener()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	database.ListenerInstance = &database.Listener{
+		conn: &database.MockPgxConn{
+			WaitForNotificationFunc: func(ctx context.Context) (*pgconn.Notification, error) {
+				return nil, nil
+			},
+		},
+	}
+	input := &model.SearchInput{}
+
+	resultChan, err := WatchSubscription(ctx, input)
 }
