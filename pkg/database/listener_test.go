@@ -4,13 +4,11 @@ package database
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgconn"
-	"github.com/jackc/pgx/v4"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stretchr/testify/assert"
 )
@@ -20,12 +18,6 @@ type MockPgxConn struct {
 	WaitForNotificationFunc func(ctx context.Context) (*pgconn.Notification, error)
 	CloseFunc               func(ctx context.Context) error
 	ExecFunc                func(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
-}
-
-func (m MockPgxConn) Connect(ctx context.Context) (*pgx.Conn, error) {
-	fmt.Println(">>> MockPgxConn.Connect")
-	panic("not implemented")
-	return nil, fmt.Errorf("not implemented")
 }
 
 func (m MockPgxConn) WaitForNotification(ctx context.Context) (*pgconn.Notification, error) {
