@@ -4,11 +4,13 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v4"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stretchr/testify/assert"
 )
@@ -20,21 +22,27 @@ type MockPgxConn struct {
 	ExecFunc                func(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
 }
 
-func (m *MockPgxConn) WaitForNotification(ctx context.Context) (*pgconn.Notification, error) {
+func (m MockPgxConn) Connect(ctx context.Context) (*pgx.Conn, error) {
+	fmt.Println(">>> MockPgxConn.Connect")
+	panic("not implemented")
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (m MockPgxConn) WaitForNotification(ctx context.Context) (*pgconn.Notification, error) {
 	if m.WaitForNotificationFunc != nil {
 		return m.WaitForNotificationFunc(ctx)
 	}
 	return nil, nil
 }
 
-func (m *MockPgxConn) Close(ctx context.Context) error {
+func (m MockPgxConn) Close(ctx context.Context) error {
 	if m.CloseFunc != nil {
 		return m.CloseFunc(ctx)
 	}
 	return nil
 }
 
-func (m *MockPgxConn) Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error) {
+func (m MockPgxConn) Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error) {
 	if m.ExecFunc != nil {
 		return m.ExecFunc(ctx, sql, arguments...)
 	}
@@ -765,20 +773,49 @@ func TestListener_RapidStartStopCycles(t *testing.T) {
 	listenerMu.Unlock()
 }
 
-// Test listen() function
+// Test listen() function.
+// Register a subscription then wait and validate the notification.
 func TestListen(t *testing.T) {
 	listenCtx, listenCancel := context.WithCancel(context.Background())
 
+	// Mock the database connection
+	mockConn := MockPgxConn{
+		WaitForNotificationFunc: func(ctx context.Context) (*pgconn.Notification, error) {
+			notification := &pgconn.Notification{
+				Channel: "search_resources_notify",
+				Payload: `{"uid":"test-123","operation":"CREATE","timestamp":"2024-01-01T00:00:00Z"}`,
+			}
+			return notification, nil
+		},
+	}
+
+	// Subscription to test event forwarding.
+	subscription := &Subscription{
+		ID:      "test-subscription-1",
+		Channel: make(chan *model.Event, 100),
+		Context: listenCtx,
+	}
+
+	// Listener with mocked database connection and subscription.
 	listener := &Listener{
 		ctx:           listenCtx,
 		cancel:        listenCancel,
-		started:       false,
-		subscriptions: make(map[string]*Subscription),
+		started:       true,
+		subscriptions: map[string]*Subscription{"test-subscription-1": subscription},
+		conn:          mockConn,
 	}
 
-	// Start the listener
+	// Start the listener and wait for the notification.
 	go listener.listen()
 	time.Sleep(50 * time.Millisecond)
+
+	notification := <-subscription.Channel
+
+	// Verify the notification payload.
+	assert.Equal(t, "test-123", notification.UID, "UID should match")
+	assert.Equal(t, "CREATE", notification.Operation, "Operation should match")
+	assert.Equal(t, "2024-01-01T00:00:00Z", notification.Timestamp, "Timestamp should match")
+	assert.Nil(t, notification.OldData, "OldData should be nil")
 
 	// Cancel the context
 	listenCancel()
@@ -786,7 +823,7 @@ func TestListen(t *testing.T) {
 	assert.Nil(t, listenerInstance, "Listener instance should be nil")
 }
 
-// Test listen() function with cancelled context
+// Test listen() function with cancelled context.
 func TestListen_withCancelledContext(t *testing.T) {
 	listenCtx, listenCancel := context.WithCancel(context.Background())
 
@@ -803,6 +840,31 @@ func TestListen_withCancelledContext(t *testing.T) {
 
 	// Start the listener
 	go listener.listen()
+	time.Sleep(50 * time.Millisecond)
+
+	assert.Nil(t, listenerInstance, "Listener instance should be nil")
+}
+
+// Test listen() function with nil connection.
+func TestListen_withNilConnection(t *testing.T) {
+	listenCtx, listenCancel := context.WithCancel(context.Background())
+
+	listener := &Listener{
+		ctx:           listenCtx,
+		cancel:        listenCancel,
+		started:       false,
+		subscriptions: make(map[string]*Subscription),
+		conn:          nil,
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	assert.Nil(t, listenerInstance, "Listener instance should be nil")
+
+	// Start the listener
+	go listener.listen()
+	time.Sleep(50 * time.Millisecond)
+
+	listenCancel()
 	time.Sleep(50 * time.Millisecond)
 
 	assert.Nil(t, listenerInstance, "Listener instance should be nil")

@@ -9,11 +9,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"k8s.io/klog/v2"
 )
+
+type MockPgxConnIface interface {
+	WaitForNotification(ctx context.Context) (*pgconn.Notification, error)
+	Close(ctx context.Context) error
+	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
+}
 
 const (
 	channelName = "search_resources_notify"
@@ -35,7 +42,7 @@ type Subscription struct {
 type Listener struct {
 	mu            sync.RWMutex
 	subscriptions map[string]*Subscription
-	conn          *pgx.Conn
+	conn          MockPgxConnIface //pgxmock.PgxConnIface
 	ctx           context.Context
 	cancel        context.CancelFunc
 	started       bool
@@ -132,6 +139,9 @@ func (l *Listener) Start() error {
 // connect establishes a dedicated connection to Postgres for LISTEN.
 // Does not use the pgxpool connection pool.
 func (l *Listener) connect() error {
+	// if l.conn != nil { // Needed to mock the connection in the tests
+	// 	return nil
+	// }
 	cfg := config.Cfg
 	dbConnString := fmt.Sprint(
 		"host=", cfg.DBHost,
