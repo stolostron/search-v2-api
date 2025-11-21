@@ -77,3 +77,20 @@ func TestRequestTimeoutReturnsUnavailableIfContextTimeout(t *testing.T) {
 	assert.Equal(t, body.String(), "") // unavailable because context cancellation, not because timeout handler
 	assert.Equal(t, rr.Code, http.StatusServiceUnavailable)
 }
+
+// Test middleware is skipped for WebSocket upgrades.
+func TestTimeoutMiddleware_SkipsWebSocketUpgrades(t *testing.T) {
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// no-op
+	})
+	handler := TimeoutHandler(5 * time.Millisecond)
+
+	req := httptest.NewRequest("GET", "/searchapi/graphql", nil)
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Connection", "Upgrade")
+	res := httptest.NewRecorder()
+
+	handler(nextHandler).ServeHTTP(res, req)
+
+	assert.Equal(t, http.StatusOK, res.Code)
+}
