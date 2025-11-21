@@ -4,6 +4,7 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -799,7 +800,6 @@ func TestListen(t *testing.T) {
 
 	// Start the listener and wait for the notification.
 	go listener.listen()
-	time.Sleep(50 * time.Millisecond)
 
 	notification := <-subscription.Channel
 
@@ -811,7 +811,7 @@ func TestListen(t *testing.T) {
 
 	// Cancel the context
 	listenCancel()
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
 	assert.Nil(t, listenerInstance, "Listener instance should be nil")
 }
 
@@ -827,12 +827,11 @@ func TestListen_withCancelledContext(t *testing.T) {
 	}
 	// Cancel the context before starting the listener
 	listenCancel()
-	time.Sleep(50 * time.Millisecond)
-	assert.Nil(t, listenerInstance, "Listener instance should be nil")
+	time.Sleep(5 * time.Millisecond) // Wait for context cancellation to propagate.
 
 	// Start the listener
-	go listener.listen()
-	time.Sleep(50 * time.Millisecond)
+	listener.listen()
+	time.Sleep(5 * time.Millisecond) // Wait for reconnect to happen.
 
 	assert.Nil(t, listenerInstance, "Listener instance should be nil")
 }
@@ -849,15 +848,115 @@ func TestListen_withNilConnection(t *testing.T) {
 		conn:          nil,
 	}
 
-	time.Sleep(50 * time.Millisecond)
-	assert.Nil(t, listenerInstance, "Listener instance should be nil")
-
 	// Start the listener
 	go listener.listen()
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(5 * time.Millisecond) // Wait for reconnect to happen.
 
 	listenCancel()
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(5 * time.Millisecond) // Wait for context cancellation to propagate.
 
 	assert.Nil(t, listenerInstance, "Listener instance should be nil")
+}
+
+func TestListener_handleNotificationError(t *testing.T) {
+	listenCtx, listenCancel := context.WithCancel(context.Background())
+	defer listenCancel()
+
+	// Mock the database connection
+	notificationCalled := false
+	mockConn := MockPgxConn{
+		WaitForNotificationFunc: func(ctx context.Context) (*pgconn.Notification, error) {
+			notification := &pgconn.Notification{}
+			if !notificationCalled {
+				return notification, fmt.Errorf("test error")
+			}
+			return notification, nil
+		},
+	}
+
+	listener := &Listener{
+		ctx:           listenCtx,
+		cancel:        listenCancel,
+		started:       false,
+		subscriptions: make(map[string]*Subscription),
+		conn:          mockConn,
+	}
+
+	go listener.listen()
+	time.Sleep(5 * time.Millisecond) // Wait for reconnect to happen.
+
+	assert.Nil(t, listenerInstance, "Listener instance should be nil")
+}
+
+func TestListener_handleBadNotificationPayload(t *testing.T) {
+	listenCtx, listenCancel := context.WithCancel(context.Background())
+	defer listenCancel()
+
+	// Mock the database connection
+	notificationCalled := false
+	goodPayload := `{"uid":"test-123","operation":"CREATE","timestamp":"2024-01-01T00:00:00Z"}`
+	badPayload := "this is a bad JSON payload"
+	mockConn := MockPgxConn{
+		WaitForNotificationFunc: func(ctx context.Context) (*pgconn.Notification, error) {
+			if !notificationCalled {
+				return &pgconn.Notification{
+					Channel: "search_resources_notify",
+					Payload: badPayload,
+				}, nil
+			}
+			return &pgconn.Notification{
+				Channel: "search_resources_notify",
+				Payload: goodPayload,
+			}, nil
+		},
+	}
+	listener := &Listener{
+		ctx:           listenCtx,
+		cancel:        listenCancel,
+		started:       false,
+		subscriptions: make(map[string]*Subscription),
+		conn:          mockConn,
+	}
+	go listener.listen()
+
+	assert.Nil(t, listenerInstance, "Listener instance should be nil")
+}
+
+func TestListener_handleErrorClosingConnection(t *testing.T) {
+	listenCtx, listenCancel := context.WithCancel(context.Background())
+
+	// Mock the database connection
+	mockConn := MockPgxConn{
+		CloseFunc: func(ctx context.Context) error {
+			return fmt.Errorf("test error")
+		},
+	}
+	listener := &Listener{
+		ctx:           listenCtx,
+		cancel:        listenCancel,
+		started:       false,
+		subscriptions: make(map[string]*Subscription),
+		conn:          mockConn,
+	}
+	go listener.listen()
+	listenCancel()
+
+	assert.Nil(t, listenerInstance, "Listener instance should be nil")
+	assert.Error(t, listener.conn.Close(listenCtx), "Should return error when closing connection")
+}
+
+func TestListener_handleConnectionError(t *testing.T) {
+	listener := &Listener{
+		ctx: context.Background(),
+		mu:  sync.RWMutex{},
+		conn: MockPgxConn{
+			CloseFunc: func(ctx context.Context) error {
+				return fmt.Errorf("test error")
+			},
+		},
+	}
+
+	listener.handleConnectionError()
+
+	assert.Nil(t, listener.conn, "Connection should be nil")
 }
