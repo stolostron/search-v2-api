@@ -35,13 +35,14 @@ lint: ## Run lint and gosec tools.
 
 .PHONY: test
 test: ## Run unit tests.
-	go test ./... -v -coverprofile cover.out
+	go test ./... -failfast
 
 .PHONY: test-race
 test-race: ## Run unit tests with race check
 	go test -race ./... -v -coverprofile cover.out
 
-coverage: test ## Run unit tests and show code coverage.
+coverage: ## Run unit tests and show code coverage.
+	go test ./... -failfast -v -coverprofile cover.out
 	go tool cover -html=cover.out -o=cover.html
 	open cover.html
 
