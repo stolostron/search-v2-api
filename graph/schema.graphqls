@@ -13,12 +13,6 @@ Subscriptions implemented by the Search Query API.
 """
 type Subscription {
   """
-  This subscription is experimental and must not be used by clients at this time.
-  Returns a stream of `SearchResult` objects.
-  """
-  experimentalSearch(input: [SearchInput]): [SearchResult]
-  
-  """
   Watch changes to the data in the search index. An event is generated for each change 
   matching the input filters. User's permissions (RBAC) are applied to each event resource.
   Events are generated from the search index and don't match the changes on Kubernetes. 

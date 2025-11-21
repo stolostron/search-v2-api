@@ -41,11 +41,6 @@ func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) 
 	return resolver.Messages(ctx)
 }
 
-// ExperimentalSearch is the resolver for the experimentalSearch field.
-func (r *subscriptionResolver) ExperimentalSearch(ctx context.Context, input []*model.SearchInput) (<-chan []*resolver.SearchResult, error) {
-	return resolver.SearchSubscription(ctx, input)
-}
-
 // Watch is the resolver for the watch field.
 func (r *subscriptionResolver) Watch(ctx context.Context, input *model.SearchInput) (<-chan *model.Event, error) {
 	klog.V(3).Infoln("Received watch subscription")
