@@ -139,9 +139,6 @@ func (l *Listener) Start() error {
 // connect establishes a dedicated connection to Postgres for LISTEN.
 // Does not use the pgxpool connection pool.
 func (l *Listener) connect() error {
-	// if l.conn != nil { // Needed to mock the connection in the tests
-	// 	return nil
-	// }
 	cfg := config.Cfg
 	dbConnString := fmt.Sprint(
 		"host=", cfg.DBHost,
