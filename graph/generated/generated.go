@@ -81,8 +81,7 @@ type ComplexityRoot struct {
 	}
 
 	Subscription struct {
-		ExperimentalSearch func(childComplexity int, input []*model.SearchInput) int
-		Watch              func(childComplexity int, input *model.SearchInput) int
+		Watch func(childComplexity int, input *model.SearchInput) int
 	}
 }
 
@@ -93,7 +92,6 @@ type QueryResolver interface {
 	Messages(ctx context.Context) ([]*model.Message, error)
 }
 type SubscriptionResolver interface {
-	ExperimentalSearch(ctx context.Context, input []*model.SearchInput) (<-chan []*resolver.SearchResult, error)
 	Watch(ctx context.Context, input *model.SearchInput) (<-chan *model.Event, error)
 }
 
@@ -244,17 +242,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.SearchResult.Related(childComplexity), true
 
-	case "Subscription.experimentalSearch":
-		if e.complexity.Subscription.ExperimentalSearch == nil {
-			break
-		}
-
-		args, err := ec.field_Subscription_experimentalSearch_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.complexity.Subscription.ExperimentalSearch(childComplexity, args["input"].([]*model.SearchInput)), true
 	case "Subscription.watch":
 		if e.complexity.Subscription.Watch == nil {
 			break
@@ -390,12 +377,6 @@ schema {
 Subscriptions implemented by the Search Query API.
 """
 type Subscription {
-  """
-  This subscription is experimental and must not be used by clients at this time.
-  Returns a stream of ` + "`" + `SearchResult` + "`" + ` objects.
-  """
-  experimentalSearch(input: [SearchInput]): [SearchResult]
-  
   """
   Watch changes to the data in the search index. An event is generated for each change 
   matching the input filters. User's permissions (RBAC) are applied to each event resource.
@@ -635,17 +616,6 @@ func (ec *executionContext) field_Query_searchSchema_args(ctx context.Context, r
 }
 
 func (ec *executionContext) field_Query_search_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalOSearchInput2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋgraphᚋmodelᚐSearchInput)
-	if err != nil {
-		return nil, err
-	}
-	args["input"] = arg0
-	return args, nil
-}
-
-func (ec *executionContext) field_Subscription_experimentalSearch_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalOSearchInput2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋgraphᚋmodelᚐSearchInput)
@@ -1405,55 +1375,6 @@ func (ec *executionContext) fieldContext_SearchResult_related(_ context.Context,
 			}
 			return nil, fmt.Errorf("no field named %q was found under type SearchRelatedResult", field.Name)
 		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Subscription_experimentalSearch(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
-	return graphql.ResolveFieldStream(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Subscription_experimentalSearch,
-		func(ctx context.Context) (any, error) {
-			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Subscription().ExperimentalSearch(ctx, fc.Args["input"].([]*model.SearchInput))
-		},
-		nil,
-		ec.marshalOSearchResult2ᚕᚖgithubᚗcomᚋstolostronᚋsearchᚑv2ᚑapiᚋpkgᚋresolverᚐSearchResult,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_Subscription_experimentalSearch(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Subscription",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "count":
-				return ec.fieldContext_SearchResult_count(ctx, field)
-			case "items":
-				return ec.fieldContext_SearchResult_items(ctx, field)
-			case "related":
-				return ec.fieldContext_SearchResult_related(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type SearchResult", field.Name)
-		},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = ec.Recover(ctx, r)
-			ec.Error(ctx, err)
-		}
-	}()
-	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Subscription_experimentalSearch_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
-		ec.Error(ctx, err)
-		return fc, err
 	}
 	return fc, nil
 }
@@ -3396,8 +3317,6 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 	}
 
 	switch fields[0].Name {
-	case "experimentalSearch":
-		return ec._Subscription_experimentalSearch(ctx, fields[0])
 	case "watch":
 		return ec._Subscription_watch(ctx, fields[0])
 	default:
