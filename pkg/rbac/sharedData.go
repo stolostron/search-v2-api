@@ -137,7 +137,7 @@ func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[str
 }
 
 func (shared *SharedData) PopulateSharedCache(ctx context.Context) {
-	defer metrics.SlowLog("PopulateSharedCache", 200*time.Millisecond)()
+	defer metrics.SlowLog("PopulateSharedCache", 0)()
 	if shared.isValid() { // if all cache is valid we use cache data
 		klog.V(5).Info("Using shared data from cache.")
 		return
