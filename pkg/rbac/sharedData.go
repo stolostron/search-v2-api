@@ -156,7 +156,7 @@ func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[str
 }
 
 func (shared *SharedData) PopulateSharedCache(ctx context.Context) {
-	defer metrics.SlowLog("PopulateSharedCache", 200*time.Millisecond)()
+	defer metrics.SlowLog("PopulateSharedCache", 0)()
 	if shared.isValid() { // if all cache is valid we use cache data
 		klog.V(5).Info("Using shared data from cache.")
 		return
@@ -209,7 +209,7 @@ func (shared *SharedData) isValid() bool {
 // Get the list of resources in the database where namespace field is null.
 // Equivalent to: `oc api-resources -o wide | grep false | grep watch | grep list`
 func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
-	defer metrics.SlowLog("SharedData::getClusterScopedResources", 100*time.Millisecond)()
+	defer metrics.SlowLog("SharedData::getClusterScopedResources", 0)()
 	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
 	shared.csrCache.lock.Lock()
 	defer shared.csrCache.lock.Unlock()

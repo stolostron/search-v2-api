@@ -234,7 +234,7 @@ func (user *UserDataCache) isValid() bool {
 // Get cluster-scoped resources the user is authorized to list.
 // Equivalent to: oc auth can-i list <resource> --as=<user>
 func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache *Cache) (*UserDataCache, error) {
-	defer metrics.SlowLog("UserDataCache::getClusterScopedResources", 150*time.Millisecond)()
+	defer metrics.SlowLog("UserDataCache::getClusterScopedResources", 0)()
 
 	user.csrCache.err = nil
 	user.csrCache.lock.Lock()
@@ -414,7 +414,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 
 // Equivalent to: oc auth can-i --list -n <iterate-each-namespace>
 func (user *UserDataCache) getNamespacedResources(ctx context.Context, cache *Cache) (*UserDataCache, error) {
-	defer metrics.SlowLog("UserDataCache::getNamespacedResources", 250*time.Millisecond)()
+	defer metrics.SlowLog("UserDataCache::getNamespacedResources", 0)()
 
 	// Lock the cache
 	user.nsrCache.lock.Lock()
