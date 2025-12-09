@@ -41,6 +41,16 @@ func (r *queryResolver) Messages(ctx context.Context) ([]*model.Message, error) 
 	return resolver.Messages(ctx)
 }
 
+// HasNextPage is the resolver for the hasNextPage field.
+func (r *searchResultResolver) HasNextPage(ctx context.Context, obj *resolver.SearchResult) (*bool, error) {
+	return obj.HasNextPage()
+}
+
+// HasPreviousPage is the resolver for the hasPreviousPage field.
+func (r *searchResultResolver) HasPreviousPage(ctx context.Context, obj *resolver.SearchResult) (*bool, error) {
+	return obj.HasPreviousPage()
+}
+
 // Watch is the resolver for the watch field.
 func (r *subscriptionResolver) Watch(ctx context.Context, input *model.SearchInput) (<-chan *model.Event, error) {
 	klog.V(3).Infoln("Received watch subscription")
@@ -50,8 +60,12 @@ func (r *subscriptionResolver) Watch(ctx context.Context, input *model.SearchInp
 // Query returns generated.QueryResolver implementation.
 func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 
+// SearchResult returns generated.SearchResultResolver implementation.
+func (r *Resolver) SearchResult() generated.SearchResultResolver { return &searchResultResolver{r} }
+
 // Subscription returns generated.SubscriptionResolver implementation.
 func (r *Resolver) Subscription() generated.SubscriptionResolver { return &subscriptionResolver{r} }
 
 type queryResolver struct{ *Resolver }
+type searchResultResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }

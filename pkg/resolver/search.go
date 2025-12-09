@@ -4,6 +4,7 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -121,6 +122,65 @@ func (s *SearchResult) Items() ([]map[string]interface{}, error) {
 	return r, e
 }
 
+// HasNextPage returns true if there are more results available after the current page.
+// Calculated using: (offset + limit) < count
+func (s *SearchResult) HasNextPage() (*bool, error) {
+	if !s.matchesManagedHubFilter() {
+		result := false
+		return &result, nil
+	}
+
+	// Get the total count
+	count, err := s.Count()
+	if err != nil {
+		return nil, err
+	}
+
+	// Get offset and limit from input
+	offset := 0
+	if s.input.Offset != nil {
+		offset = *s.input.Offset
+	}
+
+	// Use setLimit() which safely handles limit conversion
+	limit := int(s.setLimit()) // #nosec G115 - setLimit() caps at MaxUint32 which fits in int
+
+	// Calculate if there's a next page
+	hasNext := (offset + limit) < count
+	return &hasNext, nil
+}
+
+// HasPreviousPage returns true if there are results available before the current page.
+// Calculated using: offset > 0 AND count > 0
+func (s *SearchResult) HasPreviousPage() (*bool, error) {
+	if !s.matchesManagedHubFilter() {
+		result := false
+		return &result, nil
+	}
+
+	// Get the total count to check if there are any results
+	count, err := s.Count()
+	if err != nil {
+		return nil, err
+	}
+
+	// If there are no results, there can't be a previous page
+	if count == 0 {
+		result := false
+		return &result, nil
+	}
+
+	// Get offset from input
+	offset := 0
+	if s.input.Offset != nil {
+		offset = *s.input.Offset
+	}
+
+	// Calculate if there's a previous page
+	hasPrev := offset > 0
+	return &hasPrev, nil
+}
+
 func (s *SearchResult) Related(ctx context.Context) ([]SearchRelatedResult, error) {
 	var r []SearchRelatedResult
 	if !s.matchesManagedHubFilter() { // if current hub is not part of managedHub filter, stop search
@@ -192,7 +252,19 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		} else if uid {
 			selectDs = ds.Select("uid")
 		} else {
-			selectDs = ds.SelectDistinct("uid", "cluster", "data")
+			// For SELECT DISTINCT with ORDER BY, we need to include the order expression in SELECT
+			// to satisfy PostgreSQL's requirement: "ORDER BY expressions must appear in select list"
+			if s.input.OrderBy != nil && *s.input.OrderBy != "" {
+				orderProperty := s.extractOrderByProperty()
+				if orderProperty != "" {
+					// Include the order field in the SELECT to make it compatible with DISTINCT
+					selectDs = ds.SelectDistinct("uid", "cluster", "data", goqu.L("data->>?", orderProperty))
+				} else {
+					selectDs = ds.SelectDistinct("uid", "cluster", "data")
+				}
+			} else {
+				selectDs = ds.SelectDistinct("uid", "cluster", "data")
+			}
 		}
 
 		sql, _, err = selectDs.Where(whereDs...).ToSQL() // use original query
@@ -228,12 +300,40 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 		limit = s.setLimit()
 	}
 
-	// Get the query
-	if limit != 0 {
-		sql, params, err = selectDs.Where(whereDs...).Limit(limit).ToSQL()
-	} else {
-		sql, params, err = selectDs.Where(whereDs...).ToSQL()
+	// Build query with WHERE clause
+	queryDs := selectDs.Where(whereDs...)
+
+	// ORDER BY CLAUSE
+	if !count && s.input.OrderBy != nil && *s.input.OrderBy != "" {
+		queryDs, err = s.applyOrderBy(queryDs)
+		if err != nil {
+			s.checkErrorBuildingQuery(err, ErrorMsg)
+			return err
+		}
 	}
+
+	// OFFSET CLAUSE
+	if !count && s.input.Offset != nil {
+		if *s.input.Offset < 0 {
+			err := fmt.Errorf("invalid offset: %d. Offset must be non-negative", *s.input.Offset)
+			s.checkErrorBuildingQuery(err, ErrorMsg)
+			return err
+		}
+		if *s.input.Offset > 0 {
+			// Safe conversion: already checked > 0, so non-negative
+			offset := uint(*s.input.Offset) // #nosec G115 - Validated positive via > 0 check
+			queryDs = queryDs.Offset(offset)
+		}
+		// If offset == 0, no need to apply OFFSET clause (equivalent to no offset)
+	}
+
+	// LIMIT CLAUSE
+	if limit != 0 {
+		queryDs = queryDs.Limit(limit)
+	}
+
+	// Get the query
+	sql, params, err = queryDs.ToSQL()
 	if err != nil {
 		s.checkErrorBuildingQuery(err, ErrorMsg)
 	}
@@ -241,6 +341,77 @@ func (s *SearchResult) buildSearchQuery(ctx context.Context, count bool, uid boo
 	s.query = sql
 	s.params = params
 	return err
+}
+
+// extractOrderByProperty extracts just the property name from the orderBy string.
+// Returns empty string if orderBy is nil or invalid.
+// Handles edge cases like leading/trailing whitespace: " name asc" -> "name"
+func (s *SearchResult) extractOrderByProperty() string {
+	if s.input.OrderBy == nil || *s.input.OrderBy == "" {
+		return ""
+	}
+
+	orderByStr := strings.TrimSpace(*s.input.OrderBy)
+	if orderByStr == "" {
+		return "" // Was only whitespace
+	}
+
+	// Parse to get the property name (first part before space)
+	for i := 0; i < len(orderByStr); i++ {
+		if orderByStr[i] == ' ' {
+			return orderByStr[:i]
+		}
+	}
+	// No space found, entire string is the property
+	return orderByStr
+}
+
+// applyOrderBy parses the orderBy string and applies it to the query.
+// Expected format: "property_name asc" or "property_name desc"
+// Example: "name desc" or "created asc"
+func (s *SearchResult) applyOrderBy(queryDs *goqu.SelectDataset) (*goqu.SelectDataset, error) {
+	if s.input.OrderBy == nil || *s.input.OrderBy == "" {
+		return queryDs, nil
+	}
+
+	orderByStr := *s.input.OrderBy
+	klog.V(5).Infof("Applying ORDER BY: %s", orderByStr)
+
+	// Parse the orderBy string (format: "property [asc|desc]")
+	// strings.Fields splits by whitespace and removes empty parts
+	parts := strings.Fields(orderByStr)
+
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("invalid orderBy format: '%s'. Expected 'property [asc|desc]'", orderByStr)
+	}
+
+	property := parts[0]
+	direction := "asc" // Default direction
+
+	// Validate direction if provided
+	if len(parts) > 1 {
+		dirLower := strings.ToLower(parts[1])
+		if dirLower != "asc" && dirLower != "desc" {
+			return nil, fmt.Errorf("invalid orderBy direction: '%s'. Expected 'asc' or 'desc'", parts[1])
+		}
+		direction = dirLower
+	}
+
+	// Reject extra parts beyond property and direction
+	if len(parts) > 2 {
+		return nil, fmt.Errorf(
+			"invalid orderBy format: '%s'. Expected 'property [asc|desc]', but got %d parts",
+			orderByStr, len(parts))
+	}
+
+	// Build the ORDER BY expression
+	// For JSON fields, use data->>'property'
+	orderExp := goqu.L("data->>?", property)
+
+	if direction == "desc" {
+		return queryDs.Order(orderExp.Desc()), nil
+	}
+	return queryDs.Order(orderExp.Asc()), nil
 }
 
 func (s *SearchResult) checkErrorBuildingQuery(err error, logMessage string) {
@@ -297,7 +468,20 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 		var uid string
 		var cluster string
 		var data map[string]interface{}
-		err = rows.Scan(&uid, &cluster, &data)
+
+		// Check if the query actually contains the order field in SELECT by looking at the query string
+		// The order field is only added for SELECT DISTINCT queries (main items),
+		// NOT for related items queries which use regular SELECT
+		hasOrderFieldInQuery := s.input.OrderBy != nil && *s.input.OrderBy != "" &&
+			strings.Contains(s.query, "data->>'")
+
+		if hasOrderFieldInQuery {
+			var orderValue interface{} // Scan the order column but don't use it
+			err = rows.Scan(&uid, &cluster, &data, &orderValue)
+		} else {
+			err = rows.Scan(&uid, &cluster, &data)
+		}
+
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), s.query)
 		}

@@ -60,6 +60,14 @@ type SearchInput struct {
 	// **Default is** 10,000
 	// A value of -1 will remove the limit. Use carefully because it may impact the service.
 	Limit *int `json:"limit,omitempty"`
+	// Number of results to skip before returning results (for pagination).
+	// Used in combination with limit to implement pagination.
+	// **Default is** 0
+	Offset *int `json:"offset,omitempty"`
+	// Order results by a property and direction.
+	// Format: "property_name asc" or "property_name desc"
+	// Example: "name desc" or "created asc"
+	OrderBy *string `json:"orderBy,omitempty"`
 	// Filter relationships to the specified kinds.
 	// If empty, all relationships will be included.
 	// This filter is used with the 'related' field on SearchResult.

@@ -40,6 +40,7 @@ type Config struct {
 
 type ResolverRoot interface {
 	Query() QueryResolver
+	SearchResult() SearchResultResolver
 	Subscription() SubscriptionResolver
 }
 
@@ -75,9 +76,11 @@ type ComplexityRoot struct {
 	}
 
 	SearchResult struct {
-		Count   func(childComplexity int) int
-		Items   func(childComplexity int) int
-		Related func(childComplexity int) int
+		Count           func(childComplexity int) int
+		HasNextPage     func(childComplexity int) int
+		HasPreviousPage func(childComplexity int) int
+		Items           func(childComplexity int) int
+		Related         func(childComplexity int) int
 	}
 
 	Subscription struct {
@@ -90,6 +93,10 @@ type QueryResolver interface {
 	SearchComplete(ctx context.Context, property string, query *model.SearchInput, limit *int) ([]*string, error)
 	SearchSchema(ctx context.Context, query *model.SearchInput) (map[string]any, error)
 	Messages(ctx context.Context) ([]*model.Message, error)
+}
+type SearchResultResolver interface {
+	HasNextPage(ctx context.Context, obj *resolver.SearchResult) (*bool, error)
+	HasPreviousPage(ctx context.Context, obj *resolver.SearchResult) (*bool, error)
 }
 type SubscriptionResolver interface {
 	Watch(ctx context.Context, input *model.SearchInput) (<-chan *model.Event, error)
@@ -229,6 +236,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.SearchResult.Count(childComplexity), true
+	case "SearchResult.hasNextPage":
+		if e.complexity.SearchResult.HasNextPage == nil {
+			break
+		}
+
+		return e.complexity.SearchResult.HasNextPage(childComplexity), true
+	case "SearchResult.hasPreviousPage":
+		if e.complexity.SearchResult.HasPreviousPage == nil {
+			break
+		}
+
+		return e.complexity.SearchResult.HasPreviousPage(childComplexity), true
 	case "SearchResult.items":
 		if e.complexity.SearchResult.Items == nil {
 			break
@@ -467,6 +486,20 @@ input SearchInput {
     limit: Int
 
     """
+    Number of results to skip before returning results (for pagination).  
+    Used in combination with limit to implement pagination.  
+    **Default is** 0
+    """
+    offset: Int
+
+    """
+    Order results by a property and direction.  
+    Format: "property_name asc" or "property_name desc"  
+    Example: "name desc" or "created asc"
+    """
+    orderBy: String
+
+    """
     Filter relationships to the specified kinds.  
     If empty, all relationships will be included.  
     This filter is used with the 'related' field on SearchResult.
@@ -518,6 +551,16 @@ type SearchResult {
     For example, if searching for deployments, this will return the related pod resources.
     """
     related: [SearchRelatedResult]
+    """
+    Indicates if there are more results available after the current page.  
+    Calculated using: (offset + limit) < count
+    """
+    hasNextPage: Boolean
+    """
+    Indicates if there are results available before the current page.  
+    Calculated using: offset > 0
+    """
+    hasPreviousPage: Boolean
   }
 
 """
@@ -952,6 +995,10 @@ func (ec *executionContext) fieldContext_Query_search(ctx context.Context, field
 				return ec.fieldContext_SearchResult_items(ctx, field)
 			case "related":
 				return ec.fieldContext_SearchResult_related(ctx, field)
+			case "hasNextPage":
+				return ec.fieldContext_SearchResult_hasNextPage(ctx, field)
+			case "hasPreviousPage":
+				return ec.fieldContext_SearchResult_hasPreviousPage(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type SearchResult", field.Name)
 		},
@@ -1374,6 +1421,64 @@ func (ec *executionContext) fieldContext_SearchResult_related(_ context.Context,
 				return ec.fieldContext_SearchRelatedResult_items(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type SearchRelatedResult", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SearchResult_hasNextPage(ctx context.Context, field graphql.CollectedField, obj *resolver.SearchResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SearchResult_hasNextPage,
+		func(ctx context.Context) (any, error) {
+			return ec.resolvers.SearchResult().HasNextPage(ctx, obj)
+		},
+		nil,
+		ec.marshalOBoolean2ᚖbool,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_SearchResult_hasNextPage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SearchResult",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SearchResult_hasPreviousPage(ctx context.Context, field graphql.CollectedField, obj *resolver.SearchResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SearchResult_hasPreviousPage,
+		func(ctx context.Context) (any, error) {
+			return ec.resolvers.SearchResult().HasPreviousPage(ctx, obj)
+		},
+		nil,
+		ec.marshalOBoolean2ᚖbool,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_SearchResult_hasPreviousPage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SearchResult",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
 		},
 	}
 	return fc, nil
@@ -2919,7 +3024,7 @@ func (ec *executionContext) unmarshalInputSearchInput(ctx context.Context, obj a
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"keywords", "filters", "limit", "relatedKinds"}
+	fieldsInOrder := [...]string{"keywords", "filters", "limit", "offset", "orderBy", "relatedKinds"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -2947,6 +3052,20 @@ func (ec *executionContext) unmarshalInputSearchInput(ctx context.Context, obj a
 				return it, err
 			}
 			it.Limit = data
+		case "offset":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("offset"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Offset = data
+		case "orderBy":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("orderBy"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OrderBy = data
 		case "relatedKinds":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("relatedKinds"))
 			data, err := ec.unmarshalOString2ᚕᚖstring(ctx, v)
@@ -3258,6 +3377,72 @@ func (ec *executionContext) _SearchResult(ctx context.Context, sel ast.Selection
 					}
 				}()
 				res = ec._SearchResult_related(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "hasNextPage":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._SearchResult_hasNextPage(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "hasPreviousPage":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._SearchResult_hasPreviousPage(ctx, field, obj)
 				return res
 			}
 
