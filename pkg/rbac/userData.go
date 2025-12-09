@@ -156,7 +156,9 @@ func (user *UserDataCache) userHasAllAccess(ctx context.Context, cache *Cache) (
 		return false, errors.New(impersonationConfigCreationerror)
 	}
 	// If we have a new set of authorized list for the user reset the previous one
-	if user.userAuthorizedListSSAR(ctx, impersClientSet, "list", "*", "*") {
+
+	// Equivalent to: oc auth can-i '*' '*' -A --as=<user>
+	if user.userAuthorizedListSSAR(ctx, impersClientSet, "*", "*", "*") {
 		user.IsClusterAdmin = true
 
 		user.csrCache.lock.Lock()
