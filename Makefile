@@ -35,7 +35,7 @@ lint: ## Run lint and gosec tools.
 
 .PHONY: test
 test: ## Run unit tests.
-	go test ./... -v -coverprofile cover.out
+	go test ./... -failfast
 
 .PHONY: test-race
 test-race: ## Run unit tests with race check
