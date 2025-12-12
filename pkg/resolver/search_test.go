@@ -1305,3 +1305,1039 @@ func Test_buildRbacWhereClause_fineGrainedRBAC(t *testing.T) {
 	// expectedExpression := `(((data->'apigroup'?'kubevirt.io' AND data->'kind'?|'{"VirtualMachine","VirtualMachineInstance","VirtualMachineInstanceMigration","VirtualMachineInstancePreset","VirtualMachineInstanceReplicaset"}') OR (data->'apigroup'?'clone.kubevirt.io' AND data->'kind'?|'{"VirtualMachineClone"}') OR (data->'apigroup'?'export.kubevirt.io' AND data->'kind'?|'{"VirtualMachineExport"}') OR (data->'apigroup'?'instancetype.kubevirt.io' AND data->'kind'?|'{"VirtualMachineClusterInstancetype","VirtualMachineClusterPreference","VirtualMachineInstancetype","VirtualMachinePreference"}') OR (data->'apigroup'?'migrations.kubevirt.io' AND data->'kind'?|'{"MigrationPolicy"}') OR (data->'apigroup'?'pool.kubevirt.io' AND data->'kind'?|'{"VirtualMachinePool"}') OR (data->'apigroup'?'snapshot.kubevirt.io' AND data->'kind'?|'{"VirtualMachineRestore","VirtualMachineSnapshot","VirtualMachineSnapshotContent"}')) AND (("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1"}'))`
 	// assert.Equal(t, expectedExpression, expressionString)
 }
+
+// Test_ExtractOrderByProperty_WithDirection tests that the property name is correctly
+// extracted from an orderBy string that includes a direction (asc/desc).
+// Scenario: orderBy = "name desc"
+// Expected: Returns "name"
+func Test_ExtractOrderByProperty_WithDirection(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "name desc"
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Execute function
+	property := resolver.extractOrderByProperty()
+	assert.Equal(t, "name", property, "Should extract property name before space")
+}
+
+// Test_ExtractOrderByProperty_WithoutDirection tests property extraction when
+// only the property name is provided without a direction.
+// Scenario: orderBy = "namespace"
+// Expected: Returns "namespace"
+func Test_ExtractOrderByProperty_WithoutDirection(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "namespace"
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Execute function
+	property := resolver.extractOrderByProperty()
+	assert.Equal(t, "namespace", property, "Should return entire string when no space")
+}
+
+// Test_ExtractOrderByProperty_EmptyString tests behavior with empty orderBy string.
+// Scenario: orderBy = ""
+// Expected: Returns empty string
+func Test_ExtractOrderByProperty_EmptyString(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := ""
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Execute function
+	property := resolver.extractOrderByProperty()
+	assert.Equal(t, "", property, "Should return empty string for empty orderBy")
+}
+
+// Test_ExtractOrderByProperty_NilOrderBy tests behavior when orderBy is nil.
+// Scenario: orderBy = nil
+// Expected: Returns empty string
+func Test_ExtractOrderByProperty_NilOrderBy(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: nil,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Execute function
+	property := resolver.extractOrderByProperty()
+	assert.Equal(t, "", property, "Should return empty string for nil orderBy")
+}
+
+// Test_ExtractOrderByProperty_MultipleSpaces tests parsing with multiple spaces
+// between property and direction.
+// Scenario: orderBy = "name  desc" (double space)
+// Expected: Returns "name" (extracts property before first space)
+func Test_ExtractOrderByProperty_MultipleSpaces(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "name  desc" // Double space
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Execute function
+	property := resolver.extractOrderByProperty()
+	assert.Equal(t, "name", property, "Should extract property before first space")
+}
+
+// Test_ExtractOrderByProperty_SpecialCharacters tests property extraction with
+// special characters commonly found in JSON property names.
+// Scenario: orderBy = "app-version asc"
+// Expected: Returns "app-version"
+func Test_ExtractOrderByProperty_SpecialCharacters(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "app-version asc"
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Execute function
+	property := resolver.extractOrderByProperty()
+	assert.Equal(t, "app-version", property, "Should extract property with hyphens")
+}
+
+// Test_ExtractOrderByProperty_LeadingSpace tests behavior when orderBy starts with a space.
+// The function should trim leading/trailing whitespace and extract the property correctly.
+// Scenario: orderBy = " name asc" (leading space)
+// Expected: Returns "name" (whitespace trimmed before parsing)
+func Test_ExtractOrderByProperty_LeadingSpace(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := " name asc" // Leading space
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Execute function
+	property := resolver.extractOrderByProperty()
+	assert.Equal(t, "name", property, "Should trim leading space and extract property name")
+}
+
+// Test_ExtractOrderByProperty_TrailingSpace tests behavior when orderBy ends with a space.
+// The function should trim leading/trailing whitespace.
+// Scenario: orderBy = "name " (trailing space)
+// Expected: Returns "name" (whitespace trimmed)
+func Test_ExtractOrderByProperty_TrailingSpace(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "name " // Trailing space
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Execute function
+	property := resolver.extractOrderByProperty()
+	assert.Equal(t, "name", property, "Should trim trailing space and return property name")
+}
+
+// Test_ExtractOrderByProperty_OnlyWhitespace tests behavior when orderBy contains only whitespace.
+// Scenario: orderBy = "   " (only spaces)
+// Expected: Returns empty string (nothing left after trimming)
+func Test_ExtractOrderByProperty_OnlyWhitespace(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "   " // Only whitespace
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Execute function
+	property := resolver.extractOrderByProperty()
+	assert.Equal(t, "", property, "Should return empty string when orderBy is only whitespace")
+}
+
+// Test_Items_OrderByOnlyWhitespace tests that when orderBy contains only whitespace,
+// an error is returned because it's an invalid format.
+// This tests the else branch in SELECT building and validation in applyOrderBy.
+// Scenario: orderBy = "   " (only whitespace)
+// Expected: Returns error "invalid orderBy format"
+func Test_Items_OrderByOnlyWhitespace(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "   " // Only whitespace
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Execute function - should return error from applyOrderBy validation
+	// Note: line 204 is executed (SELECT without order column) before validation fails
+	items, err := resolver.Items()
+	assert.NotNil(t, err, "Should return error for whitespace-only orderBy")
+	assert.Contains(t, err.Error(), "invalid orderBy format", "Error should mention invalid format")
+	assert.Nil(t, items, "Items should be nil when error occurs")
+}
+
+// Test_Items_InvalidOrderByDirection tests that when orderBy has an invalid direction,
+// an error is returned through the full query building path.
+// This tests the error handling path in buildSearchQuery when applyOrderBy returns an error.
+// Scenario: orderBy = "name invaliddir" (invalid direction)
+// Expected: Returns error "invalid orderBy direction"
+func Test_Items_InvalidOrderByDirection(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "name invaliddir" // Invalid direction
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Execute function - should return error from applyOrderBy validation
+	items, err := resolver.Items()
+	assert.NotNil(t, err, "Should return error for invalid orderBy direction")
+	assert.Contains(t, err.Error(), "invalid orderBy direction", "Error should mention invalid direction")
+	assert.Nil(t, items, "Items should be nil when error occurs")
+}
+
+// Test_ApplyOrderBy_AscendingOrder validates that the ORDER BY clause is correctly
+// applied with ascending sort direction.
+// Scenario: orderBy = "name asc"
+// Expected: SQL contains "ORDER BY ... ASC"
+func Test_ApplyOrderBy_AscendingOrder(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "name asc"
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Create a base query dataset
+	schemaTable := goqu.S("search").Table("resources")
+	ds := goqu.From(schemaTable).Select("uid", "cluster", "data")
+
+	// Apply orderBy
+	result, err := resolver.applyOrderBy(ds)
+	assert.Nil(t, err, "Should not return error for valid orderBy")
+
+	// Get the SQL to verify ORDER BY clause
+	sql, _, err := result.ToSQL()
+	assert.Nil(t, err)
+	assert.Contains(t, sql, "ORDER BY", "SQL should contain ORDER BY clause")
+	assert.Contains(t, sql, "ASC", "SQL should contain ASC direction")
+}
+
+// Test_ApplyOrderBy_DescendingOrder validates that the ORDER BY clause is correctly
+// applied with descending sort direction.
+// Scenario: orderBy = "created desc"
+// Expected: SQL contains "ORDER BY ... DESC"
+func Test_ApplyOrderBy_DescendingOrder(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "created desc"
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Create a base query dataset
+	schemaTable := goqu.S("search").Table("resources")
+	ds := goqu.From(schemaTable).Select("uid", "cluster", "data")
+
+	// Apply orderBy
+	result, err := resolver.applyOrderBy(ds)
+	assert.Nil(t, err, "Should not return error for valid orderBy")
+
+	// Get the SQL to verify ORDER BY clause
+	sql, _, err := result.ToSQL()
+	assert.Nil(t, err)
+	assert.Contains(t, sql, "ORDER BY", "SQL should contain ORDER BY clause")
+	assert.Contains(t, sql, "DESC", "SQL should contain DESC direction")
+}
+
+// Test_ApplyOrderBy_DefaultDirection validates that when no direction is specified,
+// the system defaults to ascending order.
+// Scenario: orderBy = "namespace" (no direction specified)
+// Expected: SQL contains "ORDER BY ... ASC" (defaults to ascending)
+func Test_ApplyOrderBy_DefaultDirection(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "namespace" // No direction specified, should default to asc
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Create a base query dataset
+	schemaTable := goqu.S("search").Table("resources")
+	ds := goqu.From(schemaTable).Select("uid", "cluster", "data")
+
+	// Apply orderBy
+	result, err := resolver.applyOrderBy(ds)
+	assert.Nil(t, err, "Should not return error for valid orderBy")
+
+	// Get the SQL to verify ORDER BY clause defaults to ASC
+	sql, _, err := result.ToSQL()
+	assert.Nil(t, err)
+	assert.Contains(t, sql, "ORDER BY", "SQL should contain ORDER BY clause")
+	assert.Contains(t, sql, "ASC", "SQL should default to ASC when no direction specified")
+}
+
+// Test_ApplyOrderBy_EmptyString validates that an empty orderBy string
+// does not add any ORDER BY clause to the query.
+// Scenario: orderBy = ""
+// Expected: SQL does NOT contain "ORDER BY"
+func Test_ApplyOrderBy_EmptyString(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := ""
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Create a base query dataset
+	schemaTable := goqu.S("search").Table("resources")
+	ds := goqu.From(schemaTable).Select("uid", "cluster", "data")
+
+	// Apply orderBy
+	result, err := resolver.applyOrderBy(ds)
+	assert.Nil(t, err, "Should not return error for valid orderBy")
+
+	// Get the SQL to verify no ORDER BY clause is added
+	sql, _, err := result.ToSQL()
+	assert.Nil(t, err)
+	assert.NotContains(t, sql, "ORDER BY", "SQL should not contain ORDER BY clause when orderBy is empty")
+}
+
+// Test_ApplyOrderBy_OnlyWhitespace validates that orderBy with only whitespace returns an error.
+// This tests the validation when strings.Fields returns empty slice.
+// Scenario: orderBy = "   " (only spaces)
+// Expected: Returns error "invalid orderBy format"
+func Test_ApplyOrderBy_OnlyWhitespace(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "   " // Only whitespace
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Create a base query dataset
+	schemaTable := goqu.S("search").Table("resources")
+	ds := goqu.From(schemaTable).Select("uid", "cluster", "data")
+
+	// Apply orderBy - should return error
+	result, err := resolver.applyOrderBy(ds)
+	assert.NotNil(t, err, "Should return error for whitespace-only orderBy")
+	assert.Contains(t, err.Error(), "invalid orderBy format", "Error should mention invalid format")
+	assert.Nil(t, result, "Result should be nil when error occurs")
+}
+
+// Test_ApplyOrderBy_NilOrderBy validates that a nil orderBy parameter
+// does not add any ORDER BY clause to the query.
+// Scenario: orderBy = nil
+// Expected: SQL does NOT contain "ORDER BY"
+func Test_ApplyOrderBy_NilOrderBy(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: nil,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Create a base query dataset
+	schemaTable := goqu.S("search").Table("resources")
+	ds := goqu.From(schemaTable).Select("uid", "cluster", "data")
+
+	// Apply orderBy
+	result, err := resolver.applyOrderBy(ds)
+	assert.Nil(t, err, "Should not return error for valid orderBy")
+
+	// Get the SQL to verify no ORDER BY clause is added
+	sql, _, err := result.ToSQL()
+	assert.Nil(t, err)
+	assert.NotContains(t, sql, "ORDER BY", "SQL should not contain ORDER BY clause when orderBy is nil")
+}
+
+// Test_ApplyOrderBy_InvalidDirection validates that an invalid direction returns an error.
+// Scenario: orderBy = "name descrr" (typo in direction)
+// Expected: Returns error indicating invalid direction
+func Test_ApplyOrderBy_InvalidDirection(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "name descrr" // Invalid direction (typo)
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Create a base query dataset
+	schemaTable := goqu.S("search").Table("resources")
+	ds := goqu.From(schemaTable).Select("uid", "cluster", "data")
+
+	// Apply orderBy
+	_, err := resolver.applyOrderBy(ds)
+	assert.NotNil(t, err, "Should return error for invalid direction")
+	assert.Contains(t, err.Error(), "invalid orderBy direction", "Error should mention invalid direction")
+	assert.Contains(t, err.Error(), "descrr", "Error should mention the invalid value")
+}
+
+// Test_ApplyOrderBy_ExtraValues validates that extra values beyond property and direction return an error.
+// Scenario: orderBy = "name desc extra values" (more than 2 parts)
+// Expected: Returns error indicating too many parts
+func Test_ApplyOrderBy_ExtraValues(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "name desc extra values" // Extra values
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Create a base query dataset
+	schemaTable := goqu.S("search").Table("resources")
+	ds := goqu.From(schemaTable).Select("uid", "cluster", "data")
+
+	// Apply orderBy
+	_, err := resolver.applyOrderBy(ds)
+	assert.NotNil(t, err, "Should return error for extra values")
+	assert.Contains(t, err.Error(), "invalid orderBy format", "Error should mention invalid format")
+	assert.Contains(t, err.Error(), "4 parts", "Error should mention the number of parts found")
+}
+
+// Test_ApplyOrderBy_CaseInsensitiveDirection validates that direction is case-insensitive.
+// Scenario: orderBy = "name DESC" (uppercase), "name AsC" (mixed case)
+// Expected: Both work correctly
+func Test_ApplyOrderBy_CaseInsensitiveDirection(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+
+	// Test uppercase DESC
+	orderByUpper := "name DESC"
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderByUpper,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	schemaTable := goqu.S("search").Table("resources")
+	ds := goqu.From(schemaTable).Select("uid", "cluster", "data")
+	result, err := resolver.applyOrderBy(ds)
+	assert.Nil(t, err, "Should not return error for valid orderBy")
+
+	sql, _, err := result.ToSQL()
+	assert.Nil(t, err)
+	assert.Contains(t, sql, "DESC", "Should handle uppercase DESC")
+
+	// Test mixed case ASC
+	orderByMixed := "name AsC"
+	searchInput2 := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderByMixed,
+	}
+	resolver2, _ := newMockSearchResolver(t, searchInput2, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	ds2 := goqu.From(schemaTable).Select("uid", "cluster", "data")
+	result2, err := resolver2.applyOrderBy(ds2)
+	assert.Nil(t, err, "Should not return error for valid orderBy")
+
+	sql2, _, err2 := result2.ToSQL()
+	assert.Nil(t, err2)
+	assert.Contains(t, sql2, "ASC", "Should handle mixed case AsC")
+}
+
+// Test_BuildSearchQuery_WithOffsetAndOrderBy validates that all pagination parameters
+// (offset, limit, orderBy) are correctly integrated into the SQL query.
+// This is an integration test ensuring all features work together.
+// Scenario: offset 20, limit 10, orderBy "name desc"
+// Expected: SQL contains "OFFSET 20", "LIMIT 10", and "ORDER BY ... DESC"
+func Test_BuildSearchQuery_WithOffsetAndOrderBy(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	offset := 20
+	limit := 10
+	orderBy := "name desc"
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		Offset:  &offset,
+		Limit:   &limit,
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query
+	err := resolver.buildSearchQuery(resolver.context, false, false)
+	assert.Nil(t, err)
+
+	// Verify the query contains OFFSET, LIMIT, and ORDER BY
+	assert.Contains(t, resolver.query, "OFFSET 20", "Query should contain OFFSET clause")
+	assert.Contains(t, resolver.query, "LIMIT 10", "Query should contain LIMIT clause")
+	assert.Contains(t, resolver.query, "ORDER BY", "Query should contain ORDER BY clause")
+	assert.Contains(t, resolver.query, "DESC", "Query should contain DESC direction")
+}
+
+// Test_BuildSearchQuery_WithOnlyOffset validates that offset and limit work correctly
+// without requiring an orderBy parameter.
+// Scenario: offset 50, limit 25, no orderBy
+// Expected: SQL contains "OFFSET 50" and "LIMIT 25" but NOT "ORDER BY"
+func Test_BuildSearchQuery_WithOnlyOffset(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	offset := 50
+	limit := 25
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		Offset:  &offset,
+		Limit:   &limit,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query
+	err := resolver.buildSearchQuery(resolver.context, false, false)
+	assert.Nil(t, err)
+
+	// Verify the query contains OFFSET and LIMIT but not ORDER BY
+	assert.Contains(t, resolver.query, "OFFSET 50", "Query should contain OFFSET clause")
+	assert.Contains(t, resolver.query, "LIMIT 25", "Query should contain LIMIT clause")
+	assert.NotContains(t, resolver.query, "ORDER BY", "Query should not contain ORDER BY when not specified")
+}
+
+// Test_BuildSearchQuery_NegativeOffset validates that negative offset values return an error.
+// Offset must be non-negative (>= 0).
+// Scenario: offset = -50
+// Expected: Returns error indicating invalid offset
+func Test_BuildSearchQuery_NegativeOffset(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	offset := -50
+	limit := 10
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		Offset:  &offset,
+		Limit:   &limit,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query
+	err := resolver.buildSearchQuery(resolver.context, false, false)
+	assert.NotNil(t, err, "Should return error for negative offset")
+	assert.Contains(t, err.Error(), "invalid offset", "Error should mention invalid offset")
+	assert.Contains(t, err.Error(), "-50", "Error should mention the invalid value")
+}
+
+// Test_BuildSearchQuery_ZeroOffset validates that offset=0 is valid but doesn't add OFFSET clause.
+// Zero offset means start from the beginning, which is the default behavior.
+// Scenario: offset = 0
+// Expected: Query builds successfully without OFFSET clause (since it's redundant)
+func Test_BuildSearchQuery_ZeroOffset(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	offset := 0
+	limit := 10
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		Offset:  &offset,
+		Limit:   &limit,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query
+	err := resolver.buildSearchQuery(resolver.context, false, false)
+	assert.Nil(t, err, "Should not return error for offset=0")
+
+	// Verify the query does NOT contain OFFSET (since 0 is redundant)
+	assert.NotContains(t, resolver.query, "OFFSET", "Query should not contain OFFSET clause for offset=0")
+	assert.Contains(t, resolver.query, "LIMIT 10", "Query should contain LIMIT clause")
+}
+
+// Test_BuildSearchQuery_CountIgnoresOffsetAndOrderBy validates that count queries
+// do not include pagination parameters (OFFSET, LIMIT, ORDER BY).
+// This ensures count queries return the total number of matching items, not page-specific counts.
+// Scenario: count query with offset 20, limit 10, orderBy "name desc"
+// Expected: SQL contains "COUNT" but NOT "OFFSET", "LIMIT", or "ORDER BY"
+func Test_BuildSearchQuery_CountIgnoresOffsetAndOrderBy(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	offset := 20
+	limit := 10
+	orderBy := "name desc"
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		Offset:  &offset,
+		Limit:   &limit,
+		OrderBy: &orderBy,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query with count=true
+	err := resolver.buildSearchQuery(resolver.context, true, false)
+	assert.Nil(t, err)
+
+	// Verify the query does NOT contain OFFSET, LIMIT, or ORDER BY for count queries
+	assert.NotContains(t, resolver.query, "OFFSET", "Count query should not contain OFFSET")
+	assert.NotContains(t, resolver.query, "LIMIT", "Count query should not contain LIMIT")
+	assert.NotContains(t, resolver.query, "ORDER BY", "Count query should not contain ORDER BY")
+	assert.Contains(t, resolver.query, "COUNT", "Count query should contain COUNT")
+}
+
+// Test_ResolveItems_WithOrderBy validates that resolveItems correctly handles
+// the extra column in SELECT when orderBy is specified.
+// This tests the fix for PostgreSQL's "SELECT DISTINCT ... ORDER BY" constraint,
+// which requires ORDER BY expressions to appear in the SELECT list.
+// When orderBy is used, we add data->>'property' to SELECT, creating 4 columns instead of 3.
+// The resolveItems function must scan all 4 columns to avoid the error:
+// "number of field descriptions must equal number of destinations"
+// Scenario: Query with orderBy="name asc" and items requested
+// Expected: Items are returned successfully, scanning 4 columns (uid, cluster, data, order field)
+func Test_ResolveItems_WithOrderBy(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "name asc"
+	limit := 10
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+		Limit:   &limit,
+	}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query first
+	err := resolver.buildSearchQuery(resolver.context, false, false)
+	assert.Nil(t, err)
+
+	// Verify the query includes the order field in SELECT
+	assert.Contains(t, resolver.query, "data->>'name'", "Query should include order field in SELECT")
+
+	// Mock the database response with 4 columns (uid, cluster, data, order_field)
+	mockData := []map[string]interface{}{
+		{
+			"uid":     "local-cluster/pod1",
+			"cluster": "local-cluster",
+			"data": map[string]interface{}{
+				"kind":      "Pod",
+				"name":      "pod-alpha",
+				"namespace": "default",
+			},
+			"order_field": "pod-alpha",
+		},
+		{
+			"uid":     "local-cluster/pod2",
+			"cluster": "local-cluster",
+			"data": map[string]interface{}{
+				"kind":      "Pod",
+				"name":      "pod-beta",
+				"namespace": "default",
+			},
+			"order_field": "pod-beta",
+		},
+	}
+
+	mockRows := &MockRows{
+		mockData:      mockData,
+		index:         0,
+		columnHeaders: []string{"uid", "cluster", "data", "order_field"},
+	}
+
+	mockPool.EXPECT().Query(gomock.Any(), gomock.Any(), gomock.Any()).Return(mockRows, nil)
+
+	// Execute resolveItems
+	items, err := resolver.resolveItems()
+	assert.Nil(t, err)
+	assert.NotNil(t, items)
+	assert.Equal(t, 2, len(items), "Should return 2 items")
+
+	// Verify items contain the expected data
+	assert.Equal(t, "Pod", items[0]["kind"])
+	assert.Equal(t, "pod-alpha", items[0]["name"])
+	assert.Equal(t, "local-cluster", items[0]["cluster"])
+
+	assert.Equal(t, "Pod", items[1]["kind"])
+	assert.Equal(t, "pod-beta", items[1]["name"])
+	assert.Equal(t, "local-cluster", items[1]["cluster"])
+}
+
+// Test_ResolveItems_WithOrderBy_NoItems validates that when orderBy is specified
+// but items are NOT requested, the query should NOT include the extra order column.
+// This is important because count-only queries or queries that only request related
+// resources should not be affected by the SELECT DISTINCT constraint.
+// Scenario: Query with orderBy="name asc" but only requesting count (no items)
+// Expected: Query does NOT contain the order field in SELECT (3 columns only)
+func Test_ResolveItems_WithOrderBy_NoItems(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "name asc"
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+	}
+	resolver, mockPool := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query for count (not items)
+	err := resolver.buildSearchQuery(resolver.context, true, false)
+	assert.Nil(t, err)
+
+	// Verify the query does NOT include order field in SELECT for count queries
+	assert.NotContains(t, resolver.query, "data->>'name'", "Count query should NOT include order field in SELECT")
+	assert.Contains(t, resolver.query, "COUNT", "Should be a count query")
+
+	// Mock the count query response
+	mockRow := &Row{MockValue: 42}
+	mockPool.EXPECT().QueryRow(gomock.Any(), gomock.Any(), gomock.Any()).Return(mockRow)
+
+	// Execute count
+	count, err := resolver.Count()
+	assert.Nil(t, err)
+	assert.Equal(t, 42, count)
+}
+
+// Test_Pagination_WithKeywords tests that pagination (offset/limit) works correctly
+// when combined with keyword search (text matching across all fields).
+// Keywords should not interfere with pagination functionality.
+// Scenario: Search with keywords="backup", offset=10, limit=5
+// Expected: Query builds successfully with both keyword filters and pagination
+func Test_Pagination_WithKeywords(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	keyword1 := "backup"
+	offset := 10
+	limit := 5
+
+	searchInput := &model.SearchInput{
+		Keywords: []*string{&keyword1},
+		Filters:  []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		Offset:   &offset,
+		Limit:    &limit,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query
+	err := resolver.buildSearchQuery(resolver.context, false, false)
+	assert.Nil(t, err)
+
+	// Verify query contains both keyword handling and pagination
+	assert.Contains(t, resolver.query, "OFFSET 10", "Query should contain OFFSET for pagination")
+	assert.Contains(t, resolver.query, "LIMIT 5", "Query should contain LIMIT for pagination")
+	// Keywords are handled via jsonb_each_text in the FROM clause
+	assert.NotEmpty(t, resolver.query, "Query should be built successfully with keywords")
+}
+
+// Test_OrderBy_WithKeywords tests that sorting (orderBy) works correctly when combined
+// with keyword search. This is a complex scenario because keywords modify the FROM clause
+// by adding jsonb_each_text, which could interfere with ORDER BY.
+// Scenario: Search with keywords="cluster" and orderBy="name desc"
+// Expected: Query builds with both keyword handling and ORDER BY clause
+func Test_OrderBy_WithKeywords(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	keyword1 := "cluster"
+	orderBy := "name desc"
+	limit := 10
+
+	searchInput := &model.SearchInput{
+		Keywords: []*string{&keyword1},
+		Filters:  []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy:  &orderBy,
+		Limit:    &limit,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query
+	err := resolver.buildSearchQuery(resolver.context, false, false)
+	assert.Nil(t, err)
+
+	// Verify query contains both keyword handling and ORDER BY
+	assert.Contains(t, resolver.query, "ORDER BY", "Query should contain ORDER BY clause")
+	assert.Contains(t, resolver.query, "DESC", "Query should contain DESC direction")
+	assert.Contains(t, resolver.query, "data->>'name'", "Query should include order field in SELECT")
+	assert.NotEmpty(t, resolver.query, "Query should be built successfully")
+}
+
+// Test_OrderBy_WithRelatedKinds tests that orderBy works when relatedKinds filter is specified.
+// The relatedKinds parameter filters which related resources to include in the 'related' field,
+// but should not affect the main items query or ordering.
+// Scenario: Query with orderBy="name asc" and relatedKinds=["ReplicaSet"]
+// Expected: Query builds successfully, orderBy applies to main items
+func Test_OrderBy_WithRelatedKinds(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Deployment"
+	orderBy := "name asc"
+	relatedKind1 := "ReplicaSet"
+	relatedKind2 := "Pod"
+	limit := 10
+
+	searchInput := &model.SearchInput{
+		Filters:      []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy:      &orderBy,
+		RelatedKinds: []*string{&relatedKind1, &relatedKind2},
+		Limit:        &limit,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query
+	err := resolver.buildSearchQuery(resolver.context, false, false)
+	assert.Nil(t, err)
+
+	// Verify query contains ORDER BY
+	assert.Contains(t, resolver.query, "ORDER BY", "Query should contain ORDER BY clause")
+	assert.Contains(t, resolver.query, "ASC", "Query should contain ASC direction")
+	assert.Contains(t, resolver.query, "data->>'name'", "Query should include order field in SELECT")
+
+	// RelatedKinds are stored but don't affect the main query
+	assert.Equal(t, 2, len(resolver.input.RelatedKinds), "RelatedKinds should be stored")
+}
+
+// Test_FullPagination_AllFeatures tests the most complex scenario with all pagination
+// features enabled simultaneously: keywords, filters, offset, limit, orderBy, and relatedKinds.
+// This is a comprehensive integration test to ensure all features work together without conflicts.
+// Scenario: All SearchInput options specified together
+// Expected: Query builds successfully with all features integrated
+func Test_FullPagination_AllFeatures(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string", "namespace": "string"}
+	kind := "Pod"
+	namespace := "default"
+	keyword := "web"
+	orderBy := "created desc"
+	relatedKind := "Service"
+	offset := 5
+	limit := 10
+
+	searchInput := &model.SearchInput{
+		Keywords: []*string{&keyword},
+		Filters: []*model.SearchFilter{
+			{Property: "kind", Values: []*string{&kind}},
+			{Property: "namespace", Values: []*string{&namespace}},
+		},
+		Offset:       &offset,
+		Limit:        &limit,
+		OrderBy:      &orderBy,
+		RelatedKinds: []*string{&relatedKind},
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query
+	err := resolver.buildSearchQuery(resolver.context, false, false)
+	assert.Nil(t, err)
+
+	// Verify all pagination features are present in the query
+	assert.Contains(t, resolver.query, "OFFSET 5", "Query should contain OFFSET")
+	assert.Contains(t, resolver.query, "LIMIT 10", "Query should contain LIMIT")
+	assert.Contains(t, resolver.query, "ORDER BY", "Query should contain ORDER BY")
+	assert.Contains(t, resolver.query, "DESC", "Query should contain DESC direction")
+	assert.Contains(t, resolver.query, "data->>'created'", "Query should include order field in SELECT")
+	assert.NotEmpty(t, resolver.query, "Query should be built successfully with all features")
+}
+
+// Test_Pagination_LargeOffset tests pagination behavior with a large offset value.
+// Large offsets (>10,000) can have performance implications in PostgreSQL,
+// but should still work correctly.
+// Scenario: Query with offset=50000, limit=100
+// Expected: Query builds successfully, contains large offset value
+func Test_Pagination_LargeOffset(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "ConfigMap"
+	offset := 50000
+	limit := 100
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		Offset:  &offset,
+		Limit:   &limit,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query
+	err := resolver.buildSearchQuery(resolver.context, false, false)
+	assert.Nil(t, err)
+
+	// Verify large offset is handled
+	assert.Contains(t, resolver.query, "OFFSET 50000", "Query should contain large OFFSET value")
+	assert.Contains(t, resolver.query, "LIMIT 100", "Query should contain LIMIT")
+}
+
+// Test_OrderBy_InvalidProperty tests behavior when orderBy specifies a property
+// that may not exist in all resources. The query should still build successfully,
+// though results may vary based on whether resources have that property.
+// Scenario: orderBy with an uncommon property name
+// Expected: Query builds successfully with the specified property
+func Test_OrderBy_InvalidProperty(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "nonexistent_field asc"
+	limit := 10
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+		Limit:   &limit,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query
+	err := resolver.buildSearchQuery(resolver.context, false, false)
+	assert.Nil(t, err)
+
+	// Verify query builds even with non-standard property
+	assert.Contains(t, resolver.query, "ORDER BY", "Query should contain ORDER BY clause")
+	assert.Contains(t, resolver.query, "data->>'nonexistent_field'", "Query should include specified property")
+}
+
+// Test_OrderBy_CaseSensitivity tests that orderBy handles property names correctly.
+// PostgreSQL's ->> operator is case-sensitive for JSON keys, so "Name" and "name"
+// are different properties.
+// Scenario: orderBy with capitalized property name
+// Expected: Query uses the exact property name as specified
+func Test_OrderBy_CaseSensitivity(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "Name asc" // Capitalized property name
+	limit := 10
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+		Limit:   &limit,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query
+	err := resolver.buildSearchQuery(resolver.context, false, false)
+	assert.Nil(t, err)
+
+	// Verify exact property name is used (case-sensitive)
+	assert.Contains(t, resolver.query, "data->>'Name'", "Query should use exact property name")
+	assert.NotContains(t, resolver.query, "data->>'name'", "Query should not lowercase the property")
+}
+
+// Test_OrderBy_SpecialCharacters tests that orderBy handles property names with
+// special characters (hyphens, dots, underscores). These are valid in JSON keys.
+// Scenario: orderBy with property containing hyphens
+// Expected: Query builds successfully with the property name
+func Test_OrderBy_SpecialCharacters(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "app-version desc"
+	limit := 10
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+		Limit:   &limit,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query
+	err := resolver.buildSearchQuery(resolver.context, false, false)
+	assert.Nil(t, err)
+
+	// Verify property with special characters is handled
+	assert.Contains(t, resolver.query, "data->>'app-version'", "Query should include property with hyphens")
+	assert.Contains(t, resolver.query, "ORDER BY", "Query should contain ORDER BY clause")
+}
+
+// Test_OrderBy_ClusterColumn tests ordering by 'cluster', which is a table column not in jsonb.
+// The code should reference the 'cluster' column directly, not try to extract it from 'data'.
+// Scenario: orderBy = "cluster asc"
+// Expected: Query uses "ORDER BY cluster ASC", not "data->>'cluster'"
+func Test_OrderBy_ClusterColumn(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "cluster asc"
+	limit := 10
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+		Limit:   &limit,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query
+	err := resolver.buildSearchQuery(resolver.context, false, false)
+	assert.Nil(t, err)
+
+	// Verify 'cluster' is used as direct column reference, not jsonb extraction
+	assert.Contains(t, resolver.query, "ORDER BY", "Query should contain ORDER BY clause")
+	assert.Contains(t, resolver.query, "\"cluster\"", "Query should reference cluster column directly")
+	assert.NotContains(t, resolver.query, "data->>'cluster'", "Query should NOT extract cluster from jsonb")
+}
+
+// Test_OrderBy_UidColumn tests ordering by 'uid', which is a table column not in jsonb.
+// The code should reference the 'uid' column directly, not try to extract it from 'data'.
+// Scenario: orderBy = "uid desc"
+// Expected: Query uses "ORDER BY uid DESC", not "data->>'uid'"
+func Test_OrderBy_UidColumn(t *testing.T) {
+	propTypesMock := map[string]string{"kind": "string"}
+	val1 := "Pod"
+	orderBy := "uid desc"
+	limit := 10
+
+	searchInput := &model.SearchInput{
+		Filters: []*model.SearchFilter{{Property: "kind", Values: []*string{&val1}}},
+		OrderBy: &orderBy,
+		Limit:   &limit,
+	}
+	resolver, _ := newMockSearchResolver(t, searchInput, nil, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
+
+	// Build the query
+	err := resolver.buildSearchQuery(resolver.context, false, false)
+	assert.Nil(t, err)
+
+	// Verify 'uid' is used as direct column reference, not jsonb extraction
+	assert.Contains(t, resolver.query, "ORDER BY", "Query should contain ORDER BY clause")
+	assert.Contains(t, resolver.query, "\"uid\"", "Query should reference uid column directly")
+	assert.NotContains(t, resolver.query, "data->>'uid'", "Query should NOT extract uid from jsonb")
+}

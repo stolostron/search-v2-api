@@ -467,6 +467,20 @@ input SearchInput {
     limit: Int
 
     """
+    Number of results to skip before returning results.  
+    Used in combination with limit to implement pagination.  
+    **Default is** 0
+    """
+    offset: Int
+
+    """
+    Order results by a property and direction.  
+    Format: "property_name asc" or "property_name desc"  
+    Example: "name desc" or "created asc"
+    """
+    orderBy: String
+
+    """
     Filter relationships to the specified kinds.  
     If empty, all relationships will be included.  
     This filter is used with the 'related' field on SearchResult.
@@ -563,8 +577,7 @@ scalar Map
 """
 Date format YYYY-MM-DDTHH:mm:ss.SSSZ as defined by RFC3339.
 """
-scalar Date
-`, BuiltIn: false},
+scalar Date`, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
@@ -2919,7 +2932,7 @@ func (ec *executionContext) unmarshalInputSearchInput(ctx context.Context, obj a
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"keywords", "filters", "limit", "relatedKinds"}
+	fieldsInOrder := [...]string{"keywords", "filters", "limit", "offset", "orderBy", "relatedKinds"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -2947,6 +2960,20 @@ func (ec *executionContext) unmarshalInputSearchInput(ctx context.Context, obj a
 				return it, err
 			}
 			it.Limit = data
+		case "offset":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("offset"))
+			data, err := ec.unmarshalOInt2ᚖint(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Offset = data
+		case "orderBy":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("orderBy"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OrderBy = data
 		case "relatedKinds":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("relatedKinds"))
 			data, err := ec.unmarshalOString2ᚕᚖstring(ctx, v)
