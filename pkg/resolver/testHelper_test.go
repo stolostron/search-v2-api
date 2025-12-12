@@ -420,7 +420,8 @@ func (r *MockRows) Scan(dest ...interface{}) error {
 			case *map[string]interface{}:
 				*dest[i].(*map[string]interface{}) = r.mockData[r.index-1][r.columnHeaders[i]].(map[string]interface{})
 			case *interface{}:
-				dest[i] = r.mockData[r.index-1][r.columnHeaders[i]]
+				// For the order field when using orderBy
+				*dest[i].(*interface{}) = r.mockData[r.index-1][r.columnHeaders[i]]
 			case nil:
 				klog.Infof("error type %T", v)
 			default:
