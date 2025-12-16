@@ -859,3 +859,108 @@ func TestEventMatchesFilters_NilFilterValue(t *testing.T) {
 	// Should skip nil value and match with "Pod"
 	assert.True(t, eventMatchesFilters(event, input), "Should skip nil filter values")
 }
+
+// [AI] Test eventMatchesFilters with label matching
+func TestEventMatchesFilters_LabelMatching(t *testing.T) {
+	event := &model.Event{
+		UID:       "test-123",
+		Operation: "CREATE",
+		NewData: map[string]interface{}{
+			"kind":  "Pod",
+			"label": map[string]interface{}{"app": "nginx", "env": "prod"},
+		},
+	}
+
+	// Match on one label
+	labelVal1 := "app=nginx"
+	input1 := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: "label", Values: []*string{&labelVal1}},
+		},
+	}
+	assert.True(t, eventMatchesFilters(event, input1), "Should match exact label key=value")
+
+	// Match on multiple labels (OR logic within label filter values? No, matchLabels returns true if ANY matches)
+	// matchLabels implementation: returns true if ANY of the labelFilters matches the event labels.
+	labelVal2 := "env=prod"
+	input2 := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: "label", Values: []*string{&labelVal1, &labelVal2}},
+		},
+	}
+	assert.True(t, eventMatchesFilters(event, input2), "Should match if any label matches")
+
+	// No match
+	labelValNoMatch := "app=apache"
+	inputNoMatch := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: "label", Values: []*string{&labelValNoMatch}},
+		},
+	}
+	assert.False(t, eventMatchesFilters(event, inputNoMatch), "Should not match different value")
+
+	// Key mismatch
+	labelKeyNoMatch := "tier=frontend"
+	inputKeyNoMatch := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: "label", Values: []*string{&labelKeyNoMatch}},
+		},
+	}
+	assert.False(t, eventMatchesFilters(event, inputKeyNoMatch), "Should not match different key")
+}
+
+// [AI] Test WatchSubscription input validation
+func TestWatchSubscription_InputValidation(t *testing.T) {
+	// Enable subscription feature for this test
+	originalEnabled := config.Cfg.Features.SubscriptionEnabled
+	config.Cfg.Features.SubscriptionEnabled = true
+	defer func() {
+		config.Cfg.Features.SubscriptionEnabled = originalEnabled
+	}()
+
+	ctx := context.Background()
+
+	// Test unsupported operators
+	valOp := "!value"
+	inputOp := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: "kind", Values: []*string{&valOp}},
+		},
+	}
+	_, err := WatchSubscription(ctx, inputOp)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Operators !,!=,>,>=,<,<= are not yet supported")
+
+	// Test wildcards
+	valWild := "val*"
+	inputWild := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: "kind", Values: []*string{&valWild}},
+		},
+	}
+	_, err = WatchSubscription(ctx, inputWild)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Wildcards are not yet supported")
+
+	// Test invalid label format
+	valLabel := "invalid-label"
+	inputLabel := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: "label", Values: []*string{&valLabel}},
+		},
+	}
+	_, err = WatchSubscription(ctx, inputLabel)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Property label value must be a key=value pair")
+
+	// Test empty property
+	val := "value"
+	inputEmptyProp := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: "", Values: []*string{&val}},
+		},
+	}
+	_, err = WatchSubscription(ctx, inputEmptyProp)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Property is required")
+}

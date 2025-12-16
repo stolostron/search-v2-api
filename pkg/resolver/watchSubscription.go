@@ -15,8 +15,20 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/database"
 )
 
-// eventMatchesFilters checks if an event matches the search input filters.
-// Returns true if the event should be sent to the client, false otherwise.
+func matchLabels(eventLabels map[string]interface{}, labelFilters []*string) bool {
+	for _, labelFilter := range labelFilters {
+		keyValue := strings.Split(*labelFilter, "=")
+		// Filter validated before as containing key=value pairs.
+		labelKey := keyValue[0]
+		labelValue := keyValue[1]
+		if value, exists := eventLabels[labelKey]; exists && value == labelValue {
+			return true
+		}
+	}
+	return false
+}
+
+// eventMatchesFilters Returns true if the event matches the search input filters.
 func eventMatchesFilters(event *model.Event, input *model.SearchInput) bool {
 	// If no filters are specified, send all events
 	if input == nil {
@@ -31,6 +43,7 @@ func eventMatchesFilters(event *model.Event, input *model.SearchInput) bool {
 
 	// If no data to check, skip the event
 	if eventData == nil {
+		klog.Warningf("Event data is nil for event (UID: %s, Operation: %s)", event.UID, event.Operation)
 		return false
 	}
 
@@ -80,6 +93,10 @@ func eventMatchesFilters(event *model.Event, input *model.SearchInput) bool {
 				return false
 			}
 
+			if property == "label" {
+				return matchLabels(propertyValue.(map[string]interface{}), filter.Values)
+			}
+
 			// Convert property value to string for comparison
 			propertyValueStr := ""
 			if strValue, ok := propertyValue.(string); ok {
@@ -113,6 +130,46 @@ func eventMatchesFilters(event *model.Event, input *model.SearchInput) bool {
 	return true
 }
 
+func validateInputFilters(input *model.SearchInput) error {
+	// Validate the input filters.
+	if input != nil && len(input.Filters) > 0 {
+		for _, filter := range input.Filters {
+			if filter == nil || filter.Property == "" {
+				return fmt.Errorf("Invalid filter. Property is required. Filter %+v", *filter)
+			}
+			// Validate label filter values are key=value pairs.
+			if filter.Property == "label" {
+				for _, value := range filter.Values {
+					keyValue := strings.Split(*value, "=")
+					if len(keyValue) != 2 {
+						return fmt.Errorf("Invalid filter. Property label value must be a key=value pair. {Property: %s Values: %s} ", filter.Property, *value)
+					}
+				}
+			}
+			if len(filter.Values) == 0 {
+				return fmt.Errorf("Invalid filter. Values are required. {Property: %s Values: %+v} ", filter.Property, filter.Values)
+			}
+			for _, value := range filter.Values {
+				if value == nil || *value == "" {
+					return fmt.Errorf("Invalid filter. Value is required. Filter %+v", *filter)
+				}
+				if strings.Contains(*value, "*") {
+					return fmt.Errorf("Invalid filter. Wildcards are not yet supported. Property: %s Value: %s", filter.Property, *value)
+				}
+				if strings.HasPrefix(*value, "!") ||
+					strings.HasPrefix(*value, "!=") ||
+					strings.HasPrefix(*value, ">") ||
+					strings.HasPrefix(*value, ">=") ||
+					strings.HasPrefix(*value, "<") ||
+					strings.HasPrefix(*value, "<=") {
+					return fmt.Errorf("Invalid filter. Operators !,!=,>,>=,<,<= are not yet supported. {Property: %s Value: %s} ", filter.Property, *value)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // WatchSubscriptions implements the GraphQL watch subscription resolver.
 func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *model.Event, error) {
 	result := make(chan *model.Event)   // Channel to send events to the client.
@@ -123,6 +180,11 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 		klog.Info("GraphQL subscription feature is disabled. To enable set env variable FEATURE_SUBSCRIPTION=true")
 		ctx.Done()
 		return result, errors.New("GraphQL subscription feature is disabled. To enable set env variable FEATURE_SUBSCRIPTION=true")
+	}
+
+	// Validate the input filters.
+	if err := validateInputFilters(input); err != nil {
+		return result, err
 	}
 
 	// Get WebSocket connection ID from the context. If not found, generate a new one.
