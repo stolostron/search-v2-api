@@ -26,7 +26,9 @@ func TestRequestTimeoutReturnsUnavailableIfTimeout(t *testing.T) {
 	handler(nextHandler).ServeHTTP(rr, req)
 	var body bytes.Buffer
 	actual := rr.Result()
-	defer actual.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(actual.Body)
 	_, err := io.Copy(&body, actual.Body)
 
 	assert.Nil(t, err, "Expected nil error reading response body")
@@ -46,7 +48,9 @@ func TestRequestTimeoutReturnsOKIfNoTimeout(t *testing.T) {
 	handler(nextHandler).ServeHTTP(rr, req)
 	var body bytes.Buffer
 	actual := rr.Result()
-	defer actual.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(actual.Body)
 	_, err := io.Copy(&body, actual.Body)
 
 	assert.Nil(t, err, "Expected nil error reading response body")
@@ -70,7 +74,9 @@ func TestRequestTimeoutReturnsUnavailableIfContextTimeout(t *testing.T) {
 	handler(nextHandler).ServeHTTP(rr, req)
 	var body bytes.Buffer
 	actual := rr.Result()
-	defer actual.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(actual.Body)
 	_, err := io.Copy(&body, actual.Body)
 
 	assert.Nil(t, err, "Expected nil error reading response body")
