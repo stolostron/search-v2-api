@@ -142,19 +142,22 @@ func validateInputFilters(input *model.SearchInput) error {
 				for _, value := range filter.Values {
 					keyValue := strings.Split(*value, "=")
 					if len(keyValue) != 2 {
-						return fmt.Errorf("Invalid filter. Property label value must be a key=value pair. {Property: %s Values: %s} ", filter.Property, *value)
+						return fmt.Errorf("Invalid filter. Value must be a key=value pair. {Property: %s Values: %s} ",
+							filter.Property, *value)
 					}
 				}
 			}
 			if len(filter.Values) == 0 {
-				return fmt.Errorf("Invalid filter. Values are required. {Property: %s Values: %+v} ", filter.Property, filter.Values)
+				return fmt.Errorf("Invalid filter. Values are required. {Property: %s Values: %+v} ",
+					filter.Property, filter.Values)
 			}
 			for _, value := range filter.Values {
 				if value == nil || *value == "" {
 					return fmt.Errorf("Invalid filter. Value is required. Filter %+v", *filter)
 				}
 				if strings.Contains(*value, "*") {
-					return fmt.Errorf("Invalid filter. Wildcards are not yet supported. Property: %s Value: %s", filter.Property, *value)
+					return fmt.Errorf("Invalid filter. Wildcards are not yet supported. Property: %s Value: %s",
+						filter.Property, *value)
 				}
 				if strings.HasPrefix(*value, "!") ||
 					strings.HasPrefix(*value, "!=") ||
@@ -162,7 +165,8 @@ func validateInputFilters(input *model.SearchInput) error {
 					strings.HasPrefix(*value, ">=") ||
 					strings.HasPrefix(*value, "<") ||
 					strings.HasPrefix(*value, "<=") {
-					return fmt.Errorf("Invalid filter. Operators !,!=,>,>=,<,<= are not yet supported. {Property: %s Value: %s} ", filter.Property, *value)
+					return fmt.Errorf("Invalid filter. Operators !,!=,>,>=,<,<= are not yet supported. {Property: %s Value: %s} ",
+						filter.Property, *value)
 				}
 			}
 		}
@@ -218,7 +222,8 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 				}
 				// Filter event based on the input filters
 				if !eventMatchesFilters(event, input) {
-					klog.V(4).Infof("Subscription watch(%s) event did not match filters (UID: %s, Operation: %s)", subID, event.UID, event.Operation)
+					klog.V(4).Infof("Subscription watch(%s) event did not match filters (UID: %s, Operation: %s)",
+						subID, event.UID, event.Operation)
 					continue
 				}
 
