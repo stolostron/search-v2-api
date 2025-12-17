@@ -195,11 +195,12 @@ func newMockRowsWithoutRBAC(mockDataFile string, input *model.SearchInput, prop 
 			cluster := strings.Split(uid.(string), "/")[0]
 			data := item.(map[string]interface{})["properties"].(map[string]interface{})
 
-			if prop == "cluster" {
+			switch prop {
+			case "cluster":
 				propsString[cluster] = ""
-			} else if prop == "srchAddonDisabledCluster" {
+			case "srchAddonDisabledCluster":
 				propsString["managed1"] = ""
-			} else {
+			default:
 				if _, ok := data[prop]; ok {
 
 					switch v := data[prop].(type) {
