@@ -220,7 +220,7 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 	userAccess := UserData{
 		CsResources:      userDataCache.GetCsResourcesCopy(),
 		FGRbacNamespaces: userDataCache.GetFGRbacNamespacesCopy(),
-		IsClusterAdmin:   userDataCache.UserData.IsClusterAdmin,
+		IsClusterAdmin:   userDataCache.UserData.IsClusterAdmin, //nolint:staticcheck // "could remove embedded field 'UserData' from selector
 		NsResources:      userDataCache.GetNsResourcesCopy(),
 		ManagedClusters:  userDataCache.GetManagedClustersCopy(),
 	}
