@@ -67,12 +67,14 @@ func getPartialMatchFilter(filter string, values []string, dataType interface{},
 			values[i] = strings.ReplaceAll(val, "*", "%")
 		}
 	}
-	if dataType == "object" {
+	switch dataType {
+	case "object":
 		return extractOperator(values, "*@>", operatorOperandMap)
-	} else if dataType == "array" {
+	case "array":
 		return extractOperator(values, "*[]", operatorOperandMap)
+	default:
+		return extractOperator(values, "*", operatorOperandMap)
 	}
-	return extractOperator(values, "*", operatorOperandMap)
 }
 
 // compareValues checks if a string is equal to any string in an array of strings.
@@ -94,13 +96,15 @@ func getWhereClauseExpression(prop, operator string, values []string, dataType s
 	var lhsExp interface{}
 
 	// check if the property is cluster
-	if prop == "cluster" {
+	switch prop {
+	case "cluster":
 		lhsExp = goqu.C(prop)
-	} else if prop == "managedHub" { //ignore managedHub filter as it is not a property in the database.
+	case "managedHub":
+		// managedHub is not a property in the database. This filter is used to federate the request to this hub
 		// This property is used to federate the request to this specific hub.
 		// So, fetch results based on the other filters.
 		return exps
-	} else {
+	default:
 		lhsExp = goqu.L(`"data"->>?`, prop)
 		if dataType == "number" {
 			lhsExp = goqu.L(`("data"->?)?`, prop, goqu.L("::numeric"))
