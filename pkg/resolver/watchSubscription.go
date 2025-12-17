@@ -125,13 +125,12 @@ func eventMatchesFilters(event *model.Event, input *model.SearchInput) bool {
 			}
 		}
 	}
-
 	// All filters matched
 	return true
 }
 
+// validateInputFilters validates the input filters.
 func validateInputFilters(input *model.SearchInput) error {
-	// Validate the input filters.
 	if input != nil && len(input.Filters) > 0 {
 		for _, filter := range input.Filters {
 			if filter == nil || filter.Property == "" {
@@ -155,6 +154,8 @@ func validateInputFilters(input *model.SearchInput) error {
 				if value == nil || *value == "" {
 					return fmt.Errorf("Invalid filter. Value is required. Filter %+v", *filter)
 				}
+				// NOTE: The limitations below are only while we implement the feature.
+				// They will be removed once the feature is fully implemented.
 				if strings.Contains(*value, "*") {
 					return fmt.Errorf("Invalid filter. Wildcards are not yet supported. Property: %s Value: %s",
 						filter.Property, *value)
