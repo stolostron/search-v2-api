@@ -100,6 +100,7 @@ func getWhereClauseExpression(prop, operator string, values []string, dataType s
 	case "cluster":
 		lhsExp = goqu.C(prop)
 	case "managedHub":
+		// managedHub is not a property in the database. This filter is used to federate the request to this hub
 		// This property is used to federate the request to this specific hub.
 		// So, fetch results based on the other filters.
 		return exps
