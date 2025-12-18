@@ -95,12 +95,13 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		}
 
 		// SELECT CLAUSE
-		if s.property == "cluster" {
+		switch s.property {
+		case "cluster":
 			selectDs = ds.SelectDistinct(goqu.C(s.property)).Order(goqu.C(s.property).Asc())
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
 			whereDs = append(whereDs, goqu.C(s.property).IsNotNull(),
 				goqu.C(s.property).Neq("")) // remove empty strings from results
-		} else {
+		default:
 			// "->" - get data as json object
 			// "->>" - get data as string
 			selectDs = ds.SelectDistinct(goqu.L(`"data"->?`, s.property)).Order(goqu.L(`"data"->?`, s.property).Asc())

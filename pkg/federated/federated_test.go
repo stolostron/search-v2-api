@@ -326,7 +326,7 @@ func TestGetFederatedResponseErrors(t *testing.T) {
 				URL:  "http://example.com",
 			},
 			// receivedBody:  []byte("error body"),
-			expectedError: "Error reading federated response body",
+			expectedError: "error reading federated response body",
 		},
 		{
 			name: "Error parsing federated response",
