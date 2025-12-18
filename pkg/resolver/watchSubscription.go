@@ -107,7 +107,7 @@ func eventMatchesAllFilters(event *model.Event, input *model.SearchInput) bool {
 			propertyValueStr = strValue
 		} else {
 			// Try to convert other types to string
-			propertyValueStr = strings.ToLower(fmt.Sprintf("%v", propertyValue))
+			propertyValueStr = fmt.Sprintf("%v", propertyValue)
 		}
 
 		// Check if property value matches any of the filter values (OR operation)
@@ -115,6 +115,13 @@ func eventMatchesAllFilters(event *model.Event, input *model.SearchInput) bool {
 		for _, filterValue := range filter.Values {
 			if filterValue == nil {
 				continue
+			}
+			// Special case: Kind is compared case-insensitive to match the search behavior.
+			if property == "kind" {
+				if strings.EqualFold(propertyValueStr, *filterValue) {
+					matched = true
+					break
+				}
 			}
 
 			if propertyValueStr == *filterValue {

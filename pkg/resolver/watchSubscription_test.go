@@ -424,7 +424,7 @@ func TestEventMatchesFilters_KindCaseSensitive(t *testing.T) {
 		},
 	}
 
-	// Filter with lowercase "pod" should NOT match "Pod"
+	// The kind filter is compared case-insensitively.
 	kindFilter := "kind"
 	kindValueLower := "pod"
 	input := &model.SearchInput{
@@ -435,9 +435,9 @@ func TestEventMatchesFilters_KindCaseSensitive(t *testing.T) {
 			},
 		},
 	}
-	assert.False(t, eventMatchesAllFilters(event, input), "Should not match kind case-insensitively (lowercase)")
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match kind case-insensitively (lowercase)")
 
-	// Filter with uppercase "POD" should NOT match "Pod"
+	// Filter with uppercase "POD" should match "Pod"
 	kindValueUpper := "POD"
 	inputUpper := &model.SearchInput{
 		Filters: []*model.SearchFilter{
@@ -447,7 +447,7 @@ func TestEventMatchesFilters_KindCaseSensitive(t *testing.T) {
 			},
 		},
 	}
-	assert.False(t, eventMatchesAllFilters(event, inputUpper), "Should not match kind with different case (uppercase)")
+	assert.True(t, eventMatchesAllFilters(event, inputUpper), "Should match kind with different case (uppercase)")
 
 	// Exact match should work
 	kindValueExact := "Pod"
