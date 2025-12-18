@@ -137,30 +137,30 @@ func validateInputFilters(input *model.SearchInput) error {
 	if input != nil && len(input.Filters) > 0 {
 		for _, filter := range input.Filters {
 			if filter == nil || filter.Property == "" {
-				return fmt.Errorf("Invalid filter. Property is required. Filter %+v", *filter)
+				return fmt.Errorf("invalid filter. Property is required. Filter %+v", *filter)
 			}
 			// Validate label filter values are key=value pairs.
 			if filter.Property == "label" {
 				for _, value := range filter.Values {
 					keyValue := strings.Split(*value, "=")
 					if len(keyValue) != 2 {
-						return fmt.Errorf("Invalid filter. Value must be a key=value pair. {Property: %s Values: %s} ",
+						return fmt.Errorf("invalid filter. Value must be a key=value pair. {Property: %s Values: %s} ",
 							filter.Property, *value)
 					}
 				}
 			}
 			if len(filter.Values) == 0 {
-				return fmt.Errorf("Invalid filter. Values are required. {Property: %s Values: %+v} ",
+				return fmt.Errorf("invalid filter. Values are required. {Property: %s Values: %+v} ",
 					filter.Property, filter.Values)
 			}
 			for _, value := range filter.Values {
 				if value == nil || *value == "" {
-					return fmt.Errorf("Invalid filter. Value is required. Filter %+v", *filter)
+					return fmt.Errorf("invalid filter. Value is required. Filter %+v", *filter)
 				}
 				// NOTE: The limitations below are only while we implement the feature.
 				// They will be removed once the feature is fully implemented.
 				if strings.Contains(*value, "*") {
-					return fmt.Errorf("Invalid filter. Wildcards are not yet supported. Property: %s Value: %s",
+					return fmt.Errorf("invalid filter. Wildcards are not yet supported. Property: %s Value: %s",
 						filter.Property, *value)
 				}
 				if strings.HasPrefix(*value, "!") ||
@@ -169,7 +169,7 @@ func validateInputFilters(input *model.SearchInput) error {
 					strings.HasPrefix(*value, ">=") ||
 					strings.HasPrefix(*value, "<") ||
 					strings.HasPrefix(*value, "<=") {
-					return fmt.Errorf("Invalid filter. Operators !,!=,>,>=,<,<= are not yet supported. {Property: %s Value: %s} ",
+					return fmt.Errorf("invalid filter. Operators !,!=,>,>=,<,<= are not yet supported. {Property: %s Value: %s} ",
 						filter.Property, *value)
 				}
 			}
