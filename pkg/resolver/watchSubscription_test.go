@@ -368,11 +368,11 @@ func TestEventMatchesFilters_NoFilters(t *testing.T) {
 	}
 
 	// No input - should match
-	assert.True(t, eventMatchesFilters(event, nil))
+	assert.True(t, eventMatchesAllFilters(event, nil))
 
 	// Empty input - should match
 	emptyInput := &model.SearchInput{}
-	assert.True(t, eventMatchesFilters(event, emptyInput))
+	assert.True(t, eventMatchesAllFilters(event, emptyInput))
 }
 
 // [AI] Test eventMatchesFilters with property filters
@@ -398,7 +398,7 @@ func TestEventMatchesFilters_PropertyFilters(t *testing.T) {
 			},
 		},
 	}
-	assert.True(t, eventMatchesFilters(event, input), "Should match kind=Pod filter")
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match kind=Pod filter")
 
 	// Filter NOT matching kind=Deployment
 	deploymentValue := "Deployment"
@@ -410,7 +410,7 @@ func TestEventMatchesFilters_PropertyFilters(t *testing.T) {
 			},
 		},
 	}
-	assert.False(t, eventMatchesFilters(event, inputNoMatch), "Should not match kind=Deployment filter")
+	assert.False(t, eventMatchesAllFilters(event, inputNoMatch), "Should not match kind=Deployment filter")
 }
 
 // [AI] Test eventMatchesFilters with case-sensitive kind matching
@@ -435,7 +435,7 @@ func TestEventMatchesFilters_KindCaseSensitive(t *testing.T) {
 			},
 		},
 	}
-	assert.False(t, eventMatchesFilters(event, input), "Should not match kind case-insensitively (lowercase)")
+	assert.False(t, eventMatchesAllFilters(event, input), "Should not match kind case-insensitively (lowercase)")
 
 	// Filter with uppercase "POD" should NOT match "Pod"
 	kindValueUpper := "POD"
@@ -447,7 +447,7 @@ func TestEventMatchesFilters_KindCaseSensitive(t *testing.T) {
 			},
 		},
 	}
-	assert.False(t, eventMatchesFilters(event, inputUpper), "Should not match kind with different case (uppercase)")
+	assert.False(t, eventMatchesAllFilters(event, inputUpper), "Should not match kind with different case (uppercase)")
 
 	// Exact match should work
 	kindValueExact := "Pod"
@@ -459,7 +459,7 @@ func TestEventMatchesFilters_KindCaseSensitive(t *testing.T) {
 			},
 		},
 	}
-	assert.True(t, eventMatchesFilters(event, inputExact), "Should match kind with exact case")
+	assert.True(t, eventMatchesAllFilters(event, inputExact), "Should match kind with exact case")
 }
 
 // [AI] Test eventMatchesFilters with multiple filters (AND operation)
@@ -485,7 +485,7 @@ func TestEventMatchesFilters_MultipleFilters_AND(t *testing.T) {
 			{Property: nsFilter, Values: []*string{&nsValue}},
 		},
 	}
-	assert.True(t, eventMatchesFilters(event, input), "Should match when all filters match")
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match when all filters match")
 
 	// One filter doesn't match
 	wrongNsValue := "kube-system"
@@ -495,7 +495,7 @@ func TestEventMatchesFilters_MultipleFilters_AND(t *testing.T) {
 			{Property: nsFilter, Values: []*string{&wrongNsValue}},
 		},
 	}
-	assert.False(t, eventMatchesFilters(event, inputNoMatch), "Should not match when one filter doesn't match")
+	assert.False(t, eventMatchesAllFilters(event, inputNoMatch), "Should not match when one filter doesn't match")
 }
 
 // [AI] Test eventMatchesFilters with multiple values per filter (OR operation)
@@ -520,7 +520,7 @@ func TestEventMatchesFilters_MultipleValues_OR(t *testing.T) {
 			},
 		},
 	}
-	assert.True(t, eventMatchesFilters(event, input), "Should match when one of the values matches")
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match when one of the values matches")
 
 	// Filter with values that don't match
 	serviceValue := "Service"
@@ -533,7 +533,7 @@ func TestEventMatchesFilters_MultipleValues_OR(t *testing.T) {
 			},
 		},
 	}
-	assert.False(t, eventMatchesFilters(event, inputNoMatch), "Should not match when none of the values match")
+	assert.False(t, eventMatchesAllFilters(event, inputNoMatch), "Should not match when none of the values match")
 }
 
 // [AI] Test eventMatchesFilters with keywords
@@ -553,28 +553,28 @@ func TestEventMatchesFilters_Keywords(t *testing.T) {
 	input := &model.SearchInput{
 		Keywords: []*string{&keyword1},
 	}
-	assert.True(t, eventMatchesFilters(event, input), "Should match when keyword found")
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match when keyword found")
 
 	// Keyword with different case
 	keyword2 := "NGINX"
 	inputCase := &model.SearchInput{
 		Keywords: []*string{&keyword2},
 	}
-	assert.True(t, eventMatchesFilters(event, inputCase), "Should match keyword case-insensitively")
+	assert.True(t, eventMatchesAllFilters(event, inputCase), "Should match keyword case-insensitively")
 
 	// Multiple keywords (AND operation) - all must match
 	keyword3 := "production"
 	inputMultiple := &model.SearchInput{
 		Keywords: []*string{&keyword1, &keyword3},
 	}
-	assert.True(t, eventMatchesFilters(event, inputMultiple), "Should match when all keywords found")
+	assert.True(t, eventMatchesAllFilters(event, inputMultiple), "Should match when all keywords found")
 
 	// Keyword that doesn't match
 	keywordNoMatch := "nonexistent"
 	inputNoMatch := &model.SearchInput{
 		Keywords: []*string{&keywordNoMatch},
 	}
-	assert.False(t, eventMatchesFilters(event, inputNoMatch), "Should not match when keyword not found")
+	assert.False(t, eventMatchesAllFilters(event, inputNoMatch), "Should not match when keyword not found")
 }
 
 // [AI] Test eventMatchesFilters with DELETE operation (uses OldData)
@@ -598,14 +598,14 @@ func TestEventMatchesFilters_DeleteOperation(t *testing.T) {
 			{Property: kindFilter, Values: []*string{&kindValue}},
 		},
 	}
-	assert.True(t, eventMatchesFilters(event, input), "Should match DELETE event using OldData")
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match DELETE event using OldData")
 
 	// Keyword search in OldData
 	keyword := "deleted"
 	inputKeyword := &model.SearchInput{
 		Keywords: []*string{&keyword},
 	}
-	assert.True(t, eventMatchesFilters(event, inputKeyword), "Should find keyword in OldData")
+	assert.True(t, eventMatchesAllFilters(event, inputKeyword), "Should find keyword in OldData")
 }
 
 // [AI] Test eventMatchesFilters with both keywords and filters
@@ -630,7 +630,7 @@ func TestEventMatchesFilters_KeywordsAndFilters(t *testing.T) {
 			{Property: kindFilter, Values: []*string{&kindValue}},
 		},
 	}
-	assert.True(t, eventMatchesFilters(event, input), "Should match when both keyword and filter match")
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match when both keyword and filter match")
 
 	// Keyword matches but filter doesn't
 	wrongKind := "Pod"
@@ -640,7 +640,7 @@ func TestEventMatchesFilters_KeywordsAndFilters(t *testing.T) {
 			{Property: kindFilter, Values: []*string{&wrongKind}},
 		},
 	}
-	assert.False(t, eventMatchesFilters(event, inputNoMatch), "Should not match when filter doesn't match")
+	assert.False(t, eventMatchesAllFilters(event, inputNoMatch), "Should not match when filter doesn't match")
 }
 
 // [AI] Test eventMatchesFilters with missing property
@@ -662,7 +662,7 @@ func TestEventMatchesFilters_MissingProperty(t *testing.T) {
 			{Property: labelFilter, Values: []*string{&labelValue}},
 		},
 	}
-	assert.False(t, eventMatchesFilters(event, input), "Should not match when property doesn't exist")
+	assert.False(t, eventMatchesAllFilters(event, input), "Should not match when property doesn't exist")
 }
 
 // [AI] Test eventMatchesFilters with nil event data
@@ -681,7 +681,7 @@ func TestEventMatchesFilters_NilEventData(t *testing.T) {
 			{Property: kindFilter, Values: []*string{&kindValue}},
 		},
 	}
-	assert.False(t, eventMatchesFilters(event, input), "Should not match when event has no data")
+	assert.False(t, eventMatchesAllFilters(event, input), "Should not match when event has no data")
 }
 
 // [AI] Test eventMatchesFilters with empty filter values
@@ -702,7 +702,7 @@ func TestEventMatchesFilters_EmptyFilterValues(t *testing.T) {
 		},
 	}
 	// Empty values means no matching criteria, should not match
-	assert.False(t, eventMatchesFilters(event, input), "Should not match with empty filter values")
+	assert.False(t, eventMatchesAllFilters(event, input), "Should not match with empty filter values")
 }
 
 // [AI] Test eventMatchesFilters with non-string property values
@@ -725,7 +725,7 @@ func TestEventMatchesFilters_NonStringProperties(t *testing.T) {
 			{Property: replicasFilter, Values: []*string{&replicasValue}},
 		},
 	}
-	assert.True(t, eventMatchesFilters(event, input), "Should match numeric property converted to string")
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match numeric property converted to string")
 
 	// Filter on boolean property
 	readyFilter := "ready"
@@ -735,7 +735,7 @@ func TestEventMatchesFilters_NonStringProperties(t *testing.T) {
 			{Property: readyFilter, Values: []*string{&readyValue}},
 		},
 	}
-	assert.True(t, eventMatchesFilters(event, inputBool), "Should match boolean property converted to string")
+	assert.True(t, eventMatchesAllFilters(event, inputBool), "Should match boolean property converted to string")
 }
 
 // [AI] Test eventMatchesFilters with nil filter
@@ -753,7 +753,7 @@ func TestEventMatchesFilters_NilFilter(t *testing.T) {
 		Filters: []*model.SearchFilter{nil},
 	}
 	// Should skip nil filter and match (no valid filters)
-	assert.True(t, eventMatchesFilters(event, input), "Should skip nil filters")
+	assert.True(t, eventMatchesAllFilters(event, input), "Should skip nil filters")
 }
 
 // [AI] Test eventMatchesFilters with empty property name
@@ -774,7 +774,7 @@ func TestEventMatchesFilters_EmptyProperty(t *testing.T) {
 		},
 	}
 	// Should skip filter with empty property
-	assert.True(t, eventMatchesFilters(event, input), "Should skip filters with empty property")
+	assert.True(t, eventMatchesAllFilters(event, input), "Should skip filters with empty property")
 }
 
 // [AI] Test eventMatchesFilters with nil keyword
@@ -793,7 +793,7 @@ func TestEventMatchesFilters_NilKeyword(t *testing.T) {
 		Keywords: []*string{nil},
 	}
 	// Should skip nil keyword and match (no valid keywords)
-	assert.True(t, eventMatchesFilters(event, input), "Should skip nil keywords")
+	assert.True(t, eventMatchesAllFilters(event, input), "Should skip nil keywords")
 }
 
 // [AI] Test eventMatchesFilters with complex multi-filter scenario
@@ -825,7 +825,7 @@ func TestEventMatchesFilters_ComplexScenario(t *testing.T) {
 			{Property: nsFilter, Values: []*string{&nsValue}},
 		},
 	}
-	assert.True(t, eventMatchesFilters(event, input), "Should match complex filter scenario")
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match complex filter scenario")
 
 	// One keyword missing
 	keywordMissing := "missing"
@@ -835,7 +835,7 @@ func TestEventMatchesFilters_ComplexScenario(t *testing.T) {
 			{Property: kindFilter, Values: []*string{&kindValue}},
 		},
 	}
-	assert.False(t, eventMatchesFilters(event, inputNoMatch), "Should not match when keyword missing")
+	assert.False(t, eventMatchesAllFilters(event, inputNoMatch), "Should not match when keyword missing")
 }
 
 // [AI] Test eventMatchesFilters with nil filter value
@@ -857,7 +857,7 @@ func TestEventMatchesFilters_NilFilterValue(t *testing.T) {
 		},
 	}
 	// Should skip nil value and match with "Pod"
-	assert.True(t, eventMatchesFilters(event, input), "Should skip nil filter values")
+	assert.True(t, eventMatchesAllFilters(event, input), "Should skip nil filter values")
 }
 
 // [AI] Test eventMatchesFilters with label matching
@@ -878,7 +878,7 @@ func TestEventMatchesFilters_LabelMatching(t *testing.T) {
 			{Property: "label", Values: []*string{&labelVal1}},
 		},
 	}
-	assert.True(t, eventMatchesFilters(event, input1), "Should match exact label key=value")
+	assert.True(t, eventMatchesAllFilters(event, input1), "Should match exact label key=value")
 
 	// Match on multiple labels (OR logic within label filter values? No, matchLabels returns true if ANY matches)
 	// matchLabels implementation: returns true if ANY of the labelFilters matches the event labels.
@@ -888,7 +888,7 @@ func TestEventMatchesFilters_LabelMatching(t *testing.T) {
 			{Property: "label", Values: []*string{&labelVal1, &labelVal2}},
 		},
 	}
-	assert.True(t, eventMatchesFilters(event, input2), "Should match if any label matches")
+	assert.True(t, eventMatchesAllFilters(event, input2), "Should match if any label matches")
 
 	// No match
 	labelValNoMatch := "app=apache"
@@ -897,7 +897,7 @@ func TestEventMatchesFilters_LabelMatching(t *testing.T) {
 			{Property: "label", Values: []*string{&labelValNoMatch}},
 		},
 	}
-	assert.False(t, eventMatchesFilters(event, inputNoMatch), "Should not match different value")
+	assert.False(t, eventMatchesAllFilters(event, inputNoMatch), "Should not match different value")
 
 	// Key mismatch
 	labelKeyNoMatch := "tier=frontend"
@@ -906,7 +906,7 @@ func TestEventMatchesFilters_LabelMatching(t *testing.T) {
 			{Property: "label", Values: []*string{&labelKeyNoMatch}},
 		},
 	}
-	assert.False(t, eventMatchesFilters(event, inputKeyNoMatch), "Should not match different key")
+	assert.False(t, eventMatchesAllFilters(event, inputKeyNoMatch), "Should not match different key")
 }
 
 // [AI] Test WatchSubscription input validation
@@ -951,7 +951,7 @@ func TestWatchSubscription_InputValidation(t *testing.T) {
 	}
 	_, err = WatchSubscription(ctx, inputLabel)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "Property label value must be a key=value pair")
+	assert.Contains(t, err.Error(), "Value must be a key=value pair.")
 
 	// Test empty property
 	val := "value"

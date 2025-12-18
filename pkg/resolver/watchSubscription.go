@@ -15,7 +15,9 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/database"
 )
 
-func matchLabels(eventLabels map[string]interface{}, labelFilters []*string) bool {
+// matchAnyLabel returns true if any of the label filters matches the event labels.
+// Equivalent to an OR operation.
+func matchAnyLabel(eventLabels map[string]interface{}, labelFilters []*string) bool {
 	for _, labelFilter := range labelFilters {
 		keyValue := strings.Split(*labelFilter, "=")
 		// Filter validated before as containing key=value pairs.
@@ -28,8 +30,9 @@ func matchLabels(eventLabels map[string]interface{}, labelFilters []*string) boo
 	return false
 }
 
-// eventMatchesFilters Returns true if the event matches the search input filters.
-func eventMatchesFilters(event *model.Event, input *model.SearchInput) bool {
+// eventMatchesAllFilters Returns true if the event matches all the search input filters.
+// Equivalent to an AND operation.
+func eventMatchesAllFilters(event *model.Event, input *model.SearchInput) bool {
 	// If no filters are specified, send all events
 	if input == nil {
 		return true
@@ -47,82 +50,82 @@ func eventMatchesFilters(event *model.Event, input *model.SearchInput) bool {
 		return false
 	}
 
-	// Check keyword filters (AND operation - all keywords must match)
-	if len(input.Keywords) > 0 {
-		for _, keyword := range input.Keywords {
-			if keyword == nil {
-				continue
-			}
-			keywordLower := strings.ToLower(*keyword)
-			found := false
+	// Check keywords (AND operation - all keywords must match)
+	for _, keyword := range input.Keywords {
+		if keyword == nil {
+			continue
+		}
+		keywordLower := strings.ToLower(*keyword)
+		found := false
 
-			// Search for keyword in any field value
-			for _, value := range eventData {
-				if strValue, ok := value.(string); ok {
-					if strings.Contains(strings.ToLower(strValue), keywordLower) {
-						found = true
-						break
-					}
+		// Search for keyword in any field value
+		for _, value := range eventData {
+			if strValue, ok := value.(string); ok {
+				if strings.Contains(strings.ToLower(strValue), keywordLower) {
+					found = true
+					break
 				}
 			}
+		}
 
-			// If keyword not found in any field, event doesn't match
-			if !found {
-				return false
-			}
+		// If keyword not found in any field, event doesn't match
+		if !found {
+			return false
 		}
 	}
 
 	// Check property filters (AND operation - all filters must match)
-	if len(input.Filters) > 0 {
-		for _, filter := range input.Filters {
-			if filter == nil || filter.Property == "" {
+	for _, filter := range input.Filters {
+		if filter == nil || filter.Property == "" {
+			continue
+		}
+
+		property := filter.Property
+		propertyValue, exists := eventData[property]
+
+		// If property doesn't exist in event data, filter doesn't match
+		if !exists {
+			return false
+		}
+
+		// If filter has no values, it's invalid - reject the event
+		if len(filter.Values) == 0 {
+			return false
+		}
+
+		// Check if label filter matches
+		if property == "label" {
+			if !matchAnyLabel(propertyValue.(map[string]interface{}), filter.Values) {
+				return false
+			}
+			continue
+		}
+
+		// Convert property value to string for comparison
+		propertyValueStr := ""
+		if strValue, ok := propertyValue.(string); ok {
+			propertyValueStr = strValue
+		} else {
+			// Try to convert other types to string
+			propertyValueStr = strings.ToLower(fmt.Sprintf("%v", propertyValue))
+		}
+
+		// Check if property value matches any of the filter values (OR operation)
+		matched := false
+		for _, filterValue := range filter.Values {
+			if filterValue == nil {
 				continue
 			}
 
-			property := filter.Property
-			propertyValue, exists := eventData[property]
-
-			// If property doesn't exist in event data, filter doesn't match
-			if !exists {
-				return false
+			if propertyValueStr == *filterValue {
+				matched = true
+				break
 			}
+		}
 
-			// If filter has no values, it's invalid - reject the event
-			if len(filter.Values) == 0 {
-				return false
-			}
-
-			if property == "label" {
-				return matchLabels(propertyValue.(map[string]interface{}), filter.Values)
-			}
-
-			// Convert property value to string for comparison
-			propertyValueStr := ""
-			if strValue, ok := propertyValue.(string); ok {
-				propertyValueStr = strValue
-			} else {
-				// Try to convert other types to string
-				propertyValueStr = strings.ToLower(fmt.Sprintf("%v", propertyValue))
-			}
-
-			// Check if property value matches any of the filter values (OR operation)
-			matched := false
-			for _, filterValue := range filter.Values {
-				if filterValue == nil {
-					continue
-				}
-
-				if propertyValueStr == *filterValue {
-					matched = true
-					break
-				}
-			}
-
-			// If none of the filter values matched, event doesn't match
-			if !matched {
-				return false
-			}
+		// If none of the filter values matched, event doesn't match
+		if !matched {
+			return false
 		}
 	}
 	// All filters matched
@@ -222,7 +225,7 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 					return
 				}
 				// Filter event based on the input filters
-				if !eventMatchesFilters(event, input) {
+				if !eventMatchesAllFilters(event, input) {
 					klog.V(4).Infof("Subscription watch(%s) event did not match filters (UID: %s, Operation: %s)",
 						subID, event.UID, event.Operation)
 					continue
