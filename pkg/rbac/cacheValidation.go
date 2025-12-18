@@ -163,8 +163,8 @@ func (c *Cache) namespaceDeleted(obj *unstructured.Unstructured) {
 	c.usersLock.Lock()
 	defer c.usersLock.Unlock()
 	for _, userCache := range c.users {
-		delete(userCache.UserData.NsResources, ns)
-		delete(userCache.UserData.ManagedClusters, ns)
+		delete(userCache.UserData.NsResources, ns)     //nolint:staticcheck // "could remove embedded field 'UserData' from selector"
+		delete(userCache.UserData.ManagedClusters, ns) //nolint:staticcheck // "could remove embedded field 'UserData' from selector"
 	}
 }
 
@@ -202,7 +202,7 @@ func (c *Cache) managedClusterDeleted(obj *unstructured.Unstructured) {
 	c.usersLock.Lock()
 	defer c.usersLock.Unlock()
 	for _, userCache := range c.users {
-		delete(userCache.UserData.ManagedClusters, obj.GetName())
+		delete(userCache.UserData.ManagedClusters, obj.GetName()) //nolint:staticcheck // "could remove embedded field 'UserData' from selector"
 	}
 
 	// Delete from DisabledClusters shared cache
