@@ -13,6 +13,27 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestEventMatchesFilters_MultiKeywordsAgainstLabels(t *testing.T) {
+	event := &model.Event{
+		UID:       "test-123",
+		Operation: "CREATE",
+		NewData: map[string]interface{}{
+			"kind":  "Pod",
+			"name":  "test-one",
+			"label": map[string]interface{}{"app": "search", "ppa": "asdf"},
+		},
+	}
+
+	one := "asdf"
+	two := "search"
+	// Input with nil keyword in the array
+	input := &model.SearchInput{
+		Keywords: []*string{&one, &two},
+	}
+	// Should skip nil keyword and match (no valid keywords)
+	assert.True(t, eventMatchesAllFilters(event, input), "Should skip nil keywords")
+}
+
 // [AI]
 func TestWatchSubscription_Disabled(t *testing.T) {
 	// Save original config value

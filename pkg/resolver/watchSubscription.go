@@ -59,12 +59,16 @@ func eventMatchesAllFilters(event *model.Event, input *model.SearchInput) bool {
 		found := false
 
 		// Search for keyword in any field value
+		strValue := ""
 		for _, value := range eventData {
-			if strValue, ok := value.(string); ok {
-				if strings.Contains(strings.ToLower(strValue), keywordLower) {
-					found = true
-					break
-				}
+			if v, ok := value.(string); ok {
+				strValue = v
+			} else {
+				strValue = fmt.Sprintf("%v", value)
+			}
+			if strings.Contains(strings.ToLower(strValue), keywordLower) {
+				found = true
+				break
 			}
 		}
 
