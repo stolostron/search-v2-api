@@ -26,12 +26,12 @@ func TestEventMatchesFilters_MultiKeywordsAgainstLabels(t *testing.T) {
 
 	one := "asdf"
 	two := "search"
-	// Input with nil keyword in the array
+	// Input with keywords to match labels.
 	input := &model.SearchInput{
 		Keywords: []*string{&one, &two},
 	}
-	// Should skip nil keyword and match (no valid keywords)
-	assert.True(t, eventMatchesAllFilters(event, input), "Should skip nil keywords")
+	// Should match keywords in labels.
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match keywords against labels")
 }
 
 // [AI]
