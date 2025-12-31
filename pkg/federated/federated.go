@@ -42,10 +42,59 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	// I want to get the values of managedhub from receivedBody and
+	// check if the remoteService.Name is in the managedhub values.
+	// If not, skip this remoteService.
+	var reqBodyMap map[string]interface{}
+	if err := json.Unmarshal(receivedBody, &reqBodyMap); err != nil {
+		klog.Errorf("Error unmarshaling federated request body: %s", err)
+	}
+	// Navigate to the managedHub values in the request body.
+	// this is sample federated search query
+	// {"operationName":"searchSchema","variables":{"query":{"keywords":[],
+	// "filters":[{"property":"managedHub","values":["local-cluster"]},
+	// {"property":"cluster","values":["local-cluster"]}],"limit":10000}},
+	// "query":"query searchSchema($query: SearchInput) {\n  searchSchema(query: $query)\n}"}
+	managedHubValues := []string{}
+	if variables, ok := reqBodyMap["variables"].(map[string]interface{}); ok {
+		if query, ok := variables["query"].(map[string]interface{}); ok {
+			if filters, ok := query["filters"].([]interface{}); ok {
+				for _, filter := range filters {
+					if filterMap, ok := filter.(map[string]interface{}); ok {
+						if property, ok := filterMap["property"].(string); ok && property == "managedHub" {
+							if values, ok := filterMap["values"].([]interface{}); ok {
+								for _, value := range values {
+									if strValue, ok := value.(string); ok {
+										managedHubValues = append(managedHubValues, strValue)
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	klog.V(3).Infof("ManagedHub filter values in request: %v", managedHubValues)
+
 	fedConfig := getFedConfig(ctx, r)
 
 	wg := sync.WaitGroup{}
 	for _, remoteService := range fedConfig {
+		// If managedHubValues is not empty, check if remoteService.Name is in the list.
+		if len(managedHubValues) > 0 {
+			found := false
+			for _, hub := range managedHubValues {
+				if hub == remoteService.Name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				klog.V(3).Infof("Skipping remote service %s as it's not in the managedHub filter.", remoteService.Name)
+				continue
+			}
+		}
 		wg.Add(1)
 		go func(remoteService RemoteSearchService) {
 			defer wg.Done()
