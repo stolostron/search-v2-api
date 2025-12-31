@@ -204,6 +204,11 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 		for _, managedCluster := range managedClusters.Items {
 			hubName := managedCluster.GetName()
 			isManagedHub := false
+			// skip the local cluster
+			if managedCluster.GetLabels() != nil && managedCluster.GetLabels()["local-cluster"] == "true" {
+				klog.V(5).Info("Skipping local cluster.", "name", managedCluster.GetName())
+				continue
+			}
 			clusterClaims := managedCluster.UnstructuredContent()["status"].(map[string]interface{})["clusterClaims"].([]interface{})
 			for _, clusterClaim := range clusterClaims {
 				if clusterClaim.(map[string]interface{})["name"] == "hub.open-cluster-management.io" && clusterClaim.(map[string]interface{})["value"] != "NotInstalled" {

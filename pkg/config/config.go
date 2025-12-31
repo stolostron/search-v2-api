@@ -98,7 +98,7 @@ func new() *Config {
 			SubscriptionEnabled: getEnvAsBool("FEATURE_SUBSCRIPTION", false),      // In Dev mode default is true.
 		},
 		Federation: federationConfig{
-			GlobalHubName:  getEnv("GLOBAL_HUB_NAME", "global-hub"),
+			GlobalHubName:  getEnv("GLOBAL_HUB_NAME", "local-cluster"),
 			ConfigCacheTTL: getEnvAsInt("FEDERATION_CONFIG_CACHE_TTL", 2*60*1000), // 2 mins
 			HttpPool: httpClientPool{ // Default values for federated client pool.
 				MaxConnsPerHost:       getEnvAsInt("MAX_CONNS_PER_HOST", 2),
