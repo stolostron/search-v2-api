@@ -63,6 +63,11 @@ func (d *Data) mergeSearchResults(hubName string, results []SearchResult) {
 	}
 
 	for index, result := range results {
+		// Preserve __typename from the first response
+		if d.Search[index].TypeName == "" && result.TypeName != "" {
+			d.Search[index].TypeName = result.TypeName
+		}
+
 		// Count
 		d.Search[index].Count = d.Search[index].Count + int(result.Count)
 
@@ -115,6 +120,10 @@ func (d *Data) appendRelatedResults(mergedItems, newItems []SearchRelatedResult)
 		// If the kind is found, merge the newItems with the mergedItems.
 		for index, mergedItem := range mergedItems {
 			if mergedItem.Kind == kind {
+				// Preserve __typename from the first response if not already set
+				if mergedItems[index].TypeName == "" && newItem.TypeName != "" {
+					mergedItems[index].TypeName = newItem.TypeName
+				}
 				mergedItems[index].Count = mergedItem.Count + newItem.Count
 				mergedItems[index].Items = append(mergedItem.Items, newItem.Items...)
 				found = true
