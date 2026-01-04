@@ -74,7 +74,7 @@ func new() *Config {
 	// If environment variables are set, use default values
 	// Simply put, the order of preference is env -> default values (from left to right)
 	conf := &Config{
-		HubName:             getEnv("HUB_NAME", ""),
+		HubName:             getEnv("HUB_NAME", "global-hub"),
 		API_SERVER_URL:      getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
 		AuthCacheTTL:        getEnvAsInt("AUTH_CACHE_TTL", 60000),    // 1 minute
 		SharedCacheTTL:      getEnvAsInt("SHARED_CACHE_TTL", 300000), // 5 minutes
@@ -98,7 +98,7 @@ func new() *Config {
 			SubscriptionEnabled: getEnvAsBool("FEATURE_SUBSCRIPTION", false),      // In Dev mode default is true.
 		},
 		Federation: federationConfig{
-			GlobalHubName:  getEnv("GLOBAL_HUB_NAME", "local-cluster"),
+			GlobalHubName:  getEnv("GLOBAL_HUB_NAME", "global-hub"),
 			ConfigCacheTTL: getEnvAsInt("FEDERATION_CONFIG_CACHE_TTL", 2*60*1000), // 2 mins
 			HttpPool: httpClientPool{ // Default values for federated client pool.
 				MaxConnsPerHost:       getEnvAsInt("MAX_CONNS_PER_HOST", 2),

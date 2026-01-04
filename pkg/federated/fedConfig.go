@@ -21,9 +21,10 @@ import (
 
 // Holds the data needed to connect to a remote search service.
 type RemoteSearchService struct {
-	Name  string
-	URL   string
-	Token string
+	Name    string
+	URL     string
+	Token   string
+	Version string
 }
 
 type fedConfigCache struct {
@@ -209,11 +210,15 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 				klog.V(5).Info("Skipping local cluster.", "name", managedCluster.GetName())
 				continue
 			}
+			// store ACM version info
+			version := "unknown"
 			clusterClaims := managedCluster.UnstructuredContent()["status"].(map[string]interface{})["clusterClaims"].([]interface{})
 			for _, clusterClaim := range clusterClaims {
 				if clusterClaim.(map[string]interface{})["name"] == "hub.open-cluster-management.io" && clusterClaim.(map[string]interface{})["value"] != "NotInstalled" {
 					isManagedHub = true
-					break
+				}
+				if clusterClaim.(map[string]interface{})["name"] == "version.open-cluster-management.io" {
+					version = clusterClaim.(map[string]interface{})["value"].(string)
 				}
 			}
 			if !isManagedHub {
@@ -238,7 +243,8 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 					URL: fmt.Sprintf(
 						"https://%s/%s/api/v1/namespaces/%s/services/search-search-api:4010/proxy-service/searchapi/graphql",
 						clusterProxyRoute, hubName, acmInstallNamespaceMap[hubName]),
-					Token: string(secret.Data["token"]),
+					Token:   string(secret.Data["token"]),
+					Version: version,
 				})
 			}(hubName)
 		}
@@ -251,7 +257,7 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 func logFederationConfig(fedConfig []RemoteSearchService) {
 	configStr := ""
 	for _, service := range fedConfig {
-		configStr += fmt.Sprintf("{ Name: %s , URL: %s }\n", service.Name, service.URL)
+		configStr += fmt.Sprintf("{ Name: %s , URL: %s, Version: %s }\n", service.Name, service.URL, service.Version)
 	}
 	klog.Infof("Using federation config:\n %s", configStr)
 }
