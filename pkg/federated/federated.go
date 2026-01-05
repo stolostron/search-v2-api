@@ -128,14 +128,6 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 func sendResponse(w http.ResponseWriter, response *GraphQLPayload) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// Log the response being sent for debugging
-	if klog.V(3).Enabled() {
-		responseBody, err := json.Marshal(response)
-		if err == nil {
-			klog.V(3).Infof("Sending federated response: %s", string(responseBody))
-		}
-	}
-
 	result := json.NewEncoder(w).Encode(response)
 	if result != nil {
 		klog.Errorf("Error encoding federated response: %s", result)

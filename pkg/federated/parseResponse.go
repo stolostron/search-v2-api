@@ -11,17 +11,15 @@ import (
 
 // Used to parse the GraphQL payload.
 type SearchRelatedResult struct {
-	Count    int                      `json:"count,omitempty"`
-	Kind     string                   `json:"kind,omitempty"`
-	Items    []map[string]interface{} `json:"items,omitempty"`
-	TypeName string                   `json:"__typename,omitempty"`
+	Count int                      `json:"count,omitempty"`
+	Kind  string                   `json:"kind,omitempty"`
+	Items []map[string]interface{} `json:"items,omitempty"`
 }
 
 type SearchResult struct {
-	Count     int                      `json:"count,omitempty"`
-	Items     []map[string]interface{} `json:"items,omitempty"`
-	Related   []SearchRelatedResult    `json:"related,omitempty"`
-	TypeName  string                   `json:"__typename,omitempty"`
+	Count   int                      `json:"count,omitempty"`
+	Items   []map[string]interface{} `json:"items,omitempty"`
+	Related []SearchRelatedResult    `json:"related,omitempty"`
 }
 
 type SearchSchema struct {
