@@ -43,50 +43,7 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	// I want to get the values of managedhub from receivedBody and
-	// check if the remoteService.Name is in the managedhub values.
-	// If not, skip this remoteService.
-	var reqBodyMap map[string]interface{}
-	if err := json.Unmarshal(receivedBody, &reqBodyMap); err != nil {
-		klog.Errorf("Error unmarshaling federated request body: %s", err)
-	}
-	// Navigate to the managedHub values in the request body.
-	managedHubValues := []string{}
-	if variables, ok := reqBodyMap["variables"].(map[string]interface{}); ok {
-		var filtersList []interface{}
-		// Try path 1: variables.query.filters (for searchSchema)
-		if query, ok := variables["query"].(map[string]interface{}); ok {
-			if filters, ok := query["filters"].([]interface{}); ok {
-				filtersList = filters
-			}
-		}
-		// Try path 2: variables.input[0].filters (for searchResultItems)
-		if len(filtersList) == 0 {
-			if input, ok := variables["input"].([]interface{}); ok {
-				if len(input) > 0 {
-					if inputMap, ok := input[0].(map[string]interface{}); ok {
-						if filters, ok := inputMap["filters"].([]interface{}); ok {
-							filtersList = filters
-						}
-					}
-				}
-			}
-		}
-		// Extract managedHub values from filters
-		for _, filter := range filtersList {
-			if filterMap, ok := filter.(map[string]interface{}); ok {
-				if property, ok := filterMap["property"].(string); ok && property == "managedHub" {
-					if values, ok := filterMap["values"].([]interface{}); ok {
-						for _, value := range values {
-							if strValue, ok := value.(string); ok {
-								managedHubValues = append(managedHubValues, strValue)
-							}
-						}
-					}
-				}
-			}
-		}
-	}
+	managedHubValues := retrieveManagedHubValues(receivedBody)
 	klog.V(3).Infof("ManagedHub filter values in request: %v", managedHubValues)
 
 	fedConfig := getFedConfig(ctx, r)
@@ -122,6 +79,108 @@ func HandleFederatedRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Send JSON response to client.
 	sendResponse(w, &fedRequest.Response)
+}
+
+// retrieveManagedHubValues retrieves the managedHub values from the receivedBody of the federated request.
+func retrieveManagedHubValues(receivedBody []byte) []string {
+	var reqBodyMap map[string]interface{}
+	if err := json.Unmarshal(receivedBody, &reqBodyMap); err != nil {
+		klog.Errorf("Error unmarshaling federated request body: %s", err)
+		return []string{}
+	}
+
+	variables, ok := reqBodyMap["variables"].(map[string]interface{})
+	if !ok {
+		return []string{}
+	}
+
+	return extractManagedHubValues(extractFiltersFromVariables(variables))
+}
+
+// extractFiltersFromVariables extracts the filters list from variables using multiple paths.
+func extractFiltersFromVariables(variables map[string]interface{}) []interface{} {
+	// Try path 1: variables.query.filters (for searchSchema)
+	if filters := getFiltersFromQuery(variables); filters != nil {
+		return filters
+	}
+
+	// Try path 2: variables.input[0].filters (for searchResultItems)
+	return getFiltersFromInput(variables)
+}
+
+// getFiltersFromQuery extracts filters from variables.query.filters path.
+func getFiltersFromQuery(variables map[string]interface{}) []interface{} {
+	query, ok := variables["query"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	filters, ok := query["filters"].([]interface{})
+	if !ok {
+		return nil
+	}
+
+	return filters
+}
+
+// getFiltersFromInput extracts filters from variables.input[0].filters path.
+func getFiltersFromInput(variables map[string]interface{}) []interface{} {
+	input, ok := variables["input"].([]interface{})
+	if !ok || len(input) == 0 {
+		return nil
+	}
+
+	inputMap, ok := input[0].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	filters, ok := inputMap["filters"].([]interface{})
+	if !ok {
+		return nil
+	}
+
+	return filters
+}
+
+// extractManagedHubValues extracts managedHub values from a filters list.
+func extractManagedHubValues(filtersList []interface{}) []string {
+	managedHubValues := []string{}
+
+	for _, filter := range filtersList {
+		filterMap, ok := filter.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		property, ok := filterMap["property"].(string)
+		if !ok || property != "managedHub" {
+			continue
+		}
+
+		values := extractStringValues(filterMap["values"])
+		managedHubValues = append(managedHubValues, values...)
+	}
+
+	return managedHubValues
+}
+
+// extractStringValues extracts string values from an interface{} slice.
+func extractStringValues(valuesInterface interface{}) []string {
+	values, ok := valuesInterface.([]interface{})
+	if !ok {
+		return []string{}
+	}
+
+	stringValues := []string{}
+	for _, value := range values {
+		strValue, ok := value.(string)
+		if ok {
+			stringValues = append(stringValues, strValue)
+		}
+	}
+
+	return stringValues
 }
 
 // Send GraphQL/JSON response to client.
