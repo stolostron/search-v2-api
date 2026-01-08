@@ -13,6 +13,7 @@ import (
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/database"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 )
 
 // matchAnyLabel returns true if any of the label filters matches the event labels.
@@ -143,6 +144,190 @@ func eventMatchesAllFilters(event *model.Event, input *model.SearchInput) bool {
 	return true
 }
 
+// eventMatchesRbac validates that user has permission to see event
+func eventMatchesRbac(ctx context.Context, event *model.Event, wsSubID string) bool {
+	eventData := event.NewData
+	if eventData == nil {
+		eventData = event.OldData
+	}
+
+	// if no data to check, skip the event
+	if eventData == nil {
+		klog.Warningf("Event data is nil for event (UID: %s, Operation: %s)", event.UID, event.Operation)
+		return false
+	}
+
+	userData, userDataErr := rbac.GetCache().GetUserData(ctx)
+
+	if userDataErr != nil {
+		klog.Errorf("Failed to get user data for websocket subscription %s Rbac check: %v", wsSubID, userDataErr)
+		return false
+	}
+
+	var eventNamespace, eventKind, eventApigroup, eventCluster string
+	if _, ok := eventData["namespace"]; ok {
+		eventNamespace = eventData["namespace"].(string)
+	}
+	if _, ok := eventData["kind"]; ok {
+		eventKind = eventData["kind"].(string)
+	}
+	if _, ok := eventData["apigroup"]; ok {
+		eventApigroup = eventData["apigroup"].(string)
+	}
+	if _, ok := eventData["uid"]; ok {
+		eventCluster = strings.Split(eventData["uid"].(string), "/")[0]
+	}
+
+	// see rbacHelper.go buildRbacWhereClause() for influence
+	if userData.IsClusterAdmin {
+		klog.V(3).Info("User is cluster admin. Not checking RBAC for streamed event.")
+		return true
+	}
+
+	if config.Cfg.Features.FineGrainedRbac && len(userData.FGRbacNamespaces) > 0 {
+		klog.V(3).Infof("Using fine-grained RBAC for streamed event. Managed cluster namespaces: %+v", userData.FGRbacNamespaces)
+		return matchEventFineGrainedRbac(userData, eventData, eventNamespace, eventCluster, eventApigroup, eventKind) ||
+			matchEventHubClusterRbac(userData, eventData, eventNamespace, eventKind, eventApigroup)
+	}
+
+	if config.Cfg.Features.FineGrainedRbac && len(userData.FGRbacNamespaces) == 0 {
+		klog.V(3).Info("Using fine-grained RBAC for streamed event. User is not authorized to any managed cluster namespace.")
+		return matchEventHubClusterRbac(userData, eventData, eventNamespace, eventKind, eventApigroup)
+	}
+
+	klog.V(3).Info("Using basic RBAC for managed clusters streamed event.")
+	return matchEventManagedClusterRbac(userData, eventData, eventCluster) ||
+		matchEventHubClusterRbac(userData, eventData, eventNamespace, eventApigroup, eventKind)
+}
+
+func matchEventFineGrainedRbac(userData rbac.UserData, eventData map[string]any, eventNamespace, eventCluster, eventApigroup, eventKind string) bool {
+	if matchEventFineGrainedRbacNamespaceObject(userData, eventData, eventNamespace, eventCluster) ||
+		(matchEventFineGrainedRbacGroupKind(eventApigroup, eventKind) &&
+			matchEventFineGrainedRbacClusterAndNamespaces(userData, eventNamespace, eventCluster)) {
+		return true
+	}
+	return false
+}
+
+func matchEventFineGrainedRbacNamespaceObject(userData rbac.UserData, eventData map[string]any, eventNamespace, eventCluster string) bool {
+	if _, ok := eventData["apigroup"]; ok {
+		return false
+	}
+	if v, ok := eventData["kind"]; !ok && v.(string) != "Namespace" {
+		return false
+	}
+
+	for cluster, namespaces := range userData.FGRbacNamespaces {
+		if cluster == eventCluster {
+			for _, namespacePerm := range namespaces {
+				if namespacePerm == eventNamespace {
+					// user has permission to view cluster x and namespace y
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func matchEventFineGrainedRbacClusterAndNamespaces(userData rbac.UserData, eventNamespace, eventCluster string) bool {
+	for cluster, namespaces := range userData.FGRbacNamespaces {
+		if cluster == eventCluster {
+			if len(namespaces) == 1 && namespaces[0] == "*" {
+				// user has permission to see all namespaces in cluster x
+				return true
+			} else {
+				for _, namespacePerm := range namespaces {
+					if namespacePerm == eventNamespace {
+						// user has permission to see namespace x in cluster y
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+func matchEventFineGrainedRbacGroupKind(eventApigroup, eventKind string) bool {
+	for group, kinds := range kubevirtResourcesMap {
+		if len(kinds) == 0 && group == eventApigroup {
+			return true
+		} else {
+			if group == eventApigroup {
+				for _, kind := range kinds {
+					if kind == eventKind {
+						// user has permission to apigroup x and kind y
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+func matchEventManagedClusterRbac(userData rbac.UserData, eventData map[string]any, eventCluster string) bool {
+	if eventData["_hubClusterResource"] != nil {
+		for _, clusterPerm := range getKeys(userData.ManagedClusters) {
+			if clusterPerm == eventCluster {
+				// user has permission to see everything on managed cluster x
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func matchEventClusterScopedResources(userData rbac.UserData, eventKind, eventApigroup, eventNamespace string) bool {
+	if len(userData.CsResources) == 0 {
+		return true
+	} else if len(userData.CsResources) == 1 && userData.CsResources[0].Apigroup == "*" && userData.CsResources[0].Kind == "*" {
+		return true
+	} else {
+		return eventNamespace == "" && matchEventApigroupKind(userData, eventKind, eventApigroup)
+	}
+}
+
+func matchEventApigroupKind(userData rbac.UserData, eventKind, eventApigroup string) bool {
+	for _, resourcePerm := range userData.CsResources {
+		if resourcePerm.Apigroup == "*" && resourcePerm.Kind == "*" ||
+			resourcePerm.Apigroup == "*" && resourcePerm.Kind == eventKind ||
+			resourcePerm.Apigroup == eventApigroup && resourcePerm.Kind == "*" ||
+			resourcePerm.Apigroup == eventApigroup && resourcePerm.Kind == eventKind {
+			return true
+		}
+	}
+	return false
+}
+
+func matchEventNamespaceScopedResources(userData rbac.UserData, eventNamespace string) bool {
+	namespacePerms := getKeys(userData.NsResources)
+	if len(userData.NsResources) == 0 {
+		return false
+	}
+	if len(userData.NsResources) == 1 && namespacePerms[0] == "*" {
+		return true
+	}
+	for _, namespacePerm := range namespacePerms {
+		if namespacePerm == eventNamespace {
+			return true
+		}
+	}
+	return false
+}
+
+func matchEventHubClusterRbac(userData rbac.UserData, eventData map[string]any, eventNamespace, eventKind, eventApigroup string) bool {
+	if len(userData.CsResources) == 0 && len(userData.NsResources) == 0 {
+		return false
+	} else {
+		if _, ok := eventData["_hubClusterResource"]; ok {
+			return matchEventClusterScopedResources(userData, eventKind, eventApigroup, eventNamespace) || matchEventNamespaceScopedResources(userData, eventNamespace)
+		}
+	}
+	return false
+}
+
 // validateInputFilters validates the input filters.
 func validateInputFilters(input *model.SearchInput) error {
 	if input != nil && len(input.Filters) > 0 {
@@ -242,7 +427,12 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 					continue
 				}
 
-				// TODO: Filter events for user's RBAC permissions. ACM-26248
+				// Filter events based on user RBAC
+				if !eventMatchesRbac(ctx, event, subID) {
+					klog.V(4).Infof("Subscription watch(%s) event did not match RBAC filters (UID: %s, Operation: %s)",
+						subID, event.UID, event.Operation)
+					continue
+				}
 
 				// Send filtered event to client
 				select {
