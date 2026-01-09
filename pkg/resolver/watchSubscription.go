@@ -213,7 +213,8 @@ func matchEventFineGrainedRbacNamespaceObject(userData rbac.UserData, eventData 
 	if _, ok := eventData["apigroup"]; ok {
 		return false
 	}
-	if v, ok := eventData["kind"]; !ok && v.(string) != "Namespace" {
+	v, ok := eventData["kind"]
+	if !ok || (v != nil && v.(string) != "Namespace") {
 		return false
 	}
 
@@ -268,7 +269,7 @@ func matchEventFineGrainedRbacGroupKind(eventApigroup, eventKind string) bool {
 }
 
 func matchEventManagedClusterRbac(userData rbac.UserData, eventData map[string]any, eventCluster string) bool {
-	if eventData["_hubClusterResource"] != nil {
+	if _, ok := eventData["_hubClusterResource"]; !ok {
 		for _, clusterPerm := range getKeys(userData.ManagedClusters) {
 			if clusterPerm == eventCluster {
 				// user has permission to see everything on managed cluster x
@@ -281,7 +282,7 @@ func matchEventManagedClusterRbac(userData rbac.UserData, eventData map[string]a
 
 func matchEventClusterScopedResources(userData rbac.UserData, eventKind, eventApigroup, eventNamespace string) bool {
 	if len(userData.CsResources) == 0 {
-		return true
+		return true // TODO: should this return false?. see corresponding matchClusterScopedResources() in rbacHelper.go
 	} else if len(userData.CsResources) == 1 && userData.CsResources[0].Apigroup == "*" && userData.CsResources[0].Kind == "*" {
 		return true
 	} else {
