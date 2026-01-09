@@ -282,7 +282,7 @@ func matchEventManagedClusterRbac(userData rbac.UserData, eventData map[string]a
 
 func matchEventClusterScopedResources(userData rbac.UserData, eventKind, eventApigroup, eventNamespace string) bool {
 	if len(userData.CsResources) == 0 {
-		return true // TODO: should this return false?. see corresponding matchClusterScopedResources() in rbacHelper.go
+		return false
 	} else if len(userData.CsResources) == 1 && userData.CsResources[0].Apigroup == "*" && userData.CsResources[0].Kind == "*" {
 		return true
 	} else {

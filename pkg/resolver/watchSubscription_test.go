@@ -1207,8 +1207,8 @@ func TestMatchEventClusterScopedResourcesNoResources(t *testing.T) {
 	// When: we check if cluster-scoped resource matches user rbac
 	match := matchEventClusterScopedResources(userData, eventKind, eventApigroup, eventNamespace)
 
-	// Then: there's a match TODO: regarding other comments when len(csResources) == 0 should be false not true? rbacHelper.go matchClusterScopedResources()
-	assert.True(t, match, "Expected empty cluster-scoped resource list to match")
+	// Then: there's no match
+	assert.False(t, match, "Expected empty cluster-scoped resource list not to match")
 }
 
 func TestMatchEventClusterScopedResourcesMatch(t *testing.T) {
@@ -1454,4 +1454,24 @@ func TestMatchEventHubClusterRbacNotHubClusterEvent(t *testing.T) {
 
 	// Then: there's no match because event is not hub cluster resource
 	assert.False(t, match, "Expected event not to match rbac because event is not hub cluster resource")
+}
+
+func TestEventMatchesRbacIsClusterAdmin(t *testing.T) {
+	// Given: event data and cluster admin rbac
+	// setup event
+	event := &model.Event{NewData: map[string]any{"kind": "VirtualMachine", "apigroup": "kubevirt.io",
+		"namespace": "openshift-cnv", "uid": "local-cluster/asdf1234"}}
+
+	// Setup context with auth token
+	ctx := context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "test-token-123")
+
+	// Setup mock cache with cluster admin user
+	cache := rbac.GetCache()
+	rbac.SetupMockClusterAdmin(cache, "test-token-123", "test-user-uid")
+
+	// When: we check if event matches rbac
+	match := eventMatchesRbac(ctx, event, "")
+
+	// Then: there's a match
+	assert.True(t, match, "Expected event to match cluster admin rbac")
 }
