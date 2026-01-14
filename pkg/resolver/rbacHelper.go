@@ -61,7 +61,7 @@ func matchApigroupKind(resources []rbac.Resource) exp.ExpressionList {
 
 func matchClusterScopedResources(csRes []rbac.Resource, userInfo v1.UserInfo) exp.ExpressionList {
 	if len(csRes) == 0 {
-		return goqu.Or() // return empty clause
+		return goqu.And() // return false clause
 
 		// user has access to all cluster scoped resources
 	} else if len(csRes) == 1 && csRes[0].Apigroup == "*" && csRes[0].Kind == "*" {
