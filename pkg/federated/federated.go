@@ -199,7 +199,7 @@ func sendResponse(w http.ResponseWriter, response *GraphQLPayload) {
 // in searchSchema requests since older versions don't support filtering searchSchema results.
 func modifyRequestBodyForVersion(remoteService RemoteSearchService, receivedBody []byte) []byte {
 	// Check if the version includes "2.13"
-	if !strings.Contains(remoteService.Version, "2.13") {
+	if !strings.HasPrefix(remoteService.Version, "2.13") {
 		klog.V(5).Infof("Version %s doesn't require modification, using original request body", remoteService.Version)
 		return receivedBody
 	}
