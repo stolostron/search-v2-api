@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"strings"
 
 	klog "k8s.io/klog/v2"
@@ -13,7 +14,6 @@ import (
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/database"
-	"github.com/stolostron/search-v2-api/pkg/rbac"
 )
 
 // matchAnyLabel returns true if any of the label filters matches the event labels.
@@ -157,176 +157,45 @@ func eventMatchesRbac(ctx context.Context, event *model.Event, wsSubID string) b
 		return false
 	}
 
-	userData, userDataErr := rbac.GetCache().GetUserData(ctx)
-
-	if userDataErr != nil {
-		klog.Errorf("Failed to get user data for websocket subscription %s Rbac check: %v", wsSubID, userDataErr)
-		return false
-	}
-
 	var eventNamespace, eventKind, eventApigroup, eventCluster string
+	eventIsHubClusterResource := false
 	if _, ok := eventData["namespace"]; ok {
 		eventNamespace = eventData["namespace"].(string)
 	}
-	if _, ok := eventData["kind"]; ok {
-		eventKind = eventData["kind"].(string)
+	if _, ok := eventData["kind_plural"]; ok {
+		eventKind = eventData["kind_plural"].(string)
 	}
 	if _, ok := eventData["apigroup"]; ok {
 		eventApigroup = eventData["apigroup"].(string)
 	}
-	if _, ok := eventData["uid"]; ok {
-		eventCluster = strings.Split(eventData["uid"].(string), "/")[0]
+	if _, ok := eventData["cluster"]; ok {
+		eventCluster = eventData["cluster"].(string)
+	}
+	if _, ok := eventData["_hubClusterResource"]; ok {
+		eventIsHubClusterResource = true
 	}
 
-	// see rbacHelper.go buildRbacWhereClause() for influence
-	if userData.IsClusterAdmin {
-		klog.V(3).Info("User is cluster admin. Not checking RBAC for streamed event.")
-		return true
-	}
-
-	if config.Cfg.Features.FineGrainedRbac && len(userData.FGRbacNamespaces) > 0 {
-		klog.V(3).Infof("Using fine-grained RBAC for streamed event. Managed cluster namespaces: %+v", userData.FGRbacNamespaces)
-		return matchEventFineGrainedRbac(userData, eventData, eventNamespace, eventCluster, eventApigroup, eventKind) ||
-			matchEventHubClusterRbac(userData, eventData, eventNamespace, eventKind, eventApigroup)
-	}
-
-	if config.Cfg.Features.FineGrainedRbac && len(userData.FGRbacNamespaces) == 0 {
-		klog.V(3).Info("Using fine-grained RBAC for streamed event. User is not authorized to any managed cluster namespace.")
-		return matchEventHubClusterRbac(userData, eventData, eventNamespace, eventKind, eventApigroup)
-	}
-
-	klog.V(3).Info("Using basic RBAC for managed clusters streamed event.")
-	return matchEventManagedClusterRbac(userData, eventData, eventCluster) ||
-		matchEventHubClusterRbac(userData, eventData, eventNamespace, eventApigroup, eventKind)
-}
-
-func matchEventFineGrainedRbac(userData rbac.UserData, eventData map[string]any, eventNamespace, eventCluster, eventApigroup, eventKind string) bool {
-	if matchEventFineGrainedRbacNamespaceObject(userData, eventData, eventNamespace, eventCluster) ||
-		(matchEventFineGrainedRbacGroupKind(eventApigroup, eventKind) &&
-			matchEventFineGrainedRbacClusterAndNamespaces(userData, eventNamespace, eventCluster)) {
-		return true
-	}
-	return false
-}
-
-func matchEventFineGrainedRbacNamespaceObject(userData rbac.UserData, eventData map[string]any, eventNamespace, eventCluster string) bool {
-	if _, ok := eventData["apigroup"]; ok {
-		return false
-	}
-	v, ok := eventData["kind"]
-	if !ok || (v != nil && v.(string) != "Namespace") {
-		return false
-	}
-
-	for cluster, namespaces := range userData.FGRbacNamespaces {
-		if cluster == eventCluster {
-			for _, namespacePerm := range namespaces {
-				if namespacePerm == eventNamespace {
-					// user has permission to view cluster x and namespace y
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-func matchEventFineGrainedRbacClusterAndNamespaces(userData rbac.UserData, eventNamespace, eventCluster string) bool {
-	for cluster, namespaces := range userData.FGRbacNamespaces {
-		if cluster == eventCluster {
-			if len(namespaces) == 1 && namespaces[0] == "*" {
-				// user has permission to see all namespaces in cluster x
-				return true
-			} else {
-				for _, namespacePerm := range namespaces {
-					if namespacePerm == eventNamespace {
-						// user has permission to see namespace x in cluster y
-						return true
-					}
-				}
-			}
-		}
-	}
-	return false
-}
-
-func matchEventFineGrainedRbacGroupKind(eventApigroup, eventKind string) bool {
-	for group, kinds := range kubevirtResourcesMap {
-		if len(kinds) == 0 && group == eventApigroup {
-			return true
-		} else {
-			if group == eventApigroup {
-				for _, kind := range kinds {
-					if kind == eventKind {
-						// user has permission to apigroup x and kind y
-						return true
-					}
-				}
-			}
-		}
-	}
-	return false
-}
-
-func matchEventManagedClusterRbac(userData rbac.UserData, eventData map[string]any, eventCluster string) bool {
-	if _, ok := eventData["_hubClusterResource"]; !ok {
-		for _, clusterPerm := range getKeys(userData.ManagedClusters) {
-			if clusterPerm == eventCluster {
-				// user has permission to see everything on managed cluster x
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func matchEventClusterScopedResources(userData rbac.UserData, eventKind, eventApigroup, eventNamespace string) bool {
-	if len(userData.CsResources) == 0 {
-		return false
-	} else if len(userData.CsResources) == 1 && userData.CsResources[0].Apigroup == "*" && userData.CsResources[0].Kind == "*" {
-		return true
+	if eventIsHubClusterResource {
+		return checkAndCache(ctx, eventApigroup, eventKind, eventNamespace, eventCluster, eventIsHubClusterResource) // "oc auth can-i watch <eventApigroup>.<eventKind> [-n <eventNamespace>] --as=<user>"
+	} else if config.Cfg.Features.FineGrainedRbac {
+		return false // TODO: by Jorge :)
 	} else {
-		return eventNamespace == "" && matchEventApigroupKind(userData, eventKind, eventApigroup)
+		return checkAndCache(ctx, "", "", "", eventCluster, eventIsHubClusterResource) // "oc auth can-i create managedclusterview -n <eventCluster> --as=<user>
 	}
 }
 
-func matchEventApigroupKind(userData rbac.UserData, eventKind, eventApigroup string) bool {
-	for _, resourcePerm := range userData.CsResources {
-		if resourcePerm.Apigroup == "*" && resourcePerm.Kind == "*" ||
-			resourcePerm.Apigroup == "*" && resourcePerm.Kind == eventKind ||
-			resourcePerm.Apigroup == eventApigroup && resourcePerm.Kind == "*" ||
-			resourcePerm.Apigroup == eventApigroup && resourcePerm.Kind == eventKind {
-			return true
-		}
-	}
-	return false
-}
-
-func matchEventNamespaceScopedResources(userData rbac.UserData, eventNamespace string) bool {
-	namespacePerms := getKeys(userData.NsResources)
-	if len(userData.NsResources) == 0 {
+func checkAndCache(ctx context.Context, eventApigroup, eventKind, eventNamespace, eventCluster string, eventIsHubClusterResource bool) bool {
+	userWatchData, userWatchDataErr := rbac.GetWatchCache().GetUserWatchData(ctx)
+	if userWatchDataErr != nil {
+		klog.Errorf("Failed to get user watch data to verify permissions to view event: %v", userWatchDataErr)
 		return false
 	}
-	if len(userData.NsResources) == 1 && namespacePerms[0] == "*" {
-		return true
-	}
-	for _, namespacePerm := range namespacePerms {
-		if namespacePerm == eventNamespace {
-			return true
-		}
-	}
-	return false
-}
 
-func matchEventHubClusterRbac(userData rbac.UserData, eventData map[string]any, eventNamespace, eventKind, eventApigroup string) bool {
-	if len(userData.CsResources) == 0 && len(userData.NsResources) == 0 {
-		return false
+	if eventIsHubClusterResource {
+		return userWatchData.CheckPermissionAndCache(ctx, "watch", eventApigroup, eventKind, eventNamespace)
 	} else {
-		if _, ok := eventData["_hubClusterResource"]; ok {
-			return matchEventClusterScopedResources(userData, eventKind, eventApigroup, eventNamespace) || matchEventNamespaceScopedResources(userData, eventNamespace)
-		}
+		return userWatchData.CheckPermissionAndCache(ctx, "create", "view.open-cluster-management.io", "managedclusterviews", eventCluster)
 	}
-	return false
 }
 
 // validateInputFilters validates the input filters.
