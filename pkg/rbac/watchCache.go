@@ -125,7 +125,6 @@ func (u *UserWatchData) CheckPermissionAndCache(ctx context.Context, verb, apigr
 		Namespace: namespace,
 	}
 
-	needsInvalidation := false
 	// check cache for record and return if cache ttl still valid
 	u.PermissionsLock.RLock()
 	if entry, ok := u.Permissions[key]; ok {
@@ -133,11 +132,9 @@ func (u *UserWatchData) CheckPermissionAndCache(ctx context.Context, verb, apigr
 			klog.V(6).Infof("Using cached watch permission: %+v = %v", key, entry.Allowed)
 			u.PermissionsLock.RUnlock()
 			return entry.Allowed
-		} else {
-			u.PermissionsLock.RUnlock()
-			needsInvalidation = true
 		}
 	}
+	u.PermissionsLock.RUnlock()
 
 	klog.V(6).Infof("Cache miss for watch permission: %+v. Making SSAR call.", key)
 	allowed := u.userAuthorizedWatchSSAR(ctx, u.AuthzClient, verb, apigroup, kind, namespace)
@@ -145,7 +142,7 @@ func (u *UserWatchData) CheckPermissionAndCache(ctx context.Context, verb, apigr
 	// store in result cache
 	u.PermissionsLock.Lock()
 	defer u.PermissionsLock.Unlock()
-	if u.Permissions == nil || needsInvalidation {
+	if u.Permissions == nil {
 		u.Permissions = make(map[WatchPermissionKey]*WatchPermissionEntry)
 	}
 	u.Permissions[key] = &WatchPermissionEntry{
