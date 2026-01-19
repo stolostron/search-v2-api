@@ -27,6 +27,7 @@ import (
 )
 
 const impersonationConfigCreationerror = "error creating clientset with impersonation config"
+const rbacNoUidFound = "noUidFound"
 
 // Contains data about the resources the user is allowed to access.
 type UserData struct {
@@ -71,11 +72,11 @@ func (cache *Cache) GetUserUID(ctx context.Context) (string, authv1.UserInfo) {
 			return uid, tokenReview.Status.User
 		} else {
 			klog.Error("Error finding uid for user: ", tokenReview.Status.User.Username, err)
-			return "noUidFound", authv1.UserInfo{}
+			return rbacNoUidFound, authv1.UserInfo{}
 		}
 	} else {
 		klog.Error("Error finding uid for user: ContextAuthTokenKey IS NOT SET ")
-		return "noUidFound", authv1.UserInfo{}
+		return rbacNoUidFound, authv1.UserInfo{}
 	}
 }
 
@@ -87,7 +88,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	var err error
 	var userInfo authv1.UserInfo
 	// get uid from tokenreview
-	if uid, userInfo = cache.GetUserUID(ctx); uid == "noUidFound" {
+	if uid, userInfo = cache.GetUserUID(ctx); uid == rbacNoUidFound {
 		return user, fmt.Errorf("cannot find user with uid: %s", uid)
 	}
 	clientToken := ctx.Value(ContextAuthTokenKey).(string)

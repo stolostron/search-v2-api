@@ -187,7 +187,7 @@ func eventMatchesRbac(ctx context.Context, event *model.Event, wsSubID string) b
 func checkAndCache(ctx context.Context, eventApigroup, eventKind, eventNamespace, eventCluster string, eventIsHubClusterResource bool) bool {
 	userWatchData, userWatchDataErr := rbac.GetWatchCache().GetUserWatchData(ctx)
 	if userWatchDataErr != nil {
-		klog.Errorf("Failed to get user watch data to verify permissions to view event: %v", userWatchDataErr)
+		klog.Errorf("Failed to get user watch data to verify permissions to view event. Not authorizing with error: %v", userWatchDataErr)
 		return false
 	}
 

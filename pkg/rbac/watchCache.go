@@ -54,8 +54,6 @@ func (w *WatchCache) GetUserWatchData(ctx context.Context) (*UserWatchData, erro
 }
 
 func (w *WatchCache) GetUserWatchDataCache(ctx context.Context, authzClient v1.AuthorizationV1Interface) (*UserWatchData, error) {
-	fmt.Println("in getuserwatchdatacache")
-	fmt.Println("getting user uid from context")
 	uid, userInfo, err := getUserUidFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -73,14 +71,13 @@ func (w *WatchCache) GetUserWatchDataCache(ctx context.Context, authzClient v1.A
 		return userData, nil
 	}
 
-	// else init user entry in cache with permissions structs and authzClient for making SSAR calls
+	// init user entry in cache with permissions structs and authzClient for making SSAR calls
 	userData := &UserWatchData{
 		Permissions:     make(map[WatchPermissionKey]*WatchPermissionEntry),
 		PermissionsLock: sync.RWMutex{},
 		ttl:             time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond,
 	}
 
-	fmt.Println("setting up authzclient")
 	if authzClient != nil {
 		userData.AuthzClient = authzClient
 	} else {
@@ -100,10 +97,6 @@ func GetWatchCache() *WatchCache {
 }
 
 func (u *UserWatchData) userAuthorizedWatchSSAR(ctx context.Context, authzClient v1.AuthorizationV1Interface, verb, apigroup, kind, namespace string) bool {
-	fmt.Println("verb: ", verb)
-	fmt.Println("apigroup: ", apigroup)
-	fmt.Println("kind: ", kind)
-	fmt.Println("namespace: ", namespace)
 	accessCheck := &authz.SelfSubjectAccessReview{
 		Spec: authz.SelfSubjectAccessReviewSpec{
 			ResourceAttributes: &authz.ResourceAttributes{
@@ -119,14 +112,12 @@ func (u *UserWatchData) userAuthorizedWatchSSAR(ctx context.Context, authzClient
 		klog.Errorf("Error during watch self subject access review: %v", err)
 		return false
 	}
-	fmt.Println("SSAR result: ", result.Status.Allowed)
-	klog.V(6).Infof("SelfSubjectAccessReview result for verb=%s resource=%s group=%s namespace=%s: %v",
+	klog.V(6).Infof("SelfSubjectAccessReview watch result for verb=%s resource=%s group=%s namespace=%s: %v",
 		verb, kind, apigroup, namespace, result.Status.Allowed)
 	return result.Status.Allowed
 }
 
 func (u *UserWatchData) CheckPermissionAndCache(ctx context.Context, verb, apigroup, kind, namespace string) bool {
-	fmt.Println("in CheckPermissionsAndCache")
 	key := WatchPermissionKey{
 		Verb:      verb,
 		Apigroup:  apigroup,
@@ -134,28 +125,27 @@ func (u *UserWatchData) CheckPermissionAndCache(ctx context.Context, verb, apigr
 		Namespace: namespace,
 	}
 
-	// check cache
+	needsInvalidation := false
+	// check cache for record and return if cache ttl still valid
 	u.PermissionsLock.RLock()
 	if entry, ok := u.Permissions[key]; ok {
 		if time.Since(entry.UpdatedAt) < u.ttl {
-			fmt.Printf("record in cache: returning %v", entry.Allowed)
 			klog.V(6).Infof("Using cached watch permission: %+v = %v", key, entry.Allowed)
 			u.PermissionsLock.RUnlock()
 			return entry.Allowed
 		} else {
-			fmt.Println("cache entry ttl timeout, making fresh call")
+			u.PermissionsLock.RUnlock()
+			needsInvalidation = true
 		}
 	}
-	u.PermissionsLock.RUnlock()
 
-	fmt.Println("record not in cache, making SSAR call")
 	klog.V(6).Infof("Cache miss for watch permission: %+v. Making SSAR call.", key)
 	allowed := u.userAuthorizedWatchSSAR(ctx, u.AuthzClient, verb, apigroup, kind, namespace)
 
 	// store in result cache
 	u.PermissionsLock.Lock()
 	defer u.PermissionsLock.Unlock()
-	if u.Permissions == nil {
+	if u.Permissions == nil || needsInvalidation {
 		u.Permissions = make(map[WatchPermissionKey]*WatchPermissionEntry)
 	}
 	u.Permissions[key] = &WatchPermissionEntry{
@@ -171,7 +161,7 @@ func getUserUidFromContext(ctx context.Context) (string, authv1.UserInfo, error)
 	// we need a regular cache instance to be able to reuse token review code to build impersonation client
 	cache := GetCache()
 	uid, userInfo := cache.GetUserUID(ctx)
-	if uid == "noUidFound" {
+	if uid == rbacNoUidFound {
 		return "", authv1.UserInfo{}, errors.New("failed to get uid from context")
 	}
 
@@ -182,9 +172,6 @@ func createImpersonationClient(userInfo authv1.UserInfo) v1.AuthorizationV1Inter
 	klog.V(5).Infof("Creating impersonation client for user %s", userInfo.Username)
 
 	restConfig := config.GetClientConfig()
-	fmt.Println("user uid: ", userInfo.UID)
-	fmt.Println("user username: ", userInfo.Username)
-	fmt.Println("user groups: ", userInfo.Groups)
 
 	impersonationConfig := &rest.ImpersonationConfig{}
 	if userInfo.Username != "" {
