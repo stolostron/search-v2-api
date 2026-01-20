@@ -1217,6 +1217,11 @@ func TestEventMatchesRbacHubClusterResource_Disallowed(t *testing.T) {
 }
 
 func TestEventMatchesRbacManagedClusterResource_Allowed(t *testing.T) {
+	originalFineGrainedRbac := config.Cfg.Features.FineGrainedRbac
+	config.Cfg.Features.FineGrainedRbac = false
+	defer func() {
+		config.Cfg.Features.FineGrainedRbac = originalFineGrainedRbac
+	}()
 	// Given: a user with permissions to watch managed cluster resource streamed event
 	ctx := createTestContext("test-user-1", "testuser1")
 	permissions := map[rbac.WatchPermissionKey]*rbac.WatchPermissionEntry{
@@ -1252,6 +1257,11 @@ func TestEventMatchesRbacManagedClusterResource_Allowed(t *testing.T) {
 }
 
 func TestEventMatchesRbacManagedClusterResource_Disallowed(t *testing.T) {
+	originalFineGrainedRbac := config.Cfg.Features.FineGrainedRbac
+	config.Cfg.Features.FineGrainedRbac = false
+	defer func() {
+		config.Cfg.Features.FineGrainedRbac = originalFineGrainedRbac
+	}()
 	// Given: a user with misaligned permissions to watch managed cluster resource streamed event
 	ctx := createTestContext("test-user-1", "testuser1")
 	permissions := map[rbac.WatchPermissionKey]*rbac.WatchPermissionEntry{
