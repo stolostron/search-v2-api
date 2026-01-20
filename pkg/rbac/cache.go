@@ -23,7 +23,7 @@ type Cache struct {
 
 	// Clients to external APIs.
 	// Defining these here allow the tests to replace with a mock client.
-	authnClient       authnv1.AuthenticationV1Interface
+	AuthnClient       authnv1.AuthenticationV1Interface
 	pool              pgxpoolmock.PgxPool // Database client
 	restConfig        *rest.Config
 	dbConnInitialized bool

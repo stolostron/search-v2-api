@@ -145,7 +145,7 @@ func eventMatchesAllFilters(event *model.Event, input *model.SearchInput) bool {
 }
 
 // eventMatchesRbac validates that user has permission to see event
-func eventMatchesRbac(ctx context.Context, event *model.Event, wsSubID string) bool {
+func eventMatchesRbac(ctx context.Context, event *model.Event) bool {
 	eventData := event.NewData
 	if eventData == nil {
 		eventData = event.OldData
@@ -298,7 +298,7 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 				}
 
 				// Filter events based on user RBAC
-				if !eventMatchesRbac(ctx, event, subID) {
+				if !eventMatchesRbac(ctx, event) {
 					klog.V(4).Infof("Subscription watch(%s) event did not match RBAC filters (UID: %s, Operation: %s)",
 						subID, event.UID, event.Operation)
 					continue

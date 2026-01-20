@@ -28,7 +28,7 @@ type UserWatchData struct {
 	AuthzClient     v1.AuthorizationV1Interface
 	Permissions     map[WatchPermissionKey]*WatchPermissionEntry
 	PermissionsLock sync.RWMutex
-	ttl             time.Duration
+	Ttl             time.Duration
 }
 
 type WatchPermissionKey struct {
@@ -44,10 +44,6 @@ type WatchPermissionEntry struct {
 }
 
 var watchCacheInst = WatchCache{}
-
-func (w *WatchCache) isValid() bool {
-	return true
-}
 
 func (w *WatchCache) GetUserWatchData(ctx context.Context) (*UserWatchData, error) {
 	return w.GetUserWatchDataCache(ctx, nil)
@@ -75,7 +71,7 @@ func (w *WatchCache) GetUserWatchDataCache(ctx context.Context, authzClient v1.A
 	userData := &UserWatchData{
 		Permissions:     make(map[WatchPermissionKey]*WatchPermissionEntry),
 		PermissionsLock: sync.RWMutex{},
-		ttl:             time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond,
+		Ttl:             time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond,
 	}
 
 	if authzClient != nil {
@@ -128,7 +124,7 @@ func (u *UserWatchData) CheckPermissionAndCache(ctx context.Context, verb, apigr
 	// check cache for record and return if cache ttl still valid
 	u.PermissionsLock.RLock()
 	if entry, ok := u.Permissions[key]; ok {
-		if time.Since(entry.UpdatedAt) < u.ttl {
+		if time.Since(entry.UpdatedAt) < u.Ttl {
 			klog.V(6).Infof("Using cached watch permission: %+v = %v", key, entry.Allowed)
 			u.PermissionsLock.RUnlock()
 			return entry.Allowed
