@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	clusterviewv1alpha1 "github.com/stolostron/cluster-lifecycle-api/clusterview/v1alpha1"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/metrics"
 	authv1 "k8s.io/api/authentication/v1"
@@ -32,6 +33,9 @@ type UserData struct {
 	FGRbacNamespaces map[string][]string   // Fine-grained RBAC (cluster + namespace)
 	NsResources      map[string][]Resource // Namespaced resources on hub the user has list access.
 	ManagedClusters  map[string]struct{}   // Managed clusters where the user has view access.
+
+	// Fine-grained RBAC, UserPermissions.clusterview.open-cluster-management.io
+	UserPermissionList clusterviewv1alpha1.UserPermissionList
 }
 
 // Extend UserData with caching information.
@@ -40,10 +44,11 @@ type UserDataCache struct {
 	userInfo authv1.UserInfo
 
 	// Metadata to manage the state of the cached data.
-	clustersCache cacheMetadata
-	csrCache      cacheMetadata
-	fgRbacNsCache cacheMetadata // Fine-grained RBAC (cluster + namespace)
-	nsrCache      cacheMetadata
+	clustersCache       cacheMetadata
+	csrCache            cacheMetadata
+	fgRbacNsCache       cacheMetadata // Fine-grained RBAC (cluster + namespace)
+	nsrCache            cacheMetadata
+	userPermissionCache cacheMetadata // UserPermissions.clusterview.open-cluster-management.io
 
 	// Client to external API to be replaced with a mock by unit tests.
 	authzClient v1.AuthorizationV1Interface
@@ -101,11 +106,12 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 		}
 		// User not in cache , Initialize and assign to the UID
 		user = &UserDataCache{
-			userInfo:      userInfo,
-			clustersCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
-			csrCache:      cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
-			fgRbacNsCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
-			nsrCache:      cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+			userInfo:            userInfo,
+			clustersCache:       cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+			csrCache:            cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+			fgRbacNsCache:       cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+			nsrCache:            cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+			userPermissionCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 		}
 		if cache.users == nil {
 			cache.users = map[string]*UserDataCache{}
@@ -218,11 +224,12 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 	// Proceed if user's rbac data exists
 	// Get a copy of the current user access if user data exists
 	userAccess := UserData{
-		CsResources:      userDataCache.GetCsResourcesCopy(),
-		FGRbacNamespaces: userDataCache.GetFGRbacNamespacesCopy(),
-		IsClusterAdmin:   userDataCache.UserData.IsClusterAdmin, //nolint:staticcheck // "could remove embedded field 'UserData' from selector
-		NsResources:      userDataCache.GetNsResourcesCopy(),
-		ManagedClusters:  userDataCache.GetManagedClustersCopy(),
+		CsResources:        userDataCache.GetCsResourcesCopy(),
+		FGRbacNamespaces:   userDataCache.GetFGRbacNamespacesCopy(),
+		IsClusterAdmin:     userDataCache.UserData.IsClusterAdmin, //nolint:staticcheck // "could remove embedded field 'UserData' from selector
+		NsResources:        userDataCache.GetNsResourcesCopy(),
+		ManagedClusters:    userDataCache.GetManagedClustersCopy(),
+		UserPermissionList: userDataCache.UserPermissionList, // TODO Get Copy of UserPermissionList
 	}
 	return userAccess, nil
 }
@@ -505,6 +512,9 @@ func (user *UserDataCache) getImpersonationClientSet() v1.AuthorizationV1Interfa
 	return user.authzClient
 }
 
+// Fine-grained RBAC,
+// Get namespaces the user has access to using kubevirtprojects.clusterview.open-cluster-management.io.
+// Get UserPermissions.clusterview.open-cluster-management.io.
 func (user *UserDataCache) getFineGrainedRbacNamespaces(ctx context.Context) map[string][]string {
 	ns := make(map[string][]string, 0)
 	// Build dynamic client impersonating the user
@@ -545,11 +555,21 @@ func (user *UserDataCache) getFineGrainedRbacNamespaces(ctx context.Context) map
 		}
 	}
 
+	userPermissionList, err := user.getUserPermissions(ctx)
+	if err != nil {
+		klog.Error("Error getting UserPermissions. ", err)
+	}
+
 	// Save to cache.
 	user.fgRbacNsCache.lock.Lock()
 	defer user.fgRbacNsCache.lock.Unlock()
 	user.FGRbacNamespaces = ns
 	user.fgRbacNsCache.updatedAt = time.Now()
+
+	user.userPermissionCache.lock.Lock()
+	defer user.userPermissionCache.lock.Unlock()
+	user.UserPermissionList = userPermissionList
+	user.userPermissionCache.updatedAt = time.Now()
 
 	return user.FGRbacNamespaces
 }

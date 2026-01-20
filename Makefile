@@ -88,6 +88,8 @@ QUERY ?= ${Q}
 QUERY_STR = "{"query":"query Search() { }","variables":{} }"
 ifeq (${QUERY}, schema)
 	QUERY_STR='{"query":"query Schema() { searchSchema() }","variables":{} }'
+else ifeq (${QUERY}, any)
+	QUERY_STR='{"query":"query Search($$input: [SearchInput]) { search(input: $$input) { items } }","variables":{"input":[{"keywords":[],"filters":[{"property":"name","values":["*"]}],"limit": 10}]}}'
 else ifeq (${QUERY}, searchComplete)
 	QUERY_STR='{"query":"query SearchComplete { searchComplete(property: \"kind\") }","variables":{} }'
 else ifeq (${QUERY}, search)

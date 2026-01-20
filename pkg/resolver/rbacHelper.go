@@ -21,15 +21,15 @@ func buildRbacWhereClause(ctx context.Context, userrbac rbac.UserData, userInfo 
 		return exp.NewExpressionList(exp.ExpressionListType(exp.OrType))
 	}
 
-	if config.Cfg.Features.FineGrainedRbac && len(userrbac.FGRbacNamespaces) > 0 {
-		klog.V(3).Infof("Using fine grained RBAC. Managed cluster namespaces: %+v", userrbac.FGRbacNamespaces)
+	if config.Cfg.Features.FineGrainedRbac && len(userrbac.UserPermissionList.Items) > 0 {
+		klog.V(3).Infof("Using fine grained RBAC.")
 		return goqu.Or(
-			matchFineGrainedRbac(userrbac.FGRbacNamespaces),
+			matchFineGrainedRbacV2(userrbac.UserPermissionList),
 			matchHubClusterRbac(userrbac, userInfo))
 	}
 
-	if config.Cfg.Features.FineGrainedRbac && len(userrbac.FGRbacNamespaces) == 0 {
-		klog.V(3).Info("Using fine-grained RBAC. User is not authorized to any managed cluster namespace.")
+	if config.Cfg.Features.FineGrainedRbac && len(userrbac.UserPermissionList.Items) == 0 {
+		klog.V(3).Info("Using fine-grained RBAC. User does not have any permissions.")
 		return matchHubClusterRbac(userrbac, userInfo)
 	}
 
