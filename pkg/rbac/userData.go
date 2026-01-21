@@ -35,7 +35,7 @@ type UserData struct {
 	ManagedClusters  map[string]struct{}   // Managed clusters where the user has view access.
 
 	// Fine-grained RBAC, UserPermissions.clusterview.open-cluster-management.io
-	UserPermissionList clusterviewv1alpha1.UserPermissionList
+	UserPermissions clusterviewv1alpha1.UserPermissionList
 }
 
 // Extend UserData with caching information.
@@ -224,12 +224,12 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 	// Proceed if user's rbac data exists
 	// Get a copy of the current user access if user data exists
 	userAccess := UserData{
-		CsResources:        userDataCache.GetCsResourcesCopy(),
-		FGRbacNamespaces:   userDataCache.GetFGRbacNamespacesCopy(),
-		IsClusterAdmin:     userDataCache.UserData.IsClusterAdmin, //nolint:staticcheck // "could remove embedded field 'UserData' from selector
-		NsResources:        userDataCache.GetNsResourcesCopy(),
-		ManagedClusters:    userDataCache.GetManagedClustersCopy(),
-		UserPermissionList: userDataCache.UserPermissionList, // TODO Get Copy of UserPermissionList
+		CsResources:      userDataCache.GetCsResourcesCopy(),
+		FGRbacNamespaces: userDataCache.GetFGRbacNamespacesCopy(),
+		IsClusterAdmin:   userDataCache.UserData.IsClusterAdmin, //nolint:staticcheck // "could remove embedded field 'UserData' from selector
+		NsResources:      userDataCache.GetNsResourcesCopy(),
+		ManagedClusters:  userDataCache.GetManagedClustersCopy(),
+		UserPermissions:  userDataCache.UserPermissions, // TODO Get Copy of UserPermissionList
 	}
 	return userAccess, nil
 }
@@ -568,7 +568,7 @@ func (user *UserDataCache) getFineGrainedRbacNamespaces(ctx context.Context) map
 
 	user.userPermissionCache.lock.Lock()
 	defer user.userPermissionCache.lock.Unlock()
-	user.UserPermissionList = userPermissionList
+	user.UserPermissions = userPermissionList
 	user.userPermissionCache.updatedAt = time.Now()
 
 	return user.FGRbacNamespaces

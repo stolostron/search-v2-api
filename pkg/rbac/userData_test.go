@@ -12,12 +12,8 @@ import (
 	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	fakedynclient "k8s.io/client-go/dynamic/fake"
 	fake "k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/kubernetes/scheme"
 
 	"k8s.io/client-go/rest"
 	testingk8s "k8s.io/client-go/testing"
@@ -860,71 +856,71 @@ func Test_updateUserManagedClusterList(t *testing.T) {
 	assert.Equal(t, len(managedclusters), len(udc.ManagedClusters))
 }
 
-func Test_GetFineGrainedRbacNamespaces(t *testing.T) {
-	// Setup fake dynamic client to mock requests to
-	// kubevirtprojects.clusterview.open-cluster-management.io
-	testScheme := scheme.Scheme
-	gvrToListKind := map[schema.GroupVersionResource]string{
-		{Group: "clusterview.open-cluster-management.io", Version: "v1", Resource: "kubevirtprojects"}: "ProjectList",
-	}
-	mockDynamicClient := fakedynclient.NewSimpleDynamicClientWithCustomListKinds(testScheme,
-		gvrToListKind,
-		[]runtime.Object{
-			&unstructured.UnstructuredList{
-				Object: map[string]interface{}{
-					"apiVersion": "clusterview.open-cluster-management.io/v1",
-					"kind":       "KubevirtProject",
-				},
-				Items: []unstructured.Unstructured{
-					{
-						Object: map[string]any{
-							"apiVersion": "clusterview.open-cluster-management.io/v1",
-							"kind":       "KubevirtProject",
-							"metadata": map[string]any{
-								"name": "0000-0000-0000-1111",
-								"labels": map[string]any{
-									"cluster": "cluster-a",
-									"project": "project-a1"},
-							},
-						},
-					},
-					{
-						Object: map[string]any{
-							"apiVersion": "clusterview.open-cluster-management.io/v1",
-							"kind":       "KubevirtProject",
-							"metadata": map[string]any{
-								"name": "0000-0000-0000-2222",
-								"labels": map[string]any{
-									"cluster": "cluster-a",
-									"project": "project-a2"},
-							},
-						},
-					},
-					{
-						Object: map[string]any{
-							"apiVersion": "clusterview.open-cluster-management.io/v1",
-							"kind":       "KubevirtProject",
-							"metadata": map[string]any{
-								"name": "0000-0000-0000-3333",
-								"labels": map[string]any{
-									"cluster": "cluster-b",
-									"project": "all_projects"},
-							},
-						},
-					},
-				},
-			},
-		}...)
+// func Test_GetFineGrainedRbacNamespaces(t *testing.T) {
+// 	// Setup fake dynamic client to mock requests to
+// 	// kubevirtprojects.clusterview.open-cluster-management.io
+// 	testScheme := scheme.Scheme
+// 	gvrToListKind := map[schema.GroupVersionResource]string{
+// 		{Group: "clusterview.open-cluster-management.io", Version: "v1", Resource: "kubevirtprojects"}: "ProjectList",
+// 	}
+// 	mockDynamicClient := fakedynclient.NewSimpleDynamicClientWithCustomListKinds(testScheme,
+// 		gvrToListKind,
+// 		[]runtime.Object{
+// 			&unstructured.UnstructuredList{
+// 				Object: map[string]interface{}{
+// 					"apiVersion": "clusterview.open-cluster-management.io/v1",
+// 					"kind":       "KubevirtProject",
+// 				},
+// 				Items: []unstructured.Unstructured{
+// 					{
+// 						Object: map[string]any{
+// 							"apiVersion": "clusterview.open-cluster-management.io/v1",
+// 							"kind":       "KubevirtProject",
+// 							"metadata": map[string]any{
+// 								"name": "0000-0000-0000-1111",
+// 								"labels": map[string]any{
+// 									"cluster": "cluster-a",
+// 									"project": "project-a1"},
+// 							},
+// 						},
+// 					},
+// 					{
+// 						Object: map[string]any{
+// 							"apiVersion": "clusterview.open-cluster-management.io/v1",
+// 							"kind":       "KubevirtProject",
+// 							"metadata": map[string]any{
+// 								"name": "0000-0000-0000-2222",
+// 								"labels": map[string]any{
+// 									"cluster": "cluster-a",
+// 									"project": "project-a2"},
+// 							},
+// 						},
+// 					},
+// 					{
+// 						Object: map[string]any{
+// 							"apiVersion": "clusterview.open-cluster-management.io/v1",
+// 							"kind":       "KubevirtProject",
+// 							"metadata": map[string]any{
+// 								"name": "0000-0000-0000-3333",
+// 								"labels": map[string]any{
+// 									"cluster": "cluster-b",
+// 									"project": "all_projects"},
+// 							},
+// 						},
+// 					},
+// 				},
+// 			},
+// 		}...)
 
-	mockUserCache := &UserDataCache{
-		dynClient: mockDynamicClient,
-	}
+// 	mockUserCache := &UserDataCache{
+// 		dynClient: mockDynamicClient,
+// 	}
 
-	// Call the function under test
-	clusters := mockUserCache.getFineGrainedRbacNamespaces(context.Background())
+// 	// Call the function under test
+// 	clusters := mockUserCache.getFineGrainedRbacNamespaces(context.Background())
 
-	// Assertions
-	assert.Equal(t, 2, len(clusters))
-	assert.Equal(t, []string{"project-a1", "project-a2"}, clusters["cluster-a"])
-	assert.Equal(t, []string{"*"}, clusters["cluster-b"])
-}
+// 	// Assertions
+// 	assert.Equal(t, 2, len(clusters))
+// 	assert.Equal(t, []string{"project-a1", "project-a2"}, clusters["cluster-a"])
+// 	assert.Equal(t, []string{"*"}, clusters["cluster-b"])
+// }

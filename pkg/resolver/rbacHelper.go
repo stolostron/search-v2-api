@@ -21,14 +21,14 @@ func buildRbacWhereClause(ctx context.Context, userrbac rbac.UserData, userInfo 
 		return exp.NewExpressionList(exp.ExpressionListType(exp.OrType))
 	}
 
-	if config.Cfg.Features.FineGrainedRbac && len(userrbac.UserPermissionList.Items) > 0 {
+	if config.Cfg.Features.FineGrainedRbac && len(userrbac.UserPermissions.Items) > 0 {
 		klog.V(3).Infof("Using fine grained RBAC.")
 		return goqu.Or(
-			matchFineGrainedRbacV2(userrbac.UserPermissionList),
+			matchFineGrainedRbac(userrbac.UserPermissions),
 			matchHubClusterRbac(userrbac, userInfo))
 	}
 
-	if config.Cfg.Features.FineGrainedRbac && len(userrbac.UserPermissionList.Items) == 0 {
+	if config.Cfg.Features.FineGrainedRbac && len(userrbac.UserPermissions.Items) == 0 {
 		klog.V(3).Info("Using fine-grained RBAC. User does not have any permissions.")
 		return matchHubClusterRbac(userrbac, userInfo)
 	}
