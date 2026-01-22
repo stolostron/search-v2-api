@@ -33,6 +33,7 @@ func TestMatchFineGrainedRbac(t *testing.T) {
 								{
 									Cluster:    "cluster1",
 									Namespaces: []string{"*"},
+									Scope:      "cluster",
 								},
 							},
 							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
@@ -48,7 +49,7 @@ func TestMatchFineGrainedRbac(t *testing.T) {
 					},
 				},
 			},
-			expected: `(("cluster" = 'cluster1') AND data->'apigroup'?'*')`,
+			expected: `("cluster" IN ('cluster1')`,
 		},
 		{
 			name: "Specific namespaces and specific resources",
@@ -61,6 +62,7 @@ func TestMatchFineGrainedRbac(t *testing.T) {
 								{
 									Cluster:    "cluster1",
 									Namespaces: []string{"ns1", "ns2"},
+									Scope:      "namespace",
 								},
 							},
 							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
