@@ -107,15 +107,12 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 			fgRbacNsCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 			nsrCache:      cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 		}
-		if cache.users == nil {
-			cache.users = map[string]*UserDataCache{}
-		}
-		cache.users[uid] = user
 
 		// We want to setup the client if passed, this is only for unit tests
 		if authzClient != nil {
 			user.authzClient = authzClient
 		}
+		cache.users[uid] = user
 	}
 
 	// Before checking each namespace and clusterscoped resource, check if user has access to everything
@@ -238,12 +235,13 @@ func (user *UserDataCache) isValid() bool {
 func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache *Cache) (*UserDataCache, error) {
 	defer metrics.SlowLog("UserDataCache::getClusterScopedResources", 0)()
 
-	user.csrCache.err = nil
 	user.csrCache.lock.Lock()
 	defer user.csrCache.lock.Unlock()
 
+	user.csrCache.err = nil
+
 	// Not present in cache, find all cluster scoped resources
-	clusterScopedResources := cache.shared.csResourcesMap
+	clusterScopedResources := cache.shared.csResourcesMap //TODO: Check if this is thread safe.
 	if len(clusterScopedResources) == 0 {
 		klog.Warning("Cluster scoped resources from shared cache empty.", user.csrCache.err)
 		return user, user.csrCache.err
@@ -275,9 +273,11 @@ func (user *UserDataCache) getClusterScopedResources(ctx context.Context, cache 
 	}
 	wg.Wait() // Wait for all go routines to complete.
 
-	uid, userInfo := cache.GetUserUID(ctx)
-	klog.V(7).Infof("User %s with uid: %s has access to these cluster scoped res: %+v \n", userInfo.Username, uid,
-		user.CsResources)
+	if klog.V(7).Enabled() {
+		uid, userInfo := cache.GetUserUID(ctx)
+		klog.V(7).Infof("User %s with uid: %s has access to these cluster scoped res: %+v \n", userInfo.Username, uid,
+			user.CsResources)
+	}
 	user.csrCache.updatedAt = time.Now()
 	return user, user.csrCache.err
 }
@@ -360,18 +360,18 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 							// No need to loop through all resources. Save the wildcard *
 							// exit the resourceRulesLoop
 							if res == "*" && api == "*" {
-								user.NsResources[ns] = []Resource{{Apigroup: api, Kind: res}}
+								user.NsResources[ns] = []Resource{{Apigroup: api, Kind: res}} //TODO: Check if this is thread safe.
 								klog.V(5).Infof("User %s with uid: %s has access to everything in the namespace %s",
 									user.userInfo.Username, user.userInfo.UID, ns)
 
 								// Update user's managedcluster list too as the user has access to everything
-								user.updateUserManagedClusterList(cache, ns)
+								user.updateUserManagedClusterList(cache, ns) //TODO: Check if this is thread safe.
 								return
 							}
 							currRes := Resource{Apigroup: api, Kind: res}
 							// to avoid duplicates, check before appending to nsResources
 							if _, found := trackResources[currRes]; !found {
-								user.NsResources[ns] = append(user.NsResources[ns], currRes)
+								user.NsResources[ns] = append(user.NsResources[ns], currRes) //TODO: Check if this is thread safe.
 								trackResources[currRes] = struct{}{}
 							}
 
@@ -392,7 +392,7 @@ func (user *UserDataCache) getSSRRforNamespace(ctx context.Context, cache *Cache
 					if group == "view.open-cluster-management.io" || group == "*" {
 						for _, res := range rule.Resources {
 							if res == "managedclusterviews" || res == "*" {
-								user.updateUserManagedClusterList(cache, ns)
+								user.updateUserManagedClusterList(cache, ns) //TODO: Check if this is thread safe.
 							}
 						}
 					}
@@ -430,7 +430,7 @@ func (user *UserDataCache) getNamespacedResources(ctx context.Context, cache *Ca
 
 	// get all namespaces from shared cache
 	klog.V(5).Info("Getting namespaces from shared cache.")
-	allNamespaces, err := cache.shared.getNamespaces(ctx)
+	allNamespaces, err := cache.shared.getNamespaces(ctx) //TODO: Check if this is thread safe.
 	if err != nil || len(allNamespaces) == 0 {
 		klog.Warning("All namespaces array from shared cache is empty.", cache.shared.nsCache.err)
 		return user, cache.shared.nsCache.err
@@ -438,21 +438,23 @@ func (user *UserDataCache) getNamespacedResources(ctx context.Context, cache *Ca
 
 	// Process each namespace SSRR in an async go routine.
 	wg := sync.WaitGroup{}
-	lock := sync.Mutex{}
+	lock := sync.Mutex{} //TODO: Check if this is thread safe. Should be a separate lock for each namespace?
 	for _, ns := range allNamespaces {
 		wg.Add(1)
 		go func(namespace string) {
 			defer wg.Done()
-			user.getSSRRforNamespace(ctx, cache, namespace, &lock)
+			user.getSSRRforNamespace(ctx, cache, namespace, &lock) //TODO: Check if this is thread safe.
 		}(ns)
 	}
 	wg.Wait() // Wait for all go routines to complete.
 
-	uid, userInfo := cache.GetUserUID(ctx)
-	klog.V(7).Infof("User %s with uid: %s has access to these namespace scoped res: %+v \n", userInfo.Username, uid,
-		user.NsResources)
-	klog.V(7).Infof("User %s with uid: %s has access to these ManagedClusters: %+v \n", userInfo.Username, uid,
-		user.ManagedClusters)
+	if klog.V(7).Enabled() {
+		uid, userInfo := cache.GetUserUID(ctx)
+		klog.V(7).Infof("User %s with uid: %s has access to these namespace scoped res: %+v \n", userInfo.Username, uid,
+			user.NsResources)
+		klog.V(7).Infof("User %s with uid: %s has access to these ManagedClusters: %+v \n", userInfo.Username, uid,
+			user.ManagedClusters)
+	}
 
 	user.nsrCache.updatedAt = time.Now()
 	user.clustersCache.updatedAt = time.Now()

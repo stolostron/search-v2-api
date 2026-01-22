@@ -124,7 +124,7 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 //
 //	refresh - forces cached data to refresh from database.
 func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[string]string, error) {
-	cache.shared.ptCache.lock.RLock()
+	cache.shared.ptCache.lock.RLock() // TODO: Double check this lock is always released.
 
 	// check if propTypes data in cache and not nil and return
 	if len(cache.shared.propTypes) > 0 && cache.shared.ptCache.err == nil && !refresh {
@@ -213,8 +213,9 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
 	shared.csrCache.lock.Lock()
 	defer shared.csrCache.lock.Unlock()
-	//clear previous cache
-	shared.csResourcesMap = make(map[Resource]struct{})
+
+	newCsrMap := make(map[Resource]struct{})
+	// shared.csResourcesMap = make(map[Resource]struct{})
 	shared.csrCache.err = nil
 	klog.V(6).Info("Querying database for cluster-scoped resources.")
 
@@ -254,9 +255,11 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 					apigroup, kind)
 				continue
 			}
-			shared.csResourcesMap[Resource{Apigroup: apigroup, Kind: kind}] = struct{}{}
+			// shared.csResourcesMap[Resource{Apigroup: apigroup, Kind: kind}] = struct{}{}
+			newCsrMap[Resource{Apigroup: apigroup, Kind: kind}] = struct{}{}
 		}
 	}
+	shared.csResourcesMap = newCsrMap
 	shared.csrCache.updatedAt = time.Now()
 
 	return shared.csrCache.err
@@ -275,8 +278,9 @@ func (shared *SharedData) getNamespaces(ctx context.Context) ([]string, error) {
 	}
 
 	// Empty previous cache and request new data.
-	shared.namespaces = nil
-	shared.nsCache.err = nil
+	newNamespaces := make([]string, 0)
+	// shared.namespaces = nil
+	// shared.nsCache.err = nil
 
 	klog.V(5).Info("Getting namespaces from Kube Client.")
 	scheme := runtime.NewScheme()
@@ -285,6 +289,7 @@ func (shared *SharedData) getNamespaces(ctx context.Context) ([]string, error) {
 	namespaceList, nsErr := shared.dynamicClient.Resource(namespacesGvr).List(ctx, metav1.ListOptions{})
 	if nsErr != nil {
 		klog.Warning("Error resolving namespaces from KubeClient: ", nsErr)
+		shared.namespaces = newNamespaces
 		shared.nsCache.err = nsErr
 		shared.nsCache.updatedAt = time.Now()
 		return shared.namespaces, shared.nsCache.err
@@ -292,8 +297,10 @@ func (shared *SharedData) getNamespaces(ctx context.Context) ([]string, error) {
 
 	// add namespaces to allNamespace List
 	for _, n := range namespaceList.Items {
-		shared.namespaces = append(shared.namespaces, n.GetName())
+		newNamespaces = append(newNamespaces, n.GetName())
 	}
+
+	shared.namespaces = newNamespaces
 	shared.nsCache.updatedAt = time.Now()
 
 	return shared.namespaces, shared.nsCache.err
@@ -307,8 +314,8 @@ func (shared *SharedData) getManagedClusters(ctx context.Context) error {
 	shared.mcCache.lock.Lock()
 	defer shared.mcCache.lock.Unlock()
 	// clear previous cache
-	shared.managedClusters = nil
-	shared.mcCache.err = nil
+	// shared.managedClusters = nil
+	// shared.mcCache.err = nil
 
 	managedClusters := make(map[string]struct{})
 
@@ -319,6 +326,7 @@ func (shared *SharedData) getManagedClusters(ctx context.Context) error {
 
 	if err != nil {
 		klog.Warning("Error resolving ManagedClusters with dynamic client", err.Error())
+		shared.managedClusters = managedClusters
 		shared.mcCache.err = err
 		shared.mcCache.updatedAt = time.Now()
 		return shared.mcCache.err
@@ -331,7 +339,7 @@ func (shared *SharedData) getManagedClusters(ctx context.Context) error {
 		}
 	}
 
-	klog.V(3).Info("List of managed clusters in shared data: ", managedClusters)
+	klog.V(3).Info("Updated list of managed clusters in shared data: ", managedClusters)
 	shared.managedClusters = managedClusters
 	shared.mcCache.updatedAt = time.Now()
 	return shared.mcCache.err
@@ -460,6 +468,7 @@ func (shared *SharedData) findSrchAddonDisabledClusters(ctx context.Context) (*m
 	}
 
 	if rows != nil {
+		defer rows.Close()
 		for rows.Next() {
 			var srchAddonDisabledCluster string
 			err := rows.Scan(&srchAddonDisabledCluster)
@@ -471,7 +480,6 @@ func (shared *SharedData) findSrchAddonDisabledClusters(ctx context.Context) (*m
 		}
 		//Since cache was not valid, update shared cache with disabled clusters result
 		shared.setDisabledClusters(disabledClusters, nil)
-		defer rows.Close()
 	}
 	return &disabledClusters, err
 }
