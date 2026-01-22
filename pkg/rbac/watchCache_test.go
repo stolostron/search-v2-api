@@ -128,7 +128,8 @@ func Test_GetUserWatchDataCache_NewUser(t *testing.T) {
 	// Setup the regular cache for token review
 	regularCache := mockNamespaceCache()
 	regularCache = setupWatchToken(regularCache)
-	cacheInst = *regularCache
+	// copy just tokenReviews to cache so userUID and userInfo can be got from cache's tokenReview to build authzClient
+	cacheInst.tokenReviews = regularCache.tokenReviews
 
 	watchCache := mockWatchCache()
 
@@ -154,7 +155,8 @@ func Test_GetUserWatchDataCache_ExistingUser(t *testing.T) {
 	// Setup the regular cache for token review
 	regularCache := mockNamespaceCache()
 	regularCache = setupWatchToken(regularCache)
-	cacheInst = *regularCache
+	// copy just tokenReviews to cache so userUID and userInfo can be got from cache's tokenReview to build authzClient
+	cacheInst.tokenReviews = regularCache.tokenReviews
 
 	watchCache := mockWatchCache()
 
@@ -182,7 +184,8 @@ func Test_GetUserWatchData_WithImpersonation(t *testing.T) {
 	// Setup the regular cache for token review
 	regularCache := mockNamespaceCache()
 	regularCache = setupWatchToken(regularCache)
-	cacheInst = *regularCache
+	// copy just tokenReviews to cache so userUID and userInfo can be got from cache's tokenReview to build authzClient
+	cacheInst.tokenReviews = regularCache.tokenReviews
 
 	watchCache := mockWatchCache()
 
