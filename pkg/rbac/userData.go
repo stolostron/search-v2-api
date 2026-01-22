@@ -16,6 +16,7 @@ import (
 	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -140,6 +141,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	// This builds the fine-grained RBAC cache.
 	if config.Cfg.Features.FineGrainedRbac {
 		_ = user.getFineGrainedRbacNamespaces(ctx)
+		_ = user.getUserPermissions(ctx)
 	}
 
 	userDataCache, err := user.getNamespacedResources(ctx, cache)
@@ -229,7 +231,7 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 		IsClusterAdmin:   userDataCache.UserData.IsClusterAdmin, //nolint:staticcheck // "could remove embedded field 'UserData' from selector
 		NsResources:      userDataCache.GetNsResourcesCopy(),
 		ManagedClusters:  userDataCache.GetManagedClustersCopy(),
-		UserPermissions:  userDataCache.UserPermissions, // TODO Get Copy of UserPermissionList
+		UserPermissions:  userDataCache.GetUserPermissionsCopy(),
 	}
 	return userAccess, nil
 }
@@ -512,9 +514,8 @@ func (user *UserDataCache) getImpersonationClientSet() v1.AuthorizationV1Interfa
 	return user.authzClient
 }
 
-// Fine-grained RBAC,
+// Old code for Fine-grained RBAC.
 // Get namespaces the user has access to using kubevirtprojects.clusterview.open-cluster-management.io.
-// Get UserPermissions.clusterview.open-cluster-management.io.
 func (user *UserDataCache) getFineGrainedRbacNamespaces(ctx context.Context) map[string][]string {
 	ns := make(map[string][]string, 0)
 	// Build dynamic client impersonating the user
@@ -555,23 +556,60 @@ func (user *UserDataCache) getFineGrainedRbacNamespaces(ctx context.Context) map
 		}
 	}
 
-	userPermissionList, err := user.getUserPermissions(ctx)
-	if err != nil {
-		klog.Error("Error getting UserPermissions. ", err)
-	}
-
 	// Save to cache.
 	user.fgRbacNsCache.lock.Lock()
 	defer user.fgRbacNsCache.lock.Unlock()
 	user.FGRbacNamespaces = ns
 	user.fgRbacNsCache.updatedAt = time.Now()
 
+	return user.FGRbacNamespaces
+}
+
+// Fine-grained RBAC.
+// Get UserPermissions.clusterview.open-cluster-management.io.
+func (user *UserDataCache) getUserPermissions(ctx context.Context) error {
+	if user.dynClient == nil {
+		restConfig := config.GetClientConfig()
+		restConfig.Impersonate = *setImpersonationUserInfo(user.userInfo)
+		dynamicClient, err := dynamic.NewForConfig(restConfig)
+		if err != nil {
+			klog.Error("Error creating a new dynamic client with impersonation config.", err.Error())
+			return err
+		}
+		user.dynClient = dynamicClient
+	}
+
+	// Get userpermissions.clusterview.open-cluster-management.io
+	gvr := schema.GroupVersionResource{
+		Group:    "clusterview.open-cluster-management.io",
+		Version:  "v1alpha1",
+		Resource: "userpermissions",
+	}
+	userPermissions, err := user.dynClient.Resource(gvr).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		klog.Error("Error getting UserPermissions. ", err)
+		return err
+	}
+
+	// Convert unstructured.UnstructuredList to UserPermissionList
+	var userPermissionList clusterviewv1alpha1.UserPermissionList
+	for _, item := range userPermissions.Items {
+		var up clusterviewv1alpha1.UserPermission
+		err = runtime.DefaultUnstructuredConverter.FromUnstructured(item.Object, &up)
+		if err != nil {
+			klog.Error("Error converting Unstructured to UserPermission. ", err)
+			return err
+		}
+		userPermissionList.Items = append(userPermissionList.Items, up)
+	}
+
+	// Save to cache.
 	user.userPermissionCache.lock.Lock()
 	defer user.userPermissionCache.lock.Unlock()
 	user.UserPermissions = userPermissionList
 	user.userPermissionCache.updatedAt = time.Now()
 
-	return user.FGRbacNamespaces
+	return nil
 }
 
 func (user *UserDataCache) GetCsResourcesCopy() []Resource {
@@ -609,4 +647,11 @@ func (user *UserDataCache) GetManagedClustersCopy() map[string]struct{} {
 		mcCopy[mc] = struct{}{}
 	}
 	return mcCopy
+}
+
+func (user *UserDataCache) GetUserPermissionsCopy() clusterviewv1alpha1.UserPermissionList {
+	user.userPermissionCache.lock.Lock()
+	defer user.userPermissionCache.lock.Unlock()
+	copy := user.UserPermissions
+	return copy
 }
