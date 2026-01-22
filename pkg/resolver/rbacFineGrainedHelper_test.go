@@ -80,108 +80,111 @@ func TestMatchFineGrainedRbac(t *testing.T) {
 			},
 			expected: `((("cluster" = 'cluster1') AND data->'namespace'?|'{"ns1","ns2"}') AND (data->'apigroup'?'apps' AND data->'kind_plural'?|'{"deployments","statefulsets"}'))`,
 		},
-		// {
-		// 	name: "Multiple bindings and rules",
-		// 	input: clusterviewv1alpha1.UserPermissionList{
-		// 		Items: []clusterviewv1alpha1.UserPermission{
-		// 			{
-		// 				ObjectMeta: metav1.ObjectMeta{Name: "perm1"},
-		// 				Status: clusterviewv1alpha1.UserPermissionStatus{
-		// 					Bindings: []clusterviewv1alpha1.ClusterBinding{
-		// 						{
-		// 							Cluster:    "cluster1",
-		// 							Namespaces: []string{"*"},
-		// 						},
-		// 						{
-		// 							Cluster:    "cluster2",
-		// 							Namespaces: []string{"ns3"},
-		// 						},
-		// 					},
-		// 					ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
-		// 						Rules: []rbacv1.PolicyRule{
-		// 							{
-		// 								Verbs:     []string{"list"},
-		// 								APIGroups: []string{"v1"},
-		// 								Resources: []string{"pods"},
-		// 							},
-		// 							{
-		// 								Verbs:     []string{"*"},
-		// 								APIGroups: []string{"batch"},
-		// 								Resources: []string{"jobs"},
-		// 							},
-		// 						},
-		// 					},
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// 	expected: `((("cluster" = 'cluster1') OR (("cluster" = 'cluster2') AND (data->'namespace' ?| ARRAY['ns3']))) AND (((data->'apigroup' ? 'v1') AND (data->'kind_plural' ?| ARRAY['pods'])) OR ((data->'apigroup' ? 'batch') AND (data->'kind_plural' ?| ARRAY['jobs']))))`,
-		// },
-		// {
-		// 	name: "Ignore non-list verbs",
-		// 	input: clusterviewv1alpha1.UserPermissionList{
-		// 		Items: []clusterviewv1alpha1.UserPermission{
-		// 			{
-		// 				ObjectMeta: metav1.ObjectMeta{Name: "perm1"},
-		// 				Status: clusterviewv1alpha1.UserPermissionStatus{
-		// 					Bindings: []clusterviewv1alpha1.ClusterBinding{
-		// 						{
-		// 							Cluster:    "cluster1",
-		// 							Namespaces: []string{"*"},
-		// 						},
-		// 					},
-		// 					ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
-		// 						Rules: []rbacv1.PolicyRule{
-		// 							{
-		// 								Verbs:     []string{"create", "delete"}, // Should be ignored
-		// 								APIGroups: []string{"*"},
-		// 								Resources: []string{"*"},
-		// 							},
-		// 							{
-		// 								Verbs:     []string{"list"},
-		// 								APIGroups: []string{"apps"},
-		// 								Resources: []string{"deployments"},
-		// 							},
-		// 						},
-		// 					},
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// 	expected: `(("cluster" = 'cluster1') AND ((data->'apigroup' ? 'apps') AND (data->'kind_plural' ?| ARRAY['deployments'])))`,
-		// },
-		// {
-		// 	name: "Multiple UserPermissions",
-		// 	input: clusterviewv1alpha1.UserPermissionList{
-		// 		Items: []clusterviewv1alpha1.UserPermission{
-		// 			{
-		// 				Status: clusterviewv1alpha1.UserPermissionStatus{
-		// 					Bindings: []clusterviewv1alpha1.ClusterBinding{
-		// 						{Cluster: "c1", Namespaces: []string{"*"}},
-		// 					},
-		// 					ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
-		// 						Rules: []rbacv1.PolicyRule{
-		// 							{Verbs: []string{"*"}, APIGroups: []string{"*"}, Resources: []string{"*"}},
-		// 						},
-		// 					},
-		// 				},
-		// 			},
-		// 			{
-		// 				Status: clusterviewv1alpha1.UserPermissionStatus{
-		// 					Bindings: []clusterviewv1alpha1.ClusterBinding{
-		// 						{Cluster: "c2", Namespaces: []string{"*"}},
-		// 					},
-		// 					ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
-		// 						Rules: []rbacv1.PolicyRule{
-		// 							{Verbs: []string{"*"}, APIGroups: []string{"*"}, Resources: []string{"*"}},
-		// 						},
-		// 					},
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// 	expected: `((("cluster" = 'c1') AND (data->'apigroup' ? '*')) OR (("cluster" = 'c2') AND (data->'apigroup' ? '*')))`,
-		// },
+		{
+			name: "Multiple bindings and rules",
+			input: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "perm1"},
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{
+									Cluster:    "cluster1",
+									Namespaces: []string{"*"},
+									Scope:      "cluster",
+								},
+								{
+									Cluster:    "cluster2",
+									Namespaces: []string{"ns3"},
+									Scope:      "namespace",
+								},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{
+										Verbs:     []string{"list"},
+										APIGroups: []string{"v1"},
+										Resources: []string{"pods"},
+									},
+									{
+										Verbs:     []string{"*"},
+										APIGroups: []string{"batch"},
+										Resources: []string{"jobs"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: `(((("cluster" = 'cluster2') AND data->'namespace'?|'{"ns3"}') OR ("cluster" IN ('cluster1'))) AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'batch' AND data->'kind_plural'?'jobs')))`,
+		},
+		{
+			name: "Ignore non-list verbs",
+			input: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "perm1"},
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{
+									Cluster:    "cluster1",
+									Namespaces: []string{"*"},
+									Scope:      "cluster",
+								},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{
+										Verbs:     []string{"create", "delete"}, // Should be ignored
+										APIGroups: []string{"*"},
+										Resources: []string{"*"},
+									},
+									{
+										Verbs:     []string{"list"},
+										APIGroups: []string{"apps"},
+										Resources: []string{"deployments"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: `(("cluster" IN ('cluster1')) AND (data->'apigroup'?'apps' AND data->'kind_plural'?'deployments'))`,
+		},
+		{
+			name: "Multiple UserPermissions",
+			input: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "c1", Namespaces: []string{"*"}, Scope: "cluster"},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{Verbs: []string{"*"}, APIGroups: []string{"*"}, Resources: []string{"*"}},
+								},
+							},
+						},
+					},
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "c2", Namespaces: []string{"*"}, Scope: "cluster"},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{Verbs: []string{"*"}, APIGroups: []string{"*"}, Resources: []string{"*"}},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: `((("cluster" IN ('c1')) AND 1=1) OR (("cluster" IN ('c2')) AND 1=1))`,
+		},
 	}
 
 	for _, tc := range testCases {
