@@ -144,19 +144,7 @@ func eventMatchesAllFilters(event *model.Event, input *model.SearchInput) bool {
 	return true
 }
 
-// eventMatchesRbac validates that user has permission to see event
-func eventMatchesRbac(ctx context.Context, event *model.Event) bool {
-	eventData := event.NewData
-	if eventData == nil {
-		eventData = event.OldData
-	}
-
-	// if no data to check, skip the event
-	if eventData == nil {
-		klog.Warningf("Event data is nil for event (UID: %s, Operation: %s)", event.UID, event.Operation)
-		return false
-	}
-
+func getEventDataFields(eventData map[string]any) (string, string, string, string, bool) {
 	var eventNamespace, eventKind, eventApigroup, eventCluster string
 	eventIsHubClusterResource := false
 	if _, ok := eventData["namespace"]; ok {
@@ -174,6 +162,23 @@ func eventMatchesRbac(ctx context.Context, event *model.Event) bool {
 	if _, ok := eventData["_hubClusterResource"]; ok {
 		eventIsHubClusterResource = true
 	}
+	return eventNamespace, eventKind, eventApigroup, eventCluster, eventIsHubClusterResource
+}
+
+// eventMatchesRbac validates that user has permission to see event
+func eventMatchesRbac(ctx context.Context, event *model.Event) bool {
+	eventData := event.NewData
+	if eventData == nil {
+		eventData = event.OldData
+	}
+
+	// if no data to check, skip the event
+	if eventData == nil {
+		klog.Warningf("Event data is nil for event (UID: %s, Operation: %s)", event.UID, event.Operation)
+		return false
+	}
+
+	eventNamespace, eventKind, eventApigroup, eventCluster, eventIsHubClusterResource := getEventDataFields(eventData)
 
 	if eventIsHubClusterResource {
 		return checkAndCache(ctx, eventApigroup, eventKind, eventNamespace, eventCluster, eventIsHubClusterResource) // "oc auth can-i watch <eventApigroup>.<eventKind> [-n <eventNamespace>] --as=<user>"

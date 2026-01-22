@@ -993,6 +993,27 @@ func TestWatchSubscription_InputValidation(t *testing.T) {
 	assert.Contains(t, err.Error(), "Property is required")
 }
 
+func TestGetEventDataFields(t *testing.T) {
+	// Given: event data
+	eventData := map[string]any{
+		"namespace":           "foo",
+		"kind_plural":         "foos",
+		"apigroup":            "foo1alpha1bar",
+		"cluster":             "foo-hub",
+		"_hubClusterResource": true,
+	}
+
+	// When: we pass it to getEventDataFields
+	namespace, kind, apigroup, cluster, isHubCluster := getEventDataFields(eventData)
+
+	// Then: we get our desired fields returned
+	assert.Equal(t, namespace, "foo", "Expected namespace to be foo")
+	assert.Equal(t, kind, "foos", "Exptected kind to be foos")
+	assert.Equal(t, apigroup, "foo1alpha1bar", "Expected apigroup to be foo1alpha1bar")
+	assert.Equal(t, cluster, "foo-hub", "Expected cluster to be foo-hub")
+	assert.Equal(t, isHubCluster, true, "Expected isHubCluster to be true")
+}
+
 // helper for mocking eventMatchesRbac() and watchCache testing
 type mockAuthzClient struct {
 	permissions map[rbac.WatchPermissionKey]*rbac.WatchPermissionEntry
