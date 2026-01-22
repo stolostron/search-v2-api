@@ -136,10 +136,10 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 	mock_cache.users["unique-user-id"] = &UserDataCache{
 		UserData: UserData{ManagedClusters: managedclusters,
 			NsResources: nsresources},
-		csrCache:      cacheMetadata{updatedAt: time.Now()},
-		fgRbacNsCache: cacheMetadata{updatedAt: time.Now()},
-		nsrCache:      cacheMetadata{updatedAt: time.Now()},
-		clustersCache: cacheMetadata{updatedAt: time.Now()},
+		csrCache:            cacheMetadata{updatedAt: time.Now()},
+		nsrCache:            cacheMetadata{updatedAt: time.Now()},
+		clustersCache:       cacheMetadata{updatedAt: time.Now()},
+		userPermissionCache: cacheMetadata{updatedAt: time.Now()},
 	}
 
 	rulesCheck := &authz.SelfSubjectRulesReview{
@@ -269,10 +269,10 @@ func Test_clusterScoped_usingCache(t *testing.T) {
 			CsResources:     []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}},
 			ManagedClusters: map[string]struct{}{"some-namespace": {}}},
 		// Using current time , GetUserData should have the same values as cache
-		clustersCache: cacheMetadata{updatedAt: time.Now()},
-		fgRbacNsCache: cacheMetadata{updatedAt: time.Now()},
-		csrCache:      cacheMetadata{updatedAt: time.Now()},
-		nsrCache:      cacheMetadata{updatedAt: time.Now()},
+		clustersCache:       cacheMetadata{updatedAt: time.Now()},
+		csrCache:            cacheMetadata{updatedAt: time.Now()},
+		nsrCache:            cacheMetadata{updatedAt: time.Now()},
+		userPermissionCache: cacheMetadata{updatedAt: time.Now()},
 	}
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 
@@ -455,10 +455,10 @@ func Test_managedClusters_usingCache(t *testing.T) {
 			ManagedClusters: map[string]struct{}{"some-managed-cluster": {}, "some-other-managed-cluster": {}},
 		},
 		// Using current time , GetUserData should have the same values as cache
-		clustersCache: cacheMetadata{updatedAt: time.Now()},
-		fgRbacNsCache: cacheMetadata{updatedAt: time.Now()},
-		csrCache:      cacheMetadata{updatedAt: time.Now()},
-		nsrCache:      cacheMetadata{updatedAt: time.Now()},
+		clustersCache:       cacheMetadata{updatedAt: time.Now()},
+		csrCache:            cacheMetadata{updatedAt: time.Now()},
+		nsrCache:            cacheMetadata{updatedAt: time.Now()},
+		userPermissionCache: cacheMetadata{updatedAt: time.Now()},
 	}
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 
@@ -626,10 +626,10 @@ func Test_getUserData(t *testing.T) {
 			NsResources:     map[string][]Resource{"ns1": {{Apigroup: "", Kind: "pods"}}},
 		},
 		// Using current time , GetUserData should have the same values as cache
-		clustersCache: cacheMetadata{updatedAt: time.Now()},
-		fgRbacNsCache: cacheMetadata{updatedAt: time.Now()},
-		csrCache:      cacheMetadata{updatedAt: time.Now()},
-		nsrCache:      cacheMetadata{updatedAt: time.Now()},
+		clustersCache:       cacheMetadata{updatedAt: time.Now()},
+		csrCache:            cacheMetadata{updatedAt: time.Now()},
+		nsrCache:            cacheMetadata{updatedAt: time.Now()},
+		userPermissionCache: cacheMetadata{updatedAt: time.Now()},
 	}
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 

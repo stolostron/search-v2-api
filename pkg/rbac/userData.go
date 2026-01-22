@@ -29,11 +29,10 @@ const impersonationConfigCreationerror = "error creating clientset with imperson
 
 // Contains data about the resources the user is allowed to access.
 type UserData struct {
-	CsResources      []Resource            // Cluster-scoped resources on hub the user has list access.
-	IsClusterAdmin   bool                  // User is cluster-admin
-	FGRbacNamespaces map[string][]string   // Fine-grained RBAC (cluster + namespace)
-	NsResources      map[string][]Resource // Namespaced resources on hub the user has list access.
-	ManagedClusters  map[string]struct{}   // Managed clusters where the user has view access.
+	CsResources     []Resource            // Cluster-scoped resources on hub the user has list access.
+	IsClusterAdmin  bool                  // User is cluster-admin
+	NsResources     map[string][]Resource // Namespaced resources on hub the user has list access.
+	ManagedClusters map[string]struct{}   // Managed clusters where the user has view access.
 
 	// Fine-grained RBAC, UserPermissions.clusterview.open-cluster-management.io
 	UserPermissions clusterviewv1alpha1.UserPermissionList
@@ -47,7 +46,6 @@ type UserDataCache struct {
 	// Metadata to manage the state of the cached data.
 	clustersCache       cacheMetadata
 	csrCache            cacheMetadata
-	fgRbacNsCache       cacheMetadata // Fine-grained RBAC (cluster + namespace)
 	nsrCache            cacheMetadata
 	userPermissionCache cacheMetadata // UserPermissions.clusterview.open-cluster-management.io
 
@@ -110,7 +108,6 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 			userInfo:            userInfo,
 			clustersCache:       cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 			csrCache:            cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
-			fgRbacNsCache:       cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 			nsrCache:            cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 			userPermissionCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 		}
@@ -140,7 +137,6 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 
 	// This builds the fine-grained RBAC cache.
 	if config.Cfg.Features.FineGrainedRbac {
-		_ = user.getFineGrainedRbacNamespaces(ctx)
 		_ = user.getUserPermissions(ctx)
 	}
 
@@ -226,12 +222,11 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 	// Proceed if user's rbac data exists
 	// Get a copy of the current user access if user data exists
 	userAccess := UserData{
-		CsResources:      userDataCache.GetCsResourcesCopy(),
-		FGRbacNamespaces: userDataCache.GetFGRbacNamespacesCopy(),
-		IsClusterAdmin:   userDataCache.UserData.IsClusterAdmin, //nolint:staticcheck // "could remove embedded field 'UserData' from selector
-		NsResources:      userDataCache.GetNsResourcesCopy(),
-		ManagedClusters:  userDataCache.GetManagedClustersCopy(),
-		UserPermissions:  userDataCache.GetUserPermissionsCopy(),
+		CsResources:     userDataCache.GetCsResourcesCopy(),
+		IsClusterAdmin:  userDataCache.UserData.IsClusterAdmin, //nolint:staticcheck // "could remove embedded field 'UserData' from selector
+		NsResources:     userDataCache.GetNsResourcesCopy(),
+		ManagedClusters: userDataCache.GetManagedClustersCopy(),
+		UserPermissions: userDataCache.GetUserPermissionsCopy(),
 	}
 	return userAccess, nil
 }
@@ -239,7 +234,7 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 // UserCache is valid if the clustersCache, csrCache, fgRbacNsCache, and nsrCache are valid.
 func (user *UserDataCache) isValid() bool {
 	return user.csrCache.isValid() && user.nsrCache.isValid() &&
-		user.clustersCache.isValid() && user.fgRbacNsCache.isValid()
+		user.clustersCache.isValid() && user.userPermissionCache.isValid()
 }
 
 // Get cluster-scoped resources the user is authorized to list.
@@ -514,57 +509,6 @@ func (user *UserDataCache) getImpersonationClientSet() v1.AuthorizationV1Interfa
 	return user.authzClient
 }
 
-// Old code for Fine-grained RBAC.
-// Get namespaces the user has access to using kubevirtprojects.clusterview.open-cluster-management.io.
-func (user *UserDataCache) getFineGrainedRbacNamespaces(ctx context.Context) map[string][]string {
-	ns := make(map[string][]string, 0)
-	// Build dynamic client impersonating the user
-	if user.dynClient == nil {
-		restConfig := config.GetClientConfig()
-		restConfig.Impersonate = *setImpersonationUserInfo(user.userInfo)
-		dynamicClient, err := dynamic.NewForConfig(restConfig)
-		if err != nil {
-			klog.Error("Error creating a new dynamic client with impersonation config.", err.Error())
-			return nil
-		}
-		user.dynClient = dynamicClient
-	}
-
-	// Get KubevirtProjects
-	gvr := schema.GroupVersionResource{
-		Group:    "clusterview.open-cluster-management.io",
-		Version:  "v1",
-		Resource: "kubevirtprojects",
-	}
-	kubevirtProjects, err := user.dynClient.Resource(gvr).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		klog.Error("Error getting KubevirtProjects", err)
-	} else {
-		for _, item := range kubevirtProjects.Items {
-			cluster := item.GetLabels()["cluster"]
-			project := item.GetLabels()["project"]
-
-			if project == "all_projects" {
-				// Replace 'all_projects' with * to align better with existing code.
-				// When user has access to all projects, there shouldn't be other individual namespaces.
-				ns[cluster] = []string{"*"}
-			} else if _, exists := ns[cluster]; !exists {
-				ns[cluster] = []string{project}
-			} else {
-				ns[cluster] = append(ns[cluster], project)
-			}
-		}
-	}
-
-	// Save to cache.
-	user.fgRbacNsCache.lock.Lock()
-	defer user.fgRbacNsCache.lock.Unlock()
-	user.FGRbacNamespaces = ns
-	user.fgRbacNsCache.updatedAt = time.Now()
-
-	return user.FGRbacNamespaces
-}
-
 // Fine-grained RBAC.
 // Get UserPermissions.clusterview.open-cluster-management.io.
 func (user *UserDataCache) getUserPermissions(ctx context.Context) error {
@@ -627,16 +571,6 @@ func (user *UserDataCache) GetNsResourcesCopy() map[string][]Resource {
 		nsResourcesCopy[ns] = resources
 	}
 	return nsResourcesCopy
-}
-
-func (user *UserDataCache) GetFGRbacNamespacesCopy() map[string][]string {
-	user.fgRbacNsCache.lock.Lock()
-	defer user.fgRbacNsCache.lock.Unlock()
-	copy := make(map[string][]string)
-	for cluster, namespaces := range user.FGRbacNamespaces {
-		copy[cluster] = namespaces
-	}
-	return copy
 }
 
 func (user *UserDataCache) GetManagedClustersCopy() map[string]struct{} {
