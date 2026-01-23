@@ -564,13 +564,14 @@ func (u *UserDataCache) CheckUserHasAccess(ctx context.Context, verb, apigroup, 
 		return true
 	}
 
+	// FIXME: Need to confirm we don't need this. ClusterPermission seems to include this already.
 	// FIXME: Must validate the managedClusters cache before using it.
 	// Legacy RBAC, Check if user has full access to the cluster.
 	// oc auth can-i create managedclusterviews -n <cluster> --as=<user>
-	managedClusters := u.GetManagedClustersCopy()
-	if _, ok := managedClusters[cluster]; ok {
-		return true
-	}
+	// managedClusters := u.GetManagedClustersCopy()
+	// if _, ok := managedClusters[cluster]; ok {
+	// 	return true
+	// }
 
 	// Fine-grained RBAC.
 	if len(u.UserPermissions.Items) == 0 || !u.userPermissionCache.isValid() {

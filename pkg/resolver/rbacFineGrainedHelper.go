@@ -156,7 +156,7 @@ func matchFineGrainedRbac(userPermissionList clusterviewv1alpha1.UserPermissionL
 				matchApiGroupAndKind(userPermission)))
 	}
 
-	if klog.V(1).Enabled() { // TODO: Change to V(5) before merging.
+	if klog.V(4).Enabled() {
 		logExpression("Fine-grained RBAC WHERE expression:\n", result)
 	}
 	return result
@@ -262,7 +262,7 @@ func matchApiGroupAndKind(userPermission clusterviewv1alpha1.UserPermission) exp
 		}
 	}
 
-	if klog.V(2).Enabled() { // TODO: Change to V(7) before merging.
+	if klog.V(6).Enabled() {
 		logExpression(fmt.Sprintf("UserPermission [%s]. Expression for [apigroup AND kind]:\n",
 			userPermission.Name), result)
 	}
