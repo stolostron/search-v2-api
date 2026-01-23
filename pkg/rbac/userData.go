@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -554,6 +555,57 @@ func (user *UserDataCache) getUserPermissions(ctx context.Context) error {
 	user.userPermissionCache.updatedAt = time.Now()
 
 	return nil
+}
+
+// Check if the user has access to the resource.
+// Uses the cached UserPermissions to check if the user has access.
+func (u *UserDataCache) CheckUserHasAccess(ctx context.Context, verb, apigroup, kind, cluster, namespace string) bool {
+	if u.IsClusterAdmin {
+		return true
+	}
+
+	// FIXME: Must validate the managedClusters cache before using it.
+	// Legacy RBAC, Check if user has full access to the cluster.
+	// oc auth can-i create managedclusterviews -n <cluster> --as=<user>
+	managedClusters := u.GetManagedClustersCopy()
+	if _, ok := managedClusters[cluster]; ok {
+		return true
+	}
+
+	// Fine-grained RBAC.
+	if len(u.UserPermissions.Items) == 0 || !u.userPermissionCache.isValid() {
+		err := u.getUserPermissions(ctx)
+		if err != nil {
+			klog.Error("Error getting UserPermissions. Failed to check user has access. ", err)
+			return false
+		}
+	}
+
+	for _, userPermission := range u.UserPermissions.Items {
+		matchesClusterNamespace := false
+		for _, location := range userPermission.Status.Bindings {
+			if location.Cluster == cluster {
+				if location.Scope == "cluster" ||
+					slices.Contains(location.Namespaces, namespace) ||
+					slices.Contains(location.Namespaces, "*") {
+					matchesClusterNamespace = true
+					break
+				}
+			}
+		}
+		if !matchesClusterNamespace {
+			continue
+		}
+		for _, rule := range userPermission.Status.ClusterRoleDefinition.Rules {
+			matchVerb := slices.Contains(rule.Verbs, verb) || slices.Contains(rule.Verbs, "*")
+			matchApiGroup := slices.Contains(rule.APIGroups, apigroup) || slices.Contains(rule.APIGroups, "*")
+			matchKind := slices.Contains(rule.Resources, kind) || slices.Contains(rule.Resources, "*")
+			if matchVerb && matchApiGroup && matchKind {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (user *UserDataCache) GetCsResourcesCopy() []Resource {
