@@ -19,9 +19,9 @@ import (
 // [AI] Helper function to initialize watch cache for tests
 func mockWatchCache() *WatchCache {
 	return &WatchCache{
-		WatchUserData:       map[string]*UserWatchData{},
-		WatchUserDataLock:   sync.Mutex{},
-		WatchCacheUpdatedAt: time.Now(),
+		watchUserData:       map[string]*UserWatchData{},
+		watchUserDataLock:   sync.Mutex{},
+		watchCacheUpdatedAt: time.Now(),
 	}
 }
 
@@ -54,28 +54,28 @@ func TestWatchCacheGetWatchCache(t *testing.T) {
 // [AI]
 func Test_CheckPermissionAndCache_CacheHit(t *testing.T) {
 	userData := &UserWatchData{
-		Permissions:     make(map[WatchPermissionKey]*WatchPermissionEntry),
-		PermissionsLock: sync.RWMutex{},
-		Ttl:             5 * time.Minute,
+		permissions:     make(map[WatchPermissionKey]*WatchPermissionEntry),
+		permissionsLock: sync.RWMutex{},
+		ttl:             5 * time.Minute,
 	}
 
 	// Pre-populate cache with a valid, non-expired entry
 	key := WatchPermissionKey{
-		Verb:      "watch",
-		Apigroup:  "apps",
-		Kind:      "deployments",
-		Namespace: "default",
+		verb:      "watch",
+		apigroup:  "apps",
+		kind:      "deployments",
+		namespace: "default",
 	}
-	userData.Permissions[key] = &WatchPermissionEntry{
-		Allowed:   true,
-		UpdatedAt: time.Now(),
+	userData.permissions[key] = &WatchPermissionEntry{
+		allowed:   true,
+		updatedAt: time.Now(),
 	}
 
 	ctx := context.Background()
 	result := userData.CheckPermissionAndCache(ctx, "watch", "apps", "deployments", "default")
 
 	assert.True(t, result, "Expected cached permission to be true")
-	assert.Equal(t, 1, len(userData.Permissions), "Should still have only 1 cached entry")
+	assert.Equal(t, 1, len(userData.permissions), "Should still have only 1 cached entry")
 }
 
 // [AI]
@@ -98,10 +98,10 @@ func Test_CheckPermissionAndCache_CacheMissExpired(t *testing.T) {
 	})
 
 	userData := &UserWatchData{
-		AuthzClient:     fs.AuthorizationV1(),
-		Permissions:     make(map[WatchPermissionKey]*WatchPermissionEntry),
-		PermissionsLock: sync.RWMutex{},
-		Ttl:             100 * time.Millisecond,
+		authzClient:     fs.AuthorizationV1(),
+		permissions:     make(map[WatchPermissionKey]*WatchPermissionEntry),
+		permissionsLock: sync.RWMutex{},
+		ttl:             100 * time.Millisecond,
 	}
 
 	// Test cache miss - permission allowed
@@ -109,18 +109,18 @@ func Test_CheckPermissionAndCache_CacheMissExpired(t *testing.T) {
 	result := userData.CheckPermissionAndCache(ctx, "watch", "apps", "deployments", "default")
 
 	assert.True(t, result, "Expected permission to be allowed for deployments")
-	assert.Equal(t, 1, len(userData.Permissions), "Should have 1 cached entry after first call")
+	assert.Equal(t, 1, len(userData.permissions), "Should have 1 cached entry after first call")
 
 	// Test cache miss - permission denied
 	result2 := userData.CheckPermissionAndCache(ctx, "watch", "", "pods", "default")
 	assert.False(t, result2, "Expected permission to be denied for pods")
-	assert.Equal(t, 2, len(userData.Permissions), "Should have 2 cached entries")
+	assert.Equal(t, 2, len(userData.permissions), "Should have 2 cached entries")
 
 	// Test expired cache scenario
 	time.Sleep(150 * time.Millisecond) // Wait for TTL to expire
 	result3 := userData.CheckPermissionAndCache(ctx, "watch", "apps", "deployments", "default")
 	assert.True(t, result3, "Expected permission to still be allowed after TTL expiration")
-	assert.Equal(t, 2, len(userData.Permissions), "Should still have 2 entries (updated existing)")
+	assert.Equal(t, 2, len(userData.permissions), "Should still have 2 entries (updated existing)")
 }
 
 // [AI]
@@ -144,10 +144,10 @@ func Test_GetUserWatchDataCache_NewUser(t *testing.T) {
 
 	assert.Nil(t, err, "Should not return error for new user")
 	assert.NotNil(t, result, "Should return UserWatchData")
-	assert.NotNil(t, result.AuthzClient, "AuthzClient should be set")
-	assert.NotNil(t, result.Permissions, "Permissions map should be initialized")
-	assert.Equal(t, time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond, result.Ttl, "TTL should be set from config")
-	assert.Equal(t, 1, len(watchCache.WatchUserData), "Should have 1 user in cache")
+	assert.NotNil(t, result.authzClient, "AuthzClient should be set")
+	assert.NotNil(t, result.permissions, "Permissions map should be initialized")
+	assert.Equal(t, time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond, result.ttl, "TTL should be set from config")
+	assert.Equal(t, 1, len(watchCache.watchUserData), "Should have 1 user in cache")
 }
 
 // [AI]
@@ -162,12 +162,12 @@ func Test_GetUserWatchDataCache_ExistingUser(t *testing.T) {
 
 	// Pre-populate with existing user data
 	existingUserData := &UserWatchData{
-		AuthzClient:     fake.NewSimpleClientset().AuthorizationV1(),
-		Permissions:     make(map[WatchPermissionKey]*WatchPermissionEntry),
-		PermissionsLock: sync.RWMutex{},
-		Ttl:             10 * time.Minute,
+		authzClient:     fake.NewSimpleClientset().AuthorizationV1(),
+		permissions:     make(map[WatchPermissionKey]*WatchPermissionEntry),
+		permissionsLock: sync.RWMutex{},
+		ttl:             10 * time.Minute,
 	}
-	watchCache.WatchUserData["watch-user-id"] = existingUserData
+	watchCache.watchUserData["watch-user-id"] = existingUserData
 
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "watch-token-123")
 
@@ -176,7 +176,7 @@ func Test_GetUserWatchDataCache_ExistingUser(t *testing.T) {
 
 	assert.Nil(t, err, "Should not return error for existing user")
 	assert.Equal(t, existingUserData, result, "Should return the same UserWatchData instance")
-	assert.Equal(t, 1, len(watchCache.WatchUserData), "Should still have only 1 user in cache")
+	assert.Equal(t, 1, len(watchCache.watchUserData), "Should still have only 1 user in cache")
 }
 
 // [AI]
@@ -197,8 +197,8 @@ func Test_GetUserWatchData_WithImpersonation(t *testing.T) {
 
 	assert.Nil(t, err, "Should not return error")
 	assert.NotNil(t, result, "Should return UserWatchData")
-	assert.NotNil(t, result.AuthzClient, "AuthzClient should be created via impersonation")
-	assert.NotNil(t, result.Permissions, "Permissions map should be initialized")
-	assert.Equal(t, time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond, result.Ttl, "TTL should be set from config")
-	assert.Equal(t, 1, len(watchCache.WatchUserData), "Should have 1 user in cache")
+	assert.NotNil(t, result.authzClient, "AuthzClient should be created via impersonation")
+	assert.NotNil(t, result.permissions, "Permissions map should be initialized")
+	assert.Equal(t, time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond, result.ttl, "TTL should be set from config")
+	assert.Equal(t, 1, len(watchCache.watchUserData), "Should have 1 user in cache")
 }

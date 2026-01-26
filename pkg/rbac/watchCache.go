@@ -19,28 +19,28 @@ import (
 )
 
 type WatchCache struct {
-	WatchUserDataLock   sync.Mutex
-	WatchUserData       map[string]*UserWatchData // userID: UserWatchPermissions
-	WatchCacheUpdatedAt time.Time
+	watchUserDataLock   sync.Mutex
+	watchUserData       map[string]*UserWatchData // userID: UserWatchPermissions
+	watchCacheUpdatedAt time.Time
 }
 
 type UserWatchData struct {
-	AuthzClient     v1.AuthorizationV1Interface
-	Permissions     map[WatchPermissionKey]*WatchPermissionEntry
-	PermissionsLock sync.RWMutex
-	Ttl             time.Duration
+	authzClient     v1.AuthorizationV1Interface
+	permissions     map[WatchPermissionKey]*WatchPermissionEntry
+	permissionsLock sync.RWMutex
+	ttl             time.Duration
 }
 
 type WatchPermissionKey struct {
-	Verb      string
-	Apigroup  string
-	Kind      string
-	Namespace string
+	verb      string
+	apigroup  string
+	kind      string
+	namespace string
 }
 
 type WatchPermissionEntry struct {
-	Allowed   bool
-	UpdatedAt time.Time
+	allowed   bool
+	updatedAt time.Time
 }
 
 var watchCacheInst = WatchCache{}
@@ -55,35 +55,35 @@ func (w *WatchCache) GetUserWatchDataCache(ctx context.Context, authzClient v1.A
 		return nil, err
 	}
 
-	w.WatchUserDataLock.Lock()
-	defer w.WatchUserDataLock.Unlock()
+	w.watchUserDataLock.Lock()
+	defer w.watchUserDataLock.Unlock()
 
-	if w.WatchUserData == nil {
-		w.WatchUserData = make(map[string]*UserWatchData)
+	if w.watchUserData == nil {
+		w.watchUserData = make(map[string]*UserWatchData)
 	}
 
 	// check if user exists in cache
-	if userData, ok := w.WatchUserData[uid]; ok {
+	if userData, ok := w.watchUserData[uid]; ok {
 		return userData, nil
 	}
 
 	// init user entry in cache with permissions structs and authzClient for making SSAR calls
 	userData := &UserWatchData{
-		Permissions:     make(map[WatchPermissionKey]*WatchPermissionEntry),
-		PermissionsLock: sync.RWMutex{},
-		Ttl:             time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond,
+		permissions:     make(map[WatchPermissionKey]*WatchPermissionEntry),
+		permissionsLock: sync.RWMutex{},
+		ttl:             time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond,
 	}
 
 	if authzClient != nil {
-		userData.AuthzClient = authzClient
+		userData.authzClient = authzClient
 	} else {
-		userData.AuthzClient = createImpersonationClient(userInfo)
-		if userData.AuthzClient == nil {
+		userData.authzClient = createImpersonationClient(userInfo)
+		if userData.authzClient == nil {
 			return nil, fmt.Errorf("failed to create impersonation client for user %s", uid)
 		}
 	}
 
-	w.WatchUserData[uid] = userData
+	w.watchUserData[uid] = userData
 
 	return userData, nil
 }
@@ -115,35 +115,35 @@ func (u *UserWatchData) userAuthorizedWatchSSAR(ctx context.Context, authzClient
 
 func (u *UserWatchData) CheckPermissionAndCache(ctx context.Context, verb, apigroup, kind, namespace string) bool {
 	key := WatchPermissionKey{
-		Verb:      verb,
-		Apigroup:  apigroup,
-		Kind:      kind,
-		Namespace: namespace,
+		verb:      verb,
+		apigroup:  apigroup,
+		kind:      kind,
+		namespace: namespace,
 	}
 
 	// check cache for record and return if cache ttl still valid
-	u.PermissionsLock.RLock()
-	if entry, ok := u.Permissions[key]; ok {
-		if time.Since(entry.UpdatedAt) < u.Ttl {
-			klog.V(6).Infof("Using cached watch permission: %+v = %v", key, entry.Allowed)
-			u.PermissionsLock.RUnlock()
-			return entry.Allowed
+	u.permissionsLock.RLock()
+	if entry, ok := u.permissions[key]; ok {
+		if time.Since(entry.updatedAt) < u.ttl {
+			klog.V(6).Infof("Using cached watch permission: %+v = %v", key, entry.allowed)
+			u.permissionsLock.RUnlock()
+			return entry.allowed
 		}
 	}
-	u.PermissionsLock.RUnlock()
+	u.permissionsLock.RUnlock()
 
 	klog.V(6).Infof("Cache miss for watch permission: %+v. Making SSAR call.", key)
-	allowed := u.userAuthorizedWatchSSAR(ctx, u.AuthzClient, verb, apigroup, kind, namespace)
+	allowed := u.userAuthorizedWatchSSAR(ctx, u.authzClient, verb, apigroup, kind, namespace)
 
 	// store in result cache
-	u.PermissionsLock.Lock()
-	defer u.PermissionsLock.Unlock()
-	if u.Permissions == nil {
-		u.Permissions = make(map[WatchPermissionKey]*WatchPermissionEntry)
+	u.permissionsLock.Lock()
+	defer u.permissionsLock.Unlock()
+	if u.permissions == nil {
+		u.permissions = make(map[WatchPermissionKey]*WatchPermissionEntry)
 	}
-	u.Permissions[key] = &WatchPermissionEntry{
-		Allowed:   allowed,
-		UpdatedAt: time.Now(),
+	u.permissions[key] = &WatchPermissionEntry{
+		allowed:   allowed,
+		updatedAt: time.Now(),
 	}
 	klog.V(6).Infof("Cached watch permission: %+v = %v", key, allowed)
 

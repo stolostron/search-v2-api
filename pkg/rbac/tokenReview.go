@@ -90,8 +90,8 @@ func prettyPrint(i interface{}) string {
 
 // Utility to allow tests to inject a fake client to mock the k8s api call.
 func (c *Cache) getAuthClient() v1.AuthenticationV1Interface {
-	if c.AuthnClient == nil {
-		c.AuthnClient = config.KubeClient().AuthenticationV1()
+	if c.authnClient == nil {
+		c.authnClient = config.KubeClient().AuthenticationV1()
 	}
-	return c.AuthnClient
+	return c.authnClient
 }

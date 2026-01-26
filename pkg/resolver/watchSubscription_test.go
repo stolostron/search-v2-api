@@ -12,12 +12,6 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/database"
 	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"github.com/stretchr/testify/assert"
-	authv1 "k8s.io/api/authentication/v1"
-	authz "k8s.io/api/authorization/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	authnv1 "k8s.io/client-go/kubernetes/typed/authentication/v1"
-	v1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
-	"k8s.io/client-go/rest"
 )
 
 func TestEventMatchesFilters_MultiKeywordsAgainstLabels(t *testing.T) {
@@ -1014,171 +1008,9 @@ func TestGetEventDataFields(t *testing.T) {
 	assert.Equal(t, isHubCluster, true, "Expected isHubCluster to be true")
 }
 
-// helper for mocking eventMatchesRbac() and watchCache testing
-type mockAuthzClient struct {
-	permissions map[rbac.WatchPermissionKey]*rbac.WatchPermissionEntry
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-func (m *mockAuthzClient) RESTClient() rest.Interface {
-	return nil
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-type mockAuthnClient struct {
-	userInfo authv1.UserInfo
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-func (m *mockAuthnClient) RESTClient() rest.Interface {
-	return nil
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-func (m *mockAuthnClient) TokenReviews() authnv1.TokenReviewInterface {
-	return &mockTokenReviewInterface{userInfo: m.userInfo}
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-type mockTokenReviewInterface struct {
-	userInfo authv1.UserInfo
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-func (m *mockTokenReviewInterface) Create(ctx context.Context, tr *authv1.TokenReview, opts metav1.CreateOptions) (*authv1.TokenReview, error) {
-	tr.Status.Authenticated = true
-	tr.Status.User = m.userInfo
-	return tr, nil
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-func newMockAuthzClient() *mockAuthzClient {
-	return &mockAuthzClient{
-		permissions: make(map[rbac.WatchPermissionKey]*rbac.WatchPermissionEntry),
-	}
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-type mockSelfSubjectAccessReviewInterface struct {
-	client *mockAuthzClient
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-func (m mockSelfSubjectAccessReviewInterface) Create(ctx context.Context, ssar *authz.SelfSubjectAccessReview, opts metav1.CreateOptions) (*authz.SelfSubjectAccessReview, error) {
-	key := rbac.WatchPermissionKey{
-		Verb:      ssar.Spec.ResourceAttributes.Verb,
-		Apigroup:  ssar.Spec.ResourceAttributes.Group,
-		Kind:      ssar.Spec.ResourceAttributes.Resource,
-		Namespace: ssar.Spec.ResourceAttributes.Namespace,
-	}
-
-	entry, ok := m.client.permissions[key]
-	if !ok {
-		ssar.Status.Allowed = false
-	} else {
-		ssar.Status.Allowed = entry.Allowed
-	}
-
-	return ssar, nil
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-func (m *mockAuthzClient) SelfSubjectAccessReviews() v1.SelfSubjectAccessReviewInterface {
-	return &mockSelfSubjectAccessReviewInterface{client: m}
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-func (m *mockAuthzClient) SelfSubjectRulesReviews() v1.SelfSubjectRulesReviewInterface {
-	return nil
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-func (m *mockAuthzClient) SubjectAccessReviews() v1.SubjectAccessReviewInterface {
-	return nil
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-func (m *mockAuthzClient) LocalSubjectAccessReviews(namespace string) v1.LocalSubjectAccessReviewInterface {
-	return nil
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-func setupWatchCacheWithUserData(ctx context.Context, userData *rbac.UserWatchData) {
-	watchCache := rbac.GetWatchCache()
-	cache := rbac.GetCache()
-	uid, _ := cache.GetUserUID(ctx)
-
-	watchCache.WatchUserDataLock.Lock()
-	defer watchCache.WatchUserDataLock.Unlock()
-
-	if watchCache.WatchUserData == nil {
-		watchCache.WatchUserData = make(map[string]*rbac.UserWatchData)
-	}
-
-	watchCache.WatchUserData[uid] = userData
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-func cleanupWatchCache(ctx context.Context) {
-	watchCache := rbac.GetWatchCache()
-	cache := rbac.GetCache()
-	uid, _ := cache.GetUserUID(ctx)
-
-	watchCache.WatchUserDataLock.Lock()
-	defer watchCache.WatchUserDataLock.Unlock()
-
-	if watchCache.WatchUserData != nil {
-		delete(watchCache.WatchUserData, uid)
-	}
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-func createTestUserWatchData(permissions map[rbac.WatchPermissionKey]*rbac.WatchPermissionEntry, ttl time.Duration) *rbac.UserWatchData {
-	mockClient := newMockAuthzClient()
-	mockClient.permissions = permissions
-
-	return &rbac.UserWatchData{
-		AuthzClient:     mockClient,
-		Permissions:     make(map[rbac.WatchPermissionKey]*rbac.WatchPermissionEntry),
-		PermissionsLock: sync.RWMutex{},
-		Ttl:             ttl,
-	}
-}
-
-// helper for mocking eventMatchesRbac() and watchCache testing
-func createTestContext(userUID, username string) context.Context {
-	ctx := context.Background()
-
-	// set up the user info in the regular RBAC cache so getUserUidFromContext works
-	cache := rbac.GetCache()
-	userInfo := authv1.UserInfo{
-		UID:      userUID,
-		Username: username,
-	}
-
-	// Set up mock authentication client
-	cache.AuthnClient = &mockAuthnClient{userInfo: userInfo}
-
-	token := "test-token-" + userUID
-	ctx = context.WithValue(ctx, rbac.ContextAuthTokenKey, token)
-
-	return ctx
-}
-
 func TestEventMatchesRbacHubClusterResource_Allowed(t *testing.T) {
 	// Given: a user with permissions to watch hub cluster resource streamed event
-	ctx := createTestContext("test-user-1", "testuser1")
-	permissions := map[rbac.WatchPermissionKey]*rbac.WatchPermissionEntry{
-		rbac.WatchPermissionKey{
-			Verb:      "watch",
-			Apigroup:  "v1",
-			Kind:      "pods",
-			Namespace: "foo",
-		}: &rbac.WatchPermissionEntry{
-			Allowed:   true,
-			UpdatedAt: time.Now(),
-		},
-	}
+	ctx := rbac.CreateTestContext("test-user-1", "testuser1")
 	event := &model.Event{
 		UID:       "asdf-1234",
 		Operation: "CREATE",
@@ -1190,9 +1022,9 @@ func TestEventMatchesRbacHubClusterResource_Allowed(t *testing.T) {
 			"_hubClusterResource": true,
 		},
 	}
-	userData := createTestUserWatchData(permissions, 1*time.Minute)
-	setupWatchCacheWithUserData(ctx, userData)
-	defer cleanupWatchCache(ctx)
+	userData := rbac.CreateTestUserWatchData("watch", "v1", "pods", "foo", true, time.Now(), 1*time.Minute)
+	rbac.SetupWatchCacheWithUserData(ctx, userData)
+	defer rbac.CleanupWatchCache(ctx)
 
 	// When: we check user permissions against the event
 	result := eventMatchesRbac(ctx, event)
@@ -1203,18 +1035,7 @@ func TestEventMatchesRbacHubClusterResource_Allowed(t *testing.T) {
 
 func TestEventMatchesRbacHubClusterResource_Disallowed(t *testing.T) {
 	// Given: a user with misaligned permissions to watch hub cluster resource streamed event
-	ctx := createTestContext("test-user-1", "testuser1")
-	permissions := map[rbac.WatchPermissionKey]*rbac.WatchPermissionEntry{
-		rbac.WatchPermissionKey{
-			Verb:      "watch",
-			Apigroup:  "v1",
-			Kind:      "pods",
-			Namespace: "foo",
-		}: &rbac.WatchPermissionEntry{
-			Allowed:   true,
-			UpdatedAt: time.Now(),
-		},
-	}
+	ctx := rbac.CreateTestContext("test-user-1", "testuser1")
 	event := &model.Event{
 		UID:       "asdf-1234",
 		Operation: "UPDATE",
@@ -1226,9 +1047,9 @@ func TestEventMatchesRbacHubClusterResource_Disallowed(t *testing.T) {
 			"_hubClusterResource": true,
 		},
 	}
-	userData := createTestUserWatchData(permissions, 1*time.Minute)
-	setupWatchCacheWithUserData(ctx, userData)
-	defer cleanupWatchCache(ctx)
+	userData := rbac.CreateTestUserWatchData("watch", "v1", "pods", "foo", true, time.Now(), 1*time.Minute)
+	rbac.SetupWatchCacheWithUserData(ctx, userData)
+	defer rbac.CleanupWatchCache(ctx)
 
 	// When: we check user permissions against the event
 	result := eventMatchesRbac(ctx, event)
@@ -1244,18 +1065,7 @@ func TestEventMatchesRbacManagedClusterResource_Allowed(t *testing.T) {
 		config.Cfg.Features.FineGrainedRbac = originalFineGrainedRbac
 	}()
 	// Given: a user with permissions to watch managed cluster resource streamed event
-	ctx := createTestContext("test-user-1", "testuser1")
-	permissions := map[rbac.WatchPermissionKey]*rbac.WatchPermissionEntry{
-		rbac.WatchPermissionKey{
-			Verb:      "create",
-			Apigroup:  "view.open-cluster-management.io",
-			Kind:      "managedclusterviews",
-			Namespace: "managed-cluster",
-		}: &rbac.WatchPermissionEntry{
-			Allowed:   true,
-			UpdatedAt: time.Now(),
-		},
-	}
+	ctx := rbac.CreateTestContext("test-user-1", "testuser1")
 	event := &model.Event{
 		UID:       "asdf-1234",
 		Operation: "CREATE",
@@ -1266,9 +1076,10 @@ func TestEventMatchesRbacManagedClusterResource_Allowed(t *testing.T) {
 			"cluster":     "managed-cluster",
 		},
 	}
-	userData := createTestUserWatchData(permissions, 1*time.Minute)
-	setupWatchCacheWithUserData(ctx, userData)
-	defer cleanupWatchCache(ctx)
+	userData := rbac.CreateTestUserWatchData("create", "view.open-cluster-management.io",
+		"managedclusterviews", "managed-cluster", true, time.Now(), 1*time.Minute)
+	rbac.SetupWatchCacheWithUserData(ctx, userData)
+	defer rbac.CleanupWatchCache(ctx)
 
 	// When: we check user permissions against the event
 	result := eventMatchesRbac(ctx, event)
@@ -1284,18 +1095,7 @@ func TestEventMatchesRbacManagedClusterResource_Disallowed(t *testing.T) {
 		config.Cfg.Features.FineGrainedRbac = originalFineGrainedRbac
 	}()
 	// Given: a user with misaligned permissions to watch managed cluster resource streamed event
-	ctx := createTestContext("test-user-1", "testuser1")
-	permissions := map[rbac.WatchPermissionKey]*rbac.WatchPermissionEntry{
-		rbac.WatchPermissionKey{
-			Verb:      "create",
-			Apigroup:  "view.open-cluster-management.io",
-			Kind:      "managedclusterviews",
-			Namespace: "a-totally-different-managed-cluster",
-		}: &rbac.WatchPermissionEntry{
-			Allowed:   true,
-			UpdatedAt: time.Now(),
-		},
-	}
+	ctx := rbac.CreateTestContext("test-user-1", "testuser1")
 	event := &model.Event{
 		UID:       "asdf-1234",
 		Operation: "CREATE",
@@ -1306,9 +1106,9 @@ func TestEventMatchesRbacManagedClusterResource_Disallowed(t *testing.T) {
 			"cluster":     "managed-cluster",
 		},
 	}
-	userData := createTestUserWatchData(permissions, 1*time.Minute)
-	setupWatchCacheWithUserData(ctx, userData)
-	defer cleanupWatchCache(ctx)
+	userData := rbac.CreateTestUserWatchData("create", "view.open-cluster-management.io", "managedclusterviews", "a-different-managed-cluster", true, time.Now(), 1*time.Minute)
+	rbac.SetupWatchCacheWithUserData(ctx, userData)
+	defer rbac.CleanupWatchCache(ctx)
 
 	// When: we check user permissions against the event
 	result := eventMatchesRbac(ctx, event)
