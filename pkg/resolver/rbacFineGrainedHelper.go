@@ -227,9 +227,18 @@ func matchApiGroupAndKind(userPermission clusterviewv1alpha1.UserPermission) exp
 
 		var apigroupExp exp.Expression
 		if !wildcardAPIGroup {
-			if len(rule.APIGroups) == 1 {
-				apigroupExp = goqu.L("data->???", "apigroup", goqu.L("?"), rule.APIGroups[0])
-			} else if len(rule.APIGroups) > 1 {
+			// If apigroup is "" (empty string) query checks the key does not exist.
+			if slices.Contains(rule.APIGroups, "") {
+				apigroups := slices.Delete(rule.APIGroups, slices.Index(rule.APIGroups, ""), 1)
+				if len(apigroups) > 0 { // After deleting the empty string "".
+					apigroupExp = goqu.Or(
+						goqu.L("data->???", "apigroup", goqu.L("?|"), pq.Array(apigroups)),
+						goqu.L("NOT(???)", goqu.C("data"), goqu.Literal("?"), "apigroup"))
+
+				} else {
+					apigroupExp = goqu.L("NOT(???)", goqu.C("data"), goqu.Literal("?"), "apigroup")
+				}
+			} else {
 				apigroupExp = goqu.L("data->???", "apigroup", goqu.L("?|"), pq.Array(rule.APIGroups))
 			}
 		}
@@ -243,9 +252,7 @@ func matchApiGroupAndKind(userPermission clusterviewv1alpha1.UserPermission) exp
 					resources = append(resources, resource)
 				}
 			}
-			if len(resources) == 1 {
-				kindExp = goqu.L("data->???", "kind_plural", goqu.L("?"), resources[0])
-			} else if len(resources) > 1 {
+			if len(resources) > 0 {
 				kindExp = goqu.L("data->???", "kind_plural", goqu.L("?|"), pq.Array(resources))
 			}
 		}
