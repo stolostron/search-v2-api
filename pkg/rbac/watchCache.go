@@ -5,17 +5,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/stolostron/search-v2-api/pkg/config"
 	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	v1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"sync"
-	"time"
-
-	v1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 )
 
 type WatchCache struct {

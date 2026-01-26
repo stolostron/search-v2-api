@@ -12,7 +12,7 @@ import (
 	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	fake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/fake"
 	testingk8s "k8s.io/client-go/testing"
 )
 
