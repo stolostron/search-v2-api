@@ -8,16 +8,16 @@ import (
 	"testing"
 	"time"
 
+	clusterviewv1alpha1 "github.com/stolostron/cluster-lifecycle-api/clusterview/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	fakedynclient "k8s.io/client-go/dynamic/fake"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	fake "k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/kubernetes/scheme"
 
 	"k8s.io/client-go/rest"
 	testingk8s "k8s.io/client-go/testing"
@@ -140,10 +140,10 @@ func Test_getNamespaces_usingCache(t *testing.T) {
 	mock_cache.users["unique-user-id"] = &UserDataCache{
 		UserData: UserData{ManagedClusters: managedclusters,
 			NsResources: nsresources},
-		csrCache:      cacheMetadata{updatedAt: time.Now()},
-		fgRbacNsCache: cacheMetadata{updatedAt: time.Now()},
-		nsrCache:      cacheMetadata{updatedAt: time.Now()},
-		clustersCache: cacheMetadata{updatedAt: time.Now()},
+		csrCache:            cacheMetadata{updatedAt: time.Now()},
+		nsrCache:            cacheMetadata{updatedAt: time.Now()},
+		clustersCache:       cacheMetadata{updatedAt: time.Now()},
+		userPermissionCache: cacheMetadata{updatedAt: time.Now()},
 	}
 
 	rulesCheck := &authz.SelfSubjectRulesReview{
@@ -273,10 +273,10 @@ func Test_clusterScoped_usingCache(t *testing.T) {
 			CsResources:     []Resource{{Apigroup: "storage.k8s.io", Kind: "nodes"}},
 			ManagedClusters: map[string]struct{}{"some-namespace": {}}},
 		// Using current time , GetUserData should have the same values as cache
-		clustersCache: cacheMetadata{updatedAt: time.Now()},
-		fgRbacNsCache: cacheMetadata{updatedAt: time.Now()},
-		csrCache:      cacheMetadata{updatedAt: time.Now()},
-		nsrCache:      cacheMetadata{updatedAt: time.Now()},
+		clustersCache:       cacheMetadata{updatedAt: time.Now()},
+		csrCache:            cacheMetadata{updatedAt: time.Now()},
+		nsrCache:            cacheMetadata{updatedAt: time.Now()},
+		userPermissionCache: cacheMetadata{updatedAt: time.Now()},
 	}
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 
@@ -459,10 +459,10 @@ func Test_managedClusters_usingCache(t *testing.T) {
 			ManagedClusters: map[string]struct{}{"some-managed-cluster": {}, "some-other-managed-cluster": {}},
 		},
 		// Using current time , GetUserData should have the same values as cache
-		clustersCache: cacheMetadata{updatedAt: time.Now()},
-		fgRbacNsCache: cacheMetadata{updatedAt: time.Now()},
-		csrCache:      cacheMetadata{updatedAt: time.Now()},
-		nsrCache:      cacheMetadata{updatedAt: time.Now()},
+		clustersCache:       cacheMetadata{updatedAt: time.Now()},
+		csrCache:            cacheMetadata{updatedAt: time.Now()},
+		nsrCache:            cacheMetadata{updatedAt: time.Now()},
+		userPermissionCache: cacheMetadata{updatedAt: time.Now()},
 	}
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 
@@ -630,10 +630,10 @@ func Test_getUserData(t *testing.T) {
 			NsResources:     map[string][]Resource{"ns1": {{Apigroup: "", Kind: "pods"}}},
 		},
 		// Using current time , GetUserData should have the same values as cache
-		clustersCache: cacheMetadata{updatedAt: time.Now()},
-		fgRbacNsCache: cacheMetadata{updatedAt: time.Now()},
-		csrCache:      cacheMetadata{updatedAt: time.Now()},
-		nsrCache:      cacheMetadata{updatedAt: time.Now()},
+		clustersCache:       cacheMetadata{updatedAt: time.Now()},
+		csrCache:            cacheMetadata{updatedAt: time.Now()},
+		nsrCache:            cacheMetadata{updatedAt: time.Now()},
+		userPermissionCache: cacheMetadata{updatedAt: time.Now()},
 	}
 	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "123456")
 
@@ -860,71 +860,249 @@ func Test_updateUserManagedClusterList(t *testing.T) {
 	assert.Equal(t, len(managedclusters), len(udc.ManagedClusters))
 }
 
-func Test_GetFineGrainedRbacNamespaces(t *testing.T) {
-	// Setup fake dynamic client to mock requests to
-	// kubevirtprojects.clusterview.open-cluster-management.io
-	testScheme := scheme.Scheme
-	gvrToListKind := map[schema.GroupVersionResource]string{
-		{Group: "clusterview.open-cluster-management.io", Version: "v1", Resource: "kubevirtprojects"}: "ProjectList",
-	}
-	mockDynamicClient := fakedynclient.NewSimpleDynamicClientWithCustomListKinds(testScheme,
-		gvrToListKind,
-		[]runtime.Object{
-			&unstructured.UnstructuredList{
-				Object: map[string]interface{}{
-					"apiVersion": "clusterview.open-cluster-management.io/v1",
-					"kind":       "KubevirtProject",
-				},
-				Items: []unstructured.Unstructured{
+// [AI] Verify the fine-grained RBAC is built correctly using UserPermissions.
+func Test_CheckUserHasAccess(t *testing.T) {
+	tests := []struct {
+		name           string
+		isClusterAdmin bool
+		permissions    clusterviewv1alpha1.UserPermissionList
+		verb           string
+		group          string
+		resource       string
+		cluster        string
+		namespace      string
+		expected       bool
+	}{
+		{
+			name:           "Cluster admin has access",
+			isClusterAdmin: true,
+			expected:       true,
+		},
+		{
+			name:           "No permissions, should deny",
+			isClusterAdmin: false,
+			expected:       false,
+		},
+		{
+			name: "Specific permission match",
+			permissions: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
 					{
-						Object: map[string]any{
-							"apiVersion": "clusterview.open-cluster-management.io/v1",
-							"kind":       "KubevirtProject",
-							"metadata": map[string]any{
-								"name": "0000-0000-0000-1111",
-								"labels": map[string]any{
-									"cluster": "cluster-a",
-									"project": "project-a1"},
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "cluster1", Namespaces: []string{"ns1"}},
 							},
-						},
-					},
-					{
-						Object: map[string]any{
-							"apiVersion": "clusterview.open-cluster-management.io/v1",
-							"kind":       "KubevirtProject",
-							"metadata": map[string]any{
-								"name": "0000-0000-0000-2222",
-								"labels": map[string]any{
-									"cluster": "cluster-a",
-									"project": "project-a2"},
-							},
-						},
-					},
-					{
-						Object: map[string]any{
-							"apiVersion": "clusterview.open-cluster-management.io/v1",
-							"kind":       "KubevirtProject",
-							"metadata": map[string]any{
-								"name": "0000-0000-0000-3333",
-								"labels": map[string]any{
-									"cluster": "cluster-b",
-									"project": "all_projects"},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{Verbs: []string{"get"}, APIGroups: []string{"v1"}, Resources: []string{"pods"}},
+								},
 							},
 						},
 					},
 				},
 			},
-		}...)
-
-	mockUserCache := &UserDataCache{
-		dynClient: mockDynamicClient,
+			verb:      "get",
+			group:     "v1",
+			resource:  "pods",
+			cluster:   "cluster1",
+			namespace: "ns1",
+			expected:  true,
+		},
+		{
+			name: "Wildcard verb match",
+			permissions: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "cluster1", Namespaces: []string{"ns1"}},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{Verbs: []string{"*"}, APIGroups: []string{"v1"}, Resources: []string{"pods"}},
+								},
+							},
+						},
+					},
+				},
+			},
+			verb:      "list",
+			group:     "v1",
+			resource:  "pods",
+			cluster:   "cluster1",
+			namespace: "ns1",
+			expected:  true,
+		},
+		{
+			name: "Cluster scoped binding",
+			permissions: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "cluster1", Scope: "cluster"},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{Verbs: []string{"get"}, APIGroups: []string{"v1"}, Resources: []string{"nodes"}},
+								},
+							},
+						},
+					},
+				},
+			},
+			verb:      "get",
+			group:     "v1",
+			resource:  "nodes",
+			cluster:   "cluster1",
+			namespace: "", // Cluster scoped resource
+			expected:  true,
+		},
+		{
+			name: "Wildcard namespace binding",
+			permissions: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "cluster1", Namespaces: []string{"*"}},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{Verbs: []string{"get"}, APIGroups: []string{"v1"}, Resources: []string{"pods"}},
+								},
+							},
+						},
+					},
+				},
+			},
+			verb:      "get",
+			group:     "v1",
+			resource:  "pods",
+			cluster:   "cluster1",
+			namespace: "any-ns",
+			expected:  true,
+		},
+		{
+			name: "Mismatched cluster",
+			permissions: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "cluster1", Namespaces: []string{"ns1"}},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{Verbs: []string{"get"}, APIGroups: []string{"v1"}, Resources: []string{"pods"}},
+								},
+							},
+						},
+					},
+				},
+			},
+			verb:      "get",
+			group:     "v1",
+			resource:  "pods",
+			cluster:   "cluster2",
+			namespace: "ns1",
+			expected:  false,
+		},
+		{
+			name: "Mismatched verb",
+			permissions: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "cluster1", Namespaces: []string{"ns1"}},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{Verbs: []string{"get"}, APIGroups: []string{"v1"}, Resources: []string{"pods"}},
+								},
+							},
+						},
+					},
+				},
+			},
+			verb:      "delete",
+			group:     "v1",
+			resource:  "pods",
+			cluster:   "cluster1",
+			namespace: "ns1",
+			expected:  false,
+		},
 	}
 
-	// Call the function under test
-	clusters := mockUserCache.getFineGrainedRbacNamespaces(context.Background())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			user := &UserDataCache{
+				UserData: UserData{
+					IsClusterAdmin:  tt.isClusterAdmin,
+					UserPermissions: tt.permissions,
+				},
+				// Make cache valid to skip API call
+				clustersCache:       cacheMetadata{updatedAt: time.Now()},
+				csrCache:            cacheMetadata{updatedAt: time.Now()},
+				nsrCache:            cacheMetadata{updatedAt: time.Now()},
+				userPermissionCache: cacheMetadata{updatedAt: time.Now()},
+			}
 
-	// Assertions
-	assert.Equal(t, 2, len(clusters))
-	assert.Equal(t, []string{"project-a1", "project-a2"}, clusters["cluster-a"])
-	assert.Equal(t, []string{"*"}, clusters["cluster-b"])
+			result := user.CheckUserHasAccess(context.Background(), tt.verb, tt.group, tt.resource, tt.cluster, tt.namespace)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// [AI] Verify the UserPermission is fetched and cached correctly.
+func Test_getUserPermissions(t *testing.T) {
+	scheme := runtime.NewScheme()
+
+	// Create a UserPermission object
+	userPermission := &clusterviewv1alpha1.UserPermission{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "UserPermission",
+			APIVersion: "clusterview.open-cluster-management.io/v1alpha1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-permission",
+		},
+		Status: clusterviewv1alpha1.UserPermissionStatus{
+			Bindings: []clusterviewv1alpha1.ClusterBinding{
+				{Cluster: "c1", Namespaces: []string{"ns1"}, Scope: "cluster"},
+			},
+			ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+				Rules: []rbacv1.PolicyRule{
+					{Verbs: []string{"get"}, APIGroups: []string{"v1"}, Resources: []string{"pods"}},
+				},
+			},
+		},
+	}
+
+	// Convert to Unstructured
+	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(userPermission)
+	assert.NoError(t, err)
+	unstructuredObj := &unstructured.Unstructured{Object: unstructuredMap}
+
+	// Create fake dynamic client
+	dynClient := dynamicfake.NewSimpleDynamicClient(scheme, unstructuredObj)
+
+	// Create UserDataCache
+	user := &UserDataCache{
+		dynClient:           dynClient,
+		userPermissionCache: cacheMetadata{ttl: time.Minute * 5},
+	}
+
+	// Call getUserPermissions
+	err = user.getUserPermissions(context.Background())
+	assert.NoError(t, err)
+
+	// Verify UserPermissions in cache
+	assert.Len(t, user.UserPermissions.Items, 1)
+	assert.Equal(t, "test-permission", user.UserPermissions.Items[0].Name)
+	assert.Equal(t, "c1", user.UserPermissions.Items[0].Status.Bindings[0].Cluster)
+
+	// Verify cache timestamp is updated
+	assert.False(t, user.userPermissionCache.updatedAt.IsZero())
 }

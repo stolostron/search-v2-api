@@ -5,16 +5,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	clusterviewv1alpha1 "github.com/stolostron/cluster-lifecycle-api/clusterview/v1alpha1"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/metrics"
 	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -27,11 +30,13 @@ const impersonationConfigCreationerror = "error creating clientset with imperson
 
 // Contains data about the resources the user is allowed to access.
 type UserData struct {
-	CsResources      []Resource            // Cluster-scoped resources on hub the user has list access.
-	IsClusterAdmin   bool                  // User is cluster-admin
-	FGRbacNamespaces map[string][]string   // Fine-grained RBAC (cluster + namespace)
-	NsResources      map[string][]Resource // Namespaced resources on hub the user has list access.
-	ManagedClusters  map[string]struct{}   // Managed clusters where the user has view access.
+	CsResources     []Resource            // Cluster-scoped resources on hub the user has list access.
+	IsClusterAdmin  bool                  // User is cluster-admin
+	NsResources     map[string][]Resource // Namespaced resources on hub the user has list access.
+	ManagedClusters map[string]struct{}   // Managed clusters where the user has view access.
+
+	// Fine-grained RBAC, UserPermissions.clusterview.open-cluster-management.io
+	UserPermissions clusterviewv1alpha1.UserPermissionList
 }
 
 // Extend UserData with caching information.
@@ -40,10 +45,10 @@ type UserDataCache struct {
 	userInfo authv1.UserInfo
 
 	// Metadata to manage the state of the cached data.
-	clustersCache cacheMetadata
-	csrCache      cacheMetadata
-	fgRbacNsCache cacheMetadata // Fine-grained RBAC (cluster + namespace)
-	nsrCache      cacheMetadata
+	clustersCache       cacheMetadata
+	csrCache            cacheMetadata
+	nsrCache            cacheMetadata
+	userPermissionCache cacheMetadata // UserPermissions.clusterview.open-cluster-management.io
 
 	// Client to external API to be replaced with a mock by unit tests.
 	authzClient v1.AuthorizationV1Interface
@@ -101,11 +106,11 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 		}
 		// User not in cache , Initialize and assign to the UID
 		user = &UserDataCache{
-			userInfo:      userInfo,
-			clustersCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
-			csrCache:      cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
-			fgRbacNsCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
-			nsrCache:      cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+			userInfo:            userInfo,
+			clustersCache:       cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+			csrCache:            cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+			nsrCache:            cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+			userPermissionCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 		}
 		if cache.users == nil {
 			cache.users = map[string]*UserDataCache{}
@@ -133,7 +138,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 
 	// This builds the fine-grained RBAC cache.
 	if config.Cfg.Features.FineGrainedRbac {
-		_ = user.getFineGrainedRbacNamespaces(ctx)
+		_ = user.getUserPermissions(ctx)
 	}
 
 	userDataCache, err := user.getNamespacedResources(ctx, cache)
@@ -218,11 +223,11 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 	// Proceed if user's rbac data exists
 	// Get a copy of the current user access if user data exists
 	userAccess := UserData{
-		CsResources:      userDataCache.GetCsResourcesCopy(),
-		FGRbacNamespaces: userDataCache.GetFGRbacNamespacesCopy(),
-		IsClusterAdmin:   userDataCache.UserData.IsClusterAdmin, //nolint:staticcheck // "could remove embedded field 'UserData' from selector
-		NsResources:      userDataCache.GetNsResourcesCopy(),
-		ManagedClusters:  userDataCache.GetManagedClustersCopy(),
+		CsResources:     userDataCache.GetCsResourcesCopy(),
+		IsClusterAdmin:  userDataCache.UserData.IsClusterAdmin, //nolint:staticcheck // "could remove embedded field 'UserData' from selector
+		NsResources:     userDataCache.GetNsResourcesCopy(),
+		ManagedClusters: userDataCache.GetManagedClustersCopy(),
+		UserPermissions: userDataCache.GetUserPermissionsCopy(),
 	}
 	return userAccess, nil
 }
@@ -230,7 +235,7 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 // UserCache is valid if the clustersCache, csrCache, fgRbacNsCache, and nsrCache are valid.
 func (user *UserDataCache) isValid() bool {
 	return user.csrCache.isValid() && user.nsrCache.isValid() &&
-		user.clustersCache.isValid() && user.fgRbacNsCache.isValid()
+		user.clustersCache.isValid() && user.userPermissionCache.isValid()
 }
 
 // Get cluster-scoped resources the user is authorized to list.
@@ -505,53 +510,94 @@ func (user *UserDataCache) getImpersonationClientSet() v1.AuthorizationV1Interfa
 	return user.authzClient
 }
 
-func (user *UserDataCache) getFineGrainedRbacNamespaces(ctx context.Context) map[string][]string {
-	ns := make(map[string][]string, 0)
-	// Build dynamic client impersonating the user
+// Fine-grained RBAC.
+// Get UserPermissions.clusterview.open-cluster-management.io.
+func (user *UserDataCache) getUserPermissions(ctx context.Context) error {
 	if user.dynClient == nil {
 		restConfig := config.GetClientConfig()
 		restConfig.Impersonate = *setImpersonationUserInfo(user.userInfo)
 		dynamicClient, err := dynamic.NewForConfig(restConfig)
 		if err != nil {
 			klog.Error("Error creating a new dynamic client with impersonation config.", err.Error())
-			return nil
+			return err
 		}
 		user.dynClient = dynamicClient
 	}
 
-	// Get KubevirtProjects
+	// Get userpermissions.clusterview.open-cluster-management.io
 	gvr := schema.GroupVersionResource{
 		Group:    "clusterview.open-cluster-management.io",
-		Version:  "v1",
-		Resource: "kubevirtprojects",
+		Version:  "v1alpha1",
+		Resource: "userpermissions",
 	}
-	kubevirtProjects, err := user.dynClient.Resource(gvr).List(ctx, metav1.ListOptions{})
+	userPermissions, err := user.dynClient.Resource(gvr).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		klog.Error("Error getting KubevirtProjects", err)
-	} else {
-		for _, item := range kubevirtProjects.Items {
-			cluster := item.GetLabels()["cluster"]
-			project := item.GetLabels()["project"]
+		klog.Error("Error getting UserPermissions. ", err)
+		return err
+	}
 
-			if project == "all_projects" {
-				// Replace 'all_projects' with * to align better with existing code.
-				// When user has access to all projects, there shouldn't be other individual namespaces.
-				ns[cluster] = []string{"*"}
-			} else if _, exists := ns[cluster]; !exists {
-				ns[cluster] = []string{project}
-			} else {
-				ns[cluster] = append(ns[cluster], project)
-			}
+	// Convert unstructured.UnstructuredList to UserPermissionList
+	var userPermissionList clusterviewv1alpha1.UserPermissionList
+	for _, item := range userPermissions.Items {
+		var up clusterviewv1alpha1.UserPermission
+		err = runtime.DefaultUnstructuredConverter.FromUnstructured(item.Object, &up)
+		if err != nil {
+			klog.Error("Error converting Unstructured to UserPermission. ", err)
+			return err
 		}
+		userPermissionList.Items = append(userPermissionList.Items, up)
 	}
 
 	// Save to cache.
-	user.fgRbacNsCache.lock.Lock()
-	defer user.fgRbacNsCache.lock.Unlock()
-	user.FGRbacNamespaces = ns
-	user.fgRbacNsCache.updatedAt = time.Now()
+	user.userPermissionCache.lock.Lock()
+	defer user.userPermissionCache.lock.Unlock()
+	user.UserPermissions = userPermissionList
+	user.userPermissionCache.updatedAt = time.Now()
 
-	return user.FGRbacNamespaces
+	return nil
+}
+
+// Fine-grained RBAC.
+// Check if the user has access to the resource.
+// Uses the cached UserPermissions to check if the user has access.
+func (u *UserDataCache) CheckUserHasAccess(ctx context.Context, verb, apigroup, kind, cluster, namespace string) bool {
+	if u.IsClusterAdmin {
+		return true
+	}
+
+	if len(u.UserPermissions.Items) == 0 || !u.userPermissionCache.isValid() {
+		err := u.getUserPermissions(ctx)
+		if err != nil {
+			klog.Error("Error getting UserPermissions. Failed to check user has access. ", err)
+			return false
+		}
+	}
+
+	for _, userPermission := range u.UserPermissions.Items {
+		matchesClusterNamespace := false
+		for _, location := range userPermission.Status.Bindings {
+			if location.Cluster == cluster {
+				if location.Scope == "cluster" ||
+					slices.Contains(location.Namespaces, namespace) ||
+					slices.Contains(location.Namespaces, "*") {
+					matchesClusterNamespace = true
+					break
+				}
+			}
+		}
+		if !matchesClusterNamespace {
+			continue
+		}
+		for _, rule := range userPermission.Status.ClusterRoleDefinition.Rules {
+			matchVerb := slices.Contains(rule.Verbs, verb) || slices.Contains(rule.Verbs, "*")
+			matchApiGroup := slices.Contains(rule.APIGroups, apigroup) || slices.Contains(rule.APIGroups, "*")
+			matchKind := slices.Contains(rule.Resources, kind) || slices.Contains(rule.Resources, "*")
+			if matchVerb && matchApiGroup && matchKind {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (user *UserDataCache) GetCsResourcesCopy() []Resource {
@@ -571,16 +617,6 @@ func (user *UserDataCache) GetNsResourcesCopy() map[string][]Resource {
 	return nsResourcesCopy
 }
 
-func (user *UserDataCache) GetFGRbacNamespacesCopy() map[string][]string {
-	user.fgRbacNsCache.lock.Lock()
-	defer user.fgRbacNsCache.lock.Unlock()
-	copy := make(map[string][]string)
-	for cluster, namespaces := range user.FGRbacNamespaces {
-		copy[cluster] = namespaces
-	}
-	return copy
-}
-
 func (user *UserDataCache) GetManagedClustersCopy() map[string]struct{} {
 	user.clustersCache.lock.Lock()
 	defer user.clustersCache.lock.Unlock()
@@ -589,4 +625,11 @@ func (user *UserDataCache) GetManagedClustersCopy() map[string]struct{} {
 		mcCopy[mc] = struct{}{}
 	}
 	return mcCopy
+}
+
+func (user *UserDataCache) GetUserPermissionsCopy() clusterviewv1alpha1.UserPermissionList {
+	user.userPermissionCache.lock.Lock()
+	defer user.userPermissionCache.lock.Unlock()
+	copy := user.UserPermissions
+	return copy
 }
