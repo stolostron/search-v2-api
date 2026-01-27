@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"strings"
 
 	klog "k8s.io/klog/v2"
@@ -143,6 +144,70 @@ func eventMatchesAllFilters(event *model.Event, input *model.SearchInput) bool {
 	return true
 }
 
+func getEventDataFields(eventData map[string]any) (string, string, string, string, bool) {
+	var eventNamespace, eventKind, eventApigroup, eventCluster string
+	eventIsHubClusterResource := false
+	if _, ok := eventData["namespace"]; ok {
+		eventNamespace = eventData["namespace"].(string)
+	}
+	if _, ok := eventData["kind_plural"]; ok {
+		eventKind = eventData["kind_plural"].(string)
+	}
+	if _, ok := eventData["apigroup"]; ok {
+		eventApigroup = eventData["apigroup"].(string)
+	}
+	if _, ok := eventData["cluster"]; ok {
+		eventCluster = eventData["cluster"].(string)
+	}
+	if _, ok := eventData["_hubClusterResource"]; ok {
+		eventIsHubClusterResource = true
+	}
+	return eventNamespace, eventKind, eventApigroup, eventCluster, eventIsHubClusterResource
+}
+
+// eventMatchesRbac validates that user has permission to see event
+func eventMatchesRbac(ctx context.Context, event *model.Event) bool {
+	eventData := event.NewData
+	if eventData == nil {
+		eventData = event.OldData
+	}
+
+	// if no data to check, skip the event
+	if eventData == nil {
+		klog.Warningf("Event data is nil for event (UID: %s, Operation: %s)", event.UID, event.Operation)
+		return false
+	}
+
+	eventNamespace, eventKind, eventApigroup, eventCluster, eventIsHubClusterResource := getEventDataFields(eventData)
+
+	if eventIsHubClusterResource {
+		return checkAndCache(ctx, eventApigroup, eventKind, eventNamespace, eventCluster, eventIsHubClusterResource) // "oc auth can-i watch <eventApigroup>.<eventKind> [-n <eventNamespace>] --as=<user>"
+	} else if config.Cfg.Features.FineGrainedRbac {
+		userDataCache, err := rbac.GetCache().GetUserDataCache(ctx, nil)
+		if err != nil {
+			klog.Errorf("Failed to get user data cache to verify fine-grained RBAC permissions. Not authorizing with error: %v", err)
+			return false
+		}
+		return userDataCache.CheckUserHasAccess(ctx, "watch", eventApigroup, eventKind, eventCluster, eventNamespace)
+	} else {
+		return checkAndCache(ctx, "", "", "", eventCluster, eventIsHubClusterResource) // "oc auth can-i create managedclusterview -n <eventCluster> --as=<user>
+	}
+}
+
+func checkAndCache(ctx context.Context, eventApigroup, eventKind, eventNamespace, eventCluster string, eventIsHubClusterResource bool) bool {
+	userWatchData, userWatchDataErr := rbac.GetWatchCache().GetUserWatchData(ctx)
+	if userWatchDataErr != nil {
+		klog.Errorf("Failed to get user watch data to verify permissions to view event. Not authorizing with error: %v", userWatchDataErr)
+		return false
+	}
+
+	if eventIsHubClusterResource {
+		return userWatchData.CheckPermissionAndCache(ctx, "watch", eventApigroup, eventKind, eventNamespace)
+	} else {
+		return userWatchData.CheckPermissionAndCache(ctx, "create", "view.open-cluster-management.io", "managedclusterviews", eventCluster)
+	}
+}
+
 // validateInputFilters validates the input filters.
 func validateInputFilters(input *model.SearchInput) error {
 	if input != nil && len(input.Filters) > 0 {
@@ -242,7 +307,12 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 					continue
 				}
 
-				// TODO: Filter events for user's RBAC permissions. ACM-26248
+				// Filter events based on user RBAC
+				if !eventMatchesRbac(ctx, event) {
+					klog.V(4).Infof("Subscription watch(%s) event did not match RBAC filters (UID: %s, Operation: %s)",
+						subID, event.UID, event.Operation)
+					continue
+				}
 
 				// Send filtered event to client
 				select {
