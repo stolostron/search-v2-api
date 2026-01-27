@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// [AI] Verify the fine-grained RBAC clause is built correctly.
 func TestMatchFineGrainedRbac(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -78,7 +79,7 @@ func TestMatchFineGrainedRbac(t *testing.T) {
 					},
 				},
 			},
-			expected: `((("cluster" = 'cluster1') AND data->'namespace'?|'{"ns1","ns2"}') AND (data->'apigroup'?'apps' AND data->'kind_plural'?|'{"deployments","statefulsets"}'))`,
+			expected: `((("cluster" = 'cluster1') AND data->'namespace'?|'{"ns1","ns2"}') AND (data->'apigroup'?|'{"apps"}' AND data->'kind_plural'?|'{"deployments","statefulsets"}'))`,
 		},
 		{
 			name: "Multiple bindings and rules",
@@ -117,7 +118,7 @@ func TestMatchFineGrainedRbac(t *testing.T) {
 					},
 				},
 			},
-			expected: `(((("cluster" = 'cluster2') AND data->'namespace'?|'{"ns3"}') OR ("cluster" IN ('cluster1'))) AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'batch' AND data->'kind_plural'?'jobs')))`,
+			expected: `(((("cluster" = 'cluster2') AND data->'namespace'?|'{"ns3"}') OR ("cluster" IN ('cluster1'))) AND ((data->'apigroup'?|'{"v1"}' AND data->'kind_plural'?|'{"pods"}') OR (data->'apigroup'?|'{"batch"}' AND data->'kind_plural'?|'{"jobs"}')))`,
 		},
 		{
 			name: "Ignore non-list verbs",
@@ -151,7 +152,7 @@ func TestMatchFineGrainedRbac(t *testing.T) {
 					},
 				},
 			},
-			expected: `(("cluster" IN ('cluster1')) AND (data->'apigroup'?'apps' AND data->'kind_plural'?'deployments'))`,
+			expected: `(("cluster" IN ('cluster1')) AND (data->'apigroup'?|'{"apps"}' AND data->'kind_plural'?|'{"deployments"}'))`,
 		},
 		{
 			name: "Multiple UserPermissions",
@@ -184,6 +185,64 @@ func TestMatchFineGrainedRbac(t *testing.T) {
 				},
 			},
 			expected: `((("cluster" IN ('c1')) AND 1=1) OR (("cluster" IN ('c2')) AND 1=1))`,
+		},
+		{
+			name: "Empty apigroup (core resources)",
+			input: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "perm1"},
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{
+									Cluster:    "cluster1",
+									Namespaces: []string{"*"},
+									Scope:      "cluster",
+								},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{
+										Verbs:     []string{"list"},
+										APIGroups: []string{""},
+										Resources: []string{"nodes"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: `(("cluster" IN ('cluster1')) AND (NOT("data"?'apigroup') AND data->'kind_plural'?|'{"nodes"}'))`,
+		},
+		{
+			name: "Mixed empty and specific apigroups",
+			input: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						ObjectMeta: metav1.ObjectMeta{Name: "perm1"},
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{
+									Cluster:    "cluster1",
+									Namespaces: []string{"*"},
+									Scope:      "cluster",
+								},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{
+										Verbs:     []string{"list"},
+										APIGroups: []string{"", "apps"},
+										Resources: []string{"deployments"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: `(("cluster" IN ('cluster1')) AND ((data->'apigroup'?|'{"apps"}' OR NOT("data"?'apigroup')) AND data->'kind_plural'?|'{"deployments"}'))`,
 		},
 	}
 
