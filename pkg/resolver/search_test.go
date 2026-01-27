@@ -1320,7 +1320,7 @@ func Test_buildRbacWhereClause_fineGrainedRBAC(t *testing.T) {
 
 	assert.Nil(t, err)
 	assert.Contains(t, sql, `(("cluster" = 'cluster-a') AND data->'namespace'?|'{"namespace-a1"}')`)
-	assert.Contains(t, sql, `(data->'apigroup'?'kubevirt.io' AND data->'kind_plural'?'virtualmachines')`)
+	assert.Contains(t, sql, `(data->'apigroup'?|'{"kubevirt.io"}' AND data->'kind_plural'?|'{"virtualmachines"}')`)
 }
 
 // Test_ExtractOrderByProperty_WithDirection tests that the property name is correctly
