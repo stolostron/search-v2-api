@@ -35,3 +35,19 @@ func TestCreateTestUserWatchDataTest(t *testing.T) {
 	assert.NotNil(t, userWatchData)
 	assert.Equal(t, userWatchData.ttl, ttl)
 }
+
+func TestCreateTestUserDataCache(t *testing.T) {
+	// Given: some permission fields
+	verb := "watch"
+	apigroup := "kubevirt.io"
+	kind := "virtualmachines"
+	namespace := "foo"
+	cluster := "managed-cluster"
+
+	// When: we pass them to our function to build the UserDataCache
+	userDataCache := CreateTestUserDataCache(verb, apigroup, kind, cluster, namespace)
+
+	// Then: it's made
+	assert.NotNil(t, userDataCache)
+	assert.Equal(t, len(userDataCache.UserData.UserPermissions.Items), 1)
+}

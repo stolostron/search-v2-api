@@ -183,7 +183,12 @@ func eventMatchesRbac(ctx context.Context, event *model.Event) bool {
 	if eventIsHubClusterResource {
 		return checkAndCache(ctx, eventApigroup, eventKind, eventNamespace, eventCluster, eventIsHubClusterResource) // "oc auth can-i watch <eventApigroup>.<eventKind> [-n <eventNamespace>] --as=<user>"
 	} else if config.Cfg.Features.FineGrainedRbac {
-		return false // TODO: by Jorge :)
+		userDataCache, err := rbac.GetCache().GetUserDataCache(ctx, nil)
+		if err != nil {
+			klog.Errorf("Failed to get user data cache to verify fine-grained RBAC permissions. Not authorizing with error: %v", err)
+			return false
+		}
+		return userDataCache.CheckUserHasAccess(ctx, "watch", eventApigroup, eventKind, eventCluster, eventNamespace)
 	} else {
 		return checkAndCache(ctx, "", "", "", eventCluster, eventIsHubClusterResource) // "oc auth can-i create managedclusterview -n <eventCluster> --as=<user>
 	}

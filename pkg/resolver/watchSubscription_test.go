@@ -1116,3 +1116,62 @@ func TestEventMatchesRbacManagedClusterResource_Disallowed(t *testing.T) {
 	// Then: user doesn't have permission
 	assert.Equal(t, result, false, "Expected user not to have permission to see event")
 }
+
+func TestEventMatchesRbacFineGrainedRbac_Allowed(t *testing.T) {
+	originalFineGrainedRbac := config.Cfg.Features.FineGrainedRbac
+	config.Cfg.Features.FineGrainedRbac = true
+	defer func() {
+		config.Cfg.Features.FineGrainedRbac = originalFineGrainedRbac
+	}()
+	// Given: a user with fine-grained RBAC permissions to watch managed cluster resource streamed event
+	ctx := rbac.CreateTestContext("test-user-1", "testuser1")
+	event := &model.Event{
+		UID:       "asdf-1234",
+		Operation: "CREATE",
+		NewData: map[string]any{
+			"apigroup":    "v1",
+			"kind_plural": "pods",
+			"namespace":   "foo",
+			"cluster":     "managed-cluster",
+		},
+	}
+	userDataCache := rbac.CreateTestUserDataCache("watch", "v1", "pods", "managed-cluster", "foo")
+	rbac.SetupCacheWithUserData(ctx, userDataCache)
+	defer rbac.CleanupCache(ctx)
+
+	// When: we check user permissions against the event
+	result := eventMatchesRbac(ctx, event)
+
+	// Then: user has permission
+	assert.Equal(t, result, true, "Expected user to have permission to see event")
+}
+
+func TestEventMatchesRbacFineGrainedRbac_Disallowed(t *testing.T) {
+	originalFineGrainedRbac := config.Cfg.Features.FineGrainedRbac
+	config.Cfg.Features.FineGrainedRbac = true
+	defer func() {
+		config.Cfg.Features.FineGrainedRbac = originalFineGrainedRbac
+	}()
+	// Given: a user with misaligned fine-grained RBAC permissions to watch managed cluster resource streamed event
+	ctx := rbac.CreateTestContext("test-user-1", "testuser1")
+	event := &model.Event{
+		UID:       "asdf-1234",
+		Operation: "CREATE",
+		NewData: map[string]any{
+			"apigroup":    "v1",
+			"kind_plural": "pods",
+			"namespace":   "foo",
+			"cluster":     "managed-cluster",
+		},
+	}
+	// User has permission for different cluster
+	userDataCache := rbac.CreateTestUserDataCache("watch", "v1", "pods", "different-cluster", "foo")
+	rbac.SetupCacheWithUserData(ctx, userDataCache)
+	defer rbac.CleanupCache(ctx)
+
+	// When: we check user permissions against the event
+	result := eventMatchesRbac(ctx, event)
+
+	// Then: user doesn't have permission
+	assert.Equal(t, result, false, "Expected user not to have permission to see event")
+}

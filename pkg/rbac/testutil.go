@@ -6,8 +6,10 @@ import (
 	"sync"
 	"time"
 
+	clusterviewv1alpha1 "github.com/stolostron/cluster-lifecycle-api/clusterview/v1alpha1"
 	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	authnv1 "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	v1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
@@ -71,6 +73,10 @@ func (m mockSelfSubjectAccessReviewInterface) Create(ctx context.Context, ssar *
 // MockAuthnClient mocks the authentication client for testing
 type MockAuthnClient struct {
 	UserInfo authv1.UserInfo
+}
+
+func (m *MockAuthnClient) SelfSubjectReviews() authnv1.SelfSubjectReviewInterface {
+	return nil
 }
 
 // RESTClient implements the AuthenticationV1Interface
@@ -174,4 +180,64 @@ func CreateTestContext(userUID, username string) context.Context {
 	ctx = context.WithValue(ctx, ContextAuthTokenKey, token)
 
 	return ctx
+}
+
+// SetupCacheWithUserData sets up the regular cache with UserDataCache for testing
+func SetupCacheWithUserData(ctx context.Context, userData *UserDataCache) {
+	cache := GetCache()
+	uid, _ := cache.GetUserUID(ctx)
+
+	cache.usersLock.Lock()
+	defer cache.usersLock.Unlock()
+
+	if cache.users == nil {
+		cache.users = make(map[string]*UserDataCache)
+	}
+
+	cache.users[uid] = userData
+}
+
+// CleanupCache cleans up the regular cache for testing
+func CleanupCache(ctx context.Context) {
+	cache := GetCache()
+	uid, _ := cache.GetUserUID(ctx)
+
+	cache.usersLock.Lock()
+	defer cache.usersLock.Unlock()
+
+	if cache.users != nil {
+		delete(cache.users, uid)
+	}
+}
+
+// CreateTestUserDataCache creates test UserDataCache with the given permissions for fine-grained RBAC
+func CreateTestUserDataCache(verb, apigroup, kind, cluster, namespace string) *UserDataCache {
+	permissions := clusterviewv1alpha1.UserPermissionList{
+		Items: []clusterviewv1alpha1.UserPermission{
+			{
+				Status: clusterviewv1alpha1.UserPermissionStatus{
+					Bindings: []clusterviewv1alpha1.ClusterBinding{
+						{Cluster: cluster, Namespaces: []string{namespace}},
+					},
+					ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+						Rules: []rbacv1.PolicyRule{
+							{Verbs: []string{verb}, APIGroups: []string{apigroup}, Resources: []string{kind}},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	return &UserDataCache{
+		UserData: UserData{
+			IsClusterAdmin:  false,
+			UserPermissions: permissions,
+		},
+		// Make cache valid to skip API call
+		clustersCache:       cacheMetadata{updatedAt: time.Now()},
+		csrCache:            cacheMetadata{updatedAt: time.Now()},
+		nsrCache:            cacheMetadata{updatedAt: time.Now()},
+		userPermissionCache: cacheMetadata{updatedAt: time.Now()},
+	}
 }
