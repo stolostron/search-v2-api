@@ -8,9 +8,11 @@ import (
 	"testing"
 	"time"
 
+	clusterviewv1alpha1 "github.com/stolostron/cluster-lifecycle-api/clusterview/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	authv1 "k8s.io/api/authentication/v1"
 	authz "k8s.io/api/authorization/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	fake "k8s.io/client-go/kubernetes/fake"
@@ -854,4 +856,199 @@ func Test_updateUserManagedClusterList(t *testing.T) {
 		udc.updateUserManagedClusterList(mock_cache, ns)
 	}
 	assert.Equal(t, len(managedclusters), len(udc.ManagedClusters))
+}
+
+// [AI] Verify the fine-grained RBAC is built correctly using UserPermissions.
+func Test_CheckUserHasAccess(t *testing.T) {
+	tests := []struct {
+		name           string
+		isClusterAdmin bool
+		permissions    clusterviewv1alpha1.UserPermissionList
+		verb           string
+		group          string
+		resource       string
+		cluster        string
+		namespace      string
+		expected       bool
+	}{
+		{
+			name:           "Cluster admin has access",
+			isClusterAdmin: true,
+			expected:       true,
+		},
+		{
+			name:           "No permissions, should deny",
+			isClusterAdmin: false,
+			expected:       false,
+		},
+		{
+			name: "Specific permission match",
+			permissions: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "cluster1", Namespaces: []string{"ns1"}},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{Verbs: []string{"get"}, APIGroups: []string{"v1"}, Resources: []string{"pods"}},
+								},
+							},
+						},
+					},
+				},
+			},
+			verb:      "get",
+			group:     "v1",
+			resource:  "pods",
+			cluster:   "cluster1",
+			namespace: "ns1",
+			expected:  true,
+		},
+		{
+			name: "Wildcard verb match",
+			permissions: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "cluster1", Namespaces: []string{"ns1"}},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{Verbs: []string{"*"}, APIGroups: []string{"v1"}, Resources: []string{"pods"}},
+								},
+							},
+						},
+					},
+				},
+			},
+			verb:      "list",
+			group:     "v1",
+			resource:  "pods",
+			cluster:   "cluster1",
+			namespace: "ns1",
+			expected:  true,
+		},
+		{
+			name: "Cluster scoped binding",
+			permissions: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "cluster1", Scope: "cluster"},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{Verbs: []string{"get"}, APIGroups: []string{"v1"}, Resources: []string{"nodes"}},
+								},
+							},
+						},
+					},
+				},
+			},
+			verb:      "get",
+			group:     "v1",
+			resource:  "nodes",
+			cluster:   "cluster1",
+			namespace: "", // Cluster scoped resource
+			expected:  true,
+		},
+		{
+			name: "Wildcard namespace binding",
+			permissions: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "cluster1", Namespaces: []string{"*"}},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{Verbs: []string{"get"}, APIGroups: []string{"v1"}, Resources: []string{"pods"}},
+								},
+							},
+						},
+					},
+				},
+			},
+			verb:      "get",
+			group:     "v1",
+			resource:  "pods",
+			cluster:   "cluster1",
+			namespace: "any-ns",
+			expected:  true,
+		},
+		{
+			name: "Mismatched cluster",
+			permissions: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "cluster1", Namespaces: []string{"ns1"}},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{Verbs: []string{"get"}, APIGroups: []string{"v1"}, Resources: []string{"pods"}},
+								},
+							},
+						},
+					},
+				},
+			},
+			verb:      "get",
+			group:     "v1",
+			resource:  "pods",
+			cluster:   "cluster2",
+			namespace: "ns1",
+			expected:  false,
+		},
+		{
+			name: "Mismatched verb",
+			permissions: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "cluster1", Namespaces: []string{"ns1"}},
+							},
+							ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+								Rules: []rbacv1.PolicyRule{
+									{Verbs: []string{"get"}, APIGroups: []string{"v1"}, Resources: []string{"pods"}},
+								},
+							},
+						},
+					},
+				},
+			},
+			verb:      "delete",
+			group:     "v1",
+			resource:  "pods",
+			cluster:   "cluster1",
+			namespace: "ns1",
+			expected:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			user := &UserDataCache{
+				UserData: UserData{
+					IsClusterAdmin:  tt.isClusterAdmin,
+					UserPermissions: tt.permissions,
+				},
+				// Make cache valid to skip API call
+				clustersCache:       cacheMetadata{updatedAt: time.Now()},
+				csrCache:            cacheMetadata{updatedAt: time.Now()},
+				nsrCache:            cacheMetadata{updatedAt: time.Now()},
+				userPermissionCache: cacheMetadata{updatedAt: time.Now()},
+			}
+
+			result := user.CheckUserHasAccess(context.Background(), tt.verb, tt.group, tt.resource, tt.cluster, tt.namespace)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
