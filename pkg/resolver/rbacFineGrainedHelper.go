@@ -150,6 +150,7 @@ func matchApiGroupAndKind(userPermission clusterviewv1alpha1.UserPermission) exp
 	return result
 }
 
+// Logs a goqu expression as a SQL string.
 func logExpression(message string, exp exp.Expression) {
 	sql, _, err := goqu.From("t").Where(exp).ToSQL()
 	if err != nil {

@@ -14,7 +14,9 @@ import (
 	authz "k8s.io/api/authorization/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	fake "k8s.io/client-go/kubernetes/fake"
 
 	"k8s.io/client-go/rest"
@@ -1051,4 +1053,56 @@ func Test_CheckUserHasAccess(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+// [AI] Verify the UserPermission is fetched and cached correctly.
+func Test_getUserPermissions(t *testing.T) {
+	scheme := runtime.NewScheme()
+
+	// Create a UserPermission object
+	userPermission := &clusterviewv1alpha1.UserPermission{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "UserPermission",
+			APIVersion: "clusterview.open-cluster-management.io/v1alpha1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-permission",
+		},
+		Status: clusterviewv1alpha1.UserPermissionStatus{
+			Bindings: []clusterviewv1alpha1.ClusterBinding{
+				{Cluster: "c1", Namespaces: []string{"ns1"}, Scope: "cluster"},
+			},
+			ClusterRoleDefinition: clusterviewv1alpha1.ClusterRoleDefinition{
+				Rules: []rbacv1.PolicyRule{
+					{Verbs: []string{"get"}, APIGroups: []string{"v1"}, Resources: []string{"pods"}},
+				},
+			},
+		},
+	}
+
+	// Convert to Unstructured
+	unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(userPermission)
+	assert.NoError(t, err)
+	unstructuredObj := &unstructured.Unstructured{Object: unstructuredMap}
+
+	// Create fake dynamic client
+	dynClient := dynamicfake.NewSimpleDynamicClient(scheme, unstructuredObj)
+
+	// Create UserDataCache
+	user := &UserDataCache{
+		dynClient:           dynClient,
+		userPermissionCache: cacheMetadata{ttl: time.Minute * 5},
+	}
+
+	// Call getUserPermissions
+	err = user.getUserPermissions(context.Background())
+	assert.NoError(t, err)
+
+	// Verify UserPermissions in cache
+	assert.Len(t, user.UserPermissions.Items, 1)
+	assert.Equal(t, "test-permission", user.UserPermissions.Items[0].Name)
+	assert.Equal(t, "c1", user.UserPermissions.Items[0].Status.Bindings[0].Cluster)
+
+	// Verify cache timestamp is updated
+	assert.False(t, user.userPermissionCache.updatedAt.IsZero())
 }
