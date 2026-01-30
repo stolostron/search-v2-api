@@ -18,6 +18,8 @@ EXPOSE 4010
 USER ${USER_UID}
 ENTRYPOINT ["/bin/main"]
 
+ARG ACM_VERSION=${ACM_VERSION}
+
 LABEL com.redhat.component="acm-search-api-container" \
       url="https://github.com/stolostron/search-v2-api" \
       description="Search api service" \      
@@ -28,4 +30,5 @@ LABEL com.redhat.component="acm-search-api-container" \
       summary="Search api service" \
       io.k8s.display-name="Search api" \
       io.k8s.description="Search api service" \
-      io.openshift.tags="data,images"
+      io.openshift.tags="data,images" \
+      cpe="cpe:/a:redhat:acm:${ACM_VERSION}::el9"
