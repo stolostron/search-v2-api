@@ -95,7 +95,7 @@ func new() *Config {
 		Features: featureFlags{
 			FederatedSearch:     getEnvAsBool("FEATURE_FEDERATED_SEARCH", false),  // In Dev mode default is true.
 			FineGrainedRbac:     getEnvAsBool("FEATURE_FINE_GRAINED_RBAC", false), // In Dev mode default is true.
-			SubscriptionEnabled: getEnvAsBool("FEATURE_SUBSCRIPTION", false),      // In Dev mode default is true.
+			SubscriptionEnabled: getEnvAsBool("FEATURE_SUBSCRIPTION", true),       // In Dev mode default is true.
 		},
 		Federation: federationConfig{
 			GlobalHubName:  getEnv("GLOBAL_HUB_NAME", "global-hub"),
