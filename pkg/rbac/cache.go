@@ -61,6 +61,8 @@ func GetCache() *Cache {
 	// We need a better way to maintain this connection.
 	if pool := db.GetConnPool(ctx); pool == nil {
 		klog.Error("Unable to get a healthy database connection. Setting dbConnInitialized to false.")
+		cacheInst.pool = nil
+		cacheInst.shared.pool = nil
 		cacheInst.setDbConnInitialized(false)
 	} else {
 		cacheInst.pool = pool
