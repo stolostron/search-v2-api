@@ -5,8 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/stolostron/search-v2-api/pkg/rbac"
 	"strings"
+
+	"github.com/stolostron/search-v2-api/pkg/rbac"
 
 	klog "k8s.io/klog/v2"
 
@@ -256,8 +257,8 @@ func validateInputFilters(input *model.SearchInput) error {
 
 // WatchSubscriptions implements the GraphQL watch subscription resolver.
 func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *model.Event, error) {
-	result := make(chan *model.Event)   // Channel to send events to the client.
-	receiver := make(chan *model.Event) // Channel to receive events from the database.
+	result := make(chan *model.Event, 100)   // Channel to send events to the client.
+	receiver := make(chan *model.Event, 100) // Channel to receive events from the database.
 
 	// Check if the feature flag is enabled. If not, return an error.
 	if !config.Cfg.Features.SubscriptionEnabled {
@@ -323,7 +324,7 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 					klog.V(3).Infof("Subscription watch(%s) closed while sending event.", subID)
 					return
 				default:
-					klog.V(3).Infof("Subscription watch(%s) channel buffer is full, dropping event.", subID)
+					klog.Warningf("Subscription watch(%s) channel buffer is full, dropping event.", subID)
 					return
 				}
 			}
