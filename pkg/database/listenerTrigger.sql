@@ -24,7 +24,7 @@ BEGIN
         old_data_json := NULL;
     ELSIF TG_OP = 'UPDATE' THEN
         new_data_json := NEW.data;
-        old_data_json := NULL;
+        old_data_json := OLD.data;
     END IF;
 
     -- Build the notification payload
