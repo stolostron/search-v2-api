@@ -37,8 +37,16 @@ BEGIN
         'timestamp', NOW()
     );
 
-    -- Send the notification
-    PERFORM pg_notify('search_resources_notify', notification_payload::text);
+    payload_size := OCTET_LENGTH(notification_payload::text);
+
+    IF payload_size > 8000 THEN
+        RAISE EXCEPTION 'Payload size is too large: % bytes', payload_size;
+        -- TODO: Send a different paylod with only the uid and timestamp.
+    ELSE
+        -- Send the notification
+        PERFORM pg_notify('search_resources_notify', notification_payload::text);
+    END IF;
+
 
     -- Return the appropriate record
     IF TG_OP = 'DELETE' THEN
