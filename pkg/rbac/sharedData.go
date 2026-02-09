@@ -282,22 +282,24 @@ func (shared *SharedData) getNamespaces(ctx context.Context) ([]string, error) {
 
 	namespaceList, nsErr := shared.dynamicClient.Resource(namespacesGvr).List(ctx, metav1.ListOptions{})
 
-	shared.nsCache.lock.Lock()
-	defer shared.nsCache.lock.Unlock()
-	// Empty previous cache and request new data.
-	shared.namespaces = nil
-	shared.nsCache.err = nil
 	if nsErr != nil {
+		shared.nsCache.lock.Lock()
+		defer shared.nsCache.lock.Unlock()
 		klog.Warning("Error resolving namespaces from KubeClient: ", nsErr)
 		shared.nsCache.err = nsErr
 		shared.nsCache.updatedAt = time.Now()
-		return shared.namespaces, shared.nsCache.err
+		return nil, shared.nsCache.err
 	}
 
-	// add namespaces to allNamespace List
+	namespaces := make([]string, 0, len(namespaceList.Items))
 	for _, n := range namespaceList.Items {
-		shared.namespaces = append(shared.namespaces, n.GetName())
+		namespaces = append(namespaces, n.GetName())
 	}
+
+	shared.nsCache.lock.Lock()
+	defer shared.nsCache.lock.Unlock()
+	shared.nsCache.err = nil
+	shared.namespaces = namespaces
 	shared.nsCache.updatedAt = time.Now()
 
 	return shared.namespaces, shared.nsCache.err
