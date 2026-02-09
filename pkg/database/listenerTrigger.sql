@@ -14,6 +14,7 @@ DECLARE
     notification_payload json;
     new_data_json json;
     old_data_json json;
+    payload_size integer;
 BEGIN
     -- Prepare the old and new data as JSON
     IF TG_OP = 'DELETE' THEN
