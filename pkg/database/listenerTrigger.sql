@@ -40,7 +40,7 @@ BEGIN
     payload_size := OCTET_LENGTH(notification_payload::text);
 
     IF payload_size > 8000 THEN
-        RAISE EXCEPTION 'Payload size is too large: % bytes', payload_size;
+        RAISE WARNING 'Payload size is too large: % bytes', payload_size;
         -- TODO: Send a different paylod with only the uid and timestamp.
     ELSE
         -- Send the notification
