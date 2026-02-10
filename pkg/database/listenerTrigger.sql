@@ -14,7 +14,8 @@ DECLARE
     notification_payload json;
     new_data_json json;
     old_data_json json;
-    payload_size integer;
+    new_data_size integer;
+    old_data_size integer;
 BEGIN
     -- Prepare the old and new data as JSON
     IF TG_OP = 'DELETE' THEN
@@ -28,6 +29,21 @@ BEGIN
         old_data_json := OLD.data;
     END IF;
 
+    new_data_size := OCTET_LENGTH(new_data_json::text);
+    old_data_size := OCTET_LENGTH(old_data_json::text);
+
+    -- The total size of the payload must be less than 8000 bytes. Using 7000 for extra safety.
+    IF old_data_size + new_data_size > 7000 THEN
+        -- Remove new_data_json first, the receiver can query for the full current data.
+        new_data_json := NULL;
+
+        IF old_data_size > 7000 THEN
+            -- LIMITATION: We can't query for OLD.data later, will need to save in a separate table.
+            old_data_json := NULL;
+        END IF;
+        RAISE WARNING 'Payload truncated.'
+    END IF;
+
     -- Build the notification payload
     notification_payload := json_build_object(
         'operation', TG_OP,
@@ -38,20 +54,8 @@ BEGIN
         'timestamp', NOW()
     );
 
-    payload_size := OCTET_LENGTH(notification_payload::text);
-
-    IF payload_size > 8000 THEN
-        -- RAISE WARNING 'Payload size is too large: % bytes', payload_size;
-        notification_payload := json_build_object(
-            'operation', TG_OP,
-            'uid', COALESCE(NEW.uid, OLD.uid),
-            'cluster', COALESCE(NEW.cluster, OLD.cluster),
-            'newData', NULL,
-            -- LIMITATION: We can't query for OLD.data later, will need to save in a separate table.
-            'oldData', NULL,
-            'timestamp', NOW()
-        );
-        -- Send the notification
+    -- Check payload size and send the notification.
+    IF OCTET_LENGTH(notification_payload::text) < 7500 THEN
         PERFORM pg_notify('search_resources_notify', notification_payload::text);
     END IF;
 
