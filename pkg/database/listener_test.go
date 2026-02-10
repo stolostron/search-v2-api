@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v4"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stretchr/testify/assert"
 )
@@ -17,7 +18,8 @@ import (
 type MockPgxConn struct {
 	WaitForNotificationFunc func(ctx context.Context) (*pgconn.Notification, error)
 	CloseFunc               func(ctx context.Context) error
-	ExecFunc                func(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
+	ExecFunc                func(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	QueryFunc               func(ctx context.Context, sql string, arguments ...any) (pgx.Rows, error)
 }
 
 func (m MockPgxConn) WaitForNotification(ctx context.Context) (*pgconn.Notification, error) {
@@ -37,6 +39,12 @@ func (m MockPgxConn) Close(ctx context.Context) error {
 func (m MockPgxConn) Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error) {
 	if m.ExecFunc != nil {
 		return m.ExecFunc(ctx, sql, arguments...)
+	}
+	return nil, nil
+}
+func (m MockPgxConn) Query(ctx context.Context, sql string, arguments ...interface{}) (pgx.Rows, error) {
+	if m.QueryFunc != nil {
+		return m.QueryFunc(ctx, sql, arguments...)
 	}
 	return nil, nil
 }
@@ -778,6 +786,9 @@ func TestListen(t *testing.T) {
 				Payload: `{"uid":"test-123","operation":"CREATE","timestamp":"2024-01-01T00:00:00Z"}`,
 			}
 			return notification, nil
+		},
+		QueryFunc: func(ctx context.Context, sql string, arguments ...interface{}) (pgx.Rows, error) {
+			return nil, nil
 		},
 	}
 
