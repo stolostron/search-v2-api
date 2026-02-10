@@ -17,31 +17,35 @@ DECLARE
     new_data_size integer;
     old_data_size integer;
 BEGIN
+
+    new_data_size := OCTET_LENGTH(NEW.data::text);
+    old_data_size := OCTET_LENGTH(OLD.data::text);
+
     -- Prepare the old and new data as JSON
+    -- Truncate the data if it's too large. Notification limit is 8000 bytes,
+    -- using 7000 to leave room for other fields.
     IF TG_OP = 'DELETE' THEN
         new_data_json := NULL;
-        old_data_json := OLD.data;
-    ELSIF TG_OP = 'INSERT' THEN
-        new_data_json := NEW.data;
-        old_data_json := NULL;
-    ELSIF TG_OP = 'UPDATE' THEN
-        new_data_json := NEW.data;
-        old_data_json := OLD.data;
-    END IF;
-
-    new_data_size := OCTET_LENGTH(new_data_json::text);
-    old_data_size := OCTET_LENGTH(old_data_json::text);
-
-    -- The total size of the payload must be less than 8000 bytes. Using 7000 for extra safety.
-    IF old_data_size + new_data_size > 7000 THEN
-        -- Remove new_data_json first, the receiver can query for the full current data.
-        new_data_json := NULL;
-
-        IF old_data_size > 7000 THEN
-            -- LIMITATION: We can't query for OLD.data later, will need to save in a separate table.
+        IF old_data_size < 7000 THEN
+            old_data_json := OLD.data;
+        ELSE
             old_data_json := NULL;
         END IF;
-        RAISE WARNING 'Payload truncated.'
+    ELSIF TG_OP = 'INSERT' THEN
+        IF new_data_size < 7000 THEN    
+            new_data_json := NEW.data;
+        ELSE
+            new_data_json := NULL;
+        END IF;
+        old_data_json := NULL;
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF (new_data_size + old_data_size) < 7000 THEN
+            new_data_json := NEW.data;
+            old_data_json := OLD.data;
+        ELSE
+            new_data_json := NULL;
+            old_data_json := NULL;
+        END IF;
     END IF;
 
     -- Build the notification payload

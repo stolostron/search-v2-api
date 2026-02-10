@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgconn"
+	"github.com/jackc/pgproto3/v2"
 	"github.com/jackc/pgx/v4"
 	"github.com/stolostron/search-v2-api/graph/model"
 	"github.com/stretchr/testify/assert"
@@ -871,4 +872,104 @@ func TestListen_withNilConnection(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	assert.Nil(t, listenerInstance, "Listener instance should be nil")
+}
+
+// MockRows implements pgx.Rows for testing
+type MockRows struct {
+	nextCalled int
+	data       map[string]any
+	cluster    string
+}
+
+func (m *MockRows) Close() {}
+func (m *MockRows) Err() error { return nil }
+func (m *MockRows) CommandTag() pgconn.CommandTag { return nil }
+func (m *MockRows) FieldDescriptions() []pgproto3.FieldDescription { return nil }
+func (m *MockRows) Next() bool {
+	m.nextCalled++
+	return m.nextCalled == 1
+}
+func (m *MockRows) Scan(dest ...interface{}) error {
+	for _, d := range dest {
+		switch v := d.(type) {
+		case *string:
+			*v = m.cluster
+		case *map[string]any:
+			*v = m.data
+		}
+	}
+	return nil
+}
+func (m *MockRows) Values() ([]interface{}, error) { return nil, nil }
+func (m *MockRows) RawValues() [][]byte { return nil }
+
+// [AI] Test listen() with large payload where data is truncated
+func TestListen_WithLargePayload(t *testing.T) {
+	listenCtx, listenCancel := context.WithCancel(context.Background())
+
+	// Data to be returned by Query
+	expectedData := map[string]any{
+		"kind": "Pod",
+		"metadata": map[string]any{
+			"name": "test-pod",
+		},
+	}
+	expectedCluster := "local-cluster"
+
+	// Mock the database connection
+	mockConn := &MockPgxConn{
+		WaitForNotificationFunc: func(ctx context.Context) (*pgconn.Notification, error) {
+			// Payload with missing newData
+			notification := &pgconn.Notification{
+				Channel: "search_resources_notify",
+				Payload: `{"uid":"test-uid-large","operation":"INSERT","timestamp":"2024-01-01T00:00:00Z","cluster":"local-cluster"}`,
+			}
+			return notification, nil
+		},
+		QueryFunc: func(ctx context.Context, sql string, arguments ...interface{}) (pgx.Rows, error) {
+			assert.Contains(t, sql, "SELECT cluster, data FROM search.resources WHERE uid = 'test-uid-large'")
+			return &MockRows{
+				data:    expectedData,
+				cluster: expectedCluster,
+			}, nil
+		},
+		CloseFunc: func(ctx context.Context) error {
+			return nil
+		},
+	}
+
+	// Subscription to test event forwarding.
+	subscription := &Subscription{
+		ID:      "test-subscription-large",
+		Channel: make(chan *model.Event, 100),
+		Context: listenCtx,
+	}
+
+	// Listener with mocked database connection and subscription.
+	listener := &Listener{
+		ctx:           listenCtx,
+		cancel:        listenCancel,
+		started:       true,
+		subscriptions: map[string]*Subscription{"test-subscription-large": subscription},
+		conn:          mockConn,
+	}
+
+	// Start the listener and wait for the notification.
+	go listener.listen()
+	time.Sleep(50 * time.Millisecond)
+
+	select {
+	case notification := <-subscription.Channel:
+		// Verify the notification payload.
+		assert.Equal(t, "test-uid-large", notification.UID, "UID should match")
+		assert.Equal(t, "INSERT", notification.Operation, "Operation should match")
+		assert.Equal(t, "2024-01-01T00:00:00Z", notification.Timestamp, "Timestamp should match")
+		assert.Equal(t, expectedData, notification.NewData, "NewData should be populated from DB query")
+	case <-time.After(1 * time.Second):
+		t.Fatal("Timeout waiting for notification")
+	}
+
+	// Cancel the context
+	listenCancel()
+	time.Sleep(50 * time.Millisecond)
 }

@@ -251,7 +251,7 @@ func (l *Listener) listen() {
 				}
 				if notificationPayload.OldData == nil &&
 					(notificationPayload.Operation == "UPDATE" || notificationPayload.Operation == "DELETE") {
-					klog.V(1).Infof("Notification payload was truncated and oldData is missing. This is a current limitation.")
+					klog.Warningf("Notification payload was truncated, 'oldData' is missing. This is a current limitation. UID: %s", notificationPayload.UID)
 				}
 
 				for _, sub := range l.subscriptions {
