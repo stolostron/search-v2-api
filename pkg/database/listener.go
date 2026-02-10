@@ -226,11 +226,11 @@ func (l *Listener) listen() {
 					continue
 				}
 
-				// If the record is too large, it's not included in the notification payload.
-				// We need to query the database for the full data.
+				// If the notification payload was too large, data was truncated.
+				// We need to query the database to rebuild the data.
 				if notificationPayload.NewData == nil &&
 					(notificationPayload.Operation == "INSERT" || notificationPayload.Operation == "UPDATE") {
-					klog.Infof("Record is too large, querying the database. UID: %s", notificationPayload.UID)
+					klog.V(2).Infof("Notification payload missing newData, querying the database. UID: %s", notificationPayload.UID)
 					rows, err := l.conn.Query(l.ctx, fmt.Sprintf("SELECT cluster, data FROM search.resources WHERE uid = '%s'", notificationPayload.UID))
 					if err != nil {
 						klog.Errorf("Failed to execute query: %v", err)
@@ -248,6 +248,10 @@ func (l *Listener) listen() {
 						}
 						notificationPayload.NewData = data
 					}
+				}
+				if notificationPayload.OldData == nil &&
+					(notificationPayload.Operation == "UPDATE" || notificationPayload.Operation == "DELETE") {
+					klog.V(1).Infof("Notification payload was truncated and oldData is missing. This is a current limitation.")
 				}
 
 				for _, sub := range l.subscriptions {
