@@ -14,17 +14,41 @@ DECLARE
     notification_payload json;
     new_data_json json;
     old_data_json json;
+    new_data_size integer;
+    old_data_size integer;
 BEGIN
+
+    new_data_size := OCTET_LENGTH(NEW.data::text);
+    old_data_size := OCTET_LENGTH(OLD.data::text);
+
     -- Prepare the old and new data as JSON
+    -- Truncate the data if it's too large. Notification limit is 8000 bytes,
+    -- using 7000 to leave room for other fields.
     IF TG_OP = 'DELETE' THEN
         new_data_json := NULL;
-        old_data_json := OLD.data;
-    ELSIF TG_OP = 'INSERT' THEN
-        new_data_json := NEW.data;
+        IF old_data_size < 7000 THEN
+            old_data_json := OLD.data;
+        ELSE
+            old_data_json := NULL;
+        END IF;
+    ELSEIF TG_OP = 'INSERT' THEN
+        IF new_data_size < 7000 THEN    
+            new_data_json := NEW.data;
+        ELSE
+            new_data_json := NULL;
+        END IF;
         old_data_json := NULL;
-    ELSIF TG_OP = 'UPDATE' THEN
-        new_data_json := NEW.data;
-        old_data_json := OLD.data;
+    ELSEIF TG_OP = 'UPDATE' THEN
+        IF (new_data_size + old_data_size) < 7000 THEN
+            new_data_json := NEW.data;
+            old_data_json := OLD.data;
+        ELSEIF old_data_size < 7000 THEN
+            new_data_json := NULL;
+            old_data_json := OLD.data;
+        ELSE
+            new_data_json := NULL;
+            old_data_json := NULL;
+        END IF;
     END IF;
 
     -- Build the notification payload
@@ -37,8 +61,10 @@ BEGIN
         'timestamp', NOW()
     );
 
-    -- Send the notification
-    PERFORM pg_notify('search_resources_notify', notification_payload::text);
+    -- Check payload size and send the notification.
+    IF OCTET_LENGTH(notification_payload::text) < 7500 THEN
+        PERFORM pg_notify('search_resources_notify', notification_payload::text);
+    END IF;
 
     -- Return the appropriate record
     IF TG_OP = 'DELETE' THEN
