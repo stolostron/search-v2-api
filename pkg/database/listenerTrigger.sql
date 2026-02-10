@@ -41,13 +41,19 @@ BEGIN
     payload_size := OCTET_LENGTH(notification_payload::text);
 
     IF payload_size > 8000 THEN
-        RAISE WARNING 'Payload size is too large: % bytes', payload_size;
-        -- TODO: Send a different paylod with only the uid and timestamp.
-    ELSE
+        -- RAISE WARNING 'Payload size is too large: % bytes', payload_size;
+        notification_payload := json_build_object(
+            'operation', TG_OP,
+            'uid', COALESCE(NEW.uid, OLD.uid),
+            'cluster', COALESCE(NEW.cluster, OLD.cluster),
+            'newData', NULL,
+            -- LIMITATION: We can't query for OLD.data later, will need to save in a separate table.
+            'oldData', NULL,
+            'timestamp', NOW()
+        );
         -- Send the notification
         PERFORM pg_notify('search_resources_notify', notification_payload::text);
     END IF;
-
 
     -- Return the appropriate record
     IF TG_OP = 'DELETE' THEN

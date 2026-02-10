@@ -20,6 +20,7 @@ type MockPgxConnIface interface {
 	WaitForNotification(ctx context.Context) (*pgconn.Notification, error)
 	Close(ctx context.Context) error
 	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, arguments ...interface{}) (pgx.Rows, error)
 }
 
 const (
@@ -218,14 +219,38 @@ func (l *Listener) listen() {
 				klog.V(3).Infof("Received postgres event, forwarding to %d subscriptions.",
 					len(l.subscriptions))
 
-				for _, sub := range l.subscriptions {
-					var notificationPayload model.Event
-					err := json.Unmarshal([]byte(notification.Payload), &notificationPayload)
+				var notificationPayload model.Event
+				err := json.Unmarshal([]byte(notification.Payload), &notificationPayload)
+				if err != nil {
+					klog.Errorf("Failed to unmarshal notification payload: %v", err)
+					continue
+				}
+
+				// If the record is too large, it's not included in the notification payload.
+				// We need to query the database for the full data.
+				if notificationPayload.NewData == nil &&
+					(notificationPayload.Operation == "INSERT" || notificationPayload.Operation == "UPDATE") {
+					klog.Infof("Record is too large, querying the database. UID: %s", notificationPayload.UID)
+					rows, err := l.conn.Query(l.ctx, fmt.Sprintf("SELECT cluster, data FROM search.resources WHERE uid = '%s'", notificationPayload.UID))
 					if err != nil {
-						klog.Errorf("Failed to unmarshal notification payload: %v", err)
+						klog.Errorf("Failed to execute query: %v", err)
 						continue
 					}
+					defer rows.Close()
 
+					for rows.Next() {
+						var cluster string
+						var data map[string]any
+						err := rows.Scan(&cluster, &data)
+						if err != nil {
+							klog.Errorf("Failed to scan result: %v", err)
+							continue
+						}
+						notificationPayload.NewData = data
+					}
+				}
+
+				for _, sub := range l.subscriptions {
 					select {
 					case <-sub.Context.Done():
 						klog.V(3).Infof("Subscription %s context is done, skipping", sub.ID)
