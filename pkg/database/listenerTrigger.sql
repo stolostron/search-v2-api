@@ -31,14 +31,14 @@ BEGIN
         ELSE
             old_data_json := NULL;
         END IF;
-    ELSIF TG_OP = 'INSERT' THEN
+    ELSEIF TG_OP = 'INSERT' THEN
         IF new_data_size < 7000 THEN    
             new_data_json := NEW.data;
         ELSE
             new_data_json := NULL;
         END IF;
         old_data_json := NULL;
-    ELSIF TG_OP = 'UPDATE' THEN
+    ELSEIF TG_OP = 'UPDATE' THEN
         IF (new_data_size + old_data_size) < 7000 THEN
             new_data_json := NEW.data;
             old_data_json := OLD.data;
