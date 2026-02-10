@@ -231,7 +231,7 @@ func (l *Listener) listen() {
 				if notificationPayload.NewData == nil &&
 					(notificationPayload.Operation == "INSERT" || notificationPayload.Operation == "UPDATE") {
 					klog.V(2).Infof("Notification payload missing newData, querying the database. UID: %s", notificationPayload.UID)
-					rows, err := l.conn.Query(l.ctx, fmt.Sprintf("SELECT cluster, data FROM search.resources WHERE uid = '%s'", notificationPayload.UID))
+					rows, err := l.conn.Query(l.ctx, fmt.Sprintf("SELECT data FROM search.resources WHERE uid = '%s'", notificationPayload.UID))
 					if err != nil {
 						klog.Errorf("Failed to execute query: %v", err)
 						continue
@@ -239,9 +239,8 @@ func (l *Listener) listen() {
 					defer rows.Close()
 
 					for rows.Next() {
-						var cluster string
 						var data map[string]any
-						err := rows.Scan(&cluster, &data)
+						err := rows.Scan(&data)
 						if err != nil {
 							klog.Errorf("Failed to scan result: %v", err)
 							continue

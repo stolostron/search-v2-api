@@ -42,7 +42,7 @@ BEGIN
         IF (new_data_size + old_data_size) < 7000 THEN
             new_data_json := NEW.data;
             old_data_json := OLD.data;
-        ELSE IF old_data_size < 7000 THEN
+        ELSEIF old_data_size < 7000 THEN
             new_data_json := NULL;
             old_data_json := OLD.data;
         ELSE

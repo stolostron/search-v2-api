@@ -881,9 +881,9 @@ type MockRows struct {
 	cluster    string
 }
 
-func (m *MockRows) Close() {}
-func (m *MockRows) Err() error { return nil }
-func (m *MockRows) CommandTag() pgconn.CommandTag { return nil }
+func (m *MockRows) Close()                                         {}
+func (m *MockRows) Err() error                                     { return nil }
+func (m *MockRows) CommandTag() pgconn.CommandTag                  { return nil }
 func (m *MockRows) FieldDescriptions() []pgproto3.FieldDescription { return nil }
 func (m *MockRows) Next() bool {
 	m.nextCalled++
@@ -901,7 +901,7 @@ func (m *MockRows) Scan(dest ...interface{}) error {
 	return nil
 }
 func (m *MockRows) Values() ([]interface{}, error) { return nil, nil }
-func (m *MockRows) RawValues() [][]byte { return nil }
+func (m *MockRows) RawValues() [][]byte            { return nil }
 
 // [AI] Test listen() with large payload where data is truncated
 func TestListen_WithLargePayload(t *testing.T) {
@@ -927,7 +927,7 @@ func TestListen_WithLargePayload(t *testing.T) {
 			return notification, nil
 		},
 		QueryFunc: func(ctx context.Context, sql string, arguments ...interface{}) (pgx.Rows, error) {
-			assert.Contains(t, sql, "SELECT cluster, data FROM search.resources WHERE uid = 'test-uid-large'")
+			assert.Contains(t, sql, "SELECT data FROM search.resources WHERE uid = 'test-uid-large'")
 			return &MockRows{
 				data:    expectedData,
 				cluster: expectedCluster,
