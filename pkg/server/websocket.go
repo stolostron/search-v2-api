@@ -168,7 +168,7 @@ func getConnectionID(ctx context.Context) string {
 func WebSocketErrorFunc() func(context.Context, error) {
 	return func(ctx context.Context, err error) {
 		// Igore because this is normal when the connection is closed by the client.
-		if err.Error() == "websocket read: websocket connection closed" {
+		if strings.Contains(err.Error(), "websocket read: websocket connection closed") {
 			return
 		}
 
