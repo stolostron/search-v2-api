@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"time"
 
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -55,6 +56,9 @@ func GetClientConfig() *rest.Config {
 	// Removing client-side throttling
 	clientConfig.QPS = 250
 	clientConfig.Burst = 100
+
+	// Override default indefinite timeout
+	clientConfig.Timeout = time.Duration(Cfg.KubeClientRequestTimeout) * time.Millisecond
 
 	return clientConfig
 }

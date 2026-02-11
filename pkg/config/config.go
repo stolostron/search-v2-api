@@ -17,33 +17,34 @@ var Cfg = new()
 
 // Defines the configurable options for this microservice.
 type Config struct {
-	HubName             string //Display Name of the cluster where ACM is deployed
-	API_SERVER_URL      string // address for Kubernetes API Server
-	AuthCacheTTL        int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
-	SharedCacheTTL      int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
-	UserCacheTTL        int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
-	ContextPath         string
-	DBHost              string
-	DBMinConns          int32 // Overrides pgxpool.Config{ MinConns } Default: 2
-	DBMaxConns          int32 // Overrides pgxpool.Config{ MaxConns } Default: 10
-	DBMaxConnIdleTime   int   // Overrides pgxpool.Config{ MaxConnIdleTime } Default: 5 min
-	DBMaxConnLifeTime   int   // Overrides pgxpool.Config{ MaxConnLifetime } Default: 5 min
-	DBMaxConnLifeJitter int   // Overrides pgxpool.Config{ MaxConnLifetimeJitter } Default: 1 min
-	DBName              string
-	DBPass              string
-	DBPort              int
-	DBUser              string
-	DBReconnectDelay    int              // Duration in milliseconds between reconnect attempts. Default: 5 seconds
-	DevelopmentMode     bool             // Indicates if running in local development mode.
-	Features            featureFlags     // Enable or disable features.
-	Federation          federationConfig // Federated search configuration.
-	HttpPort            int
-	PlaygroundMode      bool   // Enable the GraphQL Playground client.
-	PodNamespace        string // Kubernetes namespace where the pod is running.
-	QueryLimit          uint   // The default LIMIT to use on queries. Client can override. Default: 1000
-	RelationLevel       int    // The number of levels/hops for finding relationships for a particular resource
-	SlowLog             int    // Logs queries slower than the specified duration in ms.      Default: 300ms
-	RequestTimeout      int    // Seconds a request will process before timing out.           Default: 2 minutes
+	HubName                  string //Display Name of the cluster where ACM is deployed
+	API_SERVER_URL           string // address for Kubernetes API Server
+	AuthCacheTTL             int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
+	SharedCacheTTL           int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
+	UserCacheTTL             int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
+	ContextPath              string
+	DBHost                   string
+	DBMinConns               int32 // Overrides pgxpool.Config{ MinConns } Default: 2
+	DBMaxConns               int32 // Overrides pgxpool.Config{ MaxConns } Default: 10
+	DBMaxConnIdleTime        int   // Overrides pgxpool.Config{ MaxConnIdleTime } Default: 5 min
+	DBMaxConnLifeTime        int   // Overrides pgxpool.Config{ MaxConnLifetime } Default: 5 min
+	DBMaxConnLifeJitter      int   // Overrides pgxpool.Config{ MaxConnLifetimeJitter } Default: 1 min
+	DBName                   string
+	DBPass                   string
+	DBPort                   int
+	DBUser                   string
+	DBReconnectDelay         int              // Duration in milliseconds between reconnect attempts. Default: 5 seconds
+	DevelopmentMode          bool             // Indicates if running in local development mode.
+	Features                 featureFlags     // Enable or disable features.
+	Federation               federationConfig // Federated search configuration.
+	HttpPort                 int
+	KubeClientRequestTimeout int    // Seconds a Kube Client request will process before timing out. Default: 1 minute
+	PlaygroundMode           bool   // Enable the GraphQL Playground client.
+	PodNamespace             string // Kubernetes namespace where the pod is running.
+	QueryLimit               uint   // The default LIMIT to use on queries. Client can override. Default: 1000
+	RelationLevel            int    // The number of levels/hops for finding relationships for a particular resource
+	SlowLog                  int    // Logs queries slower than the specified duration in ms.      Default: 300ms
+	RequestTimeout           int    // Seconds a request will process before timing out.           Default: 2 minutes
 }
 
 // Define feature flags.
@@ -109,11 +110,12 @@ func new() *Config {
 				RequestTimeout:        getEnvAsInt("FEDERATED_REQUEST_TIMEOUT", 60*1000), // 60 seconds.
 			},
 		},
-		HttpPort:       getEnvAsInt("HTTP_PORT", 4010),
-		PlaygroundMode: getEnvAsBool("PLAYGROUND_MODE", false),
-		PodNamespace:   getEnv("POD_NAMESPACE", "open-cluster-management"),
-		QueryLimit:     getEnvAsUint("QUERY_LIMIT", uint(1000)),
-		SlowLog:        getEnvAsInt("SLOW_LOG", 300),
+		HttpPort:                 getEnvAsInt("HTTP_PORT", 4010),
+		KubeClientRequestTimeout: getEnvAsInt("KUBE_CLIENT_REQUEST_TIMEOUT", 60*1000), // 1 minute
+		PlaygroundMode:           getEnvAsBool("PLAYGROUND_MODE", false),
+		PodNamespace:             getEnv("POD_NAMESPACE", "open-cluster-management"),
+		QueryLimit:               getEnvAsUint("QUERY_LIMIT", uint(1000)),
+		SlowLog:                  getEnvAsInt("SLOW_LOG", 300),
 		// Setting default level to 0 to check if user has explicitly set this variable
 		// This will be updated to 1 for default searches and 3 for applications - unless set by the user
 		RelationLevel:  getEnvAsInt("RELATION_LEVEL", 0),

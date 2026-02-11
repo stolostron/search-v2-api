@@ -266,34 +266,40 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 // Equivalent to `oc get namespaces`
 func (shared *SharedData) getNamespaces(ctx context.Context) ([]string, error) {
 	defer metrics.SlowLog("getSharedNamespaces", 100*time.Millisecond)()
-	shared.nsCache.lock.Lock()
-	defer shared.nsCache.lock.Unlock()
 
 	// Return cached namespaces if valid.
+	shared.nsCache.lock.RLock()
 	if shared.nsCache.isValid() {
-		return shared.namespaces, nil
+		namespaces := shared.namespaces
+		shared.nsCache.lock.RUnlock()
+		return namespaces, nil
 	}
-
-	// Empty previous cache and request new data.
-	shared.namespaces = nil
-	shared.nsCache.err = nil
+	shared.nsCache.lock.RUnlock()
 
 	klog.V(5).Info("Getting namespaces from Kube Client.")
 	scheme := runtime.NewScheme()
 	scheme.AddKnownTypes(namespacesGvr.GroupVersion())
 
 	namespaceList, nsErr := shared.dynamicClient.Resource(namespacesGvr).List(ctx, metav1.ListOptions{})
+
 	if nsErr != nil {
+		shared.nsCache.lock.Lock()
+		defer shared.nsCache.lock.Unlock()
 		klog.Warning("Error resolving namespaces from KubeClient: ", nsErr)
 		shared.nsCache.err = nsErr
 		shared.nsCache.updatedAt = time.Now()
-		return shared.namespaces, shared.nsCache.err
+		return nil, shared.nsCache.err
 	}
 
-	// add namespaces to allNamespace List
+	namespaces := make([]string, 0, len(namespaceList.Items))
 	for _, n := range namespaceList.Items {
-		shared.namespaces = append(shared.namespaces, n.GetName())
+		namespaces = append(namespaces, n.GetName())
 	}
+
+	shared.nsCache.lock.Lock()
+	defer shared.nsCache.lock.Unlock()
+	shared.nsCache.err = nil
+	shared.namespaces = namespaces
 	shared.nsCache.updatedAt = time.Now()
 
 	return shared.namespaces, shared.nsCache.err
