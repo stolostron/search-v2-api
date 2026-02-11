@@ -28,7 +28,7 @@ func Test_cache_isValid_expired(t *testing.T) {
 func Test_cache_isValid_withError(t *testing.T) {
 	mock := cacheMetadata{
 		err:       errors.New("Some error"),
-		updatedAt: time.Now().Add(-990 * time.Millisecond),
+		updatedAt: time.Now().Add(-9990 * time.Millisecond),
 	}
 	assert.True(t, mock.isValid())
 	time.Sleep(20 * time.Millisecond)

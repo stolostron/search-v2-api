@@ -28,7 +28,7 @@ func (cacheMeta *cacheMetadata) isValid() bool {
 
 	// Error TTL. Errors are valid for a shorter period to allow fast recovery.
 	if cacheMeta.err != nil {
-		cacheTTL = time.Duration(1000) * time.Millisecond
+		cacheTTL = time.Duration(10000) * time.Millisecond
 	}
 	return time.Now().Before(cacheMeta.updatedAt.Add(cacheTTL))
 }
