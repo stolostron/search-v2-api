@@ -31,9 +31,9 @@ func matchFineGrainedRbac(userPermissionList clusterviewv1alpha1.UserPermissionL
 	}
 	result = result.Append(matchNamespaces(userPermissionList))
 
-	if klog.V(4).Enabled() {
-		logExpression("Fine-grained RBAC WHERE expression:\n", result)
-	}
+	// if klog.V(4).Enabled() { // FIXME: Restore this before merging.
+	logExpression("Fine-grained RBAC WHERE expression:\n", result)
+	// }
 	return result
 }
 
@@ -164,6 +164,7 @@ func matchNamespaces(userPermissionList clusterviewv1alpha1.UserPermissionList) 
 				continue
 			} else if binding.Scope == "cluster" {
 				clusters[binding.Cluster] = true
+				delete(namespaces, binding.Cluster)
 			} else if binding.Scope == "namespace" {
 				// Gather the namespaces for the cluster.
 				if namespaces[binding.Cluster] == nil {
@@ -172,6 +173,7 @@ func matchNamespaces(userPermissionList clusterviewv1alpha1.UserPermissionList) 
 				for _, namespace := range binding.Namespaces {
 					if namespace == "*" {
 						clusters[binding.Cluster] = true
+						delete(namespaces, binding.Cluster)
 						break
 					} else {
 						namespaces[binding.Cluster][namespace] = true
