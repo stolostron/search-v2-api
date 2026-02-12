@@ -113,7 +113,7 @@ func new() *Config {
 		PlaygroundMode: getEnvAsBool("PLAYGROUND_MODE", false),
 		PodNamespace:   getEnv("POD_NAMESPACE", "open-cluster-management"),
 		QueryLimit:     getEnvAsUint("QUERY_LIMIT", uint(1000)),
-		SlowLog:        getEnvAsInt("SLOW_LOG", 300),
+		SlowLog:        getEnvAsInt("SLOW_LOG", 500),
 		// Setting default level to 0 to check if user has explicitly set this variable
 		// This will be updated to 1 for default searches and 3 for applications - unless set by the user
 		RelationLevel:  getEnvAsInt("RELATION_LEVEL", 0),

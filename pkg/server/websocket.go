@@ -167,6 +167,11 @@ func getConnectionID(ctx context.Context) string {
 // 2. Records error metrics
 func WebSocketErrorFunc() func(context.Context, error) {
 	return func(ctx context.Context, err error) {
+		// Igore because this is normal when the connection is closed by the client.
+		if strings.Contains(err.Error(), "websocket read: websocket connection closed") {
+			return
+		}
+
 		connectionID := getConnectionID(ctx)
 		klog.Errorf("WebSocket connection [%s] error: %v", connectionID, err)
 		metrics.WebSocketConnectionsFailed.WithLabelValues("websocket_error").Inc()

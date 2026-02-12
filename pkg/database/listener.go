@@ -127,13 +127,11 @@ func (l *Listener) Start() error {
 	_, err = l.conn.Exec(l.ctx, string(listenerTriggerSQL))
 	if err != nil {
 		return fmt.Errorf("failed to create trigger: %w", err)
-	} else {
-		klog.Info("Successfully created postgres TRIGGER to NOTIFY the listener.")
 	}
 
 	l.started = true
 	go l.listen()
-	klog.Info("Subscription listener started successfully")
+	klog.Info("Subscription postgres listener started successfully")
 	return nil
 }
 
