@@ -679,3 +679,92 @@ func TestWebSocketInitFunc_ConnectionTrackingOnError(t *testing.T) {
 	assert.Equal(t, initialConnCount, finalConnCount,
 		"Active connections should not increase on authentication failure")
 }
+
+// [AI] Test WebSocketErrorFunc increments metric on error
+func TestWebSocketErrorFunc_IncrementsMetricOnError(t *testing.T) {
+	errorFunc := WebSocketErrorFunc()
+	ctx := context.Background()
+	testErr := fmt.Errorf("generic websocket error")
+
+	// Get initial metric value
+	initialMetrics, _ := metrics.PromRegistry.Gather()
+	var initialCount float64
+	for _, m := range initialMetrics {
+		if m.GetName() == "search_api_websocket_connections_failed" {
+			for _, metric := range m.Metric {
+				for _, label := range metric.Label {
+					if label.GetName() == "reason" && label.GetValue() == "websocket_error" {
+						initialCount = metric.GetCounter().GetValue()
+					}
+				}
+			}
+			break
+		}
+	}
+
+	// Execute error function
+	errorFunc(ctx, testErr)
+
+	// Check metrics after the call
+	afterMetrics, _ := metrics.PromRegistry.Gather()
+	var afterCount float64
+	for _, m := range afterMetrics {
+		if m.GetName() == "search_api_websocket_connections_failed" {
+			for _, metric := range m.Metric {
+				for _, label := range metric.Label {
+					if label.GetName() == "reason" && label.GetValue() == "websocket_error" {
+						afterCount = metric.GetCounter().GetValue()
+					}
+				}
+			}
+			break
+		}
+	}
+
+	assert.Greater(t, afterCount, initialCount, "WebSocket connection failed metric should increment on generic error")
+}
+
+// [AI] Test WebSocketErrorFunc ignores closed connection error
+func TestWebSocketErrorFunc_IgnoresClosedConnectionError(t *testing.T) {
+	errorFunc := WebSocketErrorFunc()
+	ctx := context.Background()
+	// Exact error string checked in implementation
+	testErr := fmt.Errorf("websocket read: websocket connection closed")
+
+	// Get initial metric value
+	initialMetrics, _ := metrics.PromRegistry.Gather()
+	var initialCount float64
+	for _, m := range initialMetrics {
+		if m.GetName() == "search_api_websocket_connections_failed" {
+			for _, metric := range m.Metric {
+				for _, label := range metric.Label {
+					if label.GetName() == "reason" && label.GetValue() == "websocket_error" {
+						initialCount = metric.GetCounter().GetValue()
+					}
+				}
+			}
+			break
+		}
+	}
+
+	// Execute error function
+	errorFunc(ctx, testErr)
+
+	// Check metrics after the call
+	afterMetrics, _ := metrics.PromRegistry.Gather()
+	var afterCount float64
+	for _, m := range afterMetrics {
+		if m.GetName() == "search_api_websocket_connections_failed" {
+			for _, metric := range m.Metric {
+				for _, label := range metric.Label {
+					if label.GetName() == "reason" && label.GetValue() == "websocket_error" {
+						afterCount = metric.GetCounter().GetValue()
+					}
+				}
+			}
+			break
+		}
+	}
+
+	assert.Equal(t, initialCount, afterCount, "WebSocket connection failed metric should NOT increment on closed connection error")
+}
