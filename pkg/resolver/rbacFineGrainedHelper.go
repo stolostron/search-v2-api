@@ -29,6 +29,7 @@ func matchFineGrainedRbac(userPermissionList clusterviewv1alpha1.UserPermissionL
 				matchClusterAndNamespaces(userPermission),
 				matchApiGroupAndKind(userPermission)))
 	}
+	result = result.Append(matchNamespaces(userPermissionList))
 
 	if klog.V(4).Enabled() {
 		logExpression("Fine-grained RBAC WHERE expression:\n", result)
@@ -147,6 +148,52 @@ func matchApiGroupAndKind(userPermission clusterviewv1alpha1.UserPermission) exp
 		logExpression(fmt.Sprintf("UserPermission [%s]. Expression for [apigroup AND kind]:\n",
 			userPermission.Name), result)
 	}
+	return result
+}
+
+func matchNamespaces(userPermissionList clusterviewv1alpha1.UserPermissionList) exp.ExpressionList {
+	result := goqu.And(
+		goqu.L("data??", goqu.L("?"), "apigroup").IsNotTrue(),
+		goqu.L("data->???", "kind", goqu.L("?"), "Namespace"))
+
+	clusters := make(map[string]bool)
+	namespaces := make(map[string]map[string]bool)
+	for _, userPermission := range userPermissionList.Items {
+		for _, binding := range userPermission.Status.Bindings {
+			if clusters[binding.Cluster] { // We already have access to cluster.
+				continue
+			} else if binding.Scope == "cluster" {
+				clusters[binding.Cluster] = true
+			} else if binding.Scope == "namespace" {
+				// Gather the namespaces for the cluster.
+				if namespaces[binding.Cluster] == nil {
+					namespaces[binding.Cluster] = make(map[string]bool)
+				}
+				for _, namespace := range binding.Namespaces {
+					if namespace == "*" {
+						clusters[binding.Cluster] = true
+						break
+					} else {
+						namespaces[binding.Cluster][namespace] = true
+					}
+				}
+			}
+		}
+	}
+
+	match := goqu.Or()
+	for cluster, namespaces := range namespaces {
+		match = match.Append(goqu.And(
+			goqu.C("cluster").Eq(cluster),
+			goqu.L("data->???", "name", goqu.L("?|"), pq.Array(getKeys(namespaces)))),
+		)
+	}
+	if len(clusters) > 0 {
+		match = match.Append(goqu.C("cluster").In(getKeys(clusters)))
+	}
+	result = result.Append(match)
+
+	logExpression(">>> Namespace match expression: ", result)
 	return result
 }
 
