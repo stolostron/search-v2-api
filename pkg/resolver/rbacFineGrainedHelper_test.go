@@ -184,7 +184,7 @@ func TestMatchFineGrainedRbac(t *testing.T) {
 					},
 				},
 			},
-			expected: `((("cluster" IN ('c1')) AND 1=1) OR (("cluster" IN ('c2')) AND 1=1))`,
+			expected: `((("cluster" IN ('c1')) AND 1=1) OR (("cluster" IN ('c2')) AND 1=1) OR ((data?'apigroup' IS NOT TRUE) AND data->'kind'?'Namespace' AND ("cluster" IN ('c1', 'c2')))`,
 		},
 		{
 			name: "Empty apigroup (core resources)",
@@ -276,6 +276,91 @@ func TestMatchFineGrainedRbac(t *testing.T) {
 			} else {
 				assert.Contains(t, sql, tc.expected)
 			}
+		})
+	}
+}
+
+// [AI] Verify the matchNamespaces function.
+func TestMatchNamespaces(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    clusterviewv1alpha1.UserPermissionList
+		expected string
+	}{
+		{
+			name:     "Empty UserPermissionList",
+			input:    clusterviewv1alpha1.UserPermissionList{},
+			expected: `((data?'apigroup' IS NOT TRUE) AND data->'kind'?'Namespace')`, // Base filter only
+		},
+		{
+			name: "Cluster scoped binding",
+			input: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "c1", Scope: "cluster"},
+							},
+						},
+					},
+				},
+			},
+			expected: `((data?'apigroup' IS NOT TRUE) AND data->'kind'?'Namespace' AND ("cluster" IN ('c1')))`,
+		},
+		{
+			name: "Namespace scoped binding with wildcard",
+			input: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "c1", Namespaces: []string{"*"}, Scope: "namespace"},
+							},
+						},
+					},
+				},
+			},
+			expected: `((data?'apigroup' IS NOT TRUE) AND data->'kind'?'Namespace' AND ("cluster" IN ('c1')))`,
+		},
+		{
+			name: "Namespace scoped binding with specific namespaces",
+			input: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "c1", Namespaces: []string{"ns1", "ns2"}, Scope: "namespace"},
+							},
+						},
+					},
+				},
+			},
+			expected: `((data?'apigroup' IS NOT TRUE) AND data->'kind'?'Namespace' AND (("cluster" = 'c1') AND data->'name'?|'{"ns1","ns2"}'))`,
+		},
+		{
+			name: "Mixed bindings",
+			input: clusterviewv1alpha1.UserPermissionList{
+				Items: []clusterviewv1alpha1.UserPermission{
+					{
+						Status: clusterviewv1alpha1.UserPermissionStatus{
+							Bindings: []clusterviewv1alpha1.ClusterBinding{
+								{Cluster: "c1", Namespaces: []string{"ns1"}, Scope: "namespace"},
+								{Cluster: "c2", Scope: "cluster"},
+							},
+						},
+					},
+				},
+			},
+			expected: `((data?'apigroup' IS NOT TRUE) AND data->'kind'?'Namespace' AND ((("cluster" = 'c1') AND data->'name'?|'{"ns1"}') OR ("cluster" IN ('c2'))))`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			expression := matchNamespaces(tc.input)
+			sql, _, err := goqu.From("t").Where(expression).ToSQL()
+			assert.NoError(t, err)
+			assert.Contains(t, sql, tc.expected)
 		})
 	}
 }
