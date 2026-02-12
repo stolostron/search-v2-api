@@ -235,8 +235,12 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 
 // UserCache is valid if the clustersCache, csrCache, fgRbacNsCache, and nsrCache are valid.
 func (user *UserDataCache) isValid() bool {
+	if config.Cfg.Features.FineGrainedRbac {
+		return user.csrCache.isValid() && user.nsrCache.isValid() &&
+			user.clustersCache.isValid() && user.userPermissionCache.isValid()
+	}
 	return user.csrCache.isValid() && user.nsrCache.isValid() &&
-		user.clustersCache.isValid() && user.userPermissionCache.isValid()
+		user.clustersCache.isValid()
 }
 
 // Get cluster-scoped resources the user is authorized to list.
@@ -534,6 +538,11 @@ func (user *UserDataCache) getUserPermissions(ctx context.Context) error {
 	userPermissions, err := user.dynClient.Resource(gvr).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		klog.Error("Error getting UserPermissions. ", err)
+		// Save error to cache.
+		user.userPermissionCache.lock.Lock()
+		defer user.userPermissionCache.lock.Unlock()
+		user.userPermissionCache.err = err
+		user.userPermissionCache.updatedAt = time.Now()
 		return err
 	}
 
