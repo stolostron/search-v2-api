@@ -35,6 +35,7 @@ lint: ## Run lint and gosec tools.
 
 .PHONY: test
 test: ## Run unit tests.
+	go clean -cache -modcache
 	go test ./... -failfast
 
 .PHONY: test-race
