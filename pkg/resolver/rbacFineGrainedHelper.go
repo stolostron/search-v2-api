@@ -152,7 +152,8 @@ func matchApiGroupAndKind(userPermission clusterviewv1alpha1.UserPermission) exp
 	return result
 }
 
-// Matches the namespace resources.
+// Matches the namespace resources. Includes any namespace where the user has at least one RoleBinding
+// determined by the UserPermission API.
 //
 // Resolves to:
 // (data->'apigroup' IS NOT TRUE AND data->'kind' = 'Namespace')
