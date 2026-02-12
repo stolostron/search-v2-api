@@ -29,11 +29,12 @@ func matchFineGrainedRbac(userPermissionList clusterviewv1alpha1.UserPermissionL
 				matchClusterAndNamespaces(userPermission),
 				matchApiGroupAndKind(userPermission)))
 	}
+	// Matche the namespace resources.
 	result = result.Append(matchNamespaces(userPermissionList))
 
-	// if klog.V(4).Enabled() { // FIXME: Restore this before merging.
-	logExpression("Fine-grained RBAC WHERE expression:\n", result)
-	// }
+	if klog.V(4).Enabled() {
+		logExpression("Fine-grained RBAC WHERE expression:\n", result)
+	}
 	return result
 }
 
@@ -151,6 +152,12 @@ func matchApiGroupAndKind(userPermission clusterviewv1alpha1.UserPermission) exp
 	return result
 }
 
+// Matches the namespace resources.
+//
+// Resolves to:
+// (data->'apigroup' IS NOT TRUE AND data->'kind' = 'Namespace')
+// OR (cluster = 'a' AND data->'name' IN ['ns-1', 'ns-2', ...])
+// OR (cluster IN ['b', 'c', ...]) OR ...)
 func matchNamespaces(userPermissionList clusterviewv1alpha1.UserPermissionList) exp.ExpressionList {
 	result := goqu.And(
 		goqu.L("data??", goqu.L("?"), "apigroup").IsNotTrue(),
@@ -194,8 +201,6 @@ func matchNamespaces(userPermissionList clusterviewv1alpha1.UserPermissionList) 
 		match = match.Append(goqu.C("cluster").In(getKeys(clusters)))
 	}
 	result = result.Append(match)
-
-	logExpression(">>> Namespace match expression: ", result)
 	return result
 }
 

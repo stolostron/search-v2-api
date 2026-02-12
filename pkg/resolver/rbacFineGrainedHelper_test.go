@@ -184,7 +184,7 @@ func TestMatchFineGrainedRbac(t *testing.T) {
 					},
 				},
 			},
-			expected: `((("cluster" IN ('c1')) AND 1=1) OR (("cluster" IN ('c2')) AND 1=1))`,
+			expected: `((("cluster" IN ('c1')) AND 1=1) OR (("cluster" IN ('c2')) AND 1=1) OR ((data?'apigroup' IS NOT TRUE) AND data->'kind'?'Namespace' AND ("cluster" IN ('c1', 'c2')))`,
 		},
 		{
 			name: "Empty apigroup (core resources)",
