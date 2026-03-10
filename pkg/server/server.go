@@ -10,6 +10,7 @@ import (
 	klog "k8s.io/klog/v2"
 
 	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/handler/extension"
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gorilla/mux"
@@ -40,12 +41,6 @@ func StartAndListen(ctx context.Context) {
 	router.HandleFunc("/liveness", livenessProbe).Methods("GET")
 	router.HandleFunc("/readiness", readinessProbe).Methods("GET")
 	router.Handle("/metrics", promhttp.HandlerFor(metrics.PromRegistry, promhttp.HandlerOpts{})).Methods("GET")
-
-	if config.Cfg.PlaygroundMode {
-		router.Handle("/playground",
-			playground.Handler("Search GraphQL playground", fmt.Sprintf("%s/graphql", config.Cfg.ContextPath)))
-		klog.Infof("GraphQL playground is now running on https://localhost:%d/playground", port)
-	}
 
 	if config.Cfg.Features.FederatedSearch {
 		klog.Infof("Federated search is enabled.")
@@ -84,6 +79,13 @@ func StartAndListen(ctx context.Context) {
 		MissingPongOk:         true,
 	})
 	apiSubrouter.Handle("/graphql", graphqlSrv)
+
+	if config.Cfg.PlaygroundMode {
+		graphqlSrv.Use(extension.Introspection{}) // Enable access to documentation.
+		router.Handle("/playground",
+			playground.Handler("Search GraphQL playground", fmt.Sprintf("%s/graphql", config.Cfg.ContextPath)))
+		klog.Infof("GraphQL playground is now running on https://localhost:%d/playground", port)
+	}
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", port),
