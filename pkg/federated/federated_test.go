@@ -487,3 +487,544 @@ func TestManagedHubFederatedResponseSuccess(t *testing.T) {
 	assert.Equal(t, &mockResponseData, data)
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 }
+
+// TestManagedHubFilterPath1_SearchSchema tests extracting managedHub values from path 1:
+// variables.query.filters (used in searchSchema queries) - covers lines 58-62
+func TestManagedHubFilterPath1_SearchSchema(t *testing.T) {
+	realGetFederationConfig := getFedConfig
+	realGetHttpClient := httpClientGetter
+
+	defer func() {
+		getFedConfig = realGetFederationConfig
+		httpClientGetter = realGetHttpClient
+	}()
+
+	callCount := 0
+
+	// Mock getFederationConfig to return two services
+	getFedConfig = func(ctx context.Context, request *http.Request) []RemoteSearchService {
+		return []RemoteSearchService{
+			{Name: "hub-1", URL: "http://hub1.com", Token: "token1"},
+			{Name: "hub-2", URL: "http://hub2.com", Token: "token2"},
+		}
+	}
+
+	// Create a sample response body
+	payLoad := GraphQLPayload{
+		Data: Data{
+			SearchSchema: &SearchSchema{AllProperties: []string{"kind", "cluster"}},
+		},
+		Errors: nil,
+	}
+	responseBody, _ := json.Marshal(&payLoad)
+
+	// Create a mock HTTP client
+	mockClient := &MockHTTPClient{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			callCount++
+			return &http.Response{
+				Status:     "200 OK",
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBuffer(responseBody)),
+			}, nil
+		},
+	}
+
+	httpClientGetter = func() HTTPClient {
+		return mockClient
+	}
+
+	// Request body with managedHub filter in path 1: variables.query.filters (searchSchema)
+	receivedBody := []byte(`{
+		"operationName": "searchSchema",
+		"variables": {
+			"query": {
+				"filters": [
+					{"property": "kind", "values": ["Pod"]},
+					{"property": "managedHub", "values": ["hub-1"]}
+				]
+			}
+		},
+		"query": "query searchSchema($query: SearchInput) { searchSchema(query: $query) }"
+	}`)
+
+	// Setup HTTP request
+	req := httptest.NewRequest("POST", "/federated", bytes.NewBuffer(receivedBody))
+	w := httptest.NewRecorder()
+
+	// Call the function
+	HandleFederatedRequest(w, req)
+
+	// Assertions
+	assert.Equal(t, http.StatusOK, w.Code)
+	// Only hub-1 should be called since managedHub filter specifies only hub-1
+	assert.Equal(t, 1, callCount, "Expected only 1 remote service to be called")
+}
+
+// TestEmptyManagedHubFilter tests that when no managedHub filter is provided,
+// all remote services are called - covers lines 97-109 (empty check)
+func TestEmptyManagedHubFilter(t *testing.T) {
+	realGetFederationConfig := getFedConfig
+	realGetHttpClient := httpClientGetter
+
+	defer func() {
+		getFedConfig = realGetFederationConfig
+		httpClientGetter = realGetHttpClient
+	}()
+
+	callCount := 0
+
+	// Mock getFederationConfig to return three services
+	getFedConfig = func(ctx context.Context, request *http.Request) []RemoteSearchService {
+		return []RemoteSearchService{
+			{Name: "hub-1", URL: "http://hub1.com", Token: "token1"},
+			{Name: "hub-2", URL: "http://hub2.com", Token: "token2"},
+			{Name: "hub-3", URL: "http://hub3.com", Token: "token3"},
+		}
+	}
+
+	// Create a sample response body
+	payLoad := GraphQLPayload{
+		Data: Data{
+			Search: []SearchResult{{Count: 0, Items: []map[string]interface{}{}}},
+		},
+		Errors: nil,
+	}
+	responseBody, _ := json.Marshal(&payLoad)
+
+	// Create a mock HTTP client
+	mockClient := &MockHTTPClient{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			callCount++
+			return &http.Response{
+				Status:     "200 OK",
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBuffer(responseBody)),
+			}, nil
+		},
+	}
+
+	httpClientGetter = func() HTTPClient {
+		return mockClient
+	}
+
+	// Request body WITHOUT managedHub filter
+	receivedBody := []byte(`{
+		"operationName": "searchResult",
+		"variables": {
+			"input": [{
+				"filters": [
+					{"property": "kind", "values": ["Pod"]}
+				],
+				"limit": 1000
+			}]
+		},
+		"query": "query searchResult { search(input: $input) { count items } }"
+	}`)
+
+	// Setup HTTP request
+	req := httptest.NewRequest("POST", "/federated", bytes.NewBuffer(receivedBody))
+	w := httptest.NewRecorder()
+
+	// Call the function
+	HandleFederatedRequest(w, req)
+
+	// Assertions
+	assert.Equal(t, http.StatusOK, w.Code)
+	// All 3 services should be called since there's no managedHub filter
+	assert.Equal(t, 3, callCount, "Expected all 3 remote services to be called when no managedHub filter is provided")
+}
+
+// TestMultipleManagedHubValues tests filtering with multiple managedHub values
+// Covers lines 76-88 (extracting multiple values) and lines 99-103 (filtering loop)
+func TestMultipleManagedHubValues(t *testing.T) {
+	realGetFederationConfig := getFedConfig
+	realGetHttpClient := httpClientGetter
+
+	defer func() {
+		getFedConfig = realGetFederationConfig
+		httpClientGetter = realGetHttpClient
+	}()
+
+	callCount := 0
+	calledServices := []string{}
+
+	// Mock getFederationConfig to return four services
+	getFedConfig = func(ctx context.Context, request *http.Request) []RemoteSearchService {
+		return []RemoteSearchService{
+			{Name: "hub-1", URL: "http://hub1.com", Token: "token1"},
+			{Name: "hub-2", URL: "http://hub2.com", Token: "token2"},
+			{Name: "hub-3", URL: "http://hub3.com", Token: "token3"},
+			{Name: "hub-4", URL: "http://hub4.com", Token: "token4"},
+		}
+	}
+
+	// Create a sample response body
+	payLoad := GraphQLPayload{
+		Data: Data{
+			Search: []SearchResult{{Count: 0, Items: []map[string]interface{}{}}},
+		},
+		Errors: nil,
+	}
+	responseBody, _ := json.Marshal(&payLoad)
+
+	// Create a mock HTTP client
+	mockClient := &MockHTTPClient{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			callCount++
+			// Track which service is being called by inspecting the URL
+			if strings.Contains(req.URL.String(), "hub1.com") {
+				calledServices = append(calledServices, "hub-1")
+			} else if strings.Contains(req.URL.String(), "hub2.com") {
+				calledServices = append(calledServices, "hub-2")
+			} else if strings.Contains(req.URL.String(), "hub3.com") {
+				calledServices = append(calledServices, "hub-3")
+			} else if strings.Contains(req.URL.String(), "hub4.com") {
+				calledServices = append(calledServices, "hub-4")
+			}
+			return &http.Response{
+				Status:     "200 OK",
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBuffer(responseBody)),
+			}, nil
+		},
+	}
+
+	httpClientGetter = func() HTTPClient {
+		return mockClient
+	}
+
+	// Request body with MULTIPLE managedHub values (hub-1 and hub-3)
+	receivedBody := []byte(`{
+		"operationName": "searchResult",
+		"variables": {
+			"input": [{
+				"filters": [
+					{"property": "kind", "values": ["Pod"]},
+					{"property": "managedHub", "values": ["hub-1", "hub-3"]}
+				],
+				"limit": 1000
+			}]
+		},
+		"query": "query searchResult { search(input: $input) { count items } }"
+	}`)
+
+	// Setup HTTP request
+	req := httptest.NewRequest("POST", "/federated", bytes.NewBuffer(receivedBody))
+	w := httptest.NewRecorder()
+
+	// Call the function
+	HandleFederatedRequest(w, req)
+
+	// Assertions
+	assert.Equal(t, http.StatusOK, w.Code)
+	// Only hub-1 and hub-3 should be called (2 services)
+	assert.Equal(t, 2, callCount, "Expected 2 remote services to be called for multiple managedHub values")
+	// Verify the correct services were called
+	assert.Contains(t, calledServices, "hub-1", "hub-1 should be called")
+	assert.Contains(t, calledServices, "hub-3", "hub-3 should be called")
+	assert.NotContains(t, calledServices, "hub-2", "hub-2 should NOT be called")
+	assert.NotContains(t, calledServices, "hub-4", "hub-4 should NOT be called")
+}
+
+// TestRemoteServiceSkipped tests that services not in the managedHub filter are skipped
+// Covers lines 105-108 (skip logic and logging)
+func TestRemoteServiceSkipped(t *testing.T) {
+	realGetFederationConfig := getFedConfig
+	realGetHttpClient := httpClientGetter
+
+	defer func() {
+		getFedConfig = realGetFederationConfig
+		httpClientGetter = realGetHttpClient
+	}()
+
+	callCount := 0
+	calledServices := []string{}
+
+	// Mock getFederationConfig to return three services
+	getFedConfig = func(ctx context.Context, request *http.Request) []RemoteSearchService {
+		return []RemoteSearchService{
+			{Name: "target-hub", URL: "http://targethub.com", Token: "token1"},
+			{Name: "skipped-hub-1", URL: "http://skippedhub1.com", Token: "token2"},
+			{Name: "skipped-hub-2", URL: "http://skippedhub2.com", Token: "token3"},
+		}
+	}
+
+	// Create a sample response body
+	payLoad := GraphQLPayload{
+		Data: Data{
+			Search: []SearchResult{{Count: 0, Items: []map[string]interface{}{}}},
+		},
+		Errors: nil,
+	}
+	responseBody, _ := json.Marshal(&payLoad)
+
+	// Create a mock HTTP client
+	mockClient := &MockHTTPClient{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			callCount++
+			// Track which service is being called by inspecting the URL
+			if strings.Contains(req.URL.String(), "targethub.com") {
+				calledServices = append(calledServices, "target-hub")
+			} else if strings.Contains(req.URL.String(), "skippedhub1.com") {
+				calledServices = append(calledServices, "skipped-hub-1")
+			} else if strings.Contains(req.URL.String(), "skippedhub2.com") {
+				calledServices = append(calledServices, "skipped-hub-2")
+			}
+			return &http.Response{
+				Status:     "200 OK",
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBuffer(responseBody)),
+			}, nil
+		},
+	}
+
+	httpClientGetter = func() HTTPClient {
+		return mockClient
+	}
+
+	// Request body with managedHub filter that only includes "target-hub"
+	receivedBody := []byte(`{
+		"operationName": "searchResult",
+		"variables": {
+			"input": [{
+				"filters": [
+					{"property": "kind", "values": ["Pod"]},
+					{"property": "managedHub", "values": ["target-hub"]}
+				],
+				"limit": 1000
+			}]
+		},
+		"query": "query searchResult { search(input: $input) { count items } }"
+	}`)
+
+	// Setup HTTP request
+	req := httptest.NewRequest("POST", "/federated", bytes.NewBuffer(receivedBody))
+	w := httptest.NewRecorder()
+
+	// Call the function
+	HandleFederatedRequest(w, req)
+
+	// Assertions
+	assert.Equal(t, http.StatusOK, w.Code)
+	// Only target-hub should be called, other services should be skipped
+	assert.Equal(t, 1, callCount, "Expected only 1 remote service (target-hub) to be called")
+	assert.Contains(t, calledServices, "target-hub", "target-hub should be called")
+	assert.NotContains(t, calledServices, "skipped-hub-1", "skipped-hub-1 should NOT be called")
+	assert.NotContains(t, calledServices, "skipped-hub-2", "skipped-hub-2 should NOT be called")
+}
+
+// TestInvalidJSONUnmarshaling tests that when JSON unmarshaling fails,
+// an error is logged but execution continues with all services being called
+// Covers lines 50-52 (error handling for unmarshaling)
+func TestInvalidJSONUnmarshaling(t *testing.T) {
+	realGetFederationConfig := getFedConfig
+	realGetHttpClient := httpClientGetter
+
+	defer func() {
+		getFedConfig = realGetFederationConfig
+		httpClientGetter = realGetHttpClient
+	}()
+
+	// Redirect the logger output to capture error messages
+	var buf bytes.Buffer
+	klog.LogToStderr(false)
+	klog.SetOutput(&buf)
+	defer func() {
+		klog.SetOutput(os.Stderr)
+	}()
+
+	callCount := 0
+
+	// Mock getFederationConfig to return two services
+	getFedConfig = func(ctx context.Context, request *http.Request) []RemoteSearchService {
+		return []RemoteSearchService{
+			{Name: "hub-1", URL: "http://hub1.com", Token: "token1"},
+			{Name: "hub-2", URL: "http://hub2.com", Token: "token2"},
+		}
+	}
+
+	// Create a sample response body
+	payLoad := GraphQLPayload{
+		Data: Data{
+			Search: []SearchResult{{Count: 0, Items: []map[string]interface{}{}}},
+		},
+		Errors: nil,
+	}
+	responseBody, _ := json.Marshal(&payLoad)
+
+	// Create a mock HTTP client
+	mockClient := &MockHTTPClient{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			callCount++
+			return &http.Response{
+				Status:     "200 OK",
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBuffer(responseBody)),
+			}, nil
+		},
+	}
+
+	httpClientGetter = func() HTTPClient {
+		return mockClient
+	}
+
+	// Invalid JSON body (missing closing brace)
+	receivedBody := []byte(`{"operationName": "searchResult", "variables": {`)
+
+	// Setup HTTP request
+	req := httptest.NewRequest("POST", "/federated", bytes.NewBuffer(receivedBody))
+	w := httptest.NewRecorder()
+
+	// Call the function
+	HandleFederatedRequest(w, req)
+
+	// Assertions
+	assert.Equal(t, http.StatusOK, w.Code)
+	// All services should still be called since unmarshaling failed and managedHubValues is empty
+	assert.Equal(t, 2, callCount, "Expected all services to be called when JSON unmarshaling fails")
+
+	// Verify error message is logged
+	logMsg := buf.String()
+	assert.Contains(t, logMsg, "Error unmarshaling federated request body", "Should log unmarshaling error")
+}
+
+// TestModifyRequestBodyForVersion_NonV213 tests that non-2.13 versions don't get modified
+func TestModifyRequestBodyForVersion_NonV213(t *testing.T) {
+	remoteService := RemoteSearchService{
+		Name:    "hub-1",
+		Version: "2.14.0",
+	}
+
+	requestBody := []byte(`{
+		"operationName": "searchSchema",
+		"variables": {"query": {"filters": [{"property": "kind", "values": ["Pod"]}]}},
+		"query": "query searchSchema($query: SearchInput) { searchSchema(query: $query) }"
+	}`)
+
+	result := modifyRequestBodyForVersion(remoteService, requestBody)
+
+	// Should return the original body unchanged
+	assert.Equal(t, requestBody, result, "Non-2.13 versions should not be modified")
+}
+
+// TestModifyRequestBodyForVersion_EmptyVersion tests that empty version doesn't get modified
+func TestModifyRequestBodyForVersion_EmptyVersion(t *testing.T) {
+	remoteService := RemoteSearchService{
+		Name:    "hub-1",
+		Version: "",
+	}
+
+	requestBody := []byte(`{
+		"operationName": "searchSchema",
+		"variables": {"query": {"filters": [{"property": "kind", "values": ["Pod"]}]}},
+		"query": "query searchSchema($query: SearchInput) { searchSchema(query: $query) }"
+	}`)
+
+	result := modifyRequestBodyForVersion(remoteService, requestBody)
+
+	// Should return the original body unchanged
+	assert.Equal(t, requestBody, result, "Empty version should not be modified")
+}
+
+// TestModifyRequestBodyForVersion_V213_NotSearchSchema tests that 2.13 version with non-searchSchema query doesn't get modified
+func TestModifyRequestBodyForVersion_V213_NotSearchSchema(t *testing.T) {
+	remoteService := RemoteSearchService{
+		Name:    "hub-1",
+		Version: "2.13.0",
+	}
+
+	requestBody := []byte(`{
+		"operationName": "searchResult",
+		"variables": {"input": [{"filters": [{"property": "kind", "values": ["Pod"]}]}]},
+		"query": "query searchResult { search(input: $input) { count items } }"
+	}`)
+
+	result := modifyRequestBodyForVersion(remoteService, requestBody)
+
+	// Should return the original body unchanged for non-searchSchema queries
+	assert.Equal(t, requestBody, result, "Non-searchSchema queries should not be modified even for 2.13")
+}
+
+// TestModifyRequestBodyForVersion_V213_SearchSchema tests that 2.13 version with searchSchema query gets modified
+func TestModifyRequestBodyForVersion_V213_SearchSchema(t *testing.T) {
+	remoteService := RemoteSearchService{
+		Name:    "hub-1",
+		Version: "2.13.0",
+	}
+
+	requestBody := []byte(`{
+		"operationName": "searchSchema",
+		"variables": {"query": {"filters": [{"property": "kind", "values": ["Pod"]}]}},
+		"query": "query searchSchema($query: SearchInput) { searchSchema(query: $query) }"
+	}`)
+
+	result := modifyRequestBodyForVersion(remoteService, requestBody)
+
+	// Should modify the query to remove $query parameter
+	assert.NotEqual(t, requestBody, result, "2.13 searchSchema query should be modified")
+
+	// Parse the result to verify the modification
+	var resultMap map[string]interface{}
+	err := json.Unmarshal(result, &resultMap)
+	assert.NoError(t, err, "Modified body should be valid JSON")
+
+	// Check that the query has been modified
+	queryStr, ok := resultMap["query"].(string)
+	assert.True(t, ok, "Query should be a string")
+	assert.NotContains(t, queryStr, "$query: SearchInput", "Modified query should not contain parameter definition")
+	assert.NotContains(t, queryStr, "query: $query", "Modified query should not contain parameter usage")
+	assert.Contains(t, queryStr, "searchSchema", "Modified query should still contain searchSchema")
+}
+
+// TestModifyRequestBodyForVersion_V213_NoQueryParameter tests 2.13 searchSchema without $query parameter
+func TestModifyRequestBodyForVersion_V213_NoQueryParameter(t *testing.T) {
+	remoteService := RemoteSearchService{
+		Name:    "hub-1",
+		Version: "2.13.0",
+	}
+
+	// Request body without $query parameter (already in simple format)
+	requestBody := []byte(`{
+		"operationName": "searchSchema",
+		"variables": {},
+		"query": "query searchSchema { searchSchema }"
+	}`)
+
+	result := modifyRequestBodyForVersion(remoteService, requestBody)
+
+	// Should return the body unchanged since there's no $query to remove
+	var originalMap, resultMap map[string]interface{}
+	assert.Nil(t, json.Unmarshal(requestBody, &originalMap))
+	assert.Nil(t, json.Unmarshal(result, &resultMap))
+
+	assert.Equal(t, originalMap["query"], resultMap["query"], "Query without $query parameter should remain unchanged")
+}
+
+// TestModifyRequestBodyForVersion_InvalidJSON tests that invalid JSON is handled gracefully
+func TestModifyRequestBodyForVersion_InvalidJSON(t *testing.T) {
+	// Redirect the logger output to capture error messages
+	var buf bytes.Buffer
+	klog.LogToStderr(false)
+	klog.SetOutput(&buf)
+	defer func() {
+		klog.SetOutput(os.Stderr)
+	}()
+
+	remoteService := RemoteSearchService{
+		Name:    "hub-1",
+		Version: "2.13.0",
+	}
+
+	// Invalid JSON
+	requestBody := []byte(`{"operationName": "searchSchema", "query": `)
+
+	result := modifyRequestBodyForVersion(remoteService, requestBody)
+
+	// Should return the original body unchanged when JSON is invalid
+	assert.Equal(t, requestBody, result, "Invalid JSON should be returned unchanged")
+
+	// Verify error was logged
+	logMsg := buf.String()
+	assert.Contains(t, logMsg, "Error unmarshaling request body for version modification", "Should log unmarshaling error")
+}
