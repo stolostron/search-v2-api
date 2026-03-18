@@ -212,7 +212,17 @@ func getFederationConfigFromSecret(ctx context.Context, request *http.Request) [
 			}
 			// store ACM version info
 			version := "unknown"
-			clusterClaims := managedCluster.UnstructuredContent()["status"].(map[string]interface{})["clusterClaims"].([]interface{})
+			status, ok := managedCluster.UnstructuredContent()["status"].(map[string]interface{})
+			if status == nil || !ok {
+				klog.V(5).Infof("Managed cluster [%s] does not have status field. Skipping.", hubName)
+				continue
+			}
+
+			clusterClaims, ok := status["clusterClaims"].([]interface{})
+			if clusterClaims == nil || !ok {
+				klog.V(5).Infof("Managed cluster [%s] does not have clusterClaims. Skipping.", hubName)
+				continue
+			}
 			for _, clusterClaim := range clusterClaims {
 				if clusterClaim.(map[string]interface{})["name"] == "hub.open-cluster-management.io" && clusterClaim.(map[string]interface{})["value"] != "NotInstalled" {
 					isManagedHub = true
