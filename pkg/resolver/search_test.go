@@ -30,7 +30,7 @@ func Test_SearchResolver_Count(t *testing.T) {
 	// Mock the database query
 	mockRow := &Row{MockValue: 10}
 	mockPool.EXPECT().QueryRow(gomock.Any(),
-		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->'kind'?('Pod') AND ("cluster" = ANY ('{}')))`),
+		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->'kind'?('Pod') AND (("cluster" = ANY ('{}')) OR FALSE))`),
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
@@ -56,7 +56,7 @@ func Test_SearchResolver_MatchManagedHubCount(t *testing.T) {
 	// Mock the database query
 	mockRow := &Row{MockValue: 10}
 	mockPool.EXPECT().QueryRow(gomock.Any(),
-		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->'kind'?('Pod') AND ("cluster" = ANY ('{}')))`),
+		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->'kind'?('Pod') AND (("cluster" = ANY ('{}')) OR FALSE))`),
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
@@ -133,7 +133,7 @@ func Test_SearchResolver_CountWithOperator(t *testing.T) {
 	// Mock the database query
 	mockRow := &Row{MockValue: 1}
 	mockPool.EXPECT().QueryRow(gomock.Any(),
-		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ((("data"->'current')::numeric >= '1') AND ("cluster" = ANY ('{}')))`),
+		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ((("data"->'current')::numeric >= '1') AND (("cluster" = ANY ('{}')) OR FALSE))`),
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
@@ -156,7 +156,7 @@ func Test_SearchResolver_CountWithOperatorNum(t *testing.T) {
 	// Mock the database query
 	mockRow := &Row{MockValue: 1}
 	mockPool.EXPECT().QueryRow(gomock.Any(),
-		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ((("data"->'current')::numeric IN ('1')) AND ("cluster" = ANY ('{}')))`),
+		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ((("data"->'current')::numeric IN ('1')) AND (("cluster" = ANY ('{}')) OR FALSE))`),
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
@@ -179,7 +179,7 @@ func Test_SearchResolver_CountWithOperatorString(t *testing.T) {
 	// Mock the database query
 	mockRow := &Row{MockValue: 1}
 	mockPool.EXPECT().QueryRow(gomock.Any(),
-		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->'kind'?('Template') AND ("cluster" = ANY ('{}')))`),
+		gomock.Eq(`SELECT COUNT("uid") FROM "search"."resources" WHERE ("data"->'kind'?('Template') AND (("cluster" = ANY ('{}')) OR FALSE))`),
 		gomock.Eq([]interface{}{})).Return(mockRow)
 
 	// Execute function
@@ -204,7 +204,7 @@ func Test_SearchResolver_Items(t *testing.T) {
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", 0)
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' ILIKE ANY ('{"template"}')) AND ("cluster" = ANY ('{}'))) LIMIT 1000`),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' ILIKE ANY ('{"template"}')) AND (("cluster" = ANY ('{}')) OR FALSE)) LIMIT 1000`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 
@@ -421,7 +421,7 @@ func Test_SearchResolver_Items_Multiple_Filter(t *testing.T) {
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", 0)
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'namespace'?|'{"openshift","openshift-monitoring"}' AND ("cluster" IN ('local-cluster')) AND ("cluster" = ANY ('{}'))) LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'namespace'?|'{"openshift","openshift-monitoring"}' AND ("cluster" IN ('local-cluster')) AND (("cluster" = ANY ('{}')) OR FALSE)) LIMIT 10`),
 		// gomock.Eq("SELECT uid, cluster, data FROM search.resources  WHERE lower(data->> 'namespace')=any($1) AND cluster=$2 LIMIT 10"),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
@@ -471,7 +471,7 @@ func Test_SearchWithMultipleClusterFilter_NegativeLimit_Query(t *testing.T) {
 
 	// Mock the database query
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'namespace'?('openshift') AND ("cluster" IN ('local-cluster', 'remote-1')) AND ("cluster" = ANY ('{}')))`),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'namespace'?('openshift') AND ("cluster" IN ('local-cluster', 'remote-1')) AND (("cluster" = ANY ('{}')) OR FALSE))`),
 		gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute function
@@ -516,7 +516,7 @@ func Test_SearchResolver_Keywords(t *testing.T) {
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", 0)
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources", jsonb_each_text("data") WHERE (("value" ILIKE '%Template%') AND ("cluster" = ANY ('{}'))) LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources", jsonb_each_text("data") WHERE (("value" ILIKE '%Template%') AND (("cluster" = ANY ('{}')) OR FALSE)) LIMIT 10`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 
@@ -554,7 +554,7 @@ func Test_SearchResolver_Uids(t *testing.T) {
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", 0)
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT "uid" FROM "search"."resources" WHERE (("data"->>'kind' ILIKE ANY ('{"template"}')) AND ("cluster" = ANY ('{}'))) LIMIT 1000`),
+		gomock.Eq(`SELECT "uid" FROM "search"."resources" WHERE (("data"->>'kind' ILIKE ANY ('{"template"}')) AND (("cluster" = ANY ('{}')) OR FALSE)) LIMIT 1000`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 
@@ -596,7 +596,7 @@ func Test_buildRbacWhereClauseNs(t *testing.T) {
 
 	rbacCombined := buildRbacWhereClause(context.WithValue(context.Background(), rbac.ContextAuthTokenKey, "123456"),
 		ud, getUserInfo())
-	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{}')) OR ("data"?'_hubClusterResource' AND ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments'))))))`
+	expectedSql := `SELECT * WHERE (("cluster" = ANY ('{}')) OR ("data"?'_hubClusterResource' AND (FALSE OR ((data->'namespace'?|'{"default"}' AND ((NOT("data"?'apigroup') AND data->'kind_plural'?'configmaps') OR (data->'apigroup'?'v4' AND data->'kind_plural'?'services'))) OR (data->'namespace'?|'{"ocm"}' AND ((data->'apigroup'?'v1' AND data->'kind_plural'?'pods') OR (data->'apigroup'?'v2' AND data->'kind_plural'?'deployments')))))))`
 	gotSql, _, _ := goqu.Select().Where(rbacCombined).ToSQL()
 	assert.Equal(t, expectedSql, gotSql)
 
@@ -640,7 +640,7 @@ func Test_SearchResolver_Items_Labels(t *testing.T) {
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", limit)
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'kind'?('Template') AND ("cluster" IN ('local-cluster')) AND "data"->'label' @> '{"samples.operator.openshift.io/managed":"true"}' AND ("cluster" = ANY ('{}'))) LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'kind'?('Template') AND ("cluster" IN ('local-cluster')) AND "data"->'label' @> '{"samples.operator.openshift.io/managed":"true"}' AND (("cluster" = ANY ('{}')) OR FALSE)) LIMIT 10`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 
@@ -688,7 +688,7 @@ func Test_SearchResolver_Items_Container(t *testing.T) {
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "array", limit)
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'kind'?('Template') AND ("cluster" IN ('local-cluster')) AND "data"->'container' @> '["acm-agent"]' AND ("cluster" = ANY ('{}'))) LIMIT 10`),
+		gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'kind'?('Template') AND ("cluster" IN ('local-cluster')) AND "data"->'container' @> '["acm-agent"]' AND (("cluster" = ANY ('{}')) OR FALSE)) LIMIT 10`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 
@@ -864,7 +864,7 @@ func Test_SearchResolver_SearchUserAllAccess(t *testing.T) {
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", 0)
 
 	mockPool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT "uid" FROM "search"."resources" WHERE (("data"->>'kind' ILIKE ANY ('{"template"}')) AND ("cluster" NOT IN (SELECT "cluster" FROM "search"."resources" WHERE ((data ? '_hubClusterResource') IS TRUE) LIMIT 1))) LIMIT 1000`),
+		gomock.Eq(`SELECT "uid" FROM "search"."resources" WHERE (("data"->>'kind' ILIKE ANY ('{"template"}')) AND (("cluster" NOT IN (SELECT "cluster" FROM "search"."resources" WHERE ((data ? '_hubClusterResource') IS TRUE) LIMIT 1)) OR FALSE)) LIMIT 1000`),
 		gomock.Eq([]interface{}{}),
 	).Return(mockRows, nil)
 
@@ -948,7 +948,7 @@ func Test_SearchResolver_Items_MultipleLabels(t *testing.T) {
 
 	// Mock the database queries.
 	mockRows := newMockRowsWithoutRBAC("./mocks/mock.json", searchInput, "string", limit)
-	mockPool.EXPECT().Query(gomock.Any(), gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'kind'?('Template') AND ("cluster" IN ('local-cluster')) AND EXISTS((SELECT 1 FROM jsonb_each_text("data"->'label') As kv(key, value) WHERE (((key LIKE 'samples%') AND (value LIKE 'tru%')) OR ((key LIKE 'app%') AND (value LIKE '%prometheus%'))))) AND ("cluster" = ANY ('{}'))) LIMIT 10`), gomock.Eq([]interface{}{})).Return(mockRows, nil)
+	mockPool.EXPECT().Query(gomock.Any(), gomock.Eq(`SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'kind'?('Template') AND ("cluster" IN ('local-cluster')) AND EXISTS((SELECT 1 FROM jsonb_each_text("data"->'label') As kv(key, value) WHERE (((key LIKE 'samples%') AND (value LIKE 'tru%')) OR ((key LIKE 'app%') AND (value LIKE '%prometheus%'))))) AND (("cluster" = ANY ('{}')) OR FALSE)) LIMIT 10`), gomock.Eq([]interface{}{})).Return(mockRows, nil)
 
 	// Execute the function
 	result, err := resolver.Items()
@@ -1007,7 +1007,7 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			val2:          "acm-agent",
 			filterProp1:   "kind",
 			filterProp2:   "container",
-			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND "data"->'container' @> '["acm-agent"]' AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND "data"->'container' @> '["acm-agent"]' AND (("cluster" = ANY ('{"test"}')) OR FALSE)) LIMIT 10`,
 		},
 		{
 			name:          "Not Match Array",
@@ -1016,7 +1016,7 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			val2:          `!acm-agent`,
 			filterProp1:   "kind",
 			filterProp2:   "container",
-			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND NOT("data"->'container' @> '["acm-agent"]') AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND NOT("data"->'container' @> '["acm-agent"]') AND (("cluster" = ANY ('{"test"}')) OR FALSE)) LIMIT 10`,
 		},
 		{
 			name:          "Not Equal To Match Array",
@@ -1025,7 +1025,7 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			val2:          `!=acm-agent`,
 			filterProp1:   "kind",
 			filterProp2:   "container",
-			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND NOT("data"->'container' @> '["acm-agent"]') AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND NOT("data"->'container' @> '["acm-agent"]') AND (("cluster" = ANY ('{"test"}')) OR FALSE)) LIMIT 10`,
 		},
 		{
 			name:          "Partial Match Array",
@@ -1034,7 +1034,7 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			val2:          "acm-*",
 			filterProp1:   "kind",
 			filterProp2:   "container",
-			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE 'acm-%'))) AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE 'acm-%'))) AND (("cluster" = ANY ('{"test"}')) OR FALSE)) LIMIT 10`,
 		},
 		{
 			name:          "Partial Not Match Array",
@@ -1043,7 +1043,7 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			val2:          "!acm-*",
 			filterProp1:   "kind",
 			filterProp2:   "container",
-			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND NOT EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE 'acm-%'))) AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND NOT EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE 'acm-%'))) AND (("cluster" = ANY ('{"test"}')) OR FALSE)) LIMIT 10`,
 		},
 		{
 			name:          "Partial Match Label Key And Value",
@@ -1052,7 +1052,7 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			val2:          "samples.operator.openshift.io/man*:tru*",
 			filterProp1:   "kind",
 			filterProp2:   "label",
-			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND NOT(("cluster" LIKE 'local%')) AND EXISTS((SELECT 1 FROM jsonb_each_text("data"->'label') As kv(key, value) WHERE ((key LIKE 'samples.operator.openshift.io/man%') AND (value LIKE 'tru%')))) AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND NOT(("cluster" LIKE 'local%')) AND EXISTS((SELECT 1 FROM jsonb_each_text("data"->'label') As kv(key, value) WHERE ((key LIKE 'samples.operator.openshift.io/man%') AND (value LIKE 'tru%')))) AND (("cluster" = ANY ('{"test"}')) OR FALSE)) LIMIT 10`,
 		},
 		{
 			name:          "Partial Match Label Key Or Value",
@@ -1061,7 +1061,7 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			val2:          "samples.operator.openshift.io/man*",
 			filterProp1:   "kind",
 			filterProp2:   "label",
-			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND NOT(("cluster" LIKE 'local%')) AND EXISTS((SELECT 1 FROM jsonb_each_text("data"->'label') As kv(key, value) WHERE ((key LIKE ('samples.operator.openshift.io/man%')) OR (value LIKE ('samples.operator.openshift.io/man%'))))) AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND NOT(("cluster" LIKE 'local%')) AND EXISTS((SELECT 1 FROM jsonb_each_text("data"->'label') As kv(key, value) WHERE ((key LIKE ('samples.operator.openshift.io/man%')) OR (value LIKE ('samples.operator.openshift.io/man%'))))) AND (("cluster" = ANY ('{"test"}')) OR FALSE)) LIMIT 10`,
 		},
 		{
 			name:          "Partial Match Label Not Key Or Value",
@@ -1070,7 +1070,7 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			val2:          "!samples.operator.openshift.io/man*=tru*",
 			filterProp1:   "kind",
 			filterProp2:   "label",
-			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND NOT(("cluster" LIKE 'local%')) AND NOT EXISTS((SELECT 1 FROM jsonb_each_text("data"->'label') As kv(key, value) WHERE ((key LIKE 'samples.operator.openshift.io/man%') AND (value LIKE 'tru%')))) AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND NOT(("cluster" LIKE 'local%')) AND NOT EXISTS((SELECT 1 FROM jsonb_each_text("data"->'label') As kv(key, value) WHERE ((key LIKE 'samples.operator.openshift.io/man%') AND (value LIKE 'tru%')))) AND (("cluster" = ANY ('{"test"}')) OR FALSE)) LIMIT 10`,
 		},
 		{
 			name:          "Match Label Not Key Or Value",
@@ -1079,7 +1079,7 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			val2:          "!samples.operator.openshift.io/managed=true",
 			filterProp1:   "kind",
 			filterProp2:   "label",
-			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND NOT(("cluster" LIKE 'local%')) AND NOT("data"->'label' @> '{"samples.operator.openshift.io/managed":"true"}') AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND NOT(("cluster" LIKE 'local%')) AND NOT("data"->'label' @> '{"samples.operator.openshift.io/managed":"true"}') AND (("cluster" = ANY ('{"test"}')) OR FALSE)) LIMIT 10`,
 		},
 		{
 			name:          "Match filter Only star",
@@ -1088,7 +1088,7 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			val2:          "*",
 			filterProp1:   "kind",
 			filterProp2:   "namespace",
-			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND ("data"->>'namespace' LIKE '%') AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (("data"->>'kind' LIKE 'Temp%') AND ("cluster" LIKE 'local%') AND ("data"->>'namespace' LIKE '%') AND (("cluster" = ANY ('{"test"}')) OR FALSE)) LIMIT 10`,
 		},
 		{
 			name:          "Partial Match 2 Arrays",
@@ -1097,7 +1097,7 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			val2:          "*agent-2*",
 			filterProp1:   "container",
 			filterProp2:   "container",
-			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE '%agent-1%'))) AND ("cluster" LIKE 'local%') AND EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE '%agent-2%'))) AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE (EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE '%agent-1%'))) AND ("cluster" LIKE 'local%') AND EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE '%agent-2%'))) AND (("cluster" = ANY ('{"test"}')) OR FALSE)) LIMIT 10`,
 		},
 		{
 			name:          "Match 2 Arrays",
@@ -1106,7 +1106,7 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			val2:          "acm-agent-2",
 			filterProp1:   "container",
 			filterProp2:   "container",
-			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'container' @> '["acm-agent-1"]' AND ("cluster" IN ('local-cluster')) AND "data"->'container' @> '["acm-agent-2"]' AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'container' @> '["acm-agent-1"]' AND ("cluster" IN ('local-cluster')) AND "data"->'container' @> '["acm-agent-2"]' AND (("cluster" = ANY ('{"test"}')) OR FALSE)) LIMIT 10`,
 		},
 		{
 			name:          "Match 1 Arrays And Partial Match 2nd array",
@@ -1115,7 +1115,7 @@ func TestSearchResolverArrayLabel(t *testing.T) {
 			val2:          "*acm-agent-2",
 			filterProp1:   "container",
 			filterProp2:   "container",
-			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'container' @> '["acm-agent-1"]' AND ("cluster" IN ('local-cluster')) AND EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE '%acm-agent-2'))) AND ("cluster" = ANY ('{"test"}'))) LIMIT 10`,
+			expectedQuery: `SELECT DISTINCT "uid", "cluster", "data" FROM "search"."resources" WHERE ("data"->'container' @> '["acm-agent-1"]' AND ("cluster" IN ('local-cluster')) AND EXISTS((SELECT 1 FROM jsonb_array_elements_text("data"->'container') As arrayProp WHERE (arrayProp LIKE '%acm-agent-2'))) AND (("cluster" = ANY ('{"test"}')) OR FALSE)) LIMIT 10`,
 		},
 	}
 
@@ -1286,7 +1286,7 @@ func Test_buildRbacWhereClause_fineGrainedRBAC_noNamespaces(t *testing.T) {
 
 	sql, _, err := goqu.From("t").Where(result).ToSQL()
 
-	expectedSql := `SELECT * FROM "t" WHERE ("data"?'_hubClusterResource' AND (data->'namespace'?|'{"ns-1"}' AND (NOT("data"?'apigroup') AND data->'kind_plural'?'Pod')))`
+	expectedSql := `SELECT * FROM "t" WHERE ("data"?'_hubClusterResource' AND (FALSE OR (data->'namespace'?|'{"ns-1"}' AND (NOT("data"?'apigroup') AND data->'kind_plural'?'Pod'))))`
 	assert.Nil(t, err)
 	assert.Equal(t, expectedSql, sql)
 }

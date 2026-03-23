@@ -89,7 +89,8 @@ func matchApigroupKind(resources []rbac.Resource) exp.ExpressionList {
 
 func matchClusterScopedResources(csRes []rbac.Resource, userInfo v1.UserInfo) exp.ExpressionList {
 	if len(csRes) == 0 {
-		return goqu.And() // return false clause
+		// User has no access to cluster-scoped resources
+		return goqu.And(goqu.L("FALSE"))
 
 		// user has access to all cluster scoped resources
 	} else if len(csRes) == 1 && csRes[0].Apigroup == "*" && csRes[0].Kind == "*" {
@@ -194,7 +195,7 @@ func consolidateNsResources(nsResources map[string][]rbac.Resource) (map[string]
 func matchHubClusterRbac(userrbac rbac.UserData, userInfo v1.UserInfo) exp.ExpressionList {
 	if len(userrbac.CsResources) == 0 && len(userrbac.NsResources) == 0 {
 		// Do not match hub cluster if user doesn't have access to cluster scoped or namespace scoped resources on hub
-		return goqu.And()
+		return goqu.And(goqu.L("FALSE"))
 	} else {
 		// hub cluster rbac clause
 		return goqu.And(

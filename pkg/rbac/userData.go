@@ -489,9 +489,19 @@ func setImpersonationUserInfo(userInfo authv1.UserInfo) *rest.ImpersonationConfi
 	if len(userInfo.Extra) > 0 {
 		extraUpdated := map[string][]string{}
 		for key, val := range userInfo.Extra {
-			extraUpdated[key] = val
+			// Standard Kubernetes/OpenShift extras that are safe to impersonate:
+			// - authentication.kubernetes.io/*
+			// - scopes.authorization.openshift.io/*
+			if strings.HasPrefix(key, "authentication.kubernetes.io/") ||
+				strings.HasPrefix(key, "scopes.authorization.openshift.io/") {
+				extraUpdated[key] = val
+			} else {
+				klog.V(5).Infof("Filtering out Extra field for impersonation: %s (value not logged for security)", key)
+			}
 		}
-		impersonConfig.Extra = extraUpdated //set additional information
+		if len(extraUpdated) > 0 {
+			impersonConfig.Extra = extraUpdated //set additional information
+		}
 	}
 	klog.V(9).Infof("UserInfo available for impersonation is %+v:", userInfo)
 	return impersonConfig
