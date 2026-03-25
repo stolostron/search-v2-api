@@ -982,17 +982,20 @@ func TestMatchesWildcard(t *testing.T) {
 		expected       bool
 	}{
 		{"Pod", "Pod", true},
-		{"Pod", "po*", false},      // case-sensitive
-		{"pod", "po*", true},       // prefix wildcard
-		{"mypod", "*pod", true},    // suffix wildcard
-		{"mypodx", "*pod", false},  // suffix mismatch
-		{"mypod", "*po*", true},    // contains wildcard
-		{"Pod", "*", true},         // wildcard matches all
-		{"", "*", true},            // wildcard matches empty
-		{"abc", "a*c", true},       // middle wildcard
-		{"ac", "a*c", true},        // middle wildcard empty match
-		{"axyzc", "a*c", true},     // middle wildcard multi char
-		{"Pod", "Dep*", false},     // no match
+		{"Pod", "po*", false},             // case-sensitive
+		{"pod", "po*", true},              // prefix wildcard
+		{"mypod", "*pod", true},           // suffix wildcard
+		{"mypodx", "*pod", false},         // suffix mismatch
+		{"mypod", "*po*", true},           // contains wildcard
+		{"Pod", "*", true},                // wildcard matches all
+		{"", "*", true},                   // wildcard matches empty
+		{"abc", "a*c", true},              // middle wildcard
+		{"ac", "a*c", true},               // middle wildcard empty match
+		{"axyzc", "a*c", true},            // middle wildcard multi char
+		{"Pod", "Dep*", false},            // no match
+		{"Pod-abc-xyz", "Pod-*-*", true},  // multiple wildcards
+		{"aaaaa", "a*a*a", true},          // greedy matching
+		{"ab", "a*a*a", false},            // multiple wildcards no match
 	}
 	for _, tt := range tests {
 		result := matchesWildcard(tt.value, tt.pattern)
@@ -1100,6 +1103,38 @@ func TestEventMatchesFilters_WildcardMatchAll(t *testing.T) {
 		},
 	}
 	assert.True(t, eventMatchesAllFilters(event, input), "Wildcard '*' should match any value")
+}
+
+func TestEventMatchesFilters_WildcardOrLogic(t *testing.T) {
+	event := &model.Event{
+		UID:       "test-123",
+		Operation: "CREATE",
+		NewData: map[string]interface{}{
+			"kind": "StatefulSet",
+			"name": "my-db",
+		},
+	}
+
+	// One wildcard value matches, one exact value doesn't — OR should succeed
+	kindFilter := "kind"
+	exactNoMatch := "Pod"
+	wildcardMatch := "Stateful*"
+	input := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&exactNoMatch, &wildcardMatch}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match when one wildcard value in OR list matches")
+
+	// No wildcard or exact value matches
+	exactNoMatch2 := "Deployment"
+	wildcardNoMatch := "Daemon*"
+	inputNoMatch := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&exactNoMatch2, &wildcardNoMatch}},
+		},
+	}
+	assert.False(t, eventMatchesAllFilters(event, inputNoMatch), "Should not match when no value in OR list matches")
 }
 
 func TestWatchSubscription_WildcardFilterAccepted(t *testing.T) {
