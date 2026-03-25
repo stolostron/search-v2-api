@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/stolostron/search-v2-api/pkg/rbac"
@@ -16,6 +17,86 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/database"
 )
+
+// parseOperatorAndValue parses a filter value to extract the operator and the actual value.
+// Returns the operator and the value.
+// Supported operators: !, !=, >, >=, <, <=, = (default)
+func parseOperatorAndValue(filterValue string) (operator string, value string) {
+	if strings.HasPrefix(filterValue, "!=") {
+		return "!=", filterValue[2:]
+	}
+	if strings.HasPrefix(filterValue, ">=") {
+		return ">=", filterValue[2:]
+	}
+	if strings.HasPrefix(filterValue, "<=") {
+		return "<=", filterValue[2:]
+	}
+	if strings.HasPrefix(filterValue, "!") {
+		return "!", filterValue[1:]
+	}
+	if strings.HasPrefix(filterValue, ">") {
+		return ">", filterValue[1:]
+	}
+	if strings.HasPrefix(filterValue, "<") {
+		return "<", filterValue[1:]
+	}
+	if strings.HasPrefix(filterValue, "=") {
+		return "=", filterValue[1:]
+	}
+	// Default is equality (when no operator prefix)
+	return "=", filterValue
+}
+
+// compareWithOperator compares two values using the specified operator.
+// Returns true if the comparison matches.
+func compareWithOperator(operator string, propertyValue interface{}, filterValue string) bool {
+	// Convert property value to string
+	propertyValueStr := ""
+	if strValue, ok := propertyValue.(string); ok {
+		propertyValueStr = strValue
+	} else {
+		propertyValueStr = fmt.Sprintf("%v", propertyValue)
+	}
+
+	switch operator {
+	case "=":
+		return propertyValueStr == filterValue
+	case "!", "!=":
+		return propertyValueStr != filterValue
+	case ">", ">=", "<", "<=":
+		// Try numeric comparison first
+		propFloat, propErr := strconv.ParseFloat(propertyValueStr, 64)
+		filterFloat, filterErr := strconv.ParseFloat(filterValue, 64)
+
+		if propErr == nil && filterErr == nil {
+			// Both values are numeric, do numeric comparison
+			switch operator {
+			case ">":
+				return propFloat > filterFloat
+			case ">=":
+				return propFloat >= filterFloat
+			case "<":
+				return propFloat < filterFloat
+			case "<=":
+				return propFloat <= filterFloat
+			}
+		}
+
+		// Fall back to string comparison
+		switch operator {
+		case ">":
+			return propertyValueStr > filterValue
+		case ">=":
+			return propertyValueStr >= filterValue
+		case "<":
+			return propertyValueStr < filterValue
+		case "<=":
+			return propertyValueStr <= filterValue
+		}
+	}
+
+	return false
+}
 
 // matchAnyLabel returns true if any of the label filters matches the event labels.
 // Equivalent to an OR operation.
@@ -122,15 +203,19 @@ func eventMatchesAllFilters(event *model.Event, input *model.SearchInput) bool {
 			if filterValue == nil {
 				continue
 			}
+			// Parse operator from filter value
+			operator, value := parseOperatorAndValue(*filterValue)
+
 			// Special case: Kind is compared case-insensitive to match the search behavior.
-			if property == "kind" {
-				if strings.EqualFold(propertyValueStr, *filterValue) {
+			if property == "kind" && operator == "=" {
+				if strings.EqualFold(propertyValueStr, value) {
 					matched = true
 					break
 				}
+				continue
 			}
 
-			if propertyValueStr == *filterValue {
+			if compareWithOperator(operator, propertyValue, value) {
 				matched = true
 				break
 			}
@@ -238,15 +323,6 @@ func validateInputFilters(input *model.SearchInput) error {
 				// They will be removed once the feature is fully implemented.
 				if strings.Contains(*value, "*") {
 					return fmt.Errorf("invalid filter. Wildcards are not yet supported. Property: %s Value: %s",
-						filter.Property, *value)
-				}
-				if strings.HasPrefix(*value, "!") ||
-					strings.HasPrefix(*value, "!=") ||
-					strings.HasPrefix(*value, ">") ||
-					strings.HasPrefix(*value, ">=") ||
-					strings.HasPrefix(*value, "<") ||
-					strings.HasPrefix(*value, "<=") {
-					return fmt.Errorf("invalid filter. Operators !,!=,>,>=,<,<= are not yet supported. {Property: %s Value: %s} ",
 						filter.Property, *value)
 				}
 			}

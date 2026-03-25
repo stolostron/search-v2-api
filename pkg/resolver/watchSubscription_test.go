@@ -940,9 +940,13 @@ func TestWatchSubscription_InputValidation(t *testing.T) {
 		config.Cfg.Features.SubscriptionEnabled = originalEnabled
 	}()
 
-	ctx := context.Background()
+	// Reset database listener singleton for clean test
+	database.StopPostgresListener()
 
-	// Test unsupported operators
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	// Test operators are now supported
 	valOp := "!value"
 	inputOp := &model.SearchInput{
 		Filters: []*model.SearchFilter{
@@ -950,10 +954,9 @@ func TestWatchSubscription_InputValidation(t *testing.T) {
 		},
 	}
 	_, err := WatchSubscription(ctx, inputOp)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "Operators !,!=,>,>=,<,<= are not yet supported")
+	assert.NoError(t, err, "Operators should now be supported")
 
-	// Test wildcards
+	// Test wildcards still not supported
 	valWild := "val*"
 	inputWild := &model.SearchInput{
 		Filters: []*model.SearchFilter{
@@ -985,6 +988,353 @@ func TestWatchSubscription_InputValidation(t *testing.T) {
 	_, err = WatchSubscription(ctx, inputEmptyProp)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Property is required")
+}
+
+// [AI] Test parseOperatorAndValue function
+func TestParseOperatorAndValue(t *testing.T) {
+	tests := []struct {
+		name             string
+		filterValue      string
+		expectedOperator string
+		expectedValue    string
+	}{
+		{"Equality default", "value", "=", "value"},
+		{"Not equal !=", "!=value", "!=", "value"},
+		{"Not equal !", "!value", "!", "value"},
+		{"Greater than", ">10", ">", "10"},
+		{"Greater or equal", ">=10", ">=", "10"},
+		{"Less than", "<10", "<", "10"},
+		{"Less or equal", "<=10", "<=", "10"},
+		{"Value with special chars", "my-value-123", "=", "my-value-123"},
+		{"Numeric value", "100", "=", "100"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			operator, value := parseOperatorAndValue(tt.filterValue)
+			assert.Equal(t, tt.expectedOperator, operator, "Operator mismatch")
+			assert.Equal(t, tt.expectedValue, value, "Value mismatch")
+		})
+	}
+}
+
+// [AI] Test compareWithOperator function with string values
+func TestCompareValues_Strings(t *testing.T) {
+	tests := []struct {
+		name          string
+		operator      string
+		propertyValue interface{}
+		filterValue   string
+		expected      bool
+	}{
+		{"String equality match", "=", "Pod", "Pod", true},
+		{"String equality no match", "=", "Pod", "Deployment", false},
+		{"String not equal match", "!=", "Pod", "Deployment", true},
+		{"String not equal no match", "!=", "Pod", "Pod", false},
+		{"String greater than true", ">", "zebra", "apple", true},
+		{"String greater than false", ">", "apple", "zebra", false},
+		{"String greater or equal true", ">=", "pod", "pod", true},
+		{"String less than true", "<", "apple", "zebra", true},
+		{"String less than false", "<", "zebra", "apple", false},
+		{"String less or equal true", "<=", "pod", "pod", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := compareWithOperator(tt.operator, tt.propertyValue, tt.filterValue)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// [AI] Test compareWithOperator function with numeric values
+func TestCompareValues_Numeric(t *testing.T) {
+	tests := []struct {
+		name          string
+		operator      string
+		propertyValue interface{}
+		filterValue   string
+		expected      bool
+	}{
+		{"Numeric equality match", "=", 42, "42", true},
+		{"Numeric equality no match", "=", 42, "100", false},
+		{"Numeric not equal match", "!=", 42, "100", true},
+		{"Numeric not equal no match", "!=", 42, "42", false},
+		{"Numeric greater than true", ">", 100, "50", true},
+		{"Numeric greater than false", ">", 50, "100", false},
+		{"Numeric greater or equal true (equal)", ">=", 100, "100", true},
+		{"Numeric greater or equal true (greater)", ">=", 100, "50", true},
+		{"Numeric greater or equal false", ">=", 50, "100", false},
+		{"Numeric less than true", "<", 50, "100", true},
+		{"Numeric less than false", "<", 100, "50", false},
+		{"Numeric less or equal true (equal)", "<=", 100, "100", true},
+		{"Numeric less or equal true (less)", "<=", 50, "100", true},
+		{"Numeric less or equal false", "<=", 100, "50", false},
+		{"Float comparison", ">", 3.14, "3.0", true},
+		{"Negative numbers", "<", -10, "0", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := compareWithOperator(tt.operator, tt.propertyValue, tt.filterValue)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// [AI] Test compareWithOperator with mixed types
+func TestCompareValues_MixedTypes(t *testing.T) {
+	// Boolean converted to string
+	result := compareWithOperator("=", true, "true")
+	assert.True(t, result, "Boolean true should match string 'true'")
+
+	result = compareWithOperator("=", false, "false")
+	assert.True(t, result, "Boolean false should match string 'false'")
+
+	// String number vs numeric comparison
+	result = compareWithOperator(">", "100", "50")
+	assert.True(t, result, "String '100' should be greater than '50' numerically")
+}
+
+// [AI] Test eventMatchesAllFilters with not equal operator
+func TestEventMatchesFilters_NotEqualOperator(t *testing.T) {
+	event := &model.Event{
+		UID:       "test-123",
+		Operation: "CREATE",
+		NewData: map[string]interface{}{
+			"kind":      "Pod",
+			"namespace": "default",
+		},
+	}
+
+	// Filter: kind != Deployment (should match Pod)
+	kindFilter := "kind"
+	kindValue := "!=Deployment"
+	input := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&kindValue}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match when kind is not Deployment")
+
+	// Filter: kind != Pod (should not match)
+	kindValueNoMatch := "!=Pod"
+	inputNoMatch := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&kindValueNoMatch}},
+		},
+	}
+	assert.False(t, eventMatchesAllFilters(event, inputNoMatch), "Should not match when kind equals Pod with != operator")
+
+	// Filter: namespace ! kube-system (should match default)
+	nsFilter := "namespace"
+	nsValue := "!kube-system"
+	inputNs := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: nsFilter, Values: []*string{&nsValue}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, inputNs), "Should match when namespace is not kube-system")
+}
+
+// [AI] Test eventMatchesAllFilters with comparison operators on numeric values
+func TestEventMatchesFilters_NumericComparison(t *testing.T) {
+	event := &model.Event{
+		UID:       "test-123",
+		Operation: "CREATE",
+		NewData: map[string]interface{}{
+			"kind":     "Pod",
+			"replicas": 3,
+			"age":      100,
+		},
+	}
+
+	// replicas > 2
+	replicasFilter := "replicas"
+	replicasValue := ">2"
+	input := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: replicasFilter, Values: []*string{&replicasValue}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match replicas > 2")
+
+	// replicas >= 3
+	replicasValueGte := ">=3"
+	inputGte := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: replicasFilter, Values: []*string{&replicasValueGte}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, inputGte), "Should match replicas >= 3")
+
+	// replicas < 5
+	replicasValueLt := "<5"
+	inputLt := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: replicasFilter, Values: []*string{&replicasValueLt}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, inputLt), "Should match replicas < 5")
+
+	// replicas <= 3
+	replicasValueLte := "<=3"
+	inputLte := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: replicasFilter, Values: []*string{&replicasValueLte}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, inputLte), "Should match replicas <= 3")
+
+	// age > 200 (should not match)
+	ageFilter := "age"
+	ageValue := ">200"
+	inputNoMatch := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: ageFilter, Values: []*string{&ageValue}},
+		},
+	}
+	assert.False(t, eventMatchesAllFilters(event, inputNoMatch), "Should not match age > 200")
+}
+
+// [AI] Test eventMatchesAllFilters with comparison operators on string values
+func TestEventMatchesFilters_StringComparison(t *testing.T) {
+	event := &model.Event{
+		UID:       "test-123",
+		Operation: "CREATE",
+		NewData: map[string]interface{}{
+			"kind": "Pod",
+			"name": "nginx-deployment",
+		},
+	}
+
+	// name > "my" (alphabetically)
+	nameFilter := "name"
+	nameValue := ">my"
+	input := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: nameFilter, Values: []*string{&nameValue}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match name > 'my' alphabetically")
+
+	// name < "zebra"
+	nameValueLt := "<zebra"
+	inputLt := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: nameFilter, Values: []*string{&nameValueLt}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, inputLt), "Should match name < 'zebra' alphabetically")
+}
+
+// [AI] Test eventMatchesAllFilters with multiple operators
+func TestEventMatchesFilters_MultipleOperators(t *testing.T) {
+	event := &model.Event{
+		UID:       "test-123",
+		Operation: "CREATE",
+		NewData: map[string]interface{}{
+			"kind":     "Pod",
+			"replicas": 3,
+			"name":     "test-pod",
+		},
+	}
+
+	// Multiple filters with different operators (AND operation)
+	kindFilter := "kind"
+	kindValue := "!=Deployment"
+	replicasFilter := "replicas"
+	replicasValue := ">=2"
+	input := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&kindValue}},
+			{Property: replicasFilter, Values: []*string{&replicasValue}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match all filters with operators")
+
+	// One filter doesn't match
+	replicasValueNoMatch := ">5"
+	inputNoMatch := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&kindValue}},
+			{Property: replicasFilter, Values: []*string{&replicasValueNoMatch}},
+		},
+	}
+	assert.False(t, eventMatchesAllFilters(event, inputNoMatch), "Should not match when one operator filter doesn't match")
+}
+
+// [AI] Test eventMatchesAllFilters with operators and OR logic within a filter
+func TestEventMatchesFilters_OperatorsWithOR(t *testing.T) {
+	event := &model.Event{
+		UID:       "test-123",
+		Operation: "CREATE",
+		NewData: map[string]interface{}{
+			"kind":     "Pod",
+			"replicas": 3,
+		},
+	}
+
+	// Filter with multiple values using operators (OR logic)
+	// replicas > 5 OR replicas < 5 (should match 3)
+	replicasFilter := "replicas"
+	val1 := ">5"
+	val2 := "<5"
+	input := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: replicasFilter, Values: []*string{&val1, &val2}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match when one of the OR conditions is true")
+
+	// Both conditions false
+	val3 := ">10"
+	val4 := "<2"
+	inputNoMatch := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: replicasFilter, Values: []*string{&val3, &val4}},
+		},
+	}
+	assert.False(t, eventMatchesAllFilters(event, inputNoMatch), "Should not match when all OR conditions are false")
+}
+
+// [AI] Test that kind filter still works case-insensitively with = operator
+func TestEventMatchesFilters_KindCaseInsensitiveWithOperator(t *testing.T) {
+	event := &model.Event{
+		UID:       "test-123",
+		Operation: "CREATE",
+		NewData: map[string]interface{}{
+			"kind": "Pod",
+		},
+	}
+
+	// Kind with lowercase (implicit = operator)
+	kindFilter := "kind"
+	kindValue := "pod"
+	input := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&kindValue}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match kind case-insensitively with implicit =")
+
+	// Kind with explicit = operator
+	kindValueExplicit := "=pod"
+	inputExplicit := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&kindValueExplicit}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, inputExplicit), "Should match kind case-insensitively with explicit =")
+
+	// Kind with != operator should be case-sensitive
+	kindValueNe := "!=pod"
+	inputNe := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&kindValueNe}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, inputNe), "Kind with != should be case-sensitive (Pod != pod)")
 }
 
 func TestGetEventDataFields(t *testing.T) {
