@@ -246,7 +246,9 @@ func validateInputFilters(input *model.SearchInput) error {
 				if value == nil || *value == "" {
 					return fmt.Errorf("invalid filter. Value is required. Filter %+v", *filter)
 				}
-				if strings.HasPrefix(*value, "!") ||
+				// NOTE: The limitations below are only while we implement the feature.
+			// They will be removed once the feature is fully implemented.
+			if strings.HasPrefix(*value, "!") ||
 					strings.HasPrefix(*value, "!=") ||
 					strings.HasPrefix(*value, ">") ||
 					strings.HasPrefix(*value, ">=") ||

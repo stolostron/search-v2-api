@@ -435,7 +435,7 @@ func TestEventMatchesFilters_PropertyFilters(t *testing.T) {
 	assert.False(t, eventMatchesAllFilters(event, inputNoMatch), "Should not match kind=Deployment filter")
 }
 
-// Test eventMatchesFilters with case-sensitive kind matching.
+// [AI] Test eventMatchesFilters with case-sensitive kind matching.
 // Streaming does not apply the case-insensitive special case for kind.
 func TestEventMatchesFilters_KindCaseSensitive(t *testing.T) {
 	event := &model.Event{
