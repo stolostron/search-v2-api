@@ -74,7 +74,7 @@ input SearchFilter {
     For example, `kind:Pod` and `kind:pod` will bring up all pods. This is to maintain compatibility with Search V1.
     Wildcard matching: the `*` character can be used as a wildcard to match any sequence of characters.
     For example, `name:nginx-*` matches any resource whose name starts with `nginx-`, and `namespace:prod*` matches
-    any namespace starting with `prod`. The `kind` property is always matched case-insensitively with wildcards.
+    any namespace starting with `prod`. Wildcard matches are case-sensitive.
     """
     values: [String]!
   }

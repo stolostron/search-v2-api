@@ -138,27 +138,13 @@ func eventMatchesAllFilters(event *model.Event, input *model.SearchInput) bool {
 			}
 			fv := *filterValue
 			if strings.Contains(fv, "*") {
-				// Wildcard match. Kind is compared case-insensitively.
-				target := propertyValueStr
-				if property == "kind" {
-					target = strings.ToLower(propertyValueStr)
-					fv = strings.ToLower(fv)
-				}
-				if matchesWildcard(target, fv) {
+				if matchesWildcard(propertyValueStr, fv) {
 					matched = true
 					break
 				}
-			} else {
-				// Exact match. Kind is compared case-insensitively.
-				if property == "kind" {
-					if strings.EqualFold(propertyValueStr, fv) {
-						matched = true
-						break
-					}
-				} else if propertyValueStr == fv {
-					matched = true
-					break
-				}
+			} else if propertyValueStr == fv {
+				matched = true
+				break
 			}
 		}
 

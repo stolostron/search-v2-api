@@ -435,8 +435,8 @@ func TestEventMatchesFilters_PropertyFilters(t *testing.T) {
 	assert.False(t, eventMatchesAllFilters(event, inputNoMatch), "Should not match kind=Deployment filter")
 }
 
-// [AI] Test eventMatchesFilters with case-sensitive kind matching
-// Note: The previous behavior was case-insensitive for kind, but it was simplified to be case-sensitive.
+// Test eventMatchesFilters with case-sensitive kind matching.
+// Streaming does not apply the case-insensitive special case for kind.
 func TestEventMatchesFilters_KindCaseSensitive(t *testing.T) {
 	event := &model.Event{
 		UID:       "test-123",
@@ -446,42 +446,34 @@ func TestEventMatchesFilters_KindCaseSensitive(t *testing.T) {
 		},
 	}
 
-	// The kind filter is compared case-insensitively.
 	kindFilter := "kind"
-	kindValueLower := "pod"
-	input := &model.SearchInput{
-		Filters: []*model.SearchFilter{
-			{
-				Property: kindFilter,
-				Values:   []*string{&kindValueLower},
-			},
-		},
-	}
-	assert.True(t, eventMatchesAllFilters(event, input), "Should match kind case-insensitively (lowercase)")
 
-	// Filter with uppercase "POD" should match "Pod"
-	kindValueUpper := "POD"
-	inputUpper := &model.SearchInput{
-		Filters: []*model.SearchFilter{
-			{
-				Property: kindFilter,
-				Values:   []*string{&kindValueUpper},
-			},
-		},
-	}
-	assert.True(t, eventMatchesAllFilters(event, inputUpper), "Should match kind with different case (uppercase)")
-
-	// Exact match should work
+	// Exact match works
 	kindValueExact := "Pod"
 	inputExact := &model.SearchInput{
 		Filters: []*model.SearchFilter{
-			{
-				Property: kindFilter,
-				Values:   []*string{&kindValueExact},
-			},
+			{Property: kindFilter, Values: []*string{&kindValueExact}},
 		},
 	}
 	assert.True(t, eventMatchesAllFilters(event, inputExact), "Should match kind with exact case")
+
+	// Lowercase does NOT match (case-sensitive)
+	kindValueLower := "pod"
+	inputLower := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&kindValueLower}},
+		},
+	}
+	assert.False(t, eventMatchesAllFilters(event, inputLower), "Should not match kind with wrong case (lowercase)")
+
+	// Uppercase does NOT match (case-sensitive)
+	kindValueUpper := "POD"
+	inputUpper := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&kindValueUpper}},
+		},
+	}
+	assert.False(t, eventMatchesAllFilters(event, inputUpper), "Should not match kind with wrong case (uppercase)")
 }
 
 // [AI] Test eventMatchesFilters with multiple filters (AND operation)
@@ -1055,7 +1047,7 @@ func TestEventMatchesFilters_WildcardProperty(t *testing.T) {
 	assert.False(t, eventMatchesAllFilters(event, inputNsNoMatch), "Should not match namespace with non-matching wildcard")
 }
 
-func TestEventMatchesFilters_WildcardKindCaseInsensitive(t *testing.T) {
+func TestEventMatchesFilters_WildcardKindCaseSensitive(t *testing.T) {
 	event := &model.Event{
 		UID:       "test-123",
 		Operation: "CREATE",
@@ -1064,24 +1056,25 @@ func TestEventMatchesFilters_WildcardKindCaseInsensitive(t *testing.T) {
 		},
 	}
 
-	// Lowercase wildcard pattern should match (kind is case-insensitive)
 	kindFilter := "kind"
-	kindValue := "deploy*"
+
+	// Exact case prefix matches
+	kindValue := "Deploy*"
 	input := &model.SearchInput{
 		Filters: []*model.SearchFilter{
 			{Property: kindFilter, Values: []*string{&kindValue}},
 		},
 	}
-	assert.True(t, eventMatchesAllFilters(event, input), "Should match kind wildcard case-insensitively")
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match kind wildcard with correct case")
 
-	// Uppercase wildcard pattern should match
-	kindValueUpper := "DEPLOY*"
-	inputUpper := &model.SearchInput{
+	// Lowercase pattern should NOT match (wildcard is case-sensitive for streaming)
+	kindValueLower := "deploy*"
+	inputLower := &model.SearchInput{
 		Filters: []*model.SearchFilter{
-			{Property: kindFilter, Values: []*string{&kindValueUpper}},
+			{Property: kindFilter, Values: []*string{&kindValueLower}},
 		},
 	}
-	assert.True(t, eventMatchesAllFilters(event, inputUpper), "Should match kind wildcard case-insensitively (uppercase)")
+	assert.False(t, eventMatchesAllFilters(event, inputLower), "Should not match kind wildcard with wrong case")
 }
 
 func TestEventMatchesFilters_WildcardMatchAll(t *testing.T) {
