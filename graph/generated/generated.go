@@ -433,10 +433,13 @@ input SearchFilter {
     """
     Values for the property. Multiple values per property are interpreted as an OR operation.
     Optionally one of these operations ` + "`" + `=,!,!=,>,>=,<,<=` + "`" + ` can be included at the beginning of the value.
-    By default the equality operation is used. 
+    By default the equality operation is used.
     The values available for datetime fields (Ex: ` + "`" + `created` + "`" + `, ` + "`" + `startedAt` + "`" + `) are ` + "`" + `hour` + "`" + `, ` + "`" + `day` + "`" + `, ` + "`" + `week` + "`" + `, ` + "`" + `month` + "`" + ` and ` + "`" + `year` + "`" + `.
     Property ` + "`" + `kind` + "`" + `, if included in the filter, will be matched using a case-insensitive comparison.
     For example, ` + "`" + `kind:Pod` + "`" + ` and ` + "`" + `kind:pod` + "`" + ` will bring up all pods. This is to maintain compatibility with Search V1.
+    Wildcard matching: the ` + "`" + `*` + "`" + ` character can be used as a wildcard to match any sequence of characters.
+    For example, ` + "`" + `name:nginx-*` + "`" + ` matches any resource whose name starts with ` + "`" + `nginx-` + "`" + `, and ` + "`" + `namespace:prod*` + "`" + ` matches
+    any namespace starting with ` + "`" + `prod` + "`" + `. Wildcard matches are case-sensitive.
     """
     values: [String]!
   }
