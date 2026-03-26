@@ -58,43 +58,55 @@ func compareWithOperator(operator string, propertyValue interface{}, filterValue
 		propertyValueStr = fmt.Sprintf("%v", propertyValue)
 	}
 
-	switch operator {
-	case "=":
+	// Handle equality operators
+	if operator == "=" {
 		return propertyValueStr == filterValue
-	case "!", "!=":
+	}
+	if operator == "!" || operator == "!=" {
 		return propertyValueStr != filterValue
-	case ">", ">=", "<", "<=":
-		// Try numeric comparison first
-		propFloat, propErr := strconv.ParseFloat(propertyValueStr, 64)
-		filterFloat, filterErr := strconv.ParseFloat(filterValue, 64)
-
-		if propErr == nil && filterErr == nil {
-			// Both values are numeric, do numeric comparison
-			switch operator {
-			case ">":
-				return propFloat > filterFloat
-			case ">=":
-				return propFloat >= filterFloat
-			case "<":
-				return propFloat < filterFloat
-			case "<=":
-				return propFloat <= filterFloat
-			}
-		}
-
-		// Fall back to string comparison
-		switch operator {
-		case ">":
-			return propertyValueStr > filterValue
-		case ">=":
-			return propertyValueStr >= filterValue
-		case "<":
-			return propertyValueStr < filterValue
-		case "<=":
-			return propertyValueStr <= filterValue
-		}
 	}
 
+	// Handle comparison operators (>, >=, <, <=)
+	// Try numeric comparison first
+	propFloat, propErr := strconv.ParseFloat(propertyValueStr, 64)
+	filterFloat, filterErr := strconv.ParseFloat(filterValue, 64)
+
+	if propErr == nil && filterErr == nil {
+		// Both values are numeric, do numeric comparison
+		return compareNumeric(operator, propFloat, filterFloat)
+	}
+
+	// Fall back to string comparison
+	return compareString(operator, propertyValueStr, filterValue)
+}
+
+// compareNumeric performs numeric comparison using the specified operator.
+func compareNumeric(operator string, propValue, filterValue float64) bool {
+	switch operator {
+	case ">":
+		return propValue > filterValue
+	case ">=":
+		return propValue >= filterValue
+	case "<":
+		return propValue < filterValue
+	case "<=":
+		return propValue <= filterValue
+	}
+	return false
+}
+
+// compareString performs string comparison using the specified operator.
+func compareString(operator string, propValue, filterValue string) bool {
+	switch operator {
+	case ">":
+		return propValue > filterValue
+	case ">=":
+		return propValue >= filterValue
+	case "<":
+		return propValue < filterValue
+	case "<=":
+		return propValue <= filterValue
+	}
 	return false
 }
 
@@ -206,9 +218,10 @@ func eventMatchesAllFilters(event *model.Event, input *model.SearchInput) bool {
 			// Parse operator from filter value
 			operator, value := parseOperatorAndValue(*filterValue)
 
-			// Special case: Kind is compared case-insensitive to match the search behavior.
-			if property == "kind" && operator == "=" {
-				if strings.EqualFold(propertyValueStr, value) {
+			// Special case: Kind is compared case-insensitive for = and != operators to match search behavior.
+			if property == "kind" && (operator == "=" || operator == "!" || operator == "!=") {
+				isEqual := strings.EqualFold(propertyValueStr, value)
+				if (operator == "=" && isEqual) || ((operator == "!" || operator == "!=") && !isEqual) {
 					matched = true
 					break
 				}

@@ -1327,14 +1327,23 @@ func TestEventMatchesFilters_KindCaseInsensitiveWithOperator(t *testing.T) {
 	}
 	assert.True(t, eventMatchesAllFilters(event, inputExplicit), "Should match kind case-insensitively with explicit =")
 
-	// Kind with != operator should be case-sensitive
-	kindValueNe := "!=pod"
+	// Kind with != operator should also be case-insensitive
+	kindValueNe := "!=deployment"
 	inputNe := &model.SearchInput{
 		Filters: []*model.SearchFilter{
 			{Property: kindFilter, Values: []*string{&kindValueNe}},
 		},
 	}
-	assert.True(t, eventMatchesAllFilters(event, inputNe), "Kind with != should be case-sensitive (Pod != pod)")
+	assert.True(t, eventMatchesAllFilters(event, inputNe), "Kind with != should be case-insensitive (Pod != deployment)")
+
+	// Kind with != same value (case-insensitive) should not match
+	kindValueNeSame := "!=pod"
+	inputNeSame := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&kindValueNeSame}},
+		},
+	}
+	assert.False(t, eventMatchesAllFilters(event, inputNeSame), "Kind with != pod should not match Pod (case-insensitive)")
 }
 
 func TestGetEventDataFields(t *testing.T) {
