@@ -966,6 +966,17 @@ func TestWatchSubscription_InputValidation(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Value must be a key=value pair.")
 
+	// Test operator-prefixed label values are rejected
+	valLabelOp := "!env=prod"
+	inputLabelOp := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: "label", Values: []*string{&valLabelOp}},
+		},
+	}
+	_, err = WatchSubscription(ctx, inputLabelOp)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Operators are not supported for label values")
+
 	// Test empty property
 	val := "value"
 	inputEmptyProp := &model.SearchInput{
@@ -995,6 +1006,14 @@ func TestParseOperatorAndValue(t *testing.T) {
 		{"Less or equal", "<=10", "<=", "10"},
 		{"Value with special chars", "my-value-123", "=", "my-value-123"},
 		{"Numeric value", "100", "=", "100"},
+		// Edge cases
+		{"Empty value after !=", "!=", "!=", ""},
+		{"Empty value after >", ">", ">", ""},
+		{"Empty value after <", "<", "<", ""},
+		{"Operator-like prefix ===", "===value", "=", "==value"},
+		{"Operator-like prefix =!=", "=!=test", "=", "!=test"},
+		{"Whitespace after operator", ">= 10", ">=", " 10"},
+		{"No whitespace after operator", ">=10", ">=", "10"},
 	}
 
 	for _, tt := range tests {
@@ -1202,6 +1221,37 @@ func TestEventMatchesFilters_WildcardProperty(t *testing.T) {
 		},
 	}
 	assert.False(t, eventMatchesAllFilters(event, inputNsNoMatch), "Should not match namespace with non-matching wildcard")
+}
+
+// [AI] Test wildcards with explicit equality operator
+func TestEventMatchesFilters_WildcardWithExplicitOperator(t *testing.T) {
+	event := &model.Event{
+		UID:       "test-123",
+		Operation: "CREATE",
+		NewData: map[string]interface{}{
+			"kind": "Pod",
+			"name": "nginx-abc",
+		},
+	}
+
+	// Explicit = operator with wildcard should work
+	nameFilter := "name"
+	nameValueEq := "=nginx-*"
+	inputEq := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: nameFilter, Values: []*string{&nameValueEq}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, inputEq), "Should match name with explicit = and wildcard")
+
+	// Other operators with wildcard should not match (wildcards only work with =)
+	nameValueGt := ">nginx-*"
+	inputGt := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: nameFilter, Values: []*string{&nameValueGt}},
+		},
+	}
+	assert.False(t, eventMatchesAllFilters(event, inputGt), "Should not match name with > and wildcard")
 }
 
 // [AI] Test eventMatchesAllFilters with comparison operators on numeric values
