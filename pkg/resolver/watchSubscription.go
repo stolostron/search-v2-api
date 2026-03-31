@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/stolostron/search-v2-api/pkg/rbac"
@@ -30,6 +31,19 @@ func matchAnyLabel(eventLabels map[string]interface{}, labelFilters []*string) b
 		}
 	}
 	return false
+}
+
+// matchesWildcard returns true if value matches the wildcard pattern.
+// The wildcard character '*' matches any sequence of characters (including empty).
+func matchesWildcard(value, pattern string) bool {
+	regexPattern := "^" + regexp.QuoteMeta(pattern) + "$"
+	regexPattern = strings.ReplaceAll(regexPattern, `\*`, ".*")
+	matched, err := regexp.MatchString(regexPattern, value)
+	if err != nil {
+		klog.Warningf("Failed to match wildcard pattern %s: %v", pattern, err)
+		return false
+	}
+	return matched
 }
 
 // eventMatchesAllFilters Returns true if the event matches all the search input filters.
@@ -122,15 +136,13 @@ func eventMatchesAllFilters(event *model.Event, input *model.SearchInput) bool {
 			if filterValue == nil {
 				continue
 			}
-			// Special case: Kind is compared case-insensitive to match the search behavior.
-			if property == "kind" {
-				if strings.EqualFold(propertyValueStr, *filterValue) {
+			fv := *filterValue
+			if strings.Contains(fv, "*") {
+				if matchesWildcard(propertyValueStr, fv) {
 					matched = true
 					break
 				}
-			}
-
-			if propertyValueStr == *filterValue {
+			} else if propertyValueStr == fv {
 				matched = true
 				break
 			}
@@ -236,10 +248,6 @@ func validateInputFilters(input *model.SearchInput) error {
 				}
 				// NOTE: The limitations below are only while we implement the feature.
 				// They will be removed once the feature is fully implemented.
-				if strings.Contains(*value, "*") {
-					return fmt.Errorf("invalid filter. Wildcards are not yet supported. Property: %s Value: %s",
-						filter.Property, *value)
-				}
 				if strings.HasPrefix(*value, "!") ||
 					strings.HasPrefix(*value, "!=") ||
 					strings.HasPrefix(*value, ">") ||
