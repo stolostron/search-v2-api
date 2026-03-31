@@ -22,30 +22,9 @@ import (
 // parseOperatorAndValue parses a filter value to extract the operator and the actual value.
 // Returns the operator and the value.
 // Supported operators: !, !=, >, >=, <, <=, = (default)
+// This delegates to the shared getOperatorFromString helper to avoid code duplication.
 func parseOperatorAndValue(filterValue string) (operator string, value string) {
-	if strings.HasPrefix(filterValue, "!=") {
-		return "!=", filterValue[2:]
-	}
-	if strings.HasPrefix(filterValue, ">=") {
-		return ">=", filterValue[2:]
-	}
-	if strings.HasPrefix(filterValue, "<=") {
-		return "<=", filterValue[2:]
-	}
-	if strings.HasPrefix(filterValue, "!") {
-		return "!", filterValue[1:]
-	}
-	if strings.HasPrefix(filterValue, ">") {
-		return ">", filterValue[1:]
-	}
-	if strings.HasPrefix(filterValue, "<") {
-		return "<", filterValue[1:]
-	}
-	if strings.HasPrefix(filterValue, "=") {
-		return "=", filterValue[1:]
-	}
-	// Default is equality (when no operator prefix)
-	return "=", filterValue
+	return getOperatorFromString(filterValue)
 }
 
 // compareWithOperator compares two values using the specified operator.
@@ -230,15 +209,21 @@ func eventMatchesAllFilters(event *model.Event, input *model.SearchInput) bool {
 				continue
 			}
 			fv := *filterValue
-			if strings.Contains(fv, "*") {
-				if matchesWildcard(propertyValueStr, fv) {
+			// Parse operator from filter value first
+			operator, value := parseOperatorAndValue(fv)
+
+			// Handle wildcards - only supported with equality operator
+			if strings.Contains(value, "*") {
+				// Wildcards only work with equality
+				if operator != "=" {
+					continue
+				}
+				if matchesWildcard(propertyValueStr, value) {
 					matched = true
 					break
 				}
 				continue
 			}
-			// Parse operator from filter value
-			operator, value := parseOperatorAndValue(fv)
 
 			// Special case: Kind is compared case-insensitive for = and != operators to match search behavior.
 			if property == "kind" && (operator == "=" || operator == "!" || operator == "!=") {
@@ -339,6 +324,11 @@ func validateInputFilters(input *model.SearchInput) error {
 			// Validate label filter values are key=value pairs.
 			if filter.Property == "label" {
 				for _, value := range filter.Values {
+					// Reject operator-prefixed values for labels (operators not supported for labels yet)
+					if strings.HasPrefix(*value, "!") || strings.HasPrefix(*value, ">") || strings.HasPrefix(*value, "<") {
+						return fmt.Errorf("invalid filter. Operators are not supported for label values. {Property: %s Values: %s} ",
+							filter.Property, *value)
+					}
 					keyValue := strings.Split(*value, "=")
 					if len(keyValue) != 2 {
 						return fmt.Errorf("invalid filter. Value must be a key=value pair. {Property: %s Values: %s} ",
