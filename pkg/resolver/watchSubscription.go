@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -125,6 +126,19 @@ func matchAnyLabel(eventLabels map[string]interface{}, labelFilters []*string) b
 	return false
 }
 
+// matchesWildcard returns true if value matches the wildcard pattern.
+// The wildcard character '*' matches any sequence of characters (including empty).
+func matchesWildcard(value, pattern string) bool {
+	regexPattern := "^" + regexp.QuoteMeta(pattern) + "$"
+	regexPattern = strings.ReplaceAll(regexPattern, `\*`, ".*")
+	matched, err := regexp.MatchString(regexPattern, value)
+	if err != nil {
+		klog.Warningf("Failed to match wildcard pattern %s: %v", pattern, err)
+		return false
+	}
+	return matched
+}
+
 // eventMatchesAllFilters Returns true if the event matches all the search input filters.
 // Equivalent to an AND operation.
 func eventMatchesAllFilters(event *model.Event, input *model.SearchInput) bool {
@@ -215,8 +229,16 @@ func eventMatchesAllFilters(event *model.Event, input *model.SearchInput) bool {
 			if filterValue == nil {
 				continue
 			}
+			fv := *filterValue
+			if strings.Contains(fv, "*") {
+				if matchesWildcard(propertyValueStr, fv) {
+					matched = true
+					break
+				}
+				continue
+			}
 			// Parse operator from filter value
-			operator, value := parseOperatorAndValue(*filterValue)
+			operator, value := parseOperatorAndValue(fv)
 
 			// Special case: Kind is compared case-insensitive for = and != operators to match search behavior.
 			if property == "kind" && (operator == "=" || operator == "!" || operator == "!=") {
@@ -331,12 +353,6 @@ func validateInputFilters(input *model.SearchInput) error {
 			for _, value := range filter.Values {
 				if value == nil || *value == "" {
 					return fmt.Errorf("invalid filter. Value is required. Filter %+v", *filter)
-				}
-				// NOTE: The limitations below are only while we implement the feature.
-				// They will be removed once the feature is fully implemented.
-				if strings.Contains(*value, "*") {
-					return fmt.Errorf("invalid filter. Wildcards are not yet supported. Property: %s Value: %s",
-						filter.Property, *value)
 				}
 			}
 		}

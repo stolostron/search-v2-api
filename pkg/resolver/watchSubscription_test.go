@@ -435,9 +435,9 @@ func TestEventMatchesFilters_PropertyFilters(t *testing.T) {
 	assert.False(t, eventMatchesAllFilters(event, inputNoMatch), "Should not match kind=Deployment filter")
 }
 
-// [AI] Test eventMatchesFilters with case-sensitive kind matching
-// Note: The previous behavior was case-insensitive for kind, but it was simplified to be case-sensitive.
-func TestEventMatchesFilters_KindCaseSensitive(t *testing.T) {
+// [AI] Test eventMatchesFilters: kind equality (no wildcard) matches search behavior (case-insensitive).
+// Wildcard patterns on kind remain case-sensitive; see TestEventMatchesFilters_WildcardKindCaseSensitive.
+func TestEventMatchesFilters_KindEqualityCaseInsensitive(t *testing.T) {
 	event := &model.Event{
 		UID:       "test-123",
 		Operation: "CREATE",
@@ -446,42 +446,31 @@ func TestEventMatchesFilters_KindCaseSensitive(t *testing.T) {
 		},
 	}
 
-	// The kind filter is compared case-insensitively.
 	kindFilter := "kind"
-	kindValueLower := "pod"
-	input := &model.SearchInput{
-		Filters: []*model.SearchFilter{
-			{
-				Property: kindFilter,
-				Values:   []*string{&kindValueLower},
-			},
-		},
-	}
-	assert.True(t, eventMatchesAllFilters(event, input), "Should match kind case-insensitively (lowercase)")
 
-	// Filter with uppercase "POD" should match "Pod"
-	kindValueUpper := "POD"
-	inputUpper := &model.SearchInput{
-		Filters: []*model.SearchFilter{
-			{
-				Property: kindFilter,
-				Values:   []*string{&kindValueUpper},
-			},
-		},
-	}
-	assert.True(t, eventMatchesAllFilters(event, inputUpper), "Should match kind with different case (uppercase)")
-
-	// Exact match should work
 	kindValueExact := "Pod"
 	inputExact := &model.SearchInput{
 		Filters: []*model.SearchFilter{
-			{
-				Property: kindFilter,
-				Values:   []*string{&kindValueExact},
-			},
+			{Property: kindFilter, Values: []*string{&kindValueExact}},
 		},
 	}
 	assert.True(t, eventMatchesAllFilters(event, inputExact), "Should match kind with exact case")
+
+	kindValueLower := "pod"
+	inputLower := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&kindValueLower}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, inputLower), "Should match kind case-insensitively (lowercase)")
+
+	kindValueUpper := "POD"
+	inputUpper := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&kindValueUpper}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, inputUpper), "Should match kind case-insensitively (uppercase)")
 }
 
 // [AI] Test eventMatchesFilters with multiple filters (AND operation)
@@ -956,7 +945,7 @@ func TestWatchSubscription_InputValidation(t *testing.T) {
 	_, err := WatchSubscription(ctx, inputOp)
 	assert.NoError(t, err, "Operators should now be supported")
 
-	// Test wildcards still not supported
+	// Wildcard filters are supported
 	valWild := "val*"
 	inputWild := &model.SearchInput{
 		Filters: []*model.SearchFilter{
@@ -964,8 +953,7 @@ func TestWatchSubscription_InputValidation(t *testing.T) {
 		},
 	}
 	_, err = WatchSubscription(ctx, inputWild)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "Wildcards are not yet supported")
+	assert.NoError(t, err, "Wildcard filters should be accepted")
 
 	// Test invalid label format
 	valLabel := "invalid-label"
@@ -1135,6 +1123,85 @@ func TestEventMatchesFilters_NotEqualOperator(t *testing.T) {
 		},
 	}
 	assert.True(t, eventMatchesAllFilters(event, inputNs), "Should match when namespace is not kube-system")
+}
+
+func TestMatchesWildcard(t *testing.T) {
+	tests := []struct {
+		value, pattern string
+		expected       bool
+	}{
+		{"Pod", "Pod", true},
+		{"Pod", "po*", false},            // case-sensitive
+		{"pod", "po*", true},             // prefix wildcard
+		{"mypod", "*pod", true},          // suffix wildcard
+		{"mypodx", "*pod", false},        // suffix mismatch
+		{"mypod", "*po*", true},          // contains wildcard
+		{"Pod", "*", true},               // wildcard matches all
+		{"", "*", true},                  // wildcard matches empty
+		{"abc", "a*c", true},             // middle wildcard
+		{"ac", "a*c", true},              // middle wildcard empty match
+		{"axyzc", "a*c", true},           // middle wildcard multi char
+		{"Pod", "Dep*", false},           // no match
+		{"Pod-abc-xyz", "Pod-*-*", true}, // multiple wildcards
+		{"aaaaa", "a*a*a", true},         // greedy matching
+		{"ab", "a*a*a", false},           // multiple wildcards no match
+	}
+	for _, tt := range tests {
+		result := matchesWildcard(tt.value, tt.pattern)
+		if result != tt.expected {
+			t.Errorf("matchesWildcard(%q, %q) = %v, want %v", tt.value, tt.pattern, result, tt.expected)
+		}
+	}
+}
+
+func TestEventMatchesFilters_WildcardProperty(t *testing.T) {
+	event := &model.Event{
+		UID:       "test-123",
+		Operation: "CREATE",
+		NewData: map[string]interface{}{
+			"kind":      "Pod",
+			"name":      "nginx-abc",
+			"namespace": "production",
+		},
+	}
+
+	// Suffix wildcard on name
+	nameFilter := "name"
+	nameValue := "nginx-*"
+	input := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: nameFilter, Values: []*string{&nameValue}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match name with suffix wildcard")
+
+	// Prefix wildcard on name
+	nameValuePrefix := "*-abc"
+	inputPrefix := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: nameFilter, Values: []*string{&nameValuePrefix}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, inputPrefix), "Should match name with prefix wildcard")
+
+	// Wildcard on namespace
+	nsFilter := "namespace"
+	nsValue := "prod*"
+	inputNs := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: nsFilter, Values: []*string{&nsValue}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, inputNs), "Should match namespace with prefix wildcard")
+
+	// Wildcard that does not match
+	nsValueNoMatch := "dev*"
+	inputNsNoMatch := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: nsFilter, Values: []*string{&nsValueNoMatch}},
+		},
+	}
+	assert.False(t, eventMatchesAllFilters(event, inputNsNoMatch), "Should not match namespace with non-matching wildcard")
 }
 
 // [AI] Test eventMatchesAllFilters with comparison operators on numeric values
@@ -1344,6 +1411,112 @@ func TestEventMatchesFilters_KindCaseInsensitiveWithOperator(t *testing.T) {
 		},
 	}
 	assert.False(t, eventMatchesAllFilters(event, inputNeSame), "Kind with != pod should not match Pod (case-insensitive)")
+}
+
+func TestEventMatchesFilters_WildcardKindCaseSensitive(t *testing.T) {
+	event := &model.Event{
+		UID:       "test-123",
+		Operation: "CREATE",
+		NewData: map[string]interface{}{
+			"kind": "Deployment",
+		},
+	}
+
+	kindFilter := "kind"
+
+	// Exact case prefix matches
+	kindValue := "Deploy*"
+	input := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&kindValue}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match kind wildcard with correct case")
+
+	// Lowercase pattern should NOT match (wildcard is case-sensitive for streaming)
+	kindValueLower := "deploy*"
+	inputLower := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&kindValueLower}},
+		},
+	}
+	assert.False(t, eventMatchesAllFilters(event, inputLower), "Should not match kind wildcard with wrong case")
+}
+
+func TestEventMatchesFilters_WildcardMatchAll(t *testing.T) {
+	event := &model.Event{
+		UID:       "test-123",
+		Operation: "CREATE",
+		NewData: map[string]interface{}{
+			"kind": "Service",
+			"name": "my-service",
+		},
+	}
+
+	// "*" alone should match any value
+	kindFilter := "kind"
+	kindValue := "*"
+	input := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&kindValue}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, input), "Wildcard '*' should match any value")
+}
+
+func TestEventMatchesFilters_WildcardOrLogic(t *testing.T) {
+	event := &model.Event{
+		UID:       "test-123",
+		Operation: "CREATE",
+		NewData: map[string]interface{}{
+			"kind": "StatefulSet",
+			"name": "my-db",
+		},
+	}
+
+	// One wildcard value matches, one exact value doesn't — OR should succeed
+	kindFilter := "kind"
+	exactNoMatch := "Pod"
+	wildcardMatch := "Stateful*"
+	input := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&exactNoMatch, &wildcardMatch}},
+		},
+	}
+	assert.True(t, eventMatchesAllFilters(event, input), "Should match when one wildcard value in OR list matches")
+
+	// No wildcard or exact value matches
+	exactNoMatch2 := "Deployment"
+	wildcardNoMatch := "Daemon*"
+	inputNoMatch := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: kindFilter, Values: []*string{&exactNoMatch2, &wildcardNoMatch}},
+		},
+	}
+	assert.False(t, eventMatchesAllFilters(event, inputNoMatch), "Should not match when no value in OR list matches")
+}
+
+func TestWatchSubscription_WildcardFilterAccepted(t *testing.T) {
+	originalEnabled := config.Cfg.Features.SubscriptionEnabled
+	config.Cfg.Features.SubscriptionEnabled = true
+	defer func() {
+		config.Cfg.Features.SubscriptionEnabled = originalEnabled
+	}()
+
+	database.StopPostgresListener()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	valWild := "Pod*"
+	input := &model.SearchInput{
+		Filters: []*model.SearchFilter{
+			{Property: "kind", Values: []*string{&valWild}},
+		},
+	}
+	resultChan, err := WatchSubscription(ctx, input)
+	assert.Nil(t, err, "Wildcard filter should be accepted")
+	assert.NotNil(t, resultChan, "Result channel should be returned")
 }
 
 func TestGetEventDataFields(t *testing.T) {
