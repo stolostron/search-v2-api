@@ -656,7 +656,6 @@ func Test_getUserData(t *testing.T) {
 }
 
 func Test_setImpersonationUserInfo(t *testing.T) {
-
 	ui := authv1.UserInfo{
 		Username: "test-user",
 		UID:      "12345",
@@ -672,7 +671,6 @@ func Test_setImpersonationUserInfo(t *testing.T) {
 }
 
 func Test_setImpersonationUserInfoUndesiredExtras(t *testing.T) {
-
 	ui := authv1.UserInfo{
 		Username: "test-user",
 		UID:      "12345",
