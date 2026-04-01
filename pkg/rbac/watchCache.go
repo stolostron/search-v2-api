@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -179,9 +180,19 @@ func createImpersonationClient(userInfo authv1.UserInfo) v1.AuthorizationV1Inter
 	if len(userInfo.Extra) > 0 {
 		extraUpdated := map[string][]string{}
 		for key, val := range userInfo.Extra {
-			extraUpdated[key] = val
+			// Standard Kubernetes/OpenShift extras that are safe to impersonate:
+			// - authentication.kubernetes.io/*
+			// - scopes.authorization.openshift.io/*
+			if strings.HasPrefix(key, "authentication.kubernetes.io/") ||
+				strings.HasPrefix(key, "scopes.authorization.openshift.io/") {
+				extraUpdated[key] = val
+			} else {
+				klog.V(5).Infof("Filtering out Extra field for impersonation: %s (value not logged for security)", key)
+			}
 		}
-		impersonationConfig.Extra = extraUpdated
+		if len(extraUpdated) > 0 {
+			impersonationConfig.Extra = extraUpdated
+		}
 	}
 
 	restConfig.Impersonate = *impersonationConfig

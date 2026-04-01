@@ -500,7 +500,7 @@ func setImpersonationUserInfo(userInfo authv1.UserInfo) *rest.ImpersonationConfi
 			}
 		}
 		if len(extraUpdated) > 0 {
-			impersonConfig.Extra = extraUpdated //set additional information
+			impersonConfig.Extra = extraUpdated
 		}
 	}
 	klog.V(9).Infof("UserInfo available for impersonation is %+v:", userInfo)
