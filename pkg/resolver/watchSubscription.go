@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/stolostron/search-v2-api/pkg/rbac"
@@ -17,6 +18,77 @@ import (
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/database"
 )
+
+// parseOperatorAndValue parses a filter value to extract the operator and the actual value.
+// Returns the operator and the value.
+// Supported operators: !, !=, >, >=, <, <=, = (default)
+// This delegates to the shared getOperatorFromString helper to avoid code duplication.
+func parseOperatorAndValue(filterValue string) (operator string, value string) {
+	return getOperatorFromString(filterValue)
+}
+
+// compareWithOperator compares two values using the specified operator.
+// Returns true if the comparison matches.
+func compareWithOperator(operator string, propertyValue interface{}, filterValue string) bool {
+	// Convert property value to string
+	propertyValueStr := ""
+	if strValue, ok := propertyValue.(string); ok {
+		propertyValueStr = strValue
+	} else {
+		propertyValueStr = fmt.Sprintf("%v", propertyValue)
+	}
+
+	// Handle equality operators
+	if operator == "=" {
+		return propertyValueStr == filterValue
+	}
+	if operator == "!" || operator == "!=" {
+		return propertyValueStr != filterValue
+	}
+
+	// Handle comparison operators (>, >=, <, <=)
+	// Try numeric comparison first
+	propFloat, propErr := strconv.ParseFloat(propertyValueStr, 64)
+	filterFloat, filterErr := strconv.ParseFloat(filterValue, 64)
+
+	if propErr == nil && filterErr == nil {
+		// Both values are numeric, do numeric comparison
+		return compareNumeric(operator, propFloat, filterFloat)
+	}
+
+	// Fall back to string comparison
+	return compareString(operator, propertyValueStr, filterValue)
+}
+
+// compareNumeric performs numeric comparison using the specified operator.
+func compareNumeric(operator string, propValue, filterValue float64) bool {
+	switch operator {
+	case ">":
+		return propValue > filterValue
+	case ">=":
+		return propValue >= filterValue
+	case "<":
+		return propValue < filterValue
+	case "<=":
+		return propValue <= filterValue
+	}
+	return false
+}
+
+// compareString performs string comparison using the specified operator.
+func compareString(operator string, propValue, filterValue string) bool {
+	switch operator {
+	case ">":
+		return propValue > filterValue
+	case ">=":
+		return propValue >= filterValue
+	case "<":
+		return propValue < filterValue
+	case "<=":
+		return propValue <= filterValue
+	}
+	return false
+}
 
 // matchAnyLabel returns true if any of the label filters matches the event labels.
 // Equivalent to an OR operation.
@@ -137,12 +209,33 @@ func eventMatchesAllFilters(event *model.Event, input *model.SearchInput) bool {
 				continue
 			}
 			fv := *filterValue
-			if strings.Contains(fv, "*") {
-				if matchesWildcard(propertyValueStr, fv) {
+			// Parse operator from filter value first
+			operator, value := parseOperatorAndValue(fv)
+
+			// Handle wildcards - only supported with equality operator
+			if strings.Contains(value, "*") {
+				// Wildcards only work with equality
+				if operator != "=" {
+					continue
+				}
+				if matchesWildcard(propertyValueStr, value) {
 					matched = true
 					break
 				}
-			} else if propertyValueStr == fv {
+				continue
+			}
+
+			// Special case: Kind is compared case-insensitive for = and != operators to match search behavior.
+			if property == "kind" && (operator == "=" || operator == "!" || operator == "!=") {
+				isEqual := strings.EqualFold(propertyValueStr, value)
+				if (operator == "=" && isEqual) || ((operator == "!" || operator == "!=") && !isEqual) {
+					matched = true
+					break
+				}
+				continue
+			}
+
+			if compareWithOperator(operator, propertyValue, value) {
 				matched = true
 				break
 			}
@@ -231,6 +324,11 @@ func validateInputFilters(input *model.SearchInput) error {
 			// Validate label filter values are key=value pairs.
 			if filter.Property == "label" {
 				for _, value := range filter.Values {
+					// Reject operator-prefixed values for labels (operators not supported for labels yet)
+					if strings.HasPrefix(*value, "!") || strings.HasPrefix(*value, ">") || strings.HasPrefix(*value, "<") {
+						return fmt.Errorf("invalid filter. Operators are not supported for label values. {Property: %s Values: %s} ",
+							filter.Property, *value)
+					}
 					keyValue := strings.Split(*value, "=")
 					if len(keyValue) != 2 {
 						return fmt.Errorf("invalid filter. Value must be a key=value pair. {Property: %s Values: %s} ",
@@ -245,17 +343,6 @@ func validateInputFilters(input *model.SearchInput) error {
 			for _, value := range filter.Values {
 				if value == nil || *value == "" {
 					return fmt.Errorf("invalid filter. Value is required. Filter %+v", *filter)
-				}
-				// NOTE: The limitations below are only while we implement the feature.
-				// They will be removed once the feature is fully implemented.
-				if strings.HasPrefix(*value, "!") ||
-					strings.HasPrefix(*value, "!=") ||
-					strings.HasPrefix(*value, ">") ||
-					strings.HasPrefix(*value, ">=") ||
-					strings.HasPrefix(*value, "<") ||
-					strings.HasPrefix(*value, "<=") {
-					return fmt.Errorf("invalid filter. Operators !,!=,>,>=,<,<= are not yet supported. {Property: %s Value: %s} ",
-						filter.Property, *value)
 				}
 			}
 		}
