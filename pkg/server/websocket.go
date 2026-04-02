@@ -98,7 +98,8 @@ func WebSocketInitFunc() func(context.Context, transport.InitPayload) (context.C
 		ctx = context.WithValue(ctx, rbac.ContextAuthTokenKey, authToken)
 
 		// Return the modified context and payload
-		return ctx, &initPayload, nil
+		returnPayload := transport.InitPayload{}
+		return ctx, &returnPayload, nil
 	}
 }
 
