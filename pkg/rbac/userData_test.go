@@ -656,13 +656,48 @@ func Test_getUserData(t *testing.T) {
 }
 
 func Test_setImpersonationUserInfo(t *testing.T) {
+	ui := authv1.UserInfo{
+		Username: "test-user",
+		UID:      "12345",
+		Groups:   []string{"group1"},
+		Extra:    map[string]authv1.ExtraValue{},
+	}
+
+	impConf := setImpersonationUserInfo(ui)
+	assert.Equal(t, ui.UID, impConf.UID)
+	assert.Equal(t, ui.Username, impConf.UserName)
+	assert.Equal(t, ui.Groups, impConf.Groups)
+	assert.Equal(t, len(ui.Extra), len(impConf.Extra))
+}
+
+func Test_setImpersonationUserInfoUndesiredExtras(t *testing.T) {
+	ui := authv1.UserInfo{
+		Username: "test-user",
+		UID:      "12345",
+		Groups:   []string{"group1"},
+		Extra: map[string]authv1.ExtraValue{
+			"extraKey":     []string{"extraValue"},
+			"someOtherKey": []string{"doubleExtraValue"},
+		},
+	}
+
+	impConf := setImpersonationUserInfo(ui)
+	assert.Equal(t, ui.UID, impConf.UID)
+	assert.Equal(t, ui.Username, impConf.UserName)
+	assert.Equal(t, ui.Groups, impConf.Groups)
+	assert.Equal(t, 0, len(impConf.Extra))
+}
+
+func Test_setImpersonationUserInfoDesiredExtras(t *testing.T) {
 
 	ui := authv1.UserInfo{
 		Username: "test-user",
 		UID:      "12345",
 		Groups:   []string{"group1"},
 		Extra: map[string]authv1.ExtraValue{
-			"extraKey": []string{"extraValue"}},
+			"scopes.authorization.openshift.io/": []string{"asdf"},
+			"authentication.kubernetes.io/":      []string{"zxcv"},
+		},
 	}
 
 	impConf := setImpersonationUserInfo(ui)

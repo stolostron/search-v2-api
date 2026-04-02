@@ -202,3 +202,81 @@ func Test_GetUserWatchData_WithImpersonation(t *testing.T) {
 	assert.Equal(t, time.Duration(config.Cfg.UserCacheTTL)*time.Millisecond, result.ttl, "TTL should be set from config")
 	assert.Equal(t, 1, len(watchCache.watchUserData), "Should have 1 user in cache")
 }
+
+// [AI] Test createImpersonationClient with undesired extras - should be filtered out
+func Test_GetUserWatchData_WithUndesiredExtras(t *testing.T) {
+	// Setup the regular cache for token review with undesired extra fields
+	regularCache := mockNamespaceCache()
+	if regularCache.tokenReviews == nil {
+		regularCache.tokenReviews = map[string]*tokenReviewCache{}
+	}
+	regularCache.tokenReviews["watch-token-extras"] = &tokenReviewCache{
+		meta:       cacheMetadata{updatedAt: time.Now()},
+		authClient: fake.NewSimpleClientset().AuthenticationV1(),
+		tokenReview: &authv1.TokenReview{
+			Status: authv1.TokenReviewStatus{
+				User: authv1.UserInfo{
+					UID:      "watch-user-extras",
+					Username: "watch-test-user-extras",
+					Groups:   []string{"system:authenticated"},
+					Extra: map[string]authv1.ExtraValue{
+						"extraKey":     []string{"extraValue"},
+						"someOtherKey": []string{"doubleExtraValue"},
+					},
+				},
+			},
+		},
+	}
+	// copy just tokenReviews to cache so userUID and userInfo can be got from cache's tokenReview to build authzClient
+	cacheInst.tokenReviews = regularCache.tokenReviews
+
+	watchCache := mockWatchCache()
+
+	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "watch-token-extras")
+
+	// Call GetUserWatchData which will trigger createImpersonationClient
+	result, err := watchCache.GetUserWatchData(ctx)
+
+	assert.Nil(t, err, "Should not return error")
+	assert.NotNil(t, result, "Should return UserWatchData")
+	assert.NotNil(t, result.authzClient, "AuthzClient should be created via impersonation")
+}
+
+// [AI] Test createImpersonationClient with desired extras - should be kept
+func Test_GetUserWatchData_WithDesiredExtras(t *testing.T) {
+	// Setup the regular cache for token review with desired extra fields
+	regularCache := mockNamespaceCache()
+	if regularCache.tokenReviews == nil {
+		regularCache.tokenReviews = map[string]*tokenReviewCache{}
+	}
+	regularCache.tokenReviews["watch-token-desired-extras"] = &tokenReviewCache{
+		meta:       cacheMetadata{updatedAt: time.Now()},
+		authClient: fake.NewSimpleClientset().AuthenticationV1(),
+		tokenReview: &authv1.TokenReview{
+			Status: authv1.TokenReviewStatus{
+				User: authv1.UserInfo{
+					UID:      "watch-user-desired-extras",
+					Username: "watch-test-user-desired",
+					Groups:   []string{"system:authenticated"},
+					Extra: map[string]authv1.ExtraValue{
+						"scopes.authorization.openshift.io/": []string{"asdf"},
+						"authentication.kubernetes.io/":      []string{"zxcv"},
+					},
+				},
+			},
+		},
+	}
+	// copy just tokenReviews to cache so userUID and userInfo can be got from cache's tokenReview to build authzClient
+	cacheInst.tokenReviews = regularCache.tokenReviews
+
+	watchCache := mockWatchCache()
+
+	ctx := context.WithValue(context.Background(), ContextAuthTokenKey, "watch-token-desired-extras")
+
+	// Call GetUserWatchData which will trigger createImpersonationClient
+	result, err := watchCache.GetUserWatchData(ctx)
+
+	assert.Nil(t, err, "Should not return error")
+	assert.NotNil(t, result, "Should return UserWatchData")
+	assert.NotNil(t, result.authzClient, "AuthzClient should be created via impersonation")
+}

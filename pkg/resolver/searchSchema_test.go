@@ -17,7 +17,7 @@ func Test_SearchSchema_Query(t *testing.T) {
 	resolver, _ := newMockSearchSchema(t, searchInput, rbac.UserData{CsResources: []rbac.Resource{}}, nil)
 
 	resolver.userData = rbac.UserData{CsResources: []rbac.Resource{}}
-	sql := `SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" WHERE ("cluster" = ANY ('{}')) LIMIT 100000) AS "schema"`
+	sql := `SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" WHERE (("cluster" = ANY ('{}')) OR FALSE) LIMIT 100000) AS "schema"`
 	// Execute function
 	resolver.buildSearchSchemaQuery(context.TODO())
 
@@ -33,7 +33,7 @@ func Test_SearchSchema_Query_WithFilters(t *testing.T) {
 	resolver, _ := newMockSearchSchema(t, searchInput, rbac.UserData{CsResources: []rbac.Resource{}}, propTypesMock)
 
 	resolver.userData = rbac.UserData{CsResources: []rbac.Resource{}}
-	sql := `SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" WHERE ("data"->'namespace'?('openshift') AND ("cluster" = ANY ('{}'))) LIMIT 100000) AS "schema"`
+	sql := `SELECT DISTINCT "prop" FROM (SELECT jsonb_object_keys(jsonb_strip_nulls("data")) AS "prop" FROM "search"."resources" WHERE ("data"->'namespace'?('openshift') AND (("cluster" = ANY ('{}')) OR FALSE)) LIMIT 100000) AS "schema"`
 	// Execute function
 	resolver.buildSearchSchemaQuery(context.Background())
 
