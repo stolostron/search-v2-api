@@ -375,8 +375,10 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 	}
 
 	go func() {
-		// Register the subscription
-		if err := database.RegisterSubscription(ctx, subID, receiver); err != nil {
+		// Register the subscription. subCtx is a derived context that is also cancelled
+		// when the cleanup goroutine evicts this subscription (lifetime/idle expiry).
+		subCtx, err := database.RegisterSubscription(ctx, subID, receiver)
+		if err != nil {
 			klog.Errorf("Failed to register subscription [%s]: %v", subID, err)
 			close(result)
 			close(receiver)
@@ -393,8 +395,8 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 		// Receive events from the database (receiver), filter, and send to the client (result).
 		for {
 			select {
-			case <-ctx.Done():
-				klog.V(3).Infof("Subscription watch(%s) closed by client.", subID)
+			case <-subCtx.Done():
+				klog.V(3).Infof("Subscription watch(%s) closed.", subID)
 				return
 			case event, ok := <-receiver:
 				// If the receiver channel is closed, return.
@@ -402,6 +404,12 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 					klog.V(3).Infof("Subscription watch(%s) channel closed.", subID)
 					return
 				}
+
+				// Record activity on every DB event, regardless of filters. This prevents
+				// subscriptions with narrow filters on quiet resources from being incorrectly
+				// evicted by the idle-timeout cleanup goroutine while the client is still alive.
+				database.UpdateSubscriptionActivity(subID)
+
 				// Filter event based on the input filters
 				if !eventMatchesAllFilters(event, input) {
 					klog.V(4).Infof("Subscription watch(%s) event did not match filters (UID: %s, Operation: %s)",
@@ -419,11 +427,9 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 				// Send filtered event to client
 				select {
 				case result <- event:
-					// Update activity time to track that we sent an event
-					database.UpdateSubscriptionActivity(subID)
 					klog.V(3).Infof("Subscription watch(%s) sent event (UID: %s, Operation: %s) to client", subID, event.UID, event.Operation)
 					continue
-				case <-ctx.Done():
+				case <-subCtx.Done():
 					klog.V(3).Infof("Subscription watch(%s) closed while sending event.", subID)
 					return
 				default:

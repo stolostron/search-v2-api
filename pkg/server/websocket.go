@@ -97,7 +97,7 @@ func WebSocketInitFunc() func(context.Context, transport.InitPayload) (context.C
 		// This ensures subscription resolvers can access the token the same way
 		ctx = context.WithValue(ctx, rbac.ContextAuthTokenKey, authToken)
 
-		// Return the modified context and payload
+		// Return an empty payload to avoid echoing the auth token back to the client in connection_ack.
 		returnPayload := transport.InitPayload{}
 		return ctx, &returnPayload, nil
 	}
