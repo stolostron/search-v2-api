@@ -34,9 +34,12 @@ var (
 )
 
 type Subscription struct {
-	ID      string            // Unique UUID
-	Channel chan *model.Event // Buffered (100)
-	Context context.Context   // For cleanup
+	ID           string            // Unique UUID
+	Channel      chan *model.Event // Buffered (100)
+	Context      context.Context   // For cleanup
+	CreatedAt    time.Time         // When the subscription was created
+	LastActivity time.Time         // Last time an event was sent
+	mu           sync.RWMutex      // Protects LastActivity
 }
 
 // Listener manages the single goroutine that listens for Postgres events
@@ -51,7 +54,8 @@ type Listener struct {
 
 // RegisterSubscription registers a channel to forward events received from the database.
 // Starts the listener if not already started.
-func RegisterSubscription(ctx context.Context, subID string, notifyChannel chan *model.Event) {
+// Returns an error if the maximum number of active subscriptions has been reached.
+func RegisterSubscription(ctx context.Context, subID string, notifyChannel chan *model.Event) error {
 
 	// Initialize the listener instance if not already initialized.
 	listenerMu.Lock()
@@ -71,16 +75,28 @@ func RegisterSubscription(ctx context.Context, subID string, notifyChannel chan 
 		}
 	})
 
-	sub := &Subscription{
-		ID:      subID,
-		Channel: notifyChannel,
-		Context: ctx,
-	}
-
 	listenerInstance.mu.Lock()
 	defer listenerInstance.mu.Unlock()
+
+	// Check if we've reached the maximum number of active subscriptions
+	maxActive := config.Cfg.Subscription.MaxActive
+	if len(listenerInstance.subscriptions) >= maxActive {
+		klog.Warningf("Maximum active subscriptions reached (%d). Rejecting new subscription [%s]", maxActive, subID)
+		return fmt.Errorf("maximum active subscriptions reached (%d)", maxActive)
+	}
+
+	now := time.Now()
+	sub := &Subscription{
+		ID:           subID,
+		Channel:      notifyChannel,
+		Context:      ctx,
+		CreatedAt:    now,
+		LastActivity: now,
+	}
+
 	listenerInstance.subscriptions[subID] = sub
 	klog.Infof("Registered subscription [%s]. (%d active subscriptions)", subID, len(listenerInstance.subscriptions))
+	return nil
 }
 
 func UnregisterSubscription(subID string) {
@@ -101,6 +117,28 @@ func UnregisterSubscription(subID string) {
 	if len(listener.subscriptions) == 0 {
 		klog.Info("No more active subscriptions, shutting down listener.")
 		listener.cancel()
+	}
+}
+
+// UpdateSubscriptionActivity updates the last activity time for a subscription.
+// This is called when an event is sent to the subscription.
+func UpdateSubscriptionActivity(subID string) {
+	listenerMu.Lock()
+	listener := listenerInstance
+	listenerMu.Unlock()
+
+	if listener == nil {
+		return
+	}
+
+	listener.mu.RLock()
+	sub, exists := listener.subscriptions[subID]
+	listener.mu.RUnlock()
+
+	if exists {
+		sub.mu.Lock()
+		sub.LastActivity = time.Now()
+		sub.mu.Unlock()
 	}
 }
 
@@ -131,6 +169,7 @@ func (l *Listener) Start() error {
 
 	l.started = true
 	go l.listen()
+	go l.cleanupExpiredSubscriptions()
 	klog.Info("Subscription postgres listener started successfully")
 	return nil
 }
@@ -289,6 +328,67 @@ func (l *Listener) handleConnectionError() {
 		klog.Errorf("Failed to reconnect: %v", err)
 	} else {
 		klog.Info("Successfully reconnected to database")
+	}
+}
+
+// cleanupExpiredSubscriptions periodically checks for subscriptions that have exceeded
+// their maximum lifetime or idle timeout and closes them.
+func (l *Listener) cleanupExpiredSubscriptions() {
+	// Check every 30 seconds for expired subscriptions
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-l.ctx.Done():
+			klog.V(2).Info("Cleanup goroutine shutting down.")
+			return
+		case <-ticker.C:
+			l.checkAndCloseExpiredSubscriptions()
+		}
+	}
+}
+
+// checkAndCloseExpiredSubscriptions checks all subscriptions and closes those that have expired.
+func (l *Listener) checkAndCloseExpiredSubscriptions() {
+	now := time.Now()
+	maxLifetime := time.Duration(config.Cfg.Subscription.MaxLifetime) * time.Millisecond
+	idleTimeout := time.Duration(config.Cfg.Subscription.IdleTimeout) * time.Millisecond
+
+	l.mu.RLock()
+	subsToClose := []string{}
+	for subID, sub := range l.subscriptions {
+		sub.mu.RLock()
+		age := now.Sub(sub.CreatedAt)
+		idleTime := now.Sub(sub.LastActivity)
+		sub.mu.RUnlock()
+
+		// Check if subscription has exceeded max lifetime
+		if age > maxLifetime {
+			klog.Infof("Subscription [%s] exceeded max lifetime (%v). Closing.", subID, maxLifetime)
+			subsToClose = append(subsToClose, subID)
+			continue
+		}
+
+		// Check if subscription has been idle for too long
+		if idleTime > idleTimeout {
+			klog.Infof("Subscription [%s] idle for %v (max: %v). Closing.", subID, idleTime, idleTimeout)
+			subsToClose = append(subsToClose, subID)
+		}
+	}
+	l.mu.RUnlock()
+
+	// Close expired subscriptions
+	for _, subID := range subsToClose {
+		// Get the subscription to close its channel
+		l.mu.RLock()
+		sub, exists := l.subscriptions[subID]
+		l.mu.RUnlock()
+
+		if exists {
+			// Close the channel to signal the subscription resolver to clean up
+			close(sub.Channel)
+		}
 	}
 }
 

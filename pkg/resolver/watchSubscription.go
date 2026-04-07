@@ -375,7 +375,13 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 	}
 
 	go func() {
-		database.RegisterSubscription(ctx, subID, receiver)
+		// Register the subscription
+		if err := database.RegisterSubscription(ctx, subID, receiver); err != nil {
+			klog.Errorf("Failed to register subscription [%s]: %v", subID, err)
+			close(result)
+			close(receiver)
+			return
+		}
 
 		defer func() {
 			klog.V(2).Infof("Closed subscription watch(%s).", subID)
@@ -413,6 +419,8 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 				// Send filtered event to client
 				select {
 				case result <- event:
+					// Update activity time to track that we sent an event
+					database.UpdateSubscriptionActivity(subID)
 					klog.V(3).Infof("Subscription watch(%s) sent event (UID: %s, Operation: %s) to client", subID, event.UID, event.Operation)
 					continue
 				case <-ctx.Done():

@@ -44,6 +44,7 @@ type Config struct {
 	RelationLevel       int    // The number of levels/hops for finding relationships for a particular resource
 	SlowLog             int    // Logs queries slower than the specified duration in ms.      Default: 300ms
 	RequestTimeout      int    // Seconds a request will process before timing out.           Default: 2 minutes
+	Subscription        subscriptionConfig // Subscription limits configuration.
 }
 
 // Define feature flags.
@@ -68,6 +69,13 @@ type federationConfig struct {
 	GlobalHubName  string         // Identifies the global hub cluster, similar to local-cluster
 	ConfigCacheTTL int            // Time-to-live (milliseconds) of federation config cache.
 	HttpPool       httpClientPool // Transport settings for federated client pool.
+}
+
+// Subscription limits configuration.
+type subscriptionConfig struct {
+	MaxActive     int // Maximum number of active subscriptions. Default: 1000
+	MaxLifetime   int // Maximum lifetime (milliseconds) for a subscription. Default: 24 hours
+	IdleTimeout   int // Idle timeout (milliseconds) to close inactive subscriptions. Default: 1 hour
 }
 
 func new() *Config {
@@ -118,6 +126,11 @@ func new() *Config {
 		// This will be updated to 1 for default searches and 3 for applications - unless set by the user
 		RelationLevel:  getEnvAsInt("RELATION_LEVEL", 0),
 		RequestTimeout: getEnvAsInt("REQUEST_TIMEOUT", 2*60*1000), // 2 minutes
+		Subscription: subscriptionConfig{
+			MaxActive:   getEnvAsInt("SUBSCRIPTION_MAX_ACTIVE", 1000),                // 1000 subscriptions
+			MaxLifetime: getEnvAsInt("SUBSCRIPTION_MAX_LIFETIME", 24*60*60*1000),     // 24 hours
+			IdleTimeout: getEnvAsInt("SUBSCRIPTION_IDLE_TIMEOUT", 1*60*60*1000),      // 1 hour
+		},
 	}
 	conf.DBPass = url.QueryEscape(conf.DBPass)
 	return conf
