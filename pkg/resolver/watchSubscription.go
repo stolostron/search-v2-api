@@ -374,17 +374,17 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 		klog.Errorf("Failed to get WebSocket connection ID from context. Generating a new one: %s", subID)
 	}
 
-	go func() {
-		// Register the subscription. subCtx is a derived context that is also cancelled
-		// when the cleanup goroutine evicts this subscription (lifetime/idle expiry).
-		subCtx, err := database.RegisterSubscription(ctx, subID, receiver)
-		if err != nil {
-			klog.Errorf("Failed to register subscription [%s]: %v", subID, err)
-			close(result)
-			close(receiver)
-			return
-		}
+	// Register the subscription before starting the goroutine so admission failures
+	// (e.g., max active limit reached) are propagated to the client as GraphQL errors.
+	// subCtx is a derived context that is also cancelled when the cleanup goroutine
+	// evicts this subscription (lifetime/idle expiry).
+	subCtx, err := database.RegisterSubscription(ctx, subID, receiver)
+	if err != nil {
+		klog.Errorf("Failed to register subscription [%s]: %v", subID, err)
+		return nil, err
+	}
 
+	go func() {
 		defer func() {
 			klog.V(2).Infof("Closed subscription watch(%s).", subID)
 			database.UnregisterSubscription(subID)
@@ -405,11 +405,6 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 					return
 				}
 
-				// Record activity on every DB event, regardless of filters. This prevents
-				// subscriptions with narrow filters on quiet resources from being incorrectly
-				// evicted by the idle-timeout cleanup goroutine while the client is still alive.
-				database.UpdateSubscriptionActivity(subID)
-
 				// Filter event based on the input filters
 				if !eventMatchesAllFilters(event, input) {
 					klog.V(4).Infof("Subscription watch(%s) event did not match filters (UID: %s, Operation: %s)",
@@ -427,6 +422,10 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 				// Send filtered event to client
 				select {
 				case result <- event:
+					// Update activity only after successful delivery to tie idle timeout
+					// to actual subscription activity (events matching filters + RBAC),
+					// not global database traffic.
+					database.UpdateSubscriptionActivity(subID)
 					klog.V(3).Infof("Subscription watch(%s) sent event (UID: %s, Operation: %s) to client", subID, event.UID, event.Operation)
 					continue
 				case <-subCtx.Done():

@@ -137,8 +137,8 @@ func UnregisterSubscription(subID string) {
 }
 
 // UpdateSubscriptionActivity updates the last activity time for a subscription.
-// Called when any event is received from the database (before filtering), so that
-// subscriptions with narrow filters on quiet resources are not incorrectly evicted.
+// Called when an event is successfully delivered to the client (after filters and RBAC),
+// so idle timeout tracks actual subscription activity rather than global database traffic.
 func UpdateSubscriptionActivity(subID string) {
 	listenerMu.Lock()
 	listener := listenerInstance

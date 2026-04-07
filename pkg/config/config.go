@@ -5,6 +5,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"strconv"
@@ -161,6 +162,16 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.DBPass == "" {
 		return errors.New("required environment DB_PASS is not set")
+	}
+	// Validate subscription limits
+	if cfg.Subscription.MaxActive <= 0 {
+		return fmt.Errorf("invalid SUBSCRIPTION_MAX_ACTIVE=%d, must be > 0", cfg.Subscription.MaxActive)
+	}
+	if cfg.Subscription.MaxLifetime <= 0 {
+		return fmt.Errorf("invalid SUBSCRIPTION_MAX_LIFETIME=%d, must be > 0", cfg.Subscription.MaxLifetime)
+	}
+	if cfg.Subscription.IdleTimeout <= 0 {
+		return fmt.Errorf("invalid SUBSCRIPTION_IDLE_TIMEOUT=%d, must be > 0", cfg.Subscription.IdleTimeout)
 	}
 	return nil
 }
