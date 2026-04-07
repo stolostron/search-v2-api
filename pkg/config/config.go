@@ -46,6 +46,7 @@ type Config struct {
 	SlowLog             int    // Logs queries slower than the specified duration in ms.      Default: 300ms
 	RequestTimeout      int    // Seconds a request will process before timing out.           Default: 2 minutes
 	Subscription        subscriptionConfig // Subscription limits configuration.
+	initErrors          []error            // Errors encountered during config initialization (env var parse failures)
 }
 
 // Define feature flags.
@@ -127,12 +128,30 @@ func new() *Config {
 		// This will be updated to 1 for default searches and 3 for applications - unless set by the user
 		RelationLevel:  getEnvAsInt("RELATION_LEVEL", 0),
 		RequestTimeout: getEnvAsInt("REQUEST_TIMEOUT", 2*60*1000), // 2 minutes
-		Subscription: subscriptionConfig{
-			MaxActive:   getEnvAsInt("SUBSCRIPTION_MAX_ACTIVE", 1000),                // 1000 subscriptions
-			MaxLifetime: getEnvAsInt("SUBSCRIPTION_MAX_LIFETIME", 24*60*60*1000),     // 24 hours
-			IdleTimeout: getEnvAsInt("SUBSCRIPTION_IDLE_TIMEOUT", 1*60*60*1000),      // 1 hour
-		},
 	}
+
+	// Parse subscription config with strict validation to catch malformed env vars
+	var parseErrors []error
+	maxActive, err := getEnvAsIntStrict("SUBSCRIPTION_MAX_ACTIVE", 1000)
+	if err != nil {
+		parseErrors = append(parseErrors, err)
+	}
+	maxLifetime, err := getEnvAsIntStrict("SUBSCRIPTION_MAX_LIFETIME", 24*60*60*1000)
+	if err != nil {
+		parseErrors = append(parseErrors, err)
+	}
+	idleTimeout, err := getEnvAsIntStrict("SUBSCRIPTION_IDLE_TIMEOUT", 1*60*60*1000)
+	if err != nil {
+		parseErrors = append(parseErrors, err)
+	}
+
+	conf.Subscription = subscriptionConfig{
+		MaxActive:   maxActive,   // 1000 subscriptions
+		MaxLifetime: maxLifetime, // 24 hours
+		IdleTimeout: idleTimeout, // 1 hour
+	}
+	conf.initErrors = parseErrors
+
 	conf.DBPass = url.QueryEscape(conf.DBPass)
 	return conf
 }
@@ -154,6 +173,11 @@ func (cfg *Config) PrintConfig() {
 
 // Validate required configuration.
 func (cfg *Config) Validate() error {
+	// Check for env var parse errors first (e.g., SUBSCRIPTION_MAX_ACTIVE=1O00)
+	if len(cfg.initErrors) > 0 {
+		return fmt.Errorf("configuration initialization failed: %v", cfg.initErrors)
+	}
+
 	if cfg.DBName == "" {
 		return errors.New("required environment DB_NAME is not set")
 	}
@@ -191,6 +215,21 @@ func getEnvAsInt(name string, defaultVal int) int {
 		return value
 	}
 	return defaultVal
+}
+
+// getEnvAsIntStrict reads an environment variable into integer.
+// Returns the parsed value and an error if the env var is set but invalid.
+// Returns defaultVal and nil error if the env var is not set.
+func getEnvAsIntStrict(name string, defaultVal int) (int, error) {
+	valueStr, exists := os.LookupEnv(name)
+	if !exists {
+		return defaultVal, nil
+	}
+	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid integer value for %s=%q: %w", name, valueStr, err)
+	}
+	return value, nil
 }
 
 // Helper function to read an environment variable into integer32 or return a default value

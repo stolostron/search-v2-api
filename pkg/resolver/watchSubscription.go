@@ -413,7 +413,8 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 				}
 
 				// Filter events based on user RBAC
-				if !eventMatchesRbac(ctx, event) {
+				// Use subCtx so cancellation aborts in-flight permission checks
+				if !eventMatchesRbac(subCtx, event) {
 					klog.V(4).Infof("Subscription watch(%s) event did not match RBAC filters (UID: %s, Operation: %s)",
 						subID, event.UID, event.Operation)
 					continue
