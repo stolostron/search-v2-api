@@ -39,7 +39,7 @@ type Subscription struct {
 	Context      context.Context    // Derived context — cancelled to stop the subscription gracefully
 	Cancel       context.CancelFunc // Cancels Context; must be called exactly once on teardown
 	CreatedAt    time.Time          // When the subscription was created
-	LastActivity time.Time          // Last time a DB event was received (before filters)
+	LastActivity time.Time          // Last time an event was successfully delivered (after filters and RBAC)
 	mu           sync.RWMutex       // Protects LastActivity
 	// Lock ordering (outer → inner): listenerMu → listener.mu → sub.mu
 }
