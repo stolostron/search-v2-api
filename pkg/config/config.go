@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"time"
 
 	klog "k8s.io/klog/v2"
 )
@@ -75,9 +76,10 @@ type federationConfig struct {
 
 // Subscription limits configuration.
 type subscriptionConfig struct {
-	MaxActive     int // Maximum number of active subscriptions. Default: 1000
-	MaxLifetime   int // Maximum lifetime (milliseconds) for a subscription. Default: 12 hours
-	IdleTimeout   int // Idle timeout (milliseconds) to close inactive subscriptions. Default: 1 hour
+	MaxActive       int // Maximum number of active subscriptions. Default: 1000
+	MaxLifetime     int // Maximum lifetime (milliseconds) for a subscription. Default: 12 hours
+	IdleTimeout     int // Idle timeout (milliseconds) to close inactive subscriptions. Default: 1 hour
+	CleanupInterval int // Interval (seconds) between cleanup checks for expired subscriptions. Default: 30 seconds
 }
 
 func new() *Config {
@@ -144,11 +146,16 @@ func new() *Config {
 	if err != nil {
 		parseErrors = append(parseErrors, err)
 	}
+	cleanupInterval, err := getEnvAsIntStrict("SUBSCRIPTION_CLEANUP_INTERVAL", 30)
+	if err != nil {
+		parseErrors = append(parseErrors, err)
+	}
 
 	conf.Subscription = subscriptionConfig{
-		MaxActive:   maxActive,   // 1000 subscriptions
-		MaxLifetime: maxLifetime, // 12 hours
-		IdleTimeout: idleTimeout, // 1 hour
+		MaxActive:       maxActive,       // 1000 subscriptions
+		MaxLifetime:     maxLifetime,     // 12 hours
+		IdleTimeout:     idleTimeout,     // 1 hour
+		CleanupInterval: cleanupInterval, // 30 seconds
 	}
 	conf.initErrors = parseErrors
 
@@ -194,8 +201,19 @@ func (cfg *Config) Validate() error {
 	if cfg.Subscription.MaxLifetime <= 0 {
 		return fmt.Errorf("invalid SUBSCRIPTION_MAX_LIFETIME=%d, must be > 0", cfg.Subscription.MaxLifetime)
 	}
+	// Prevent overflow when converting milliseconds to time.Duration
+	const maxDurationMillis = int64(1<<63-1) / int64(time.Millisecond)
+	if int64(cfg.Subscription.MaxLifetime) > maxDurationMillis {
+		return fmt.Errorf("invalid SUBSCRIPTION_MAX_LIFETIME=%d, must be <= %d", cfg.Subscription.MaxLifetime, maxDurationMillis)
+	}
 	if cfg.Subscription.IdleTimeout <= 0 {
 		return fmt.Errorf("invalid SUBSCRIPTION_IDLE_TIMEOUT=%d, must be > 0", cfg.Subscription.IdleTimeout)
+	}
+	if int64(cfg.Subscription.IdleTimeout) > maxDurationMillis {
+		return fmt.Errorf("invalid SUBSCRIPTION_IDLE_TIMEOUT=%d, must be <= %d", cfg.Subscription.IdleTimeout, maxDurationMillis)
+	}
+	if cfg.Subscription.CleanupInterval <= 0 {
+		return fmt.Errorf("invalid SUBSCRIPTION_CLEANUP_INTERVAL=%d, must be > 0", cfg.Subscription.CleanupInterval)
 	}
 	return nil
 }

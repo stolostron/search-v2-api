@@ -351,14 +351,15 @@ func (l *Listener) handleConnectionError() {
 // cleanupExpiredSubscriptions periodically checks for subscriptions that have exceeded
 // their maximum lifetime or idle timeout and closes them.
 func (l *Listener) cleanupExpiredSubscriptions() {
-	// Check every 30 seconds for expired subscriptions
-	ticker := time.NewTicker(30 * time.Second)
+	// Check for expired subscriptions at the configured interval
+	cleanupInterval := time.Duration(config.Cfg.Subscription.CleanupInterval) * time.Second
+	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-l.ctx.Done():
-			klog.V(2).Info("Cleanup goroutine shutting down.")
+			klog.V(2).Info("Subscriptions cleanup goroutine shutting down.")
 			return
 		case <-ticker.C:
 			l.checkAndCloseExpiredSubscriptions()
