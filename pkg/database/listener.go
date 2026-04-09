@@ -270,6 +270,9 @@ func (l *Listener) listen() {
 
 			if notification != nil {
 				l.mu.RLock()
+				// Ensure RUnlock is called on all paths (error and success)
+				defer l.mu.RUnlock()
+
 				klog.V(3).Infof("Received postgres event, forwarding to %d subscriptions.",
 					len(l.subscriptions))
 
@@ -290,8 +293,8 @@ func (l *Listener) listen() {
 						klog.Errorf("Failed to execute query: %v", err)
 						continue
 					}
-					defer rows.Close()
 
+					// Explicitly close rows after processing to avoid resource leak
 					for rows.Next() {
 						var data map[string]any
 						err := rows.Scan(&data)
@@ -300,6 +303,12 @@ func (l *Listener) listen() {
 							continue
 						}
 						notificationPayload.NewData = data
+					}
+					rows.Close()
+
+					// Check for errors from iteration
+					if err := rows.Err(); err != nil {
+						klog.Errorf("Error iterating rows: %v", err)
 					}
 				}
 				if notificationPayload.OldData == nil &&
@@ -316,7 +325,6 @@ func (l *Listener) listen() {
 						sub.Channel <- &notificationPayload
 					}
 				}
-				l.mu.RUnlock()
 			}
 		}
 	}
