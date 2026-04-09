@@ -76,7 +76,7 @@ type federationConfig struct {
 // Subscription limits configuration.
 type subscriptionConfig struct {
 	MaxActive     int // Maximum number of active subscriptions. Default: 1000
-	MaxLifetime   int // Maximum lifetime (milliseconds) for a subscription. Default: 24 hours
+	MaxLifetime   int // Maximum lifetime (milliseconds) for a subscription. Default: 12 hours
 	IdleTimeout   int // Idle timeout (milliseconds) to close inactive subscriptions. Default: 1 hour
 }
 
@@ -136,7 +136,7 @@ func new() *Config {
 	if err != nil {
 		parseErrors = append(parseErrors, err)
 	}
-	maxLifetime, err := getEnvAsIntStrict("SUBSCRIPTION_MAX_LIFETIME", 24*60*60*1000)
+	maxLifetime, err := getEnvAsIntStrict("SUBSCRIPTION_MAX_LIFETIME", 12*60*60*1000)
 	if err != nil {
 		parseErrors = append(parseErrors, err)
 	}
@@ -147,7 +147,7 @@ func new() *Config {
 
 	conf.Subscription = subscriptionConfig{
 		MaxActive:   maxActive,   // 1000 subscriptions
-		MaxLifetime: maxLifetime, // 24 hours
+		MaxLifetime: maxLifetime, // 12 hours
 		IdleTimeout: idleTimeout, // 1 hour
 	}
 	conf.initErrors = parseErrors
