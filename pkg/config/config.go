@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"strconv"
-	"time"
 
 	klog "k8s.io/klog/v2"
 )
@@ -40,12 +39,12 @@ type Config struct {
 	Features            featureFlags     // Enable or disable features.
 	Federation          federationConfig // Federated search configuration.
 	HttpPort            int
-	PlaygroundMode      bool   // Enable the GraphQL Playground client.
-	PodNamespace        string // Kubernetes namespace where the pod is running.
-	QueryLimit          uint   // The default LIMIT to use on queries. Client can override. Default: 1000
-	RelationLevel       int    // The number of levels/hops for finding relationships for a particular resource
-	SlowLog             int    // Logs queries slower than the specified duration in ms.      Default: 300ms
-	RequestTimeout      int    // Seconds a request will process before timing out.           Default: 2 minutes
+	PlaygroundMode      bool               // Enable the GraphQL Playground client.
+	PodNamespace        string             // Kubernetes namespace where the pod is running.
+	QueryLimit          uint               // The default LIMIT to use on queries. Client can override. Default: 1000
+	RelationLevel       int                // The number of levels/hops for finding relationships for a particular resource
+	SlowLog             int                // Logs queries slower than the specified duration in ms.      Default: 300ms
+	RequestTimeout      int                // Seconds a request will process before timing out.           Default: 2 minutes
 	Subscription        subscriptionConfig // Subscription limits configuration.
 }
 
@@ -169,40 +168,29 @@ func (cfg *Config) Validate() error {
 	}
 
 	// Validate subscription limits - check for malformed env vars and invalid values
-	subscriptionEnvVars := map[string]string{
-		"SUBSCRIPTION_MAX_ACTIVE":       "MaxActive",
-		"SUBSCRIPTION_MAX_LIFETIME":     "MaxLifetime",
-		"SUBSCRIPTION_IDLE_TIMEOUT":     "IdleTimeout",
-		"SUBSCRIPTION_CLEANUP_INTERVAL": "CleanupInterval",
+	type subscriptionCheck struct {
+		envVar string
+		value  int
 	}
-	for envVar := range subscriptionEnvVars {
-		if raw, ok := os.LookupEnv(envVar); ok {
-			if _, err := strconv.Atoi(raw); err != nil {
-				return fmt.Errorf("invalid %s=%q, must be an integer", envVar, raw)
-			}
-		}
+	checks := []subscriptionCheck{
+		{"SUBSCRIPTION_MAX_ACTIVE", cfg.Subscription.MaxActive},
+		{"SUBSCRIPTION_MAX_LIFETIME", cfg.Subscription.MaxLifetime},
+		{"SUBSCRIPTION_IDLE_TIMEOUT", cfg.Subscription.IdleTimeout},
+		{"SUBSCRIPTION_CLEANUP_INTERVAL", cfg.Subscription.CleanupInterval},
 	}
 
-	// Validate subscription values
-	if cfg.Subscription.MaxActive <= 0 {
-		return fmt.Errorf("invalid SUBSCRIPTION_MAX_ACTIVE=%d, must be > 0", cfg.Subscription.MaxActive)
-	}
-	if cfg.Subscription.MaxLifetime <= 0 {
-		return fmt.Errorf("invalid SUBSCRIPTION_MAX_LIFETIME=%d, must be > 0", cfg.Subscription.MaxLifetime)
-	}
-	// Prevent overflow when converting milliseconds to time.Duration
-	const maxDurationMillis = int64(1<<63-1) / int64(time.Millisecond)
-	if int64(cfg.Subscription.MaxLifetime) > maxDurationMillis {
-		return fmt.Errorf("invalid SUBSCRIPTION_MAX_LIFETIME=%d, must be <= %d", cfg.Subscription.MaxLifetime, maxDurationMillis)
-	}
-	if cfg.Subscription.IdleTimeout <= 0 {
-		return fmt.Errorf("invalid SUBSCRIPTION_IDLE_TIMEOUT=%d, must be > 0", cfg.Subscription.IdleTimeout)
-	}
-	if int64(cfg.Subscription.IdleTimeout) > maxDurationMillis {
-		return fmt.Errorf("invalid SUBSCRIPTION_IDLE_TIMEOUT=%d, must be <= %d", cfg.Subscription.IdleTimeout, maxDurationMillis)
-	}
-	if cfg.Subscription.CleanupInterval <= 0 {
-		return fmt.Errorf("invalid SUBSCRIPTION_CLEANUP_INTERVAL=%d, must be > 0", cfg.Subscription.CleanupInterval)
+	for _, check := range checks {
+		// Check if env var is set and parseable as integer
+		if raw, ok := os.LookupEnv(check.envVar); ok {
+			if _, err := strconv.Atoi(raw); err != nil {
+				return fmt.Errorf("invalid %s=%q, must be an integer", check.envVar, raw)
+			}
+		}
+
+		// Check value is > 0
+		if check.value <= 0 {
+			return fmt.Errorf("invalid %s=%d, must be > 0", check.envVar, check.value)
+		}
 	}
 	return nil
 }
