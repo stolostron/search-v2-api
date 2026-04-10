@@ -74,7 +74,7 @@ type federationConfig struct {
 
 // Subscription limits configuration.
 type subscriptionConfig struct {
-	MaxActive       int // Maximum number of active subscriptions. Default: 1000
+	MaxActive       int // Maximum number of active subscriptions. Default: 200
 	MaxLifetime     int // Maximum lifetime (milliseconds) for a subscription. Default: 12 hours
 	IdleTimeout     int // Idle timeout (milliseconds) to close inactive subscriptions. Default: 1 hour
 	CleanupInterval int // Interval (seconds) between cleanup checks for expired subscriptions. Default: 30 seconds
@@ -129,7 +129,7 @@ func new() *Config {
 		RelationLevel:  getEnvAsInt("RELATION_LEVEL", 0),
 		RequestTimeout: getEnvAsInt("REQUEST_TIMEOUT", 2*60*1000), // 2 minutes
 		Subscription: subscriptionConfig{
-			MaxActive:       getEnvAsInt("SUBSCRIPTION_MAX_ACTIVE", 1000),            // 1000 subscriptions
+			MaxActive:       getEnvAsInt("SUBSCRIPTION_MAX_ACTIVE", 200),             // 200 subscriptions
 			MaxLifetime:     getEnvAsInt("SUBSCRIPTION_MAX_LIFETIME", 12*60*60*1000), // 12 hours
 			IdleTimeout:     getEnvAsInt("SUBSCRIPTION_IDLE_TIMEOUT", 1*60*60*1000),  // 1 hour
 			CleanupInterval: getEnvAsInt("SUBSCRIPTION_CLEANUP_INTERVAL", 30),        // 30 seconds
