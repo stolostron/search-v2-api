@@ -111,7 +111,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 			clustersCache:       cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 			csrCache:            cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 			nsrCache:            cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
-			userPermissionCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+			userPermissionCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserPermissionCacheTTL) * time.Millisecond},
 		}
 		if cache.users == nil {
 			cache.users = map[string]*UserDataCache{}
@@ -233,12 +233,10 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 	return userAccess, nil
 }
 
-// UserCache is valid if the clustersCache, csrCache, fgRbacNsCache, and nsrCache are valid.
+// UserCache is valid if the clustersCache, csrCache, and nsrCache are valid.
+// Note: userPermissionCache is validated separately where it's used (CheckUserHasAccess)
+// to allow independent TTL control.
 func (user *UserDataCache) isValid() bool {
-	if config.Cfg.Features.FineGrainedRbac {
-		return user.csrCache.isValid() && user.nsrCache.isValid() &&
-			user.clustersCache.isValid() && user.userPermissionCache.isValid()
-	}
 	return user.csrCache.isValid() && user.nsrCache.isValid() &&
 		user.clustersCache.isValid()
 }
