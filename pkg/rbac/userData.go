@@ -222,9 +222,10 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 		return UserData{}, errors.New("unable to resolve query because of error while resolving user's access")
 	}
 
-	// Ensure UserPermissions cache is fresh before using it for RBAC filtering.
+	// Ensure UserPermissions cache is fresh before using it for fine-grained RBAC filtering.
 	// This is critical for search/searchComplete/searchSchema which use buildRbacWhereClause.
-	if len(userDataCache.UserPermissions.Items) == 0 || !userDataCache.userPermissionCache.isValid() {
+	if config.Cfg.Features.FineGrainedRbac &&
+		(len(userDataCache.UserPermissions.Items) == 0 || !userDataCache.userPermissionCache.isValid()) {
 		if err := userDataCache.getUserPermissions(ctx); err != nil {
 			klog.Error("Error refreshing UserPermissions: ", err)
 			return UserData{}, errors.New("unable to resolve query because of error while refreshing user permissions")
