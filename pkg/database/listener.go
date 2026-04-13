@@ -360,7 +360,7 @@ func (l *Listener) handleConnectionError() {
 // their maximum lifetime or idle timeout and closes them.
 func (l *Listener) cleanupExpiredSubscriptions() {
 	// Check for expired subscriptions at the configured interval
-	cleanupInterval := time.Duration(config.Cfg.Subscription.CleanupInterval) * time.Second
+	cleanupInterval := time.Duration(config.Cfg.Subscription.CleanupInterval) * time.Millisecond
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
@@ -382,7 +382,7 @@ func (l *Listener) checkAndCloseExpiredSubscriptions() {
 	idleTimeout := time.Duration(config.Cfg.Subscription.IdleTimeout) * time.Millisecond
 
 	l.mu.RLock()
-	subsToClose := []string{}
+	defer l.mu.RUnlock()
 	for subID, sub := range l.subscriptions {
 		sub.mu.RLock()
 		age := now.Sub(sub.CreatedAt)
@@ -392,30 +392,22 @@ func (l *Listener) checkAndCloseExpiredSubscriptions() {
 		// Check if subscription has exceeded max lifetime
 		if age > maxLifetime {
 			klog.Infof("Subscription [%s] exceeded max lifetime (%v). Closing.", subID, maxLifetime)
-			subsToClose = append(subsToClose, subID)
+			sub.Cancel()
 			continue
 		}
 
 		// Check if subscription has been idle for too long
 		if idleTime > idleTimeout {
 			klog.Infof("Subscription [%s] idle for %v (max: %v). Closing.", subID, idleTime, idleTimeout)
-			subsToClose = append(subsToClose, subID)
+			sub.Cancel()
 		}
 	}
-	l.mu.RUnlock()
 
 	// Cancel expired subscriptions via their derived context.
 	// This signals the watchSubscription goroutine to exit via <-ctx.Done(), which then
 	// runs its defer (UnregisterSubscription + close(channel)) exactly once — avoiding the
 	// double-close panic that would occur if we closed sub.Channel directly here.
 	// context.CancelFunc is idempotent, so a concurrent UnregisterSubscription call is safe.
-	l.mu.RLock()
-	for _, subID := range subsToClose {
-		if sub, exists := l.subscriptions[subID]; exists {
-			sub.Cancel()
-		}
-	}
-	l.mu.RUnlock()
 }
 
 // StopPostgresListener stops the Postgres listenerInstance.

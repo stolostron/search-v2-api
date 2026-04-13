@@ -1105,10 +1105,9 @@ func TestUpdateSubscriptionActivity_NonExistentSubscription(t *testing.T) {
 	// No assertion needed, just verify no panic
 }
 
-// [AI] Test that checkAndCloseExpiredSubscriptions cancels the subscription context
-// rather than closing the channel directly, preventing the double-close panic that
-// occurred when the watchSubscription defer also called close(receiver).
-func TestCheckAndCloseExpiredSubscriptions_CancelsContext(t *testing.T) {
+// [AI] Test that checkAndCloseExpiredSubscriptions cancels subscriptions that exceed max lifetime.
+// Sets IdleTimeout high so only MaxLifetime triggers cancellation.
+func TestCheckAndCloseExpiredSubscriptions_MaxLifetime(t *testing.T) {
 	listenerOnce = sync.Once{}
 	listenerInstance = nil
 
@@ -1119,43 +1118,88 @@ func TestCheckAndCloseExpiredSubscriptions_CancelsContext(t *testing.T) {
 		config.Cfg.Subscription.IdleTimeout = originalIdleTimeout
 	}()
 
-	// Use very short limits so the subscription is immediately considered expired.
-	config.Cfg.Subscription.MaxLifetime = 1 // 1 ms
-	config.Cfg.Subscription.IdleTimeout = 1 // 1 ms
+	config.Cfg.Subscription.MaxLifetime = 10      // 10 ms (will trigger)
+	config.Cfg.Subscription.IdleTimeout = 10 * 1000 // 10 seconds (won't trigger)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	notifyChannel := make(chan *model.Event, 100)
 	defer close(notifyChannel)
-	uid := "test-expired-sub"
+	uid := "test-max-lifetime"
 
 	subCtx, err := RegisterSubscription(ctx, uid, notifyChannel)
 	assert.NoError(t, err)
 	assert.NotNil(t, subCtx, "RegisterSubscription should return a derived context")
 
-	// Verify context is not yet cancelled.
-	select {
-	case <-subCtx.Done():
-		t.Fatal("Sub context should not be cancelled before cleanup")
-	default:
+	// Keep updating activity to ensure IdleTimeout doesn't trigger
+	for i := 0; i < 3; i++ {
+		time.Sleep(5 * time.Millisecond)
+		UpdateSubscriptionActivity(uid)
 	}
 
-	// Sleep past the lifetime/idle limits, then trigger cleanup.
-	time.Sleep(5 * time.Millisecond)
+	// Trigger cleanup - should cancel due to max lifetime
 	listenerInstance.checkAndCloseExpiredSubscriptions()
 
-	// The subscription's derived context must be cancelled.
+	// The subscription's derived context must be cancelled (due to max lifetime, not idle)
 	select {
 	case <-subCtx.Done():
-		// correct — cleanup used Cancel(), not close(channel)
+		// correct — cleanup cancelled due to max lifetime
 	case <-time.After(500 * time.Millisecond):
-		t.Fatal("Sub context should be cancelled after cleanup")
+		t.Fatal("Sub context should be cancelled after cleanup due to max lifetime")
 	}
 
 	// The channel must NOT have been closed by the cleanup goroutine.
-	// A send to a non-closed buffered channel must succeed; a send to a
-	// closed channel would panic, failing the test.
+	select {
+	case notifyChannel <- &model.Event{}:
+		// Channel is still open — only the watchSubscription defer owns the close.
+	default:
+		// Channel is full (buffered), which is also fine — it was not closed.
+	}
+}
+
+// [AI] Test that checkAndCloseExpiredSubscriptions cancels subscriptions that are idle.
+// Sets MaxLifetime high so only IdleTimeout triggers cancellation.
+func TestCheckAndCloseExpiredSubscriptions_IdleTimeout(t *testing.T) {
+	listenerOnce = sync.Once{}
+	listenerInstance = nil
+
+	originalMaxLifetime := config.Cfg.Subscription.MaxLifetime
+	originalIdleTimeout := config.Cfg.Subscription.IdleTimeout
+	defer func() {
+		config.Cfg.Subscription.MaxLifetime = originalMaxLifetime
+		config.Cfg.Subscription.IdleTimeout = originalIdleTimeout
+	}()
+
+	config.Cfg.Subscription.MaxLifetime = 10 * 1000 // 10 seconds (won't trigger)
+	config.Cfg.Subscription.IdleTimeout = 10        // 10 ms (will trigger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	notifyChannel := make(chan *model.Event, 100)
+	defer close(notifyChannel)
+	uid := "test-idle-timeout"
+
+	subCtx, err := RegisterSubscription(ctx, uid, notifyChannel)
+	assert.NoError(t, err)
+	assert.NotNil(t, subCtx, "RegisterSubscription should return a derived context")
+
+	// DON'T call UpdateSubscriptionActivity() - let it become idle
+	time.Sleep(15 * time.Millisecond)
+
+	// Trigger cleanup - should cancel due to idle timeout
+	listenerInstance.checkAndCloseExpiredSubscriptions()
+
+	// The subscription's derived context must be cancelled (due to idle, not max lifetime)
+	select {
+	case <-subCtx.Done():
+		// correct — cleanup cancelled due to idle timeout
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Sub context should be cancelled after cleanup due to idle timeout")
+	}
+
+	// The channel must NOT have been closed by the cleanup goroutine.
 	select {
 	case notifyChannel <- &model.Event{}:
 		// Channel is still open — only the watchSubscription defer owns the close.

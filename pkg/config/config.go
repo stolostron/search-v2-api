@@ -77,7 +77,7 @@ type subscriptionConfig struct {
 	MaxActive       int // Maximum number of active subscriptions. Default: 200
 	MaxLifetime     int // Maximum lifetime (milliseconds) for a subscription. Default: 12 hours
 	IdleTimeout     int // Idle timeout (milliseconds) to close inactive subscriptions. Default: 1 hour
-	CleanupInterval int // Interval (seconds) between cleanup checks for expired subscriptions. Default: 30 seconds
+	CleanupInterval int // Interval (milliseconds) between cleanup checks for expired subscriptions. Default: 30 seconds
 }
 
 func new() *Config {
@@ -132,7 +132,7 @@ func new() *Config {
 			MaxActive:       getEnvAsInt("SUBSCRIPTION_MAX_ACTIVE", 200),             // 200 subscriptions
 			MaxLifetime:     getEnvAsInt("SUBSCRIPTION_MAX_LIFETIME", 12*60*60*1000), // 12 hours
 			IdleTimeout:     getEnvAsInt("SUBSCRIPTION_IDLE_TIMEOUT", 1*60*60*1000),  // 1 hour
-			CleanupInterval: getEnvAsInt("SUBSCRIPTION_CLEANUP_INTERVAL", 30),        // 30 seconds
+			CleanupInterval: getEnvAsInt("SUBSCRIPTION_CLEANUP_INTERVAL", 30*1000),   // 30 seconds
 		},
 	}
 
