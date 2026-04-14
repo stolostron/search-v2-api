@@ -34,9 +34,14 @@ var (
 )
 
 type Subscription struct {
-	ID      string            // Unique UUID
-	Channel chan *model.Event // Buffered (100)
-	Context context.Context   // For cleanup
+	ID           string             // Unique UUID
+	Channel      chan *model.Event  // Buffered (100)
+	Context      context.Context    // Derived context — cancelled to stop the subscription gracefully
+	Cancel       context.CancelFunc // Cancels Context; must be called exactly once on teardown
+	CreatedAt    time.Time          // When the subscription was created
+	LastActivity time.Time          // Last time an event was successfully delivered (after filters and RBAC)
+	mu           sync.RWMutex       // Protects LastActivity
+	// Lock ordering (outer → inner): listenerMu → listener.mu → sub.mu
 }
 
 // Listener manages the single goroutine that listens for Postgres events
@@ -51,7 +56,10 @@ type Listener struct {
 
 // RegisterSubscription registers a channel to forward events received from the database.
 // Starts the listener if not already started.
-func RegisterSubscription(ctx context.Context, subID string, notifyChannel chan *model.Event) {
+// Returns a derived context that the caller must select on (it is cancelled when the
+// subscription is evicted by the cleanup goroutine or unregistered), and an error if
+// the maximum number of active subscriptions has been reached.
+func RegisterSubscription(ctx context.Context, subID string, notifyChannel chan *model.Event) (context.Context, error) {
 
 	// Initialize the listener instance if not already initialized.
 	listenerMu.Lock()
@@ -71,16 +79,33 @@ func RegisterSubscription(ctx context.Context, subID string, notifyChannel chan 
 		}
 	})
 
-	sub := &Subscription{
-		ID:      subID,
-		Channel: notifyChannel,
-		Context: ctx,
-	}
-
 	listenerInstance.mu.Lock()
 	defer listenerInstance.mu.Unlock()
+
+	// Check if we've reached the maximum number of active subscriptions
+	maxActive := config.Cfg.Subscription.MaxActive
+	if len(listenerInstance.subscriptions) >= maxActive {
+		klog.Warningf("Maximum active subscriptions reached (%d). Rejecting new subscription [%s]", maxActive, subID)
+		return nil, fmt.Errorf("maximum active subscriptions reached (%d)", maxActive)
+	}
+
+	// Wrap the caller's context so the cleanup goroutine can cancel this subscription
+	// independently, without closing the channel directly (which would race with the
+	// watchSubscription defer that also calls close(receiver)).
+	subCtx, subCancel := context.WithCancel(ctx)
+	now := time.Now()
+	sub := &Subscription{
+		ID:           subID,
+		Channel:      notifyChannel,
+		Context:      subCtx,
+		Cancel:       subCancel,
+		CreatedAt:    now,
+		LastActivity: now,
+	}
+
 	listenerInstance.subscriptions[subID] = sub
 	klog.Infof("Registered subscription [%s]. (%d active subscriptions)", subID, len(listenerInstance.subscriptions))
+	return subCtx, nil
 }
 
 func UnregisterSubscription(subID string) {
@@ -95,12 +120,42 @@ func UnregisterSubscription(subID string) {
 	listener.mu.Lock()
 	defer listener.mu.Unlock()
 
+	// Cancel the subscription's derived context to free its resources.
+	// This is safe to call even if the cleanup goroutine already called Cancel
+	// (context.CancelFunc is idempotent).
+	if sub, ok := listener.subscriptions[subID]; ok {
+		sub.Cancel()
+	}
+
 	delete(listener.subscriptions, subID)
 	klog.Infof("Unregistered subscription %s. (%d active subscriptions)", subID, len(listener.subscriptions))
 
 	if len(listener.subscriptions) == 0 {
 		klog.Info("No more active subscriptions, shutting down listener.")
 		listener.cancel()
+	}
+}
+
+// UpdateSubscriptionActivity updates the last activity time for a subscription.
+// Called when an event is successfully delivered to the client (after filters and RBAC),
+// so idle timeout tracks actual subscription activity rather than global database traffic.
+func UpdateSubscriptionActivity(subID string) {
+	listenerMu.Lock()
+	listener := listenerInstance
+	listenerMu.Unlock()
+
+	if listener == nil {
+		return
+	}
+
+	listener.mu.RLock()
+	sub, exists := listener.subscriptions[subID]
+	listener.mu.RUnlock()
+
+	if exists {
+		sub.mu.Lock()
+		sub.LastActivity = time.Now()
+		sub.mu.Unlock()
 	}
 }
 
@@ -131,6 +186,7 @@ func (l *Listener) Start() error {
 
 	l.started = true
 	go l.listen()
+	go l.cleanupExpiredSubscriptions()
 	klog.Info("Subscription postgres listener started successfully")
 	return nil
 }
@@ -214,6 +270,9 @@ func (l *Listener) listen() {
 
 			if notification != nil {
 				l.mu.RLock()
+				// Ensure RUnlock is called on all paths (error and success)
+				defer l.mu.RUnlock()
+
 				klog.V(3).Infof("Received postgres event, forwarding to %d subscriptions.",
 					len(l.subscriptions))
 
@@ -234,8 +293,8 @@ func (l *Listener) listen() {
 						klog.Errorf("Failed to execute query: %v", err)
 						continue
 					}
-					defer rows.Close()
 
+					// Explicitly close rows after processing to avoid resource leak
 					for rows.Next() {
 						var data map[string]any
 						err := rows.Scan(&data)
@@ -244,6 +303,12 @@ func (l *Listener) listen() {
 							continue
 						}
 						notificationPayload.NewData = data
+					}
+					rows.Close()
+
+					// Check for errors from iteration
+					if err := rows.Err(); err != nil {
+						klog.Errorf("Error iterating rows: %v", err)
 					}
 				}
 				if notificationPayload.OldData == nil &&
@@ -260,7 +325,6 @@ func (l *Listener) listen() {
 						sub.Channel <- &notificationPayload
 					}
 				}
-				l.mu.RUnlock()
 			}
 		}
 	}
@@ -290,6 +354,60 @@ func (l *Listener) handleConnectionError() {
 	} else {
 		klog.Info("Successfully reconnected to database")
 	}
+}
+
+// cleanupExpiredSubscriptions periodically checks for subscriptions that have exceeded
+// their maximum lifetime or idle timeout and closes them.
+func (l *Listener) cleanupExpiredSubscriptions() {
+	// Check for expired subscriptions at the configured interval
+	cleanupInterval := time.Duration(config.Cfg.Subscription.CleanupInterval) * time.Millisecond
+	ticker := time.NewTicker(cleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-l.ctx.Done():
+			klog.V(2).Info("Subscriptions cleanup goroutine shutting down.")
+			return
+		case <-ticker.C:
+			l.checkAndCloseExpiredSubscriptions()
+		}
+	}
+}
+
+// checkAndCloseExpiredSubscriptions checks all subscriptions and closes those that have expired.
+func (l *Listener) checkAndCloseExpiredSubscriptions() {
+	now := time.Now()
+	maxLifetime := time.Duration(config.Cfg.Subscription.MaxLifetime) * time.Millisecond
+	idleTimeout := time.Duration(config.Cfg.Subscription.IdleTimeout) * time.Millisecond
+
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	for subID, sub := range l.subscriptions {
+		sub.mu.RLock()
+		age := now.Sub(sub.CreatedAt)
+		idleTime := now.Sub(sub.LastActivity)
+		sub.mu.RUnlock()
+
+		// Check if subscription has exceeded max lifetime
+		if age > maxLifetime {
+			klog.Infof("Subscription [%s] exceeded max lifetime (%v). Closing.", subID, maxLifetime)
+			sub.Cancel()
+			continue
+		}
+
+		// Check if subscription has been idle for too long
+		if idleTime > idleTimeout {
+			klog.Infof("Subscription [%s] idle for %v (max: %v). Closing.", subID, idleTime, idleTimeout)
+			sub.Cancel()
+		}
+	}
+
+	// Cancel expired subscriptions via their derived context.
+	// This signals the watchSubscription goroutine to exit via <-ctx.Done(), which then
+	// runs its defer (UnregisterSubscription + close(channel)) exactly once — avoiding the
+	// double-close panic that would occur if we closed sub.Channel directly here.
+	// context.CancelFunc is idempotent, so a concurrent UnregisterSubscription call is safe.
 }
 
 // StopPostgresListener stops the Postgres listenerInstance.

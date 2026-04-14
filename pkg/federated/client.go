@@ -62,5 +62,5 @@ type RealHTTPClient struct {
 
 // Do implements the HTTPClient interface for RealHTTPClient.
 func (c RealHTTPClient) Do(req *http.Request) (*http.Response, error) {
-	return c.Client.Do(req)
+	return c.Client.Do(req) // #nosec G704 -- Controlled HTTP client for internal federated search
 }
