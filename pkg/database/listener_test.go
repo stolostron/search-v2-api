@@ -4,6 +4,7 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/jackc/pgproto3/v2"
 	"github.com/jackc/pgx/v4"
 	"github.com/stolostron/search-v2-api/graph/model"
+	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -63,7 +65,8 @@ func TestRegisterSubscription(t *testing.T) {
 	uid := "test-uid-123"
 
 	// Register subscription - this should initialize the listener
-	RegisterSubscription(ctx, uid, notifyChannel)
+	_, err := RegisterSubscription(ctx, uid, notifyChannel)
+	assert.NoError(t, err, "RegisterSubscription should not return error")
 
 	// Verify listener was initialized
 	assert.NotNil(t, listenerInstance, "Listener instance should be initialized")
@@ -88,12 +91,12 @@ func TestRegisterMultipleSubscriptions(t *testing.T) {
 	// Register first subscription
 	notifyChannel1 := make(chan *model.Event, 100)
 	uid1 := "test-uid-1"
-	RegisterSubscription(ctx, uid1, notifyChannel1)
+	_, _ = RegisterSubscription(ctx, uid1, notifyChannel1)
 
 	// Register second subscription
 	notifyChannel2 := make(chan *model.Event, 100)
 	uid2 := "test-uid-2"
-	RegisterSubscription(ctx, uid2, notifyChannel2)
+	_, _ = RegisterSubscription(ctx, uid2, notifyChannel2)
 
 	// Verify both subscriptions exist
 	assert.Equal(t, 2, len(listenerInstance.subscriptions), "Should have 2 subscriptions")
@@ -115,11 +118,11 @@ func TestUnregisterSubscription(t *testing.T) {
 	// Register subscriptions
 	notifyChannel1 := make(chan *model.Event, 100)
 	uid1 := "test-uid-1"
-	RegisterSubscription(ctx, uid1, notifyChannel1)
+	_, _ = RegisterSubscription(ctx, uid1, notifyChannel1)
 
 	notifyChannel2 := make(chan *model.Event, 100)
 	uid2 := "test-uid-2"
-	RegisterSubscription(ctx, uid2, notifyChannel2)
+	_, _ = RegisterSubscription(ctx, uid2, notifyChannel2)
 
 	assert.Equal(t, 2, len(listenerInstance.subscriptions), "Should have 2 subscriptions")
 
@@ -147,7 +150,7 @@ func TestUnregisterLastSubscription(t *testing.T) {
 	// Register a subscription
 	notifyChannel := make(chan *model.Event, 100)
 	uid := "test-uid-1"
-	RegisterSubscription(ctx, uid, notifyChannel)
+	_, _ = RegisterSubscription(ctx, uid, notifyChannel)
 
 	assert.Equal(t, 1, len(listenerInstance.subscriptions), "Should have 1 subscription")
 
@@ -197,7 +200,7 @@ func TestListenerContextCancellation(t *testing.T) {
 	// Register a subscription
 	notifyChannel := make(chan *model.Event, 100)
 	uid := "test-uid-1"
-	RegisterSubscription(ctx, uid, notifyChannel)
+	_, _ = RegisterSubscription(ctx, uid, notifyChannel)
 
 	// Verify listener context is not done initially
 	select {
@@ -237,7 +240,7 @@ func TestListenerListenContextCancellation(t *testing.T) {
 	// Register a subscription
 	notifyChannel := make(chan *model.Event, 100)
 	uid := "test-listen-cancel"
-	RegisterSubscription(ctx, uid, notifyChannel)
+	_, _ = RegisterSubscription(ctx, uid, notifyChannel)
 
 	// Give the listener goroutine time to start
 	time.Sleep(50 * time.Millisecond)
@@ -275,13 +278,13 @@ func TestListenerWithCancelledSubscriptionContext(t *testing.T) {
 	// Register first subscription with active context
 	notifyChannel1 := make(chan *model.Event, 100)
 	uid1 := "test-active-sub"
-	RegisterSubscription(ctx, uid1, notifyChannel1)
+	_, _ = RegisterSubscription(ctx, uid1, notifyChannel1)
 
 	// Register second subscription with context that we'll cancel
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	notifyChannel2 := make(chan *model.Event, 100)
 	uid2 := "test-cancelled-sub"
-	RegisterSubscription(ctx2, uid2, notifyChannel2)
+	_, _ = RegisterSubscription(ctx2, uid2, notifyChannel2)
 
 	// Verify both subscriptions exist
 	assert.Equal(t, 2, len(listenerInstance.subscriptions), "Should have 2 subscriptions")
@@ -319,7 +322,7 @@ func TestListenerMultipleSubscriptionsForwarding(t *testing.T) {
 	for i := 0; i < numSubs; i++ {
 		channels[i] = make(chan *model.Event, 100)
 		uids[i] = "test-multi-" + string(rune('A'+i))
-		RegisterSubscription(ctx, uids[i], channels[i])
+		_, _ = RegisterSubscription(ctx, uids[i], channels[i])
 	}
 
 	// Verify all subscriptions were registered
@@ -372,7 +375,7 @@ func TestConcurrentRegisterUnregister(t *testing.T) {
 			defer wg.Done()
 			channel := make(chan *model.Event, 100)
 			uid := "concurrent-" + string(rune(index))
-			RegisterSubscription(ctx, uid, channel)
+			_, _ = RegisterSubscription(ctx, uid, channel)
 
 			// Small delay
 			time.Sleep(10 * time.Millisecond)
@@ -408,7 +411,7 @@ func TestListenerStateAfterInit(t *testing.T) {
 
 	notifyChannel := make(chan *model.Event, 100)
 	uid := "test-state"
-	RegisterSubscription(ctx, uid, notifyChannel)
+	_, _ = RegisterSubscription(ctx, uid, notifyChannel)
 
 	// Verify listener state
 	assert.NotNil(t, listenerInstance, "Listener should be initialized")
@@ -421,7 +424,18 @@ func TestListenerStateAfterInit(t *testing.T) {
 	sub := listenerInstance.subscriptions[uid]
 	assert.Equal(t, uid, sub.ID, "Subscription ID should match")
 	assert.Equal(t, notifyChannel, sub.Channel, "Subscription channel should match")
-	assert.Equal(t, ctx, sub.Context, "Subscription context should match")
+	// sub.Context is a derived child of ctx (wrapped via context.WithCancel in RegisterSubscription),
+	// so we verify it is a descendant of ctx rather than asserting pointer equality.
+	assert.NotNil(t, sub.Context, "Subscription context should exist")
+	assert.NotNil(t, sub.Cancel, "Subscription cancel function should exist")
+	// Cancelling the parent context must propagate to the sub-context.
+	cancel()
+	select {
+	case <-sub.Context.Done():
+		// expected — sub-context is a child of ctx
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Sub-context should be cancelled when parent context is cancelled")
+	}
 
 	// Clean up
 	close(notifyChannel)
@@ -617,7 +631,7 @@ func TestStopPostgresListener_WithActiveInstance(t *testing.T) {
 	defer close(notifyChannel)
 
 	// Register a subscription to initialize the listener
-	RegisterSubscription(ctx, "test-stop-listener", notifyChannel)
+	_, _ = RegisterSubscription(ctx, "test-stop-listener", notifyChannel)
 
 	assert.NotNil(t, listenerInstance, "Listener should be initialized")
 
@@ -644,7 +658,7 @@ func TestStopPostgresListener_ResetsOnce(t *testing.T) {
 	defer close(notifyChannel1)
 
 	// Register first subscription
-	RegisterSubscription(ctx, "test-once-1", notifyChannel1)
+	_, _ = RegisterSubscription(ctx, "test-once-1", notifyChannel1)
 	assert.NotNil(t, listenerInstance, "First listener should be initialized")
 	firstInstance := listenerInstance
 
@@ -655,7 +669,7 @@ func TestStopPostgresListener_ResetsOnce(t *testing.T) {
 	// Register another subscription - should create new instance
 	notifyChannel2 := make(chan *model.Event, 100)
 	defer close(notifyChannel2)
-	RegisterSubscription(ctx, "test-once-2", notifyChannel2)
+	_, _ = RegisterSubscription(ctx, "test-once-2", notifyChannel2)
 
 	assert.NotNil(t, listenerInstance, "Second listener should be initialized")
 	// Should be a new instance (different pointer)
@@ -720,7 +734,7 @@ func TestListener_CleanupViaUnregister(t *testing.T) {
 	defer close(notifyChannel)
 
 	// Register subscription
-	RegisterSubscription(ctx, "test-cleanup", notifyChannel)
+	_, _ = RegisterSubscription(ctx, "test-cleanup", notifyChannel)
 	assert.NotNil(t, listenerInstance, "Listener should be initialized")
 
 	// Unregister to trigger shutdown (when it's the last subscription)
@@ -758,7 +772,7 @@ func TestListener_RapidStartStopCycles(t *testing.T) {
 		notifyChannel := make(chan *model.Event, 100)
 
 		// Register
-		RegisterSubscription(ctx, "test-rapid-cycle", notifyChannel)
+		_, _ = RegisterSubscription(ctx, "test-rapid-cycle", notifyChannel)
 		assert.NotNil(t, listenerInstance, "Listener should be initialized")
 
 		// Stop
@@ -972,4 +986,224 @@ func TestListen_WithLargePayload(t *testing.T) {
 	// Cancel the context
 	listenCancel()
 	time.Sleep(50 * time.Millisecond)
+}
+
+// [AI] Test subscription max active limit
+func TestRegisterSubscription_MaxActiveLimit(t *testing.T) {
+	// Reset the singleton for testing
+	listenerOnce = sync.Once{}
+	listenerInstance = nil
+
+	// Save original config and restore after test
+	originalMaxActive := config.Cfg.Subscription.MaxActive
+	defer func() {
+		config.Cfg.Subscription.MaxActive = originalMaxActive
+	}()
+
+	// Set max active to 3 for testing
+	config.Cfg.Subscription.MaxActive = 3
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Register 3 subscriptions (should succeed)
+	channels := make([]chan *model.Event, 4)
+	for i := 0; i < 3; i++ {
+		channels[i] = make(chan *model.Event, 100)
+		_, err := RegisterSubscription(ctx, fmt.Sprintf("test-uid-%d", i), channels[i])
+		assert.NoError(t, err, "Should successfully register subscription %d", i)
+	}
+
+	// Verify we have 3 subscriptions
+	assert.Equal(t, 3, len(listenerInstance.subscriptions), "Should have 3 subscriptions")
+
+	// Try to register a 4th subscription (should fail)
+	channels[3] = make(chan *model.Event, 100)
+	_, err := RegisterSubscription(ctx, "test-uid-4", channels[3])
+	assert.Error(t, err, "Should fail to register 4th subscription")
+	assert.Contains(t, err.Error(), "maximum active subscriptions reached", "Error should mention max limit")
+
+	// Verify still only 3 subscriptions
+	assert.Equal(t, 3, len(listenerInstance.subscriptions), "Should still have only 3 subscriptions")
+
+	// Clean up
+	for _, ch := range channels {
+		if ch != nil {
+			close(ch)
+		}
+	}
+}
+
+// [AI] Test UpdateSubscriptionActivity
+func TestUpdateSubscriptionActivity(t *testing.T) {
+	// Reset the singleton for testing
+	listenerOnce = sync.Once{}
+	listenerInstance = nil
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	notifyChannel := make(chan *model.Event, 100)
+	defer close(notifyChannel)
+	uid := "test-activity-update"
+
+	// Register subscription
+	_, err := RegisterSubscription(ctx, uid, notifyChannel)
+	assert.NoError(t, err, "RegisterSubscription should not return error")
+
+	// Get initial last activity time
+	sub := listenerInstance.subscriptions[uid]
+	sub.mu.RLock()
+	initialActivity := sub.LastActivity
+	sub.mu.RUnlock()
+
+	// Wait a bit to ensure time difference
+	time.Sleep(10 * time.Millisecond)
+
+	// Update activity
+	UpdateSubscriptionActivity(uid)
+
+	// Verify activity time was updated
+	sub.mu.RLock()
+	updatedActivity := sub.LastActivity
+	sub.mu.RUnlock()
+
+	assert.True(t, updatedActivity.After(initialActivity), "LastActivity should be updated")
+}
+
+// [AI] Test UpdateSubscriptionActivity with nil listener
+func TestUpdateSubscriptionActivity_NilListener(t *testing.T) {
+	// Reset to nil
+	listenerMu.Lock()
+	listenerInstance = nil
+	listenerMu.Unlock()
+
+	// This should not panic
+	UpdateSubscriptionActivity("any-uid")
+
+	// No assertion needed, just verify no panic
+}
+
+// [AI] Test UpdateSubscriptionActivity with non-existent subscription
+func TestUpdateSubscriptionActivity_NonExistentSubscription(t *testing.T) {
+	// Reset the singleton for testing
+	listenerOnce = sync.Once{}
+	listenerInstance = nil
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	notifyChannel := make(chan *model.Event, 100)
+	defer close(notifyChannel)
+
+	// Register a subscription
+	_, _ = RegisterSubscription(ctx, "test-exists", notifyChannel)
+
+	// Update activity for a non-existent subscription (should not panic)
+	UpdateSubscriptionActivity("does-not-exist")
+
+	// No assertion needed, just verify no panic
+}
+
+// [AI] Test that checkAndCloseExpiredSubscriptions cancels subscriptions that exceed max lifetime.
+// Sets IdleTimeout high so only MaxLifetime triggers cancellation.
+func TestCheckAndCloseExpiredSubscriptions_MaxLifetime(t *testing.T) {
+	listenerOnce = sync.Once{}
+	listenerInstance = nil
+
+	originalMaxLifetime := config.Cfg.Subscription.MaxLifetime
+	originalIdleTimeout := config.Cfg.Subscription.IdleTimeout
+	defer func() {
+		config.Cfg.Subscription.MaxLifetime = originalMaxLifetime
+		config.Cfg.Subscription.IdleTimeout = originalIdleTimeout
+	}()
+
+	config.Cfg.Subscription.MaxLifetime = 10      // 10 ms (will trigger)
+	config.Cfg.Subscription.IdleTimeout = 10 * 1000 // 10 seconds (won't trigger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	notifyChannel := make(chan *model.Event, 100)
+	defer close(notifyChannel)
+	uid := "test-max-lifetime"
+
+	subCtx, err := RegisterSubscription(ctx, uid, notifyChannel)
+	assert.NoError(t, err)
+	assert.NotNil(t, subCtx, "RegisterSubscription should return a derived context")
+
+	// Keep updating activity to ensure IdleTimeout doesn't trigger
+	for i := 0; i < 3; i++ {
+		time.Sleep(5 * time.Millisecond)
+		UpdateSubscriptionActivity(uid)
+	}
+
+	// Trigger cleanup - should cancel due to max lifetime
+	listenerInstance.checkAndCloseExpiredSubscriptions()
+
+	// The subscription's derived context must be cancelled (due to max lifetime, not idle)
+	select {
+	case <-subCtx.Done():
+		// correct — cleanup cancelled due to max lifetime
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Sub context should be cancelled after cleanup due to max lifetime")
+	}
+
+	// The channel must NOT have been closed by the cleanup goroutine.
+	select {
+	case notifyChannel <- &model.Event{}:
+		// Channel is still open — only the watchSubscription defer owns the close.
+	default:
+		// Channel is full (buffered), which is also fine — it was not closed.
+	}
+}
+
+// [AI] Test that checkAndCloseExpiredSubscriptions cancels subscriptions that are idle.
+// Sets MaxLifetime high so only IdleTimeout triggers cancellation.
+func TestCheckAndCloseExpiredSubscriptions_IdleTimeout(t *testing.T) {
+	listenerOnce = sync.Once{}
+	listenerInstance = nil
+
+	originalMaxLifetime := config.Cfg.Subscription.MaxLifetime
+	originalIdleTimeout := config.Cfg.Subscription.IdleTimeout
+	defer func() {
+		config.Cfg.Subscription.MaxLifetime = originalMaxLifetime
+		config.Cfg.Subscription.IdleTimeout = originalIdleTimeout
+	}()
+
+	config.Cfg.Subscription.MaxLifetime = 10 * 1000 // 10 seconds (won't trigger)
+	config.Cfg.Subscription.IdleTimeout = 10        // 10 ms (will trigger)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	notifyChannel := make(chan *model.Event, 100)
+	defer close(notifyChannel)
+	uid := "test-idle-timeout"
+
+	subCtx, err := RegisterSubscription(ctx, uid, notifyChannel)
+	assert.NoError(t, err)
+	assert.NotNil(t, subCtx, "RegisterSubscription should return a derived context")
+
+	// DON'T call UpdateSubscriptionActivity() - let it become idle
+	time.Sleep(15 * time.Millisecond)
+
+	// Trigger cleanup - should cancel due to idle timeout
+	listenerInstance.checkAndCloseExpiredSubscriptions()
+
+	// The subscription's derived context must be cancelled (due to idle, not max lifetime)
+	select {
+	case <-subCtx.Done():
+		// correct — cleanup cancelled due to idle timeout
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Sub context should be cancelled after cleanup due to idle timeout")
+	}
+
+	// The channel must NOT have been closed by the cleanup goroutine.
+	select {
+	case notifyChannel <- &model.Event{}:
+		// Channel is still open — only the watchSubscription defer owns the close.
+	default:
+		// Channel is full (buffered), which is also fine — it was not closed.
+	}
 }

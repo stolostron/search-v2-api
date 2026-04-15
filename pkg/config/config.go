@@ -5,6 +5,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"strconv"
@@ -39,12 +40,13 @@ type Config struct {
 	Features            featureFlags     // Enable or disable features.
 	Federation          federationConfig // Federated search configuration.
 	HttpPort            int
-	PlaygroundMode      bool   // Enable the GraphQL Playground client.
-	PodNamespace        string // Kubernetes namespace where the pod is running.
-	QueryLimit          uint   // The default LIMIT to use on queries. Client can override. Default: 1000
-	RelationLevel       int    // The number of levels/hops for finding relationships for a particular resource
-	SlowLog             int    // Logs queries slower than the specified duration in ms.      Default: 300ms
-	RequestTimeout      int    // Seconds a request will process before timing out.           Default: 2 minutes
+	PlaygroundMode      bool               // Enable the GraphQL Playground client.
+	PodNamespace        string             // Kubernetes namespace where the pod is running.
+	QueryLimit          uint               // The default LIMIT to use on queries. Client can override. Default: 1000
+	RelationLevel       int                // The number of levels/hops for finding relationships for a particular resource
+	SlowLog             int                // Logs queries slower than the specified duration in ms.      Default: 300ms
+	RequestTimeout      int                // Seconds a request will process before timing out.           Default: 2 minutes
+	Subscription        subscriptionConfig // Subscription limits configuration.
 }
 
 // Define feature flags.
@@ -69,6 +71,14 @@ type federationConfig struct {
 	GlobalHubName  string         // Identifies the global hub cluster, similar to local-cluster
 	ConfigCacheTTL int            // Time-to-live (milliseconds) of federation config cache.
 	HttpPool       httpClientPool // Transport settings for federated client pool.
+}
+
+// Subscription limits configuration.
+type subscriptionConfig struct {
+	MaxActive       int // Maximum number of active subscriptions. Default: 200
+	MaxLifetime     int // Maximum lifetime (milliseconds) for a subscription. Default: 12 hours
+	IdleTimeout     int // Idle timeout (milliseconds) to close inactive subscriptions. Default: 1 hour
+	CleanupInterval int // Interval (milliseconds) between cleanup checks for expired subscriptions. Default: 30 seconds
 }
 
 func new() *Config {
@@ -120,7 +130,14 @@ func new() *Config {
 		// This will be updated to 1 for default searches and 3 for applications - unless set by the user
 		RelationLevel:  getEnvAsInt("RELATION_LEVEL", 0),
 		RequestTimeout: getEnvAsInt("REQUEST_TIMEOUT", 2*60*1000), // 2 minutes
+		Subscription: subscriptionConfig{
+			MaxActive:       getEnvAsInt("SUBSCRIPTION_MAX_ACTIVE", 200),             // 200 subscriptions
+			MaxLifetime:     getEnvAsInt("SUBSCRIPTION_MAX_LIFETIME", 12*60*60*1000), // 12 hours
+			IdleTimeout:     getEnvAsInt("SUBSCRIPTION_IDLE_TIMEOUT", 1*60*60*1000),  // 1 hour
+			CleanupInterval: getEnvAsInt("SUBSCRIPTION_CLEANUP_INTERVAL", 30*1000),   // 30 seconds
+		},
 	}
+
 	conf.DBPass = url.QueryEscape(conf.DBPass)
 	return conf
 }
@@ -150,6 +167,32 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.DBPass == "" {
 		return errors.New("required environment DB_PASS is not set")
+	}
+
+	// Validate subscription limits - check for malformed env vars and invalid values
+	type subscriptionCheck struct {
+		envVar string
+		value  int
+	}
+	checks := []subscriptionCheck{
+		{"SUBSCRIPTION_MAX_ACTIVE", cfg.Subscription.MaxActive},
+		{"SUBSCRIPTION_MAX_LIFETIME", cfg.Subscription.MaxLifetime},
+		{"SUBSCRIPTION_IDLE_TIMEOUT", cfg.Subscription.IdleTimeout},
+		{"SUBSCRIPTION_CLEANUP_INTERVAL", cfg.Subscription.CleanupInterval},
+	}
+
+	for _, check := range checks {
+		// Check if env var is set and parseable as integer
+		if raw, ok := os.LookupEnv(check.envVar); ok {
+			if _, err := strconv.Atoi(raw); err != nil {
+				return fmt.Errorf("invalid %s=%q, must be an integer", check.envVar, raw)
+			}
+		}
+
+		// Check value is > 0
+		if check.value <= 0 {
+			return fmt.Errorf("invalid %s=%d, must be > 0", check.envVar, check.value)
+		}
 	}
 	return nil
 }

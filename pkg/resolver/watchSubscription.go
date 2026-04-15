@@ -374,9 +374,17 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 		klog.Errorf("Failed to get WebSocket connection ID from context. Generating a new one: %s", subID)
 	}
 
-	go func() {
-		database.RegisterSubscription(ctx, subID, receiver)
+	// Register the subscription before starting the goroutine so admission failures
+	// (e.g., max active limit reached) are propagated to the client as GraphQL errors.
+	// subCtx is a derived context that is also cancelled when the cleanup goroutine
+	// evicts this subscription (lifetime/idle expiry).
+	subCtx, err := database.RegisterSubscription(ctx, subID, receiver)
+	if err != nil {
+		klog.Errorf("Failed to register subscription [%s]: %v", subID, err)
+		return nil, err
+	}
 
+	go func() {
 		defer func() {
 			klog.V(2).Infof("Closed subscription watch(%s).", subID)
 			database.UnregisterSubscription(subID)
@@ -387,8 +395,8 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 		// Receive events from the database (receiver), filter, and send to the client (result).
 		for {
 			select {
-			case <-ctx.Done():
-				klog.V(3).Infof("Subscription watch(%s) closed by client.", subID)
+			case <-subCtx.Done():
+				klog.V(3).Infof("Subscription watch(%s) closed.", subID)
 				return
 			case event, ok := <-receiver:
 				// If the receiver channel is closed, return.
@@ -396,6 +404,7 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 					klog.V(3).Infof("Subscription watch(%s) channel closed.", subID)
 					return
 				}
+
 				// Filter event based on the input filters
 				if !eventMatchesAllFilters(event, input) {
 					klog.V(4).Infof("Subscription watch(%s) event did not match filters (UID: %s, Operation: %s)",
@@ -404,7 +413,8 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 				}
 
 				// Filter events based on user RBAC
-				if !eventMatchesRbac(ctx, event) {
+				// Use subCtx so cancellation aborts in-flight permission checks
+				if !eventMatchesRbac(subCtx, event) {
 					klog.V(4).Infof("Subscription watch(%s) event did not match RBAC filters (UID: %s, Operation: %s)",
 						subID, event.UID, event.Operation)
 					continue
@@ -413,9 +423,13 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 				// Send filtered event to client
 				select {
 				case result <- event:
+					// Update activity only after successful delivery to tie idle timeout
+					// to actual subscription activity (events matching filters + RBAC),
+					// not global database traffic.
+					database.UpdateSubscriptionActivity(subID)
 					klog.V(3).Infof("Subscription watch(%s) sent event (UID: %s, Operation: %s) to client", subID, event.UID, event.Operation)
 					continue
-				case <-ctx.Done():
+				case <-subCtx.Done():
 					klog.V(3).Infof("Subscription watch(%s) closed while sending event.", subID)
 					return
 				default:
