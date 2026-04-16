@@ -20,10 +20,11 @@ var Cfg = new()
 type Config struct {
 	HubName             string //Display Name of the cluster where ACM is deployed
 	API_SERVER_URL      string // address for Kubernetes API Server
-	AuthCacheTTL        int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
-	SharedCacheTTL      int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
-	UserCacheTTL        int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
-	ContextPath         string
+	AuthCacheTTL            int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
+	SharedCacheTTL          int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
+	UserCacheTTL            int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
+	UserPermissionCacheTTL  int    // Time-to-live (milliseconds) of UserPermissions cache. Default: 30 seconds
+	ContextPath             string
 	DBHost              string
 	DBMinConns          int32 // Overrides pgxpool.Config{ MinConns } Default: 2
 	DBMaxConns          int32 // Overrides pgxpool.Config{ MaxConns } Default: 10
@@ -86,10 +87,11 @@ func new() *Config {
 	conf := &Config{
 		HubName:             getEnv("HUB_NAME", "global-hub"),
 		API_SERVER_URL:      getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
-		AuthCacheTTL:        getEnvAsInt("AUTH_CACHE_TTL", 60000),    // 1 minute
-		SharedCacheTTL:      getEnvAsInt("SHARED_CACHE_TTL", 300000), // 5 minutes
-		UserCacheTTL:        getEnvAsInt("USER_CACHE_TTL", 300000),   // 5 minutes
-		ContextPath:         getEnv("CONTEXT_PATH", "/searchapi"),
+		AuthCacheTTL:           getEnvAsInt("AUTH_CACHE_TTL", 60000),              // 1 minute
+		SharedCacheTTL:         getEnvAsInt("SHARED_CACHE_TTL", 300000),           // 5 minutes
+		UserCacheTTL:           getEnvAsInt("USER_CACHE_TTL", 300000),             // 5 minutes
+		UserPermissionCacheTTL: getEnvAsInt("USER_PERMISSION_CACHE_TTL", 30000),   // 30 seconds
+		ContextPath:            getEnv("CONTEXT_PATH", "/searchapi"),
 		DBHost:              getEnv("DB_HOST", "localhost"),
 		DBMaxConns:          getEnvAsInt32("DB_MAX_CONNS", int32(10)),          // 10     Overrides pgxpool default (4)
 		DBMaxConnIdleTime:   getEnvAsInt("DB_MAX_CONN_IDLE_TIME", 5*60*1000),   // 5 min, Overrides pgxpool default (30)

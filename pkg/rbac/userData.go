@@ -111,7 +111,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 			clustersCache:       cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 			csrCache:            cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
 			nsrCache:            cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
-			userPermissionCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserCacheTTL) * time.Millisecond},
+			userPermissionCache: cacheMetadata{ttl: time.Duration(config.Cfg.UserPermissionCacheTTL) * time.Millisecond},
 		}
 		if cache.users == nil {
 			cache.users = map[string]*UserDataCache{}
@@ -221,6 +221,17 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 		klog.Error("Error fetching UserAccessData: ", userDataErr)
 		return UserData{}, errors.New("unable to resolve query because of error while resolving user's access")
 	}
+
+	// Ensure UserPermissions cache is fresh before using it for fine-grained RBAC filtering.
+	// This is critical for search/searchComplete/searchSchema which use buildRbacWhereClause.
+	if config.Cfg.Features.FineGrainedRbac &&
+		(len(userDataCache.UserPermissions.Items) == 0 || !userDataCache.userPermissionCache.isValid()) {
+		if err := userDataCache.getUserPermissions(ctx); err != nil {
+			klog.Error("Error refreshing UserPermissions: ", err)
+			return UserData{}, errors.New("unable to resolve query because of error while refreshing user permissions")
+		}
+	}
+
 	// Proceed if user's rbac data exists
 	// Get a copy of the current user access if user data exists
 	userAccess := UserData{
@@ -233,12 +244,10 @@ func (cache *Cache) GetUserData(ctx context.Context) (UserData, error) {
 	return userAccess, nil
 }
 
-// UserCache is valid if the clustersCache, csrCache, fgRbacNsCache, and nsrCache are valid.
+// UserCache is valid if the clustersCache, csrCache, and nsrCache are valid.
+// Note: userPermissionCache is validated separately where it's used (CheckUserHasAccess)
+// to allow independent TTL control.
 func (user *UserDataCache) isValid() bool {
-	if config.Cfg.Features.FineGrainedRbac {
-		return user.csrCache.isValid() && user.nsrCache.isValid() &&
-			user.clustersCache.isValid() && user.userPermissionCache.isValid()
-	}
 	return user.csrCache.isValid() && user.nsrCache.isValid() &&
 		user.clustersCache.isValid()
 }
