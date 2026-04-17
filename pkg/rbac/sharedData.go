@@ -248,6 +248,7 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 		// Lock only to update cache error state.
 		shared.csrCache.lock.Lock()
 		shared.csrCache.err = err
+		shared.csrCache.updatedAt = time.Now()
 		shared.csResourcesMap = map[Resource]struct{}{}
 		shared.csrCache.lock.Unlock()
 		return err
@@ -270,6 +271,7 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 	if queryErr != nil {
 		klog.Errorf("Error resolving cluster scoped resources. Query [%s]. Error: [%+v]", query, queryErr.Error())
 		shared.csrCache.err = queryErr
+		shared.csrCache.updatedAt = time.Now()
 		shared.csResourcesMap = map[Resource]struct{}{}
 		return shared.csrCache.err
 	}
