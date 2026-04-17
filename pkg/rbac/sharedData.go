@@ -160,41 +160,53 @@ func (shared *SharedData) PopulateSharedCache(ctx context.Context) {
 	if shared.isValid() { // if all cache is valid we use cache data
 		klog.V(5).Info("Using shared data from cache.")
 		return
-	} else { // get data and add to cache
-		var wg sync.WaitGroup
+	}
 
-		// get hub cluster-scoped resources and cache in shared.csResources
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			err := shared.getClusterScopedResources(ctx)
-			if err != nil {
-				klog.Errorf("Error retrieving cluster scoped resources. Error: [%+v]", err)
-			}
-		}()
+	// get data and add to cache
+	var wg sync.WaitGroup
 
-		// get hub cluster namespaces and cache in shared.namespaces.
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			_, err := shared.getNamespaces(ctx)
-			if err != nil {
-				klog.Errorf("Error retrieving shared namespaces. Error: [%+v]", err)
-			}
-		}()
+	// get hub cluster-scoped resources and cache in shared.csResources
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := shared.getClusterScopedResources(ctx)
+		if err != nil {
+			klog.Errorf("Error retrieving cluster scoped resources. Error: [%+v]", err)
+		}
+	}()
 
-		// get managed clusters and cache in shared.managedClusters
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			err := shared.getManagedClusters(ctx)
-			if err != nil {
-				klog.Errorf("Error retrieving managed clusters. Error: [%+v]", err)
-			}
-		}()
+	// get hub cluster namespaces and cache in shared.namespaces.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, err := shared.getNamespaces(ctx)
+		if err != nil {
+			klog.Errorf("Error retrieving shared namespaces. Error: [%+v]", err)
+		}
+	}()
 
-		wg.Wait() // Wait for async go routines to complete.
+	// get managed clusters and cache in shared.managedClusters
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := shared.getManagedClusters(ctx)
+		if err != nil {
+			klog.Errorf("Error retrieving managed clusters. Error: [%+v]", err)
+		}
+	}()
 
+	// Wait for goroutines to complete, but respect context cancellation
+	// to avoid accumulating zombie goroutines when http.TimeoutHandler fires.
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// All goroutines completed successfully.
+	case <-ctx.Done():
+		klog.Warning("PopulateSharedCache: context cancelled, returning early. Background goroutines will finish independently.")
 	}
 }
 
@@ -210,12 +222,16 @@ func (shared *SharedData) isValid() bool {
 // Equivalent to: `oc api-resources -o wide | grep false | grep watch | grep list`
 func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 	defer metrics.SlowLog("SharedData::getClusterScopedResources", 0)()
-	// lock to prevent checking more than one at a time and check if cluster scoped resources already in cache
-	shared.csrCache.lock.Lock()
-	defer shared.csrCache.lock.Unlock()
-	//clear previous cache
-	shared.csResourcesMap = make(map[Resource]struct{})
-	shared.csrCache.err = nil
+
+	// Fast path: return if cache is still valid.
+	shared.csrCache.lock.RLock()
+	if shared.csrCache.isValid() {
+		shared.csrCache.lock.RUnlock()
+		return nil
+	}
+	shared.csrCache.lock.RUnlock()
+
+	// Build and execute query WITHOUT holding the lock to prevent blocking all requests.
 	klog.V(6).Info("Querying database for cluster-scoped resources.")
 
 	// Building query to get cluster scoped resources
@@ -229,20 +245,36 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 			goqu.L("???", goqu.C("data"), goqu.Literal("?"), "namespace").IsFalse()).ToSQL()
 	if err != nil {
 		klog.Errorf("Error creating query [%s]. Error: [%+v]", query, err)
+		// Lock only to update cache error state.
+		shared.csrCache.lock.Lock()
 		shared.csrCache.err = err
+		shared.csResourcesMap = map[Resource]struct{}{}
+		shared.csrCache.lock.Unlock()
+		return err
+	}
+
+	rows, queryErr := shared.pool.Query(ctx, query)
+
+	// Acquire write lock to update cache.
+	shared.csrCache.lock.Lock()
+	defer shared.csrCache.lock.Unlock()
+
+	// Another goroutine may have refreshed the cache while we were waiting.
+	if shared.csrCache.isValid() {
+		if rows != nil {
+			rows.Close()
+		}
+		return nil
+	}
+
+	if queryErr != nil {
+		klog.Errorf("Error resolving cluster scoped resources. Query [%s]. Error: [%+v]", query, queryErr.Error())
+		shared.csrCache.err = queryErr
 		shared.csResourcesMap = map[Resource]struct{}{}
 		return shared.csrCache.err
 	}
 
-	rows, err := shared.pool.Query(ctx, query)
-	if err != nil {
-		klog.Errorf("Error resolving cluster scoped resources. Query [%s]. Error: [%+v]", query, err.Error())
-		shared.csrCache.err = err
-		shared.csResourcesMap = map[Resource]struct{}{}
-
-		return shared.csrCache.err
-	}
-
+	csResourcesMap := make(map[Resource]struct{})
 	if rows != nil {
 		defer rows.Close()
 
@@ -254,9 +286,11 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 					apigroup, kind)
 				continue
 			}
-			shared.csResourcesMap[Resource{Apigroup: apigroup, Kind: kind}] = struct{}{}
+			csResourcesMap[Resource{Apigroup: apigroup, Kind: kind}] = struct{}{}
 		}
 	}
+	shared.csResourcesMap = csResourcesMap
+	shared.csrCache.err = nil
 	shared.csrCache.updatedAt = time.Now()
 
 	return shared.csrCache.err
@@ -266,23 +300,32 @@ func (shared *SharedData) getClusterScopedResources(ctx context.Context) error {
 // Equivalent to `oc get namespaces`
 func (shared *SharedData) getNamespaces(ctx context.Context) ([]string, error) {
 	defer metrics.SlowLog("getSharedNamespaces", 100*time.Millisecond)()
-	shared.nsCache.lock.Lock()
-	defer shared.nsCache.lock.Unlock()
 
-	// Return cached namespaces if valid.
+	// Fast path: return cached namespaces if valid.
+	shared.nsCache.lock.RLock()
 	if shared.nsCache.isValid() {
-		return shared.namespaces, nil
+		result := shared.namespaces
+		shared.nsCache.lock.RUnlock()
+		return result, nil
 	}
+	shared.nsCache.lock.RUnlock()
 
-	// Empty previous cache and request new data.
-	shared.namespaces = nil
-	shared.nsCache.err = nil
-
+	// Make K8s API call WITHOUT holding the lock to prevent blocking all requests.
 	klog.V(5).Info("Getting namespaces from Kube Client.")
 	scheme := runtime.NewScheme()
 	scheme.AddKnownTypes(namespacesGvr.GroupVersion())
 
 	namespaceList, nsErr := shared.dynamicClient.Resource(namespacesGvr).List(ctx, metav1.ListOptions{})
+
+	// Acquire write lock to update cache.
+	shared.nsCache.lock.Lock()
+	defer shared.nsCache.lock.Unlock()
+
+	// Another goroutine may have refreshed the cache while we were waiting.
+	if shared.nsCache.isValid() {
+		return shared.namespaces, nil
+	}
+
 	if nsErr != nil {
 		klog.Warning("Error resolving namespaces from KubeClient: ", nsErr)
 		shared.nsCache.err = nsErr
@@ -290,7 +333,9 @@ func (shared *SharedData) getNamespaces(ctx context.Context) ([]string, error) {
 		return shared.namespaces, shared.nsCache.err
 	}
 
-	// add namespaces to allNamespace List
+	// Empty previous cache and update with new data.
+	shared.namespaces = nil
+	shared.nsCache.err = nil
 	for _, n := range namespaceList.Items {
 		shared.namespaces = append(shared.namespaces, n.GetName())
 	}
@@ -304,26 +349,37 @@ func (shared *SharedData) getNamespaces(ctx context.Context) ([]string, error) {
 func (shared *SharedData) getManagedClusters(ctx context.Context) error {
 	defer metrics.SlowLog("getManagedClusters", 100*time.Millisecond)()
 
-	shared.mcCache.lock.Lock()
-	defer shared.mcCache.lock.Unlock()
-	// clear previous cache
-	shared.managedClusters = nil
-	shared.mcCache.err = nil
+	// Fast path: return if cache is still valid.
+	shared.mcCache.lock.RLock()
+	if shared.mcCache.isValid() {
+		shared.mcCache.lock.RUnlock()
+		return nil
+	}
+	shared.mcCache.lock.RUnlock()
 
-	managedClusters := make(map[string]struct{})
-
+	// Make K8s API call WITHOUT holding the lock to prevent blocking all requests.
 	scheme := runtime.NewScheme()
 	scheme.AddKnownTypes(managedClusterResourceGvr.GroupVersion())
 
-	resourceObj, err := shared.dynamicClient.Resource(managedClusterResourceGvr).List(ctx, metav1.ListOptions{})
+	resourceObj, mcErr := shared.dynamicClient.Resource(managedClusterResourceGvr).List(ctx, metav1.ListOptions{})
 
-	if err != nil {
-		klog.Warning("Error resolving ManagedClusters with dynamic client", err.Error())
-		shared.mcCache.err = err
+	// Acquire write lock to update cache.
+	shared.mcCache.lock.Lock()
+	defer shared.mcCache.lock.Unlock()
+
+	// Another goroutine may have refreshed the cache while we were waiting.
+	if shared.mcCache.isValid() {
+		return nil
+	}
+
+	if mcErr != nil {
+		klog.Warning("Error resolving ManagedClusters with dynamic client", mcErr.Error())
+		shared.mcCache.err = mcErr
 		shared.mcCache.updatedAt = time.Now()
 		return shared.mcCache.err
 	}
 
+	managedClusters := make(map[string]struct{})
 	for _, item := range resourceObj.Items {
 		// Add to list if it is not local-cluster
 		if _, ok := item.GetLabels()["local-cluster"]; !ok {
@@ -333,6 +389,7 @@ func (shared *SharedData) getManagedClusters(ctx context.Context) error {
 
 	klog.V(3).Info("List of managed clusters in shared data: ", managedClusters)
 	shared.managedClusters = managedClusters
+	shared.mcCache.err = nil
 	shared.mcCache.updatedAt = time.Now()
 	return shared.mcCache.err
 
@@ -478,9 +535,9 @@ func (shared *SharedData) findSrchAddonDisabledClusters(ctx context.Context) (*m
 
 // SSRR has resources that are clusterscoped too - check if a resource is clusterscoped
 func (shared *SharedData) isClusterScoped(kindPlural, apigroup string) bool {
-	// lock to prevent checking more than one at a time
-	shared.csrCache.lock.Lock()
-	defer shared.csrCache.lock.Unlock()
+	// RLock is sufficient - this function only reads the map, never writes.
+	shared.csrCache.lock.RLock()
+	defer shared.csrCache.lock.RUnlock()
 	var ok bool
 	resource := Resource{Apigroup: apigroup, Kind: kindPlural}
 	_, ok = shared.csResourcesMap[resource]
