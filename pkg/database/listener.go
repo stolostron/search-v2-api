@@ -276,16 +276,9 @@ func (l *Listener) listen() {
 }
 
 // forwardNotification parses a Postgres notification and sends it to all registered subscriptions.
-// Uses RLock so multiple notifications can be processed concurrently. The lock is acquired and
-// released within this function (not deferred to the caller's loop) to avoid holding the read
-// lock across loop iterations, which would prevent write-lock acquisition in RegisterSubscription
-// and UnregisterSubscription.
+// The RLock is held only long enough to snapshot the current subscribers; the DB backfill and
+// channel sends happen outside the lock so they cannot block RegisterSubscription/UnregisterSubscription.
 func (l *Listener) forwardNotification(notification *pgconn.Notification) {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-
-	klog.V(3).Infof("Received postgres event, forwarding to %d subscriptions.", len(l.subscriptions))
-
 	var notificationPayload model.Event
 	err := json.Unmarshal([]byte(notification.Payload), &notificationPayload)
 	if err != nil {
@@ -295,10 +288,11 @@ func (l *Listener) forwardNotification(notification *pgconn.Notification) {
 
 	// If the notification payload was too large, data was truncated.
 	// We need to query the database to rebuild the data.
+	// This DB call happens without holding l.mu to avoid blocking subscription registration.
 	if notificationPayload.NewData == nil &&
 		(notificationPayload.Operation == "INSERT" || notificationPayload.Operation == "UPDATE") {
 		klog.V(2).Infof("Notification payload missing newData, querying the database. UID: %s", notificationPayload.UID)
-		rows, err := l.conn.Query(l.ctx, fmt.Sprintf("SELECT data FROM search.resources WHERE uid = '%s'", notificationPayload.UID))
+		rows, err := l.conn.Query(l.ctx, "SELECT data FROM search.resources WHERE uid = $1", notificationPayload.UID)
 		if err != nil {
 			klog.Errorf("Failed to execute query: %v", err)
 			return
@@ -326,13 +320,23 @@ func (l *Listener) forwardNotification(notification *pgconn.Notification) {
 		klog.Warningf("Notification payload was truncated, 'oldData' is missing. This is a current limitation. UID: %s", notificationPayload.UID)
 	}
 
+	// Snapshot subscribers under RLock, then release before sending to avoid
+	// blocking RegisterSubscription/UnregisterSubscription on slow channel sends.
+	l.mu.RLock()
+	subs := make([]*Subscription, 0, len(l.subscriptions))
 	for _, sub := range l.subscriptions {
+		subs = append(subs, sub)
+	}
+	klog.V(3).Infof("Received postgres event, forwarding to %d subscriptions.", len(subs))
+	l.mu.RUnlock()
+
+	for _, sub := range subs {
 		select {
 		case <-sub.Context.Done():
 			klog.V(3).Infof("Subscription %s context is done, skipping", sub.ID)
-			continue
+		case sub.Channel <- &notificationPayload:
 		default:
-			sub.Channel <- &notificationPayload
+			klog.Warningf("Subscription %s channel buffer is full, dropping event.", sub.ID)
 		}
 	}
 }
