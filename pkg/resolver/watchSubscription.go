@@ -434,7 +434,7 @@ func WatchSubscription(ctx context.Context, input *model.SearchInput) (<-chan *m
 					return
 				default:
 					klog.Warningf("Subscription watch(%s) channel buffer is full, dropping event.", subID)
-					return
+					continue
 				}
 			}
 		}
