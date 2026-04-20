@@ -269,63 +269,70 @@ func (l *Listener) listen() {
 			}
 
 			if notification != nil {
-				l.mu.RLock()
-				// Ensure RUnlock is called on all paths (error and success)
-				defer l.mu.RUnlock()
-
-				klog.V(3).Infof("Received postgres event, forwarding to %d subscriptions.",
-					len(l.subscriptions))
-
-				var notificationPayload model.Event
-				err := json.Unmarshal([]byte(notification.Payload), &notificationPayload)
-				if err != nil {
-					klog.Errorf("Failed to unmarshal notification payload: %v", err)
-					continue
-				}
-
-				// If the notification payload was too large, data was truncated.
-				// We need to query the database to rebuild the data.
-				if notificationPayload.NewData == nil &&
-					(notificationPayload.Operation == "INSERT" || notificationPayload.Operation == "UPDATE") {
-					klog.V(2).Infof("Notification payload missing newData, querying the database. UID: %s", notificationPayload.UID)
-					rows, err := l.conn.Query(l.ctx, fmt.Sprintf("SELECT data FROM search.resources WHERE uid = '%s'", notificationPayload.UID))
-					if err != nil {
-						klog.Errorf("Failed to execute query: %v", err)
-						continue
-					}
-
-					// Explicitly close rows after processing to avoid resource leak
-					for rows.Next() {
-						var data map[string]any
-						err := rows.Scan(&data)
-						if err != nil {
-							klog.Errorf("Failed to scan result: %v", err)
-							continue
-						}
-						notificationPayload.NewData = data
-					}
-					rows.Close()
-
-					// Check for errors from iteration
-					if err := rows.Err(); err != nil {
-						klog.Errorf("Error iterating rows: %v", err)
-					}
-				}
-				if notificationPayload.OldData == nil &&
-					(notificationPayload.Operation == "UPDATE" || notificationPayload.Operation == "DELETE") {
-					klog.Warningf("Notification payload was truncated, 'oldData' is missing. This is a current limitation. UID: %s", notificationPayload.UID)
-				}
-
-				for _, sub := range l.subscriptions {
-					select {
-					case <-sub.Context.Done():
-						klog.V(3).Infof("Subscription %s context is done, skipping", sub.ID)
-						continue
-					default:
-						sub.Channel <- &notificationPayload
-					}
-				}
+				l.forwardNotification(notification)
 			}
+		}
+	}
+}
+
+// forwardNotification parses a Postgres notification and sends it to all registered subscriptions.
+// Uses RLock so multiple notifications can be processed concurrently. The lock is acquired and
+// released within this function (not deferred to the caller's loop) to avoid holding the read
+// lock across loop iterations, which would prevent write-lock acquisition in RegisterSubscription
+// and UnregisterSubscription.
+func (l *Listener) forwardNotification(notification *pgconn.Notification) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+
+	klog.V(3).Infof("Received postgres event, forwarding to %d subscriptions.", len(l.subscriptions))
+
+	var notificationPayload model.Event
+	err := json.Unmarshal([]byte(notification.Payload), &notificationPayload)
+	if err != nil {
+		klog.Errorf("Failed to unmarshal notification payload: %v", err)
+		return
+	}
+
+	// If the notification payload was too large, data was truncated.
+	// We need to query the database to rebuild the data.
+	if notificationPayload.NewData == nil &&
+		(notificationPayload.Operation == "INSERT" || notificationPayload.Operation == "UPDATE") {
+		klog.V(2).Infof("Notification payload missing newData, querying the database. UID: %s", notificationPayload.UID)
+		rows, err := l.conn.Query(l.ctx, fmt.Sprintf("SELECT data FROM search.resources WHERE uid = '%s'", notificationPayload.UID))
+		if err != nil {
+			klog.Errorf("Failed to execute query: %v", err)
+			return
+		}
+
+		// Explicitly close rows after processing to avoid resource leak
+		for rows.Next() {
+			var data map[string]any
+			err := rows.Scan(&data)
+			if err != nil {
+				klog.Errorf("Failed to scan result: %v", err)
+				continue
+			}
+			notificationPayload.NewData = data
+		}
+		rows.Close()
+
+		// Check for errors from iteration
+		if err := rows.Err(); err != nil {
+			klog.Errorf("Error iterating rows: %v", err)
+		}
+	}
+	if notificationPayload.OldData == nil &&
+		(notificationPayload.Operation == "UPDATE" || notificationPayload.Operation == "DELETE") {
+		klog.Warningf("Notification payload was truncated, 'oldData' is missing. This is a current limitation. UID: %s", notificationPayload.UID)
+	}
+
+	for _, sub := range l.subscriptions {
+		select {
+		case <-sub.Context.Done():
+			klog.V(3).Infof("Subscription %s context is done, skipping", sub.ID)
+			continue
+		default:
+			sub.Channel <- &notificationPayload
 		}
 	}
 }
