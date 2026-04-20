@@ -276,8 +276,12 @@ func (l *Listener) listen() {
 }
 
 // forwardNotification parses a Postgres notification and sends it to all registered subscriptions.
-// The RLock is held only long enough to snapshot the current subscribers; the DB backfill and
-// channel sends happen outside the lock so they cannot block RegisterSubscription/UnregisterSubscription.
+// The DB backfill query runs without holding l.mu to avoid blocking RegisterSubscription/UnregisterSubscription
+// during slow queries. The RLock is acquired only for the channel fan-out; sends are non-blocking
+// (events are dropped if a channel is full) so the lock is never held indefinitely. Holding the
+// RLock during sends is required for safety: it prevents UnregisterSubscription (which needs the
+// write lock) from completing while a send is in progress, ensuring subscriber channels are not
+// closed mid-send.
 func (l *Listener) forwardNotification(notification *pgconn.Notification) {
 	var notificationPayload model.Event
 	err := json.Unmarshal([]byte(notification.Payload), &notificationPayload)
@@ -320,17 +324,14 @@ func (l *Listener) forwardNotification(notification *pgconn.Notification) {
 		klog.Warningf("Notification payload was truncated, 'oldData' is missing. This is a current limitation. UID: %s", notificationPayload.UID)
 	}
 
-	// Snapshot subscribers under RLock, then release before sending to avoid
-	// blocking RegisterSubscription/UnregisterSubscription on slow channel sends.
+	// Hold RLock during fan-out. Non-blocking sends ensure we never block while holding the lock.
+	// The RLock also prevents subscriber channels from being closed mid-send (UnregisterSubscription
+	// needs the write lock and must wait for all readers to finish).
 	l.mu.RLock()
-	subs := make([]*Subscription, 0, len(l.subscriptions))
-	for _, sub := range l.subscriptions {
-		subs = append(subs, sub)
-	}
-	klog.V(3).Infof("Received postgres event, forwarding to %d subscriptions.", len(subs))
-	l.mu.RUnlock()
+	defer l.mu.RUnlock()
 
-	for _, sub := range subs {
+	klog.V(3).Infof("Received postgres event, forwarding to %d subscriptions.", len(l.subscriptions))
+	for _, sub := range l.subscriptions {
 		select {
 		case <-sub.Context.Done():
 			klog.V(3).Infof("Subscription %s context is done, skipping", sub.ID)
