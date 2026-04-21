@@ -301,22 +301,26 @@ func (l *Listener) forwardNotification(notification *pgconn.Notification) {
 			klog.Errorf("Failed to execute query: %v", err)
 			return
 		}
+		defer rows.Close()
 
-		// Explicitly close rows after processing to avoid resource leak
-		for rows.Next() {
+		found := false
+		if rows.Next() {
 			var data map[string]any
-			err := rows.Scan(&data)
-			if err != nil {
+			if err := rows.Scan(&data); err != nil {
 				klog.Errorf("Failed to scan result: %v", err)
-				continue
+				return
 			}
 			notificationPayload.NewData = data
+			found = true
 		}
-		rows.Close()
 
-		// Check for errors from iteration
 		if err := rows.Err(); err != nil {
 			klog.Errorf("Error iterating rows: %v", err)
+			return
+		}
+		if !found {
+			klog.Errorf("Backfill query returned no rows for UID: %s", notificationPayload.UID)
+			return
 		}
 	}
 	if notificationPayload.OldData == nil &&

@@ -917,6 +917,18 @@ func (m *MockRows) Scan(dest ...interface{}) error {
 func (m *MockRows) Values() ([]interface{}, error) { return nil, nil }
 func (m *MockRows) RawValues() [][]byte            { return nil }
 
+// ErrorScanRows is a mock pgx.Rows that returns one row but fails on Scan.
+type ErrorScanRows struct{ called bool }
+
+func (r *ErrorScanRows) Close()                                         {}
+func (r *ErrorScanRows) Err() error                                     { return nil }
+func (r *ErrorScanRows) CommandTag() pgconn.CommandTag                  { return nil }
+func (r *ErrorScanRows) FieldDescriptions() []pgproto3.FieldDescription { return nil }
+func (r *ErrorScanRows) Next() bool                                     { v := !r.called; r.called = true; return v }
+func (r *ErrorScanRows) Scan(dest ...interface{}) error                 { return assert.AnError }
+func (r *ErrorScanRows) Values() ([]interface{}, error)                 { return nil, nil }
+func (r *ErrorScanRows) RawValues() [][]byte                            { return nil }
+
 // [AI] Test listen() with large payload where data is truncated
 func TestListen_WithLargePayload(t *testing.T) {
 	listenCtx, listenCancel := context.WithCancel(context.Background())
@@ -1417,4 +1429,52 @@ func TestForwardNotification_InsertWithFullPayload(t *testing.T) {
 	event := <-ch
 	assert.Equal(t, "u1", event.UID)
 	assert.Equal(t, "ConfigMap", event.NewData["kind"])
+}
+
+// TestForwardNotification_BackfillNoRows verifies that an INSERT/UPDATE with no matching DB row is dropped.
+func TestForwardNotification_BackfillNoRows(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	conn := MockPgxConn{
+		QueryFunc: func(ctx context.Context, sql string, arguments ...interface{}) (pgx.Rows, error) {
+			// Return empty rows (no results found).
+			return &MockRows{nextCalled: 1}, nil // nextCalled=1 so Next() returns false immediately
+		},
+	}
+	ch := make(chan *model.Event, 10)
+	l, _ := buildTestListener(ctx, "sub-1", ch, conn)
+
+	l.forwardNotification(&pgconn.Notification{
+		Payload: `{"uid":"missing-uid","operation":"INSERT","timestamp":"2024-01-01T00:00:00Z"}`,
+	})
+
+	assert.Equal(t, 0, len(ch), "Event with no backfill data should be dropped")
+}
+
+// TestForwardNotification_BackfillScanError verifies that a scan error during backfill drops the event.
+func TestForwardNotification_BackfillScanError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	conn := MockPgxConn{
+		QueryFunc: func(ctx context.Context, sql string, arguments ...interface{}) (pgx.Rows, error) {
+			return &MockRows{data: nil}, nil // Scan into *map[string]any with nil triggers no error, but data is nil
+		},
+	}
+	_ = conn
+	// Use a rows mock that returns an error from Scan.
+	ch := make(chan *model.Event, 10)
+	scanErrConn := MockPgxConn{
+		QueryFunc: func(ctx context.Context, sql string, arguments ...interface{}) (pgx.Rows, error) {
+			return &ErrorScanRows{}, nil
+		},
+	}
+	l, _ := buildTestListener(ctx, "sub-1", ch, scanErrConn)
+
+	l.forwardNotification(&pgconn.Notification{
+		Payload: `{"uid":"u1","operation":"INSERT","timestamp":"2024-01-01T00:00:00Z"}`,
+	})
+
+	assert.Equal(t, 0, len(ch), "Event should be dropped when scan fails")
 }
