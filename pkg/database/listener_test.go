@@ -941,7 +941,8 @@ func TestListen_WithLargePayload(t *testing.T) {
 			return notification, nil
 		},
 		QueryFunc: func(ctx context.Context, sql string, arguments ...interface{}) (pgx.Rows, error) {
-			assert.Contains(t, sql, "SELECT data FROM search.resources WHERE uid = 'test-uid-large'")
+			assert.Contains(t, sql, "SELECT data FROM search.resources WHERE uid = $1")
+			assert.Equal(t, "test-uid-large", arguments[0])
 			return &MockRows{
 				data:    expectedData,
 				cluster: expectedCluster,
