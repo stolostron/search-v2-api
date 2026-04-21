@@ -1118,7 +1118,7 @@ func TestCheckAndCloseExpiredSubscriptions_MaxLifetime(t *testing.T) {
 		config.Cfg.Subscription.IdleTimeout = originalIdleTimeout
 	}()
 
-	config.Cfg.Subscription.MaxLifetime = 10      // 10 ms (will trigger)
+	config.Cfg.Subscription.MaxLifetime = 10        // 10 ms (will trigger)
 	config.Cfg.Subscription.IdleTimeout = 10 * 1000 // 10 seconds (won't trigger)
 
 	ctx, cancel := context.WithCancel(context.Background())
