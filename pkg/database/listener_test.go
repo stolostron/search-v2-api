@@ -941,8 +941,7 @@ func TestListen_WithLargePayload(t *testing.T) {
 			return notification, nil
 		},
 		QueryFunc: func(ctx context.Context, sql string, arguments ...interface{}) (pgx.Rows, error) {
-			assert.Contains(t, sql, "SELECT data FROM search.resources WHERE uid = $1")
-			assert.Equal(t, "test-uid-large", arguments[0])
+			assert.Contains(t, sql, "SELECT data FROM search.resources WHERE uid = 'test-uid-large'")
 			return &MockRows{
 				data:    expectedData,
 				cluster: expectedCluster,
@@ -1119,7 +1118,7 @@ func TestCheckAndCloseExpiredSubscriptions_MaxLifetime(t *testing.T) {
 		config.Cfg.Subscription.IdleTimeout = originalIdleTimeout
 	}()
 
-	config.Cfg.Subscription.MaxLifetime = 10      // 10 ms (will trigger)
+	config.Cfg.Subscription.MaxLifetime = 10        // 10 ms (will trigger)
 	config.Cfg.Subscription.IdleTimeout = 10 * 1000 // 10 seconds (won't trigger)
 
 	ctx, cancel := context.WithCancel(context.Background())
