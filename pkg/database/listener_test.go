@@ -1208,3 +1208,213 @@ func TestCheckAndCloseExpiredSubscriptions_IdleTimeout(t *testing.T) {
 		// Channel is full (buffered), which is also fine — it was not closed.
 	}
 }
+
+// buildTestListener creates a minimal Listener with a mock connection and one subscription.
+func buildTestListener(ctx context.Context, subID string, ch chan *model.Event, conn MockPgxConnIface) (*Listener, *Subscription) {
+	subCtx, subCancel := context.WithCancel(ctx)
+	sub := &Subscription{
+		ID:      subID,
+		Channel: ch,
+		Context: subCtx,
+		Cancel:  subCancel,
+	}
+	l := &Listener{
+		ctx:           ctx,
+		subscriptions: map[string]*Subscription{subID: sub},
+		conn:          conn,
+	}
+	return l, sub
+}
+
+// TestForwardNotification_InvalidJSON verifies that a malformed payload is dropped gracefully.
+func TestForwardNotification_InvalidJSON(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan *model.Event, 10)
+	l, _ := buildTestListener(ctx, "sub-1", ch, MockPgxConn{})
+
+	l.forwardNotification(&pgconn.Notification{Payload: `not-valid-json`})
+
+	assert.Equal(t, 0, len(ch), "No event should be forwarded on JSON parse failure")
+}
+
+// TestForwardNotification_DBQueryError verifies that a DB error during backfill drops the event.
+func TestForwardNotification_DBQueryError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	queryCalled := false
+	conn := MockPgxConn{
+		QueryFunc: func(ctx context.Context, sql string, arguments ...interface{}) (pgx.Rows, error) {
+			queryCalled = true
+			return nil, assert.AnError
+		},
+	}
+	ch := make(chan *model.Event, 10)
+	l, _ := buildTestListener(ctx, "sub-1", ch, conn)
+
+	// INSERT with no newData triggers the DB backfill path.
+	l.forwardNotification(&pgconn.Notification{
+		Payload: `{"uid":"u1","operation":"INSERT","timestamp":"2024-01-01T00:00:00Z"}`,
+	})
+
+	assert.True(t, queryCalled, "DB query should have been attempted")
+	assert.Equal(t, 0, len(ch), "No event should be forwarded when DB query fails")
+}
+
+// TestForwardNotification_ChannelFull verifies that a full channel drops the event without blocking.
+func TestForwardNotification_ChannelFull(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan *model.Event, 2)
+	// Pre-fill the channel to capacity.
+	ch <- &model.Event{}
+	ch <- &model.Event{}
+
+	l, _ := buildTestListener(ctx, "sub-1", ch, MockPgxConn{})
+
+	done := make(chan struct{})
+	go func() {
+		l.forwardNotification(&pgconn.Notification{
+			Payload: `{"uid":"u1","operation":"CREATE","timestamp":"2024-01-01T00:00:00Z"}`,
+		})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Good: returned promptly without blocking.
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("forwardNotification blocked on a full channel")
+	}
+	assert.Equal(t, 2, len(ch), "Channel length should be unchanged (new event dropped)")
+}
+
+// TestForwardNotification_CancelledSubscription verifies that a cancelled subscription is skipped.
+func TestForwardNotification_CancelledSubscription(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan *model.Event, 10)
+	l, sub := buildTestListener(ctx, "sub-1", ch, MockPgxConn{})
+
+	sub.Cancel() // cancel before forwarding
+
+	l.forwardNotification(&pgconn.Notification{
+		Payload: `{"uid":"u1","operation":"CREATE","timestamp":"2024-01-01T00:00:00Z"}`,
+	})
+
+	assert.Equal(t, 0, len(ch), "Cancelled subscription should not receive events")
+}
+
+// TestForwardNotification_MultipleSubscriptions verifies the event is sent to all active subscribers.
+func TestForwardNotification_MultipleSubscriptions(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch1 := make(chan *model.Event, 10)
+	ch2 := make(chan *model.Event, 10)
+	subCtx1, subCancel1 := context.WithCancel(ctx)
+	subCtx2, subCancel2 := context.WithCancel(ctx)
+	defer subCancel1()
+	defer subCancel2()
+
+	l := &Listener{
+		ctx: ctx,
+		subscriptions: map[string]*Subscription{
+			"sub-1": {ID: "sub-1", Channel: ch1, Context: subCtx1, Cancel: subCancel1},
+			"sub-2": {ID: "sub-2", Channel: ch2, Context: subCtx2, Cancel: subCancel2},
+		},
+		conn: MockPgxConn{},
+	}
+
+	l.forwardNotification(&pgconn.Notification{
+		Payload: `{"uid":"u1","operation":"CREATE","timestamp":"2024-01-01T00:00:00Z"}`,
+	})
+
+	assert.Equal(t, 1, len(ch1), "sub-1 should receive the event")
+	assert.Equal(t, 1, len(ch2), "sub-2 should receive the event")
+}
+
+// TestForwardNotification_MixedSubscriptions verifies active subscribers receive the event
+// while cancelled ones are skipped.
+func TestForwardNotification_MixedSubscriptions(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	chActive := make(chan *model.Event, 10)
+	chCancelled := make(chan *model.Event, 10)
+	activeCtx, activeCancel := context.WithCancel(ctx)
+	cancelledCtx, cancelledCancel := context.WithCancel(ctx)
+	defer activeCancel()
+	cancelledCancel() // cancel immediately
+
+	l := &Listener{
+		ctx: ctx,
+		subscriptions: map[string]*Subscription{
+			"active":    {ID: "active", Channel: chActive, Context: activeCtx, Cancel: activeCancel},
+			"cancelled": {ID: "cancelled", Channel: chCancelled, Context: cancelledCtx, Cancel: cancelledCancel},
+		},
+		conn: MockPgxConn{},
+	}
+
+	l.forwardNotification(&pgconn.Notification{
+		Payload: `{"uid":"u1","operation":"CREATE","timestamp":"2024-01-01T00:00:00Z"}`,
+	})
+
+	assert.Equal(t, 1, len(chActive), "Active subscription should receive the event")
+	assert.Equal(t, 0, len(chCancelled), "Cancelled subscription should not receive the event")
+}
+
+// TestForwardNotification_DeleteDoesNotTriggerBackfill verifies DELETE events skip DB backfill.
+func TestForwardNotification_DeleteDoesNotTriggerBackfill(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	queryCalled := false
+	conn := MockPgxConn{
+		QueryFunc: func(ctx context.Context, sql string, arguments ...interface{}) (pgx.Rows, error) {
+			queryCalled = true
+			return nil, nil
+		},
+	}
+	ch := make(chan *model.Event, 10)
+	l, _ := buildTestListener(ctx, "sub-1", ch, conn)
+
+	// DELETE with no oldData — should log a warning but not query DB.
+	l.forwardNotification(&pgconn.Notification{
+		Payload: `{"uid":"u1","operation":"DELETE","timestamp":"2024-01-01T00:00:00Z"}`,
+	})
+
+	assert.False(t, queryCalled, "DB should not be queried for DELETE events")
+	assert.Equal(t, 1, len(ch), "DELETE event should still be forwarded to subscribers")
+}
+
+// TestForwardNotification_InsertWithFullPayload verifies that an INSERT with newData present
+// skips the DB backfill and is forwarded directly.
+func TestForwardNotification_InsertWithFullPayload(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	queryCalled := false
+	conn := MockPgxConn{
+		QueryFunc: func(ctx context.Context, sql string, arguments ...interface{}) (pgx.Rows, error) {
+			queryCalled = true
+			return nil, nil
+		},
+	}
+	ch := make(chan *model.Event, 10)
+	l, _ := buildTestListener(ctx, "sub-1", ch, conn)
+
+	l.forwardNotification(&pgconn.Notification{
+		Payload: `{"uid":"u1","operation":"INSERT","timestamp":"2024-01-01T00:00:00Z","newData":{"kind":"ConfigMap","name":"my-cm"}}`,
+	})
+
+	assert.False(t, queryCalled, "DB should not be queried when newData is present")
+	assert.Equal(t, 1, len(ch), "Event should be forwarded to subscriber")
+	event := <-ch
+	assert.Equal(t, "u1", event.UID)
+	assert.Equal(t, "ConfigMap", event.NewData["kind"])
+}

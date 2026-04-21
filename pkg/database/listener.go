@@ -332,9 +332,16 @@ func (l *Listener) forwardNotification(notification *pgconn.Notification) {
 
 	klog.V(3).Infof("Received postgres event, forwarding to %d subscriptions.", len(l.subscriptions))
 	for _, sub := range l.subscriptions {
+		// Check Done first (without competing with the send case) to guarantee
+		// cancelled subscriptions are skipped even when the channel has space.
 		select {
 		case <-sub.Context.Done():
 			klog.V(3).Infof("Subscription %s context is done, skipping", sub.ID)
+			continue
+		default:
+		}
+		// Non-blocking send: drop the event if the channel buffer is full.
+		select {
 		case sub.Channel <- &notificationPayload:
 		default:
 			klog.Warningf("Subscription %s channel buffer is full, dropping event.", sub.ID)
