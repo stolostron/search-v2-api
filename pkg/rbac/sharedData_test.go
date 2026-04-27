@@ -95,22 +95,7 @@ func Test_getClusterScopedResources_emptyCache(t *testing.T) {
 
 func Test_getResouces_usingCache(t *testing.T) {
 	ctx := context.Background()
-	mockpool, mock_cache := mockResourcesListCache(t)
-	columns := []string{"apigroup", "kind"}
-	pgxRows := pgxpoolmock.NewRows(columns).AddRow("addon.open-cluster-management.io", "Nodes").ToPgxRows()
-
-	columns1 := []string{"key", "datatype"}
-	pgxRows1 := pgxpoolmock.NewRows(columns1).AddRow("kind", "string").AddRow("apigroup", "string").ToPgxRows()
-
-	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT COALESCE("data"->>'apigroup', '') AS "apigroup", COALESCE("data"->>'kind_plural', '') AS "kind" FROM "search"."resources" WHERE ("data"?'_hubClusterResource' AND ("data"?'namespace' IS FALSE))`),
-		gomock.Eq([]interface{}{}),
-	).Return(pgxRows, nil)
-
-	mockpool.EXPECT().Query(gomock.Any(),
-		gomock.Eq(`SELECT DISTINCT key, CASE  WHEN (jsonb_typeof(value) = 'string' AND value::text ~ '^"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}') THEN 'timestamp' ELSE jsonb_typeof(value) END AS "datatype" FROM "search"."resources", jsonb_each("data")`),
-		gomock.Eq([]interface{}{}),
-	).Return(pgxRows1, nil)
+	_, mock_cache := mockResourcesListCache(t)
 
 	namespaces := []string{"test-namespace"}
 	manClusters := map[string]struct{}{"test-man": {}}
@@ -119,10 +104,11 @@ func Test_getResouces_usingCache(t *testing.T) {
 	propTypesMock := map[string]string{"kind": "string", "label": "object"}
 
 	csRes[res] = struct{}{}
-	// Adding cache:
+	// Adding cache with all caches valid - no DB queries should be made.
 	mock_cache.shared = SharedData{
 		namespaces:      namespaces,
 		managedClusters: manClusters,
+		nsCache:         cacheMetadata{updatedAt: time.Now()},
 		mcCache:         cacheMetadata{updatedAt: time.Now()},
 		csrCache:        cacheMetadata{updatedAt: time.Now()},
 		csResourcesMap:  csRes,
@@ -132,11 +118,11 @@ func Test_getResouces_usingCache(t *testing.T) {
 	}
 
 	mock_cache.shared.PopulateSharedCache(ctx)
-	csResource := Resource{Kind: "Nodes", Apigroup: "addon.open-cluster-management.io"}
-	_, csResPresent := mock_cache.shared.csResourcesMap[csResource]
 
+	// With all caches valid, the cached data should be preserved (no DB queries made).
+	_, csResPresent := mock_cache.shared.csResourcesMap[res]
 	if len(mock_cache.shared.csResourcesMap) != 1 || !csResPresent {
-		t.Error("Cluster Scoped Resources not in cache")
+		t.Error("Cluster Scoped Resources cache should be preserved when valid")
 	}
 	if len(mock_cache.shared.namespaces) != 1 || mock_cache.shared.namespaces[0] != "test-namespace" || mock_cache.shared.propTypes["kind"] != "string" {
 		t.Error("Shared Namespaces not in cache")
