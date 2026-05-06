@@ -1,0 +1,35 @@
+# Copyright Contributors to the Open Cluster Management project
+
+FROM registry-proxy.engineering.redhat.com/rh-osbs/openshift-golang-builder:v1.25.8 AS builder
+
+WORKDIR /go/src/github.com/stolostron/search-v2-api
+COPY . .
+RUN go mod vendor
+RUN CGO_ENABLED=1 GOGC=25 GOEXPERIMENT=strictfipsruntime go build -trimpath -o main main.go
+
+FROM registry-proxy.engineering.redhat.com/ubi9/ubi-minimal:latest
+
+COPY --from=builder /go/src/github.com/stolostron/search-v2-api/main /bin/main
+COPY --from=builder /go/src/github.com/stolostron/search-v2-api/pkg/database/listenerTrigger.sql /pkg/database/listenerTrigger.sql
+
+ENV USER_UID=1001 \
+    USER_NAME=search-api
+
+EXPOSE 4010
+USER ${USER_UID}
+ENTRYPOINT ["/bin/main"]
+
+ARG ACM_VERSION=${ACM_VERSION}
+
+LABEL com.redhat.component="acm-search-api-container" \
+      url="https://github.com/stolostron/search-v2-api" \
+      description="Search api service" \      
+      maintainer="acm-contact@redhat.com" \
+      name="rhacm2/acm-search-v2-api-rhel9" \
+      org.label-schema.license="Red Hat Advanced Cluster Management for Kubernetes EULA" \
+      org.label-schema.schema-version="1.0" \
+      summary="Search api service" \
+      io.k8s.display-name="Search api" \
+      io.k8s.description="Search api service" \
+      io.openshift.tags="data,images" \
+      cpe="cpe:/a:redhat:acm:${ACM_VERSION}::el9"
