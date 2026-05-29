@@ -80,8 +80,10 @@ func StartAndListen(ctx context.Context) {
 	})
 	apiSubrouter.Handle("/graphql", graphqlSrv)
 
-	if config.Cfg.PlaygroundMode {
+	if config.Cfg.GraphQLDocEnabled {
 		graphqlSrv.Use(extension.Introspection{}) // Enable access to documentation.
+	}
+	if config.Cfg.PlaygroundMode {
 		router.Handle("/playground",
 			playground.Handler("Search GraphQL playground", fmt.Sprintf("%s/graphql", config.Cfg.ContextPath)))
 		klog.Infof("GraphQL playground is now running on https://localhost:%d/playground", port)
