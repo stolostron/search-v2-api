@@ -80,9 +80,10 @@ func StartAndListen(ctx context.Context) {
 	})
 	apiSubrouter.Handle("/graphql", graphqlSrv)
 
-	if config.Cfg.GraphQLDocEnabled {
-		graphqlSrv.Use(extension.Introspection{}) // Enable access to documentation.
+	if config.Cfg.ApiDocumentation {
+		graphqlSrv.Use(extension.Introspection{}) // Enable access to GraphQL API documentation.
 	}
+
 	if config.Cfg.PlaygroundMode {
 		router.Handle("/playground",
 			playground.Handler("Search GraphQL playground", fmt.Sprintf("%s/graphql", config.Cfg.ContextPath)))
