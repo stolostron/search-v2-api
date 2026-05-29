@@ -18,35 +18,36 @@ var Cfg = new()
 
 // Defines the configurable options for this microservice.
 type Config struct {
-	HubName             string //Display Name of the cluster where ACM is deployed
-	API_SERVER_URL      string // address for Kubernetes API Server
-	AuthCacheTTL            int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
-	SharedCacheTTL          int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
-	UserCacheTTL            int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
-	UserPermissionCacheTTL  int    // Time-to-live (milliseconds) of UserPermissions cache. Default: 30 seconds
-	ContextPath             string
-	DBHost              string
-	DBMinConns          int32 // Overrides pgxpool.Config{ MinConns } Default: 2
-	DBMaxConns          int32 // Overrides pgxpool.Config{ MaxConns } Default: 10
-	DBMaxConnIdleTime   int   // Overrides pgxpool.Config{ MaxConnIdleTime } Default: 5 min
-	DBMaxConnLifeTime   int   // Overrides pgxpool.Config{ MaxConnLifetime } Default: 5 min
-	DBMaxConnLifeJitter int   // Overrides pgxpool.Config{ MaxConnLifetimeJitter } Default: 1 min
-	DBName              string
-	DBPass              string
-	DBPort              int
-	DBUser              string
-	DBReconnectDelay    int              // Duration in milliseconds between reconnect attempts. Default: 5 seconds
-	DevelopmentMode     bool             // Indicates if running in local development mode.
-	Features            featureFlags     // Enable or disable features.
-	Federation          federationConfig // Federated search configuration.
-	HttpPort            int
-	PlaygroundMode      bool               // Enable the GraphQL Playground client.
-	PodNamespace        string             // Kubernetes namespace where the pod is running.
-	QueryLimit          uint               // The default LIMIT to use on queries. Client can override. Default: 1000
-	RelationLevel       int                // The number of levels/hops for finding relationships for a particular resource
-	SlowLog             int                // Logs queries slower than the specified duration in ms.      Default: 300ms
-	RequestTimeout      int                // Seconds a request will process before timing out.           Default: 2 minutes
-	Subscription        subscriptionConfig // Subscription limits configuration.
+	HubName                string //Display Name of the cluster where ACM is deployed
+	API_SERVER_URL         string // address for Kubernetes API Server
+	AuthCacheTTL           int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
+	SharedCacheTTL         int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
+	UserCacheTTL           int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
+	UserPermissionCacheTTL int    // Time-to-live (milliseconds) of UserPermissions cache. Default: 30 seconds
+	ContextPath            string
+	DBHost                 string
+	DBMinConns             int32 // Overrides pgxpool.Config{ MinConns } Default: 2
+	DBMaxConns             int32 // Overrides pgxpool.Config{ MaxConns } Default: 10
+	DBMaxConnIdleTime      int   // Overrides pgxpool.Config{ MaxConnIdleTime } Default: 5 min
+	DBMaxConnLifeTime      int   // Overrides pgxpool.Config{ MaxConnLifetime } Default: 5 min
+	DBMaxConnLifeJitter    int   // Overrides pgxpool.Config{ MaxConnLifetimeJitter } Default: 1 min
+	DBName                 string
+	DBPass                 string
+	DBPort                 int
+	DBUser                 string
+	DBReconnectDelay       int              // Duration in milliseconds between reconnect attempts. Default: 5 seconds
+	DevelopmentMode        bool             // Indicates if running in local development mode.
+	DocumentationEnabled   bool             // Indicates if the documentation is enabled.
+	Features               featureFlags     // Enable or disable features.
+	Federation             federationConfig // Federated search configuration.
+	HttpPort               int
+	PlaygroundMode         bool               // Enable the GraphQL Playground client.
+	PodNamespace           string             // Kubernetes namespace where the pod is running.
+	QueryLimit             uint               // Default LIMIT to use on queries. Client can override.  Default: 1000
+	RelationLevel          int                // Number of levels/hops for finding relationships for a resource
+	SlowLog                int                // Logs queries slower than the specified duration in ms. Default: 300ms
+	RequestTimeout         int                // Seconds a request will process before timing out.      Default: 2 mins
+	Subscription           subscriptionConfig // Subscription limits configuration.
 }
 
 // Define feature flags.
@@ -85,25 +86,26 @@ func new() *Config {
 	// If environment variables are set, use default values
 	// Simply put, the order of preference is env -> default values (from left to right)
 	conf := &Config{
-		HubName:             getEnv("HUB_NAME", "global-hub"),
-		API_SERVER_URL:      getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
-		AuthCacheTTL:           getEnvAsInt("AUTH_CACHE_TTL", 60000),              // 1 minute
-		SharedCacheTTL:         getEnvAsInt("SHARED_CACHE_TTL", 300000),           // 5 minutes
-		UserCacheTTL:           getEnvAsInt("USER_CACHE_TTL", 300000),             // 5 minutes
-		UserPermissionCacheTTL: getEnvAsInt("USER_PERMISSION_CACHE_TTL", 30000),   // 30 seconds
+		HubName:                getEnv("HUB_NAME", "global-hub"),
+		API_SERVER_URL:         getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
+		AuthCacheTTL:           getEnvAsInt("AUTH_CACHE_TTL", 60000),            // 1 minute
+		SharedCacheTTL:         getEnvAsInt("SHARED_CACHE_TTL", 300000),         // 5 minutes
+		UserCacheTTL:           getEnvAsInt("USER_CACHE_TTL", 300000),           // 5 minutes
+		UserPermissionCacheTTL: getEnvAsInt("USER_PERMISSION_CACHE_TTL", 30000), // 30 seconds
 		ContextPath:            getEnv("CONTEXT_PATH", "/searchapi"),
-		DBHost:              getEnv("DB_HOST", "localhost"),
-		DBMaxConns:          getEnvAsInt32("DB_MAX_CONNS", int32(10)),          // 10     Overrides pgxpool default (4)
-		DBMaxConnIdleTime:   getEnvAsInt("DB_MAX_CONN_IDLE_TIME", 5*60*1000),   // 5 min, Overrides pgxpool default (30)
-		DBMaxConnLifeJitter: getEnvAsInt("DB_MAX_CONN_LIFE_JITTER", 1*60*1000), // 1 min, Overrides pgxpool default
-		DBMaxConnLifeTime:   getEnvAsInt("DB_MAX_CONN_LIFE_TIME", 5*60*1000),   // 5 min, Overrides pgxpool default (60)
-		DBMinConns:          getEnvAsInt32("DB_MIN_CONNS", int32(2)),           // 2      Overrides pgxpool default (0)
-		DBName:              getEnv("DB_NAME", ""),
-		DBPass:              getEnv("DB_PASS", ""),
-		DBPort:              getEnvAsInt("DB_PORT", 5432),
-		DBUser:              getEnv("DB_USER", ""),
-		DBReconnectDelay:    getEnvAsInt("DB_RECONNECT_DELAY", 5*1000), // 5 seconds
-		DevelopmentMode:     DEVELOPMENT_MODE,
+		DBHost:                 getEnv("DB_HOST", "localhost"),
+		DBMaxConns:             getEnvAsInt32("DB_MAX_CONNS", int32(10)),          // 10     Overrides pgxpool default (4)
+		DBMaxConnIdleTime:      getEnvAsInt("DB_MAX_CONN_IDLE_TIME", 5*60*1000),   // 5 min, Overrides pgxpool default (30)
+		DBMaxConnLifeJitter:    getEnvAsInt("DB_MAX_CONN_LIFE_JITTER", 1*60*1000), // 1 min, Overrides pgxpool default
+		DBMaxConnLifeTime:      getEnvAsInt("DB_MAX_CONN_LIFE_TIME", 5*60*1000),   // 5 min, Overrides pgxpool default (60)
+		DBMinConns:             getEnvAsInt32("DB_MIN_CONNS", int32(2)),           // 2      Overrides pgxpool default (0)
+		DBName:                 getEnv("DB_NAME", ""),
+		DBPass:                 getEnv("DB_PASS", ""),
+		DBPort:                 getEnvAsInt("DB_PORT", 5432),
+		DBUser:                 getEnv("DB_USER", ""),
+		DBReconnectDelay:       getEnvAsInt("DB_RECONNECT_DELAY", 5*1000), // 5 seconds
+		DevelopmentMode:        DEVELOPMENT_MODE,
+		DocumentationEnabled:   getEnvAsBool("DOCUMENTATION_ENABLED", false),
 		Features: featureFlags{
 			FederatedSearch:     getEnvAsBool("FEATURE_FEDERATED_SEARCH", false),  // In Dev mode default is true.
 			FineGrainedRbac:     getEnvAsBool("FEATURE_FINE_GRAINED_RBAC", false), // In Dev mode default is true.
