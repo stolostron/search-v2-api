@@ -20,6 +20,7 @@ var Cfg = new()
 type Config struct {
 	HubName                string //Display Name of the cluster where ACM is deployed
 	API_SERVER_URL         string // address for Kubernetes API Server
+	ApiDocumentation       bool   // Indicates if the API documentation is enabled.
 	AuthCacheTTL           int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
 	SharedCacheTTL         int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
 	UserCacheTTL           int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
@@ -37,7 +38,6 @@ type Config struct {
 	DBUser                 string
 	DBReconnectDelay       int              // Duration in milliseconds between reconnect attempts. Default: 5 seconds
 	DevelopmentMode        bool             // Indicates if running in local development mode.
-	DocumentationEnabled   bool             // Indicates if the documentation is enabled.
 	Features               featureFlags     // Enable or disable features.
 	Federation             federationConfig // Federated search configuration.
 	HttpPort               int
@@ -88,6 +88,7 @@ func new() *Config {
 	conf := &Config{
 		HubName:                getEnv("HUB_NAME", "global-hub"),
 		API_SERVER_URL:         getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
+		ApiDocumentation:       getEnvAsBool("API_DOCUMENTATION", false),
 		AuthCacheTTL:           getEnvAsInt("AUTH_CACHE_TTL", 60000),            // 1 minute
 		SharedCacheTTL:         getEnvAsInt("SHARED_CACHE_TTL", 300000),         // 5 minutes
 		UserCacheTTL:           getEnvAsInt("USER_CACHE_TTL", 300000),           // 5 minutes
@@ -105,7 +106,6 @@ func new() *Config {
 		DBUser:                 getEnv("DB_USER", ""),
 		DBReconnectDelay:       getEnvAsInt("DB_RECONNECT_DELAY", 5*1000), // 5 seconds
 		DevelopmentMode:        DEVELOPMENT_MODE,
-		DocumentationEnabled:   getEnvAsBool("DOCUMENTATION_ENABLED", false),
 		Features: featureFlags{
 			FederatedSearch:     getEnvAsBool("FEATURE_FEDERATED_SEARCH", false),  // In Dev mode default is true.
 			FineGrainedRbac:     getEnvAsBool("FEATURE_FINE_GRAINED_RBAC", false), // In Dev mode default is true.
