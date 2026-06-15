@@ -20,7 +20,6 @@ type tokenReviewCache struct {
 	meta cacheMetadata
 
 	authClient  v1.AuthenticationV1Interface // This allows tests to replace with mock client.
-	token       string
 	tokenReview *authv1.TokenReview
 }
 
@@ -49,18 +48,18 @@ func (c *Cache) GetTokenReview(ctx context.Context, token string) (*authv1.Token
 	if !tokenExists {
 		cachedTR = &tokenReviewCache{
 			authClient: c.getAuthClient(),
-			token:      token,
 		}
 		if c.tokenReviews == nil {
 			c.tokenReviews = map[string]*tokenReviewCache{}
 		}
 		c.tokenReviews[hashToken(token)] = cachedTR
 	}
-	return cachedTR.getTokenReview()
+	return cachedTR.getTokenReview(token)
 }
 
 // Get the resolved TokenReview from the cached tokenReviewCachedRequest object.
-func (trc *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
+// The raw token is passed transiently and never stored on the struct.
+func (trc *tokenReviewCache) getTokenReview(token string) (*authv1.TokenReview, error) {
 	// This ensures that only 1 process is updating the TokenReview data from API request.
 	trc.meta.lock.Lock()
 	defer trc.meta.lock.Unlock()
@@ -71,7 +70,7 @@ func (trc *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
 
 		tr := authv1.TokenReview{
 			Spec: authv1.TokenReviewSpec{
-				Token: trc.token,
+				Token: token,
 			},
 		}
 
