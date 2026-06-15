@@ -42,7 +42,7 @@ func Test_IsValidToken_emptyCache(t *testing.T) {
 func Test_IsValidToken_usingCache(t *testing.T) {
 	// Initialize cache and set state.
 	mock_cache := newMockCache()
-	mock_cache.tokenReviews["1234567890"] = &tokenReviewCache{
+	mock_cache.tokenReviews[hashToken("1234567890")] = &tokenReviewCache{
 		meta: cacheMetadata{updatedAt: time.Now()},
 		tokenReview: &authv1.TokenReview{
 			Status: authv1.TokenReviewStatus{
@@ -67,7 +67,7 @@ func Test_IsValidToken_usingCache(t *testing.T) {
 func Test_IsValidToken_expiredCache(t *testing.T) {
 	// Initialize cache and set state to TokenReview updated 5 minutes ago.
 	mock_cache := newMockCache()
-	mock_cache.tokenReviews["1234567890-expired"] = &tokenReviewCache{
+	mock_cache.tokenReviews[hashToken("1234567890-expired")] = &tokenReviewCache{
 		authClient: fake.NewSimpleClientset().AuthenticationV1(),
 		meta:       cacheMetadata{updatedAt: time.Now().Add(time.Duration(-5) * time.Minute)},
 		token:      "1234567890-expired",
@@ -89,8 +89,26 @@ func Test_IsValidToken_expiredCache(t *testing.T) {
 		t.Error("Received unexpected error from IsValidToken()", err)
 	}
 	// Verify that cache was updated within the last 1 millisecond.
-	if mock_cache.tokenReviews["1234567890-expired"].meta.updatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
+	if mock_cache.tokenReviews[hashToken("1234567890-expired")].meta.updatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
 		t.Error("Expected the cached TokenReview to be updated within the last millisecond.")
 	}
 
+}
+
+// Test_hashToken_keyIsHashed asserts that GetTokenReview stores entries under the
+// SHA-256 hash of the token, not the raw token string.
+func Test_hashToken_keyIsHashed(t *testing.T) {
+	mock_cache := newMockCache()
+	token := "super-secret-bearer-token"
+
+	// Trigger a TokenReview — the fake client returns an unauthenticated result,
+	// but a cache entry is still created.
+	mock_cache.GetTokenReview(context.TODO(), token)
+
+	if _, rawPresent := mock_cache.tokenReviews[token]; rawPresent {
+		t.Error("raw token must not be stored as a cache key")
+	}
+	if _, hashedPresent := mock_cache.tokenReviews[hashToken(token)]; !hashedPresent {
+		t.Error("SHA-256 hash of token must be used as the cache key")
+	}
 }

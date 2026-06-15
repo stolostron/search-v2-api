@@ -3,7 +3,9 @@ package rbac
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -29,6 +31,13 @@ func (c *Cache) IsValidToken(ctx context.Context, token string) (bool, error) {
 	return tr.Status.Authenticated, err
 }
 
+// hashToken returns the SHA-256 hex digest of a raw token value.
+// Used as the cache key to avoid retaining bearer tokens in heap memory.
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return fmt.Sprintf("%x", sum)
+}
+
 // Get the TokenReview response for a given token.
 // Will use cached data if available and valid, otherwise starts a new request.
 func (c *Cache) GetTokenReview(ctx context.Context, token string) (*authv1.TokenReview, error) {
@@ -36,7 +45,7 @@ func (c *Cache) GetTokenReview(ctx context.Context, token string) (*authv1.Token
 	defer c.tokenReviewsLock.Unlock()
 
 	// Check if a TokenReviewCacheRequest exists in the cache or create a new one.
-	cachedTR, tokenExists := c.tokenReviews[token]
+	cachedTR, tokenExists := c.tokenReviews[hashToken(token)]
 	if !tokenExists {
 		cachedTR = &tokenReviewCache{
 			authClient: c.getAuthClient(),
@@ -45,7 +54,7 @@ func (c *Cache) GetTokenReview(ctx context.Context, token string) (*authv1.Token
 		if c.tokenReviews == nil {
 			c.tokenReviews = map[string]*tokenReviewCache{}
 		}
-		c.tokenReviews[token] = cachedTR
+		c.tokenReviews[hashToken(token)] = cachedTR
 	}
 	return cachedTR.getTokenReview()
 }
