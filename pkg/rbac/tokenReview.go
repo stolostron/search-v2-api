@@ -44,7 +44,8 @@ func (c *Cache) GetTokenReview(ctx context.Context, token string) (*authv1.Token
 	defer c.tokenReviewsLock.Unlock()
 
 	// Check if a TokenReviewCacheRequest exists in the cache or create a new one.
-	cachedTR, tokenExists := c.tokenReviews[hashToken(token)]
+	tokenHash := hashToken(token)
+	cachedTR, tokenExists := c.tokenReviews[tokenHash]
 	if !tokenExists {
 		cachedTR = &tokenReviewCache{
 			authClient: c.getAuthClient(),
@@ -52,7 +53,7 @@ func (c *Cache) GetTokenReview(ctx context.Context, token string) (*authv1.Token
 		if c.tokenReviews == nil {
 			c.tokenReviews = map[string]*tokenReviewCache{}
 		}
-		c.tokenReviews[hashToken(token)] = cachedTR
+		c.tokenReviews[tokenHash] = cachedTR
 	}
 	return cachedTR.getTokenReview(token)
 }
