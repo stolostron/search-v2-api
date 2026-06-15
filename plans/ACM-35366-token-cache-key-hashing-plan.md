@@ -13,27 +13,29 @@
 string as the map key in `Cache.tokenReviews`:
 
 ```go
-// GetTokenReview — line 39 (read)
+// GetTokenReview — read
 cachedTR, tokenExists := c.tokenReviews[token]
 
-// GetTokenReview — line 48 (write)
+// GetTokenReview — write
 c.tokenReviews[token] = cachedTR
 ```
 
-The map comment in `cache.go` line 19 even documents this: `//Key:ClientToken`.
 Raw tokens — which can carry cluster-admin privileges — are retained in heap memory
 for the duration of `AuthCacheTTL`. Any memory exposure path (core dump, heap
 read, debug log printing the map) yields high-privilege credentials verbatim.
 
-Note: `tokenReviewCache.token` (line 43) is the raw token sent to the Kubernetes
-TokenReview API. That field must remain unchanged — only the map key changes.
+Additionally, the `tokenReviewCache` struct stored the raw token as a field
+(`token string`), which also kept the credential in heap memory for the lifetime
+of the cached entry.
 
 ---
 
 ## Fix
 
-Replace the raw token string used as the map key with its SHA-256 hex digest.
-SHA-256 is deterministic, so cache hit/miss semantics are unchanged.
+1. Replace the raw token string used as the map key with its SHA-256 hex digest.
+   SHA-256 is deterministic, so cache hit/miss semantics are unchanged.
+2. Remove `tokenReviewCache.token` field. Pass the raw token transiently as a
+   parameter to `getTokenReview(token string)` so it is never stored on the struct.
 
 ---
 
@@ -41,7 +43,7 @@ SHA-256 is deterministic, so cache hit/miss semantics are unchanged.
 
 ### 1. `pkg/rbac/tokenReview.go`
 
-**Add import** `"crypto/sha256"` and `"fmt"` (check if `fmt` is already imported).
+**Add imports** `"crypto/sha256"` and `"fmt"`.
 
 **Add helper** (above `GetTokenReview`):
 
@@ -54,100 +56,122 @@ func hashToken(token string) string {
 }
 ```
 
-**Update read path** (line 39):
+**Update `GetTokenReview`** — use `hashToken(token)` as the map key; remove `token` from
+struct initialization:
 
 ```go
-// before
-cachedTR, tokenExists := c.tokenReviews[token]
-
-// after
 cachedTR, tokenExists := c.tokenReviews[hashToken(token)]
+if !tokenExists {
+	cachedTR = &tokenReviewCache{
+		authClient: c.getAuthClient(),
+		// no token field — passed transiently to getTokenReview
+	}
+	c.tokenReviews[hashToken(token)] = cachedTR
+}
+return cachedTR.getTokenReview(token)
 ```
 
-**Update write path** (line 48):
+**Remove `token string` from `tokenReviewCache` struct** and update `getTokenReview`
+signature to accept it as a parameter:
 
 ```go
-// before
-c.tokenReviews[token] = cachedTR
-
-// after
-c.tokenReviews[hashToken(token)] = cachedTR
-```
-
-`tokenReviewCache.token` (line 43) stays as `token: token` — no change.
-
----
-
-### 2. `pkg/rbac/tokenReview_test.go` — update existing tests
-
-Two existing tests directly insert raw token strings as map keys. After the fix,
-`GetTokenReview` will look up the hashed key and miss them. Both need updating.
-
-**`Test_IsValidToken_usingCache`** (line 45):
-
-```go
-// before
-mock_cache.tokenReviews["1234567890"] = &tokenReviewCache{ ... }
-result, err := mock_cache.IsValidToken(context.TODO(), "1234567890")
-
-// after — seed with the hashed key so the lookup matches
-mock_cache.tokenReviews[hashToken("1234567890")] = &tokenReviewCache{ ... }
-result, err := mock_cache.IsValidToken(context.TODO(), "1234567890")
-```
-
-**`Test_IsValidToken_expiredCache`** (lines 70, 82, 92):
-
-```go
-// before
-mock_cache.tokenReviews["1234567890-expired"] = &tokenReviewCache{ ... }
-result, err := mock_cache.IsValidToken(context.TODO(), "1234567890-expired")
-if mock_cache.tokenReviews["1234567890-expired"].meta.updatedAt...
-
-// after
-mock_cache.tokenReviews[hashToken("1234567890-expired")] = &tokenReviewCache{ ... }
-result, err := mock_cache.IsValidToken(context.TODO(), "1234567890-expired")
-if mock_cache.tokenReviews[hashToken("1234567890-expired")].meta.updatedAt...
-```
-
----
-
-### 3. `pkg/rbac/tokenReview_test.go` — add new tests
-
-```go
-// Test_hashToken_keyIsHashed asserts that GetTokenReview stores entries under the
-// SHA-256 hash of the token, not the raw token string.
-func Test_hashToken_keyIsHashed(t *testing.T) {
-    mock_cache := newMockCache()
-    token := "super-secret-bearer-token"
-
-    // Trigger a (failed) TokenReview — this seeds the cache entry.
-    mock_cache.GetTokenReview(context.TODO(), token)
-
-    _, rawPresent := mock_cache.tokenReviews[token]
-    if rawPresent {
-        t.Error("raw token must not be stored as a cache key")
-    }
-
-    _, hashedPresent := mock_cache.tokenReviews[hashToken(token)]
-    if !hashedPresent {
-        t.Error("SHA-256 hash of token must be used as the cache key")
-    }
+func (trc *tokenReviewCache) getTokenReview(token string) (*authv1.TokenReview, error) {
+	// ...
+	tr := authv1.TokenReview{
+		Spec: authv1.TokenReviewSpec{Token: token},
+	}
+	// ...
 }
 ```
 
 ---
 
+### 2. `pkg/rbac/userData.go`
+
+Line 150 contained a direct raw-key map access discovered during testing:
+
+```go
+// before
+cache.tokenReviews[clientToken].tokenReview.Status.User.Username
+
+// after
+cache.tokenReviews[hashToken(clientToken)].tokenReview.Status.User.Username
+```
+
+---
+
+### 3. `pkg/rbac/tokenReview_test.go` — update existing tests
+
+Two existing tests directly inserted raw token strings as map keys. Both needed
+updating to seed with hashed keys. The `token:` field in the struct literal for
+`Test_IsValidToken_expiredCache` was also removed.
+
+**`Test_IsValidToken_usingCache`**:
+
+```go
+mock_cache.tokenReviews[hashToken("1234567890")] = &tokenReviewCache{ ... }
+```
+
+**`Test_IsValidToken_expiredCache`**:
+
+```go
+mock_cache.tokenReviews[hashToken("1234567890-expired")] = &tokenReviewCache{
+	// no token field
+	authClient: fake.NewSimpleClientset().AuthenticationV1(),
+	meta:       cacheMetadata{updatedAt: time.Now().Add(time.Duration(-5) * time.Minute)},
+	// ...
+}
+```
+
+---
+
+### 4. `pkg/rbac/tokenReview_test.go` — add new test
+
+```go
+func Test_hashToken_keyIsHashed(t *testing.T) {
+	mock_cache := newMockCache()
+	token := "super-secret-bearer-token"
+
+	_, err := mock_cache.GetTokenReview(context.TODO(), token)
+	if err != nil {
+		t.Fatalf("unexpected error from GetTokenReview: %v", err)
+	}
+
+	if _, rawPresent := mock_cache.tokenReviews[token]; rawPresent {
+		t.Error("raw token must not be stored as a cache key")
+	}
+	if _, hashedPresent := mock_cache.tokenReviews[hashToken(token)]; !hashedPresent {
+		t.Error("SHA-256 hash of token must be used as the cache key")
+	}
+}
+```
+
+---
+
+### 5. `pkg/rbac/userData_test.go` and `pkg/rbac/watchCache_test.go`
+
+All test helpers that seeded `tokenReviews` directly with raw keys were updated
+to use `hashToken(...)`:
+
+- `userData_test.go`: `setupToken` — `cache.tokenReviews[hashToken("123456")]`
+- `watchCache_test.go`: `setupWatchToken` and two inline setups for
+  `"watch-token-extras"` and `"watch-token-desired-extras"`
+
+---
+
 ## Acceptance Criteria
 
-- [ ] `hashToken` helper added; `crypto/sha256` imported
-- [ ] `GetTokenReview` read (line 39) and write (line 48) use `hashToken(token)` as the map key
-- [ ] `tokenReviewCache.token` (Kubernetes API payload) unchanged
-- [ ] `Test_IsValidToken_usingCache` updated to seed the hashed key
-- [ ] `Test_IsValidToken_expiredCache` updated to seed and assert via hashed key
-- [ ] `Test_hashToken_keyIsHashed` added and passes
-- [ ] `make test` passes
-- [ ] `make test-race` passes
-- [ ] `make lint` reports no new issues
+- [x] `hashToken` helper added; `crypto/sha256` imported
+- [x] `GetTokenReview` read and write paths use `hashToken(token)` as the map key
+- [x] `tokenReviewCache.token` field removed; token passed transiently as parameter to `getTokenReview`
+- [x] `userData.go` raw-key access updated to `hashToken(clientToken)`
+- [x] `Test_IsValidToken_usingCache` updated to seed the hashed key
+- [x] `Test_IsValidToken_expiredCache` updated to seed and assert via hashed key; `token:` field removed from struct literal
+- [x] `Test_hashToken_keyIsHashed` added with error check and passes
+- [x] `userData_test.go` and `watchCache_test.go` helpers updated to use `hashToken`
+- [x] `make test` passes
+- [x] `make test-race` passes
+- [x] `make lint` reports no new issues
 
 ---
 
