@@ -39,7 +39,7 @@ func setupToken(cache *Cache) *Cache {
 	if cache.tokenReviews == nil {
 		cache.tokenReviews = map[string]*tokenReviewCache{}
 	}
-	cache.tokenReviews["123456"] = &tokenReviewCache{
+	cache.tokenReviews[hashToken("123456")] = &tokenReviewCache{
 		meta:       cacheMetadata{updatedAt: time.Now()},
 		authClient: fake.NewSimpleClientset().AuthenticationV1(),
 		tokenReview: &authv1.TokenReview{
