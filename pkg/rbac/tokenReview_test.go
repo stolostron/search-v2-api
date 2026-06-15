@@ -70,7 +70,6 @@ func Test_IsValidToken_expiredCache(t *testing.T) {
 	mock_cache.tokenReviews[hashToken("1234567890-expired")] = &tokenReviewCache{
 		authClient: fake.NewSimpleClientset().AuthenticationV1(),
 		meta:       cacheMetadata{updatedAt: time.Now().Add(time.Duration(-5) * time.Minute)},
-		token:      "1234567890-expired",
 		tokenReview: &authv1.TokenReview{
 			Status: authv1.TokenReviewStatus{
 				Authenticated: true,
@@ -103,7 +102,10 @@ func Test_hashToken_keyIsHashed(t *testing.T) {
 
 	// Trigger a TokenReview — the fake client returns an unauthenticated result,
 	// but a cache entry is still created.
-	mock_cache.GetTokenReview(context.TODO(), token)
+	_, err := mock_cache.GetTokenReview(context.TODO(), token)
+	if err != nil {
+		t.Fatalf("unexpected error from GetTokenReview: %v", err)
+	}
 
 	if _, rawPresent := mock_cache.tokenReviews[token]; rawPresent {
 		t.Error("raw token must not be stored as a cache key")
