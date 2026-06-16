@@ -30,7 +30,7 @@ func setupWatchToken(cache *Cache) *Cache {
 	if cache.tokenReviews == nil {
 		cache.tokenReviews = map[string]*tokenReviewCache{}
 	}
-	cache.tokenReviews["watch-token-123"] = &tokenReviewCache{
+	cache.tokenReviews[hashToken("watch-token-123")] = &tokenReviewCache{
 		meta:       cacheMetadata{updatedAt: time.Now()},
 		authClient: fake.NewSimpleClientset().AuthenticationV1(),
 		tokenReview: &authv1.TokenReview{
@@ -210,7 +210,7 @@ func Test_GetUserWatchData_WithUndesiredExtras(t *testing.T) {
 	if regularCache.tokenReviews == nil {
 		regularCache.tokenReviews = map[string]*tokenReviewCache{}
 	}
-	regularCache.tokenReviews["watch-token-extras"] = &tokenReviewCache{
+	regularCache.tokenReviews[hashToken("watch-token-extras")] = &tokenReviewCache{
 		meta:       cacheMetadata{updatedAt: time.Now()},
 		authClient: fake.NewSimpleClientset().AuthenticationV1(),
 		tokenReview: &authv1.TokenReview{
@@ -249,7 +249,7 @@ func Test_GetUserWatchData_WithDesiredExtras(t *testing.T) {
 	if regularCache.tokenReviews == nil {
 		regularCache.tokenReviews = map[string]*tokenReviewCache{}
 	}
-	regularCache.tokenReviews["watch-token-desired-extras"] = &tokenReviewCache{
+	regularCache.tokenReviews[hashToken("watch-token-desired-extras")] = &tokenReviewCache{
 		meta:       cacheMetadata{updatedAt: time.Now()},
 		authClient: fake.NewSimpleClientset().AuthenticationV1(),
 		tokenReview: &authv1.TokenReview{

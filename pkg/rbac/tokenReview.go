@@ -3,7 +3,9 @@ package rbac
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -18,7 +20,6 @@ type tokenReviewCache struct {
 	meta cacheMetadata
 
 	authClient  v1.AuthenticationV1Interface // This allows tests to replace with mock client.
-	token       string
 	tokenReview *authv1.TokenReview
 }
 
@@ -29,6 +30,13 @@ func (c *Cache) IsValidToken(ctx context.Context, token string) (bool, error) {
 	return tr.Status.Authenticated, err
 }
 
+// hashToken returns the SHA-256 hex digest of a raw token value.
+// Used as the cache key to avoid retaining bearer tokens in heap memory.
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return fmt.Sprintf("%x", sum)
+}
+
 // Get the TokenReview response for a given token.
 // Will use cached data if available and valid, otherwise starts a new request.
 func (c *Cache) GetTokenReview(ctx context.Context, token string) (*authv1.TokenReview, error) {
@@ -36,22 +44,23 @@ func (c *Cache) GetTokenReview(ctx context.Context, token string) (*authv1.Token
 	defer c.tokenReviewsLock.Unlock()
 
 	// Check if a TokenReviewCacheRequest exists in the cache or create a new one.
-	cachedTR, tokenExists := c.tokenReviews[token]
+	tokenHash := hashToken(token)
+	cachedTR, tokenExists := c.tokenReviews[tokenHash]
 	if !tokenExists {
 		cachedTR = &tokenReviewCache{
 			authClient: c.getAuthClient(),
-			token:      token,
 		}
 		if c.tokenReviews == nil {
 			c.tokenReviews = map[string]*tokenReviewCache{}
 		}
-		c.tokenReviews[token] = cachedTR
+		c.tokenReviews[tokenHash] = cachedTR
 	}
-	return cachedTR.getTokenReview()
+	return cachedTR.getTokenReview(token)
 }
 
 // Get the resolved TokenReview from the cached tokenReviewCachedRequest object.
-func (trc *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
+// The raw token is passed transiently and never stored on the struct.
+func (trc *tokenReviewCache) getTokenReview(token string) (*authv1.TokenReview, error) {
 	// This ensures that only 1 process is updating the TokenReview data from API request.
 	trc.meta.lock.Lock()
 	defer trc.meta.lock.Unlock()
@@ -62,7 +71,7 @@ func (trc *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
 
 		tr := authv1.TokenReview{
 			Spec: authv1.TokenReviewSpec{
-				Token: trc.token,
+				Token: token,
 			},
 		}
 
