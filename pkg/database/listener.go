@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -171,17 +170,6 @@ func (l *Listener) Start() error {
 
 	if err := l.connect(); err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	// TODO: We should move this TRIGGER to the search-v2-operator.
-	// Register the trigger defined in listernerTrigger.sql
-	listenerTriggerSQL, err := os.ReadFile("pkg/database/listenerTrigger.sql")
-	if err != nil {
-		return fmt.Errorf("failed to read listener trigger SQL: %w", err)
-	}
-	_, err = l.conn.Exec(l.ctx, string(listenerTriggerSQL))
-	if err != nil {
-		return fmt.Errorf("failed to create trigger: %w", err)
 	}
 
 	l.started = true

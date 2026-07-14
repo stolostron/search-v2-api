@@ -53,7 +53,7 @@ Filters support operators (`=`, `!`, `!=`, `>`, `>=`, `<`, `<=`), wildcard (`*`)
 
 1. Client opens a WebSocket to `/searchapi/graphql`.
 2. On subscribe, the resolver registers a listener channel with `pkg/database`'s PostgreSQL `LISTEN/NOTIFY` listener.
-3. The DB listener receives `NOTIFY` events from `listenerTrigger.sql` (a trigger on `search.resources`) and broadcasts change payloads.
+3. The DB listener receives `NOTIFY` events from [search-v2-operator subscription trigger](https://github.com/stolostron/search-v2-operator/blob/main/controllers/create_pgconfigmap.go#L174-L240) (a trigger on `search.resources`) and broadcasts change payloads.
 4. Each event is RBAC-filtered before being sent to the client.
 5. Subscriptions are bounded by `SUBSCRIPTION_MAX_ACTIVE`, `SUBSCRIPTION_MAX_LIFETIME`, and `SUBSCRIPTION_IDLE_TIMEOUT`.
 
