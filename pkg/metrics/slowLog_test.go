@@ -12,7 +12,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// Redirect and capture the logger output.
+// captureLogOutput redirects klog to an in-memory buffer and returns a stop
+// function that restores stderr and returns everything that was written.
 func captureLogOutput() func() string {
 	var buf bytes.Buffer
 	klog.LogToStderr(false)
@@ -24,49 +25,72 @@ func captureLogOutput() func() string {
 	}
 }
 
-// Should use default value when passed duration is 0.
+// Test_SlowLog_Default verifies that DEFAULT_SLOW_LOG is used when no custom
+// duration is supplied (logAfter == 0).
 func Test_SlowLog_Default(t *testing.T) {
-	// Capture the logger output for verification.
+	// Restore the package-level default after this test so it does not leak
+	// into other tests running in the same binary.
+	orig := DEFAULT_SLOW_LOG
+	t.Cleanup(func() { DEFAULT_SLOW_LOG = orig })
+
+	DEFAULT_SLOW_LOG = 10 * time.Millisecond
+
 	stop := captureLogOutput()
 
-	// Set DEFAULT_SLOW_LOG to 2ms
-	DEFAULT_SLOW_LOG = 2 * time.Millisecond
-
 	endFn := SlowLog("MockFunction", 0)
-	time.Sleep(5 * time.Millisecond) // nolint:staticcheck //lint:ignore SA1004
+	time.Sleep(100 * time.Millisecond) // 10× the threshold — always exceeds it
 	endFn()
 
-	// Verify log was called.
 	logBuf := stop()
 	if !strings.Contains(logBuf, "MockFunction") {
 		t.Error("Expected SlowLog to write to log buffer. Received: ", logBuf)
 	}
 }
 
+// Test_SlowLog_CustomDuration verifies that a caller-supplied duration
+// overrides DEFAULT_SLOW_LOG.
 func Test_SlowLog_CustomDuration(t *testing.T) {
-	// Capture the logger output for verification.
+	// Restore the package-level default after this test so it does not leak
+	// into other tests running in the same binary.
+	orig := DEFAULT_SLOW_LOG
+	t.Cleanup(func() { DEFAULT_SLOW_LOG = orig })
+
+	// Set DEFAULT_SLOW_LOG to a very long value so the test cannot pass via
+	// the fallback path — only the custom threshold should trigger logging.
+	DEFAULT_SLOW_LOG = 10 * time.Second
+
 	stop := captureLogOutput()
 
-	endFn := SlowLog("MockFunction2", 3*time.Millisecond)
-	time.Sleep(5 * time.Millisecond) // nolint:staticcheck //lint:ignore SA1004
+	endFn := SlowLog("MockFunction2", 10*time.Millisecond)
+	time.Sleep(100 * time.Millisecond) // 10× the custom threshold — always exceeds it
 	endFn()
 
-	// Verify log is written.
 	logBuf := stop()
 	if !strings.Contains(logBuf, "MockFunction2") {
 		t.Error("Expected SlowLog to write to log buffer. Received: ", logBuf)
 	}
 }
 
+// Test_SlowLog_ThresholdNotMet verifies that no log is written when elapsed
+// time is below the custom threshold, regardless of DEFAULT_SLOW_LOG.
 func Test_SlowLog_ThresholdNotMet(t *testing.T) {
-	// Capture the logger output for verification.
+	// Restore the package-level default after this test so it does not leak
+	// into other tests running in the same binary.
+	orig := DEFAULT_SLOW_LOG
+	t.Cleanup(func() { DEFAULT_SLOW_LOG = orig })
+
+	// Set DEFAULT_SLOW_LOG to a tiny value to ensure the test would catch a
+	// regression where the custom threshold is incorrectly OR-ed with the
+	// default (i.e., the bug we fixed in slowLog.go).
+	DEFAULT_SLOW_LOG = 1 * time.Microsecond
+
 	stop := captureLogOutput()
 
-	endFn := SlowLog("MockFunction_DontLog", 5*time.Millisecond)
-	time.Sleep(1 * time.Millisecond) // nolint:staticcheck //lint:ignore SA1004
+	// Custom threshold: 500 ms.  The handler returns immediately (no sleep),
+	// so elapsed time will always be well below the threshold.
+	endFn := SlowLog("MockFunction_DontLog", 500*time.Millisecond)
 	endFn()
 
-	// Verify log is not written.
 	logBuf := stop()
 	if logBuf != "" {
 		t.Error("Expected log buffer to be empty. Received: ", logBuf)
