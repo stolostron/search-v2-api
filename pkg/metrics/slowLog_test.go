@@ -13,14 +13,16 @@ import (
 )
 
 // captureLogOutput redirects klog to an in-memory buffer and returns a stop
-// function that restores stderr and returns everything that was written.
+// function that restores the full klog routing state (both the output writer
+// and the toStderr flag) and returns everything that was written.
 func captureLogOutput() func() string {
 	var buf bytes.Buffer
-	klog.LogToStderr(false)
-	klog.SetOutput(&buf)
+	klog.LogToStderr(false) // stop writing to stderr
+	klog.SetOutput(&buf)    // redirect all output to buffer
 
 	return func() string {
-		klog.SetOutput(os.Stderr)
+		klog.SetOutput(os.Stderr) // restore writer to stderr
+		klog.LogToStderr(true)    // re-enable stderr routing
 		return buf.String()
 	}
 }
@@ -86,9 +88,10 @@ func Test_SlowLog_ThresholdNotMet(t *testing.T) {
 
 	stop := captureLogOutput()
 
-	// Custom threshold: 500 ms.  The handler returns immediately (no sleep),
-	// so elapsed time will always be well below the threshold.
-	endFn := SlowLog("MockFunction_DontLog", 500*time.Millisecond)
+	// Custom threshold: 1 hour.  Even extreme CI descheduling cannot push the
+	// elapsed time above this, so the log must always remain empty.
+	// (500 ms was theoretically reachable on a severely loaded runner.)
+	endFn := SlowLog("MockFunction_DontLog", time.Hour)
 	endFn()
 
 	logBuf := stop()
