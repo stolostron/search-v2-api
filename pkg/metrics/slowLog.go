@@ -18,7 +18,11 @@ func SlowLog(funcName string, logAfter time.Duration) func() {
 
 	// This function should be invoked with defer to execute at the end of the caller function.
 	return func() {
-		if (logAfter > 0 && time.Since(start) > logAfter) || (time.Since(start) > DEFAULT_SLOW_LOG) {
+		threshold := DEFAULT_SLOW_LOG
+		if logAfter > 0 {
+			threshold = logAfter
+		}
+		if time.Since(start) > threshold {
 			klog.Warningf("%s - %s", time.Since(start), funcName)
 		}
 
