@@ -28,19 +28,57 @@ func TestGetFederatedConfig_fromCache(t *testing.T) {
 			{
 				Name:  "mock-cache-name",
 				URL:   "https://mock-cache-url",
-				Token: "mock-cache-token",
+				Token: "",
+			},
+			{
+				Name:  "mock-remote-hub",
+				URL:   "https://mock-remote-url",
+				Token: "mock-sa-token",
 			},
 		},
 	}
 
-	mockRequest := &http.Request{}
+	mockRequest := &http.Request{
+		Header: map[string][]string{"Authorization": {"Bearer caller-token"}},
+	}
 	ctx := context.Background()
 	result := getFederationConfig(ctx, mockRequest)
 
-	assert.Equal(t, 1, len(result))
+	assert.Equal(t, 2, len(result))
+	// Local-hub URL/Name come from the cache, but the token MUST come from
+	// the current request, never from the cache.
 	assert.Equal(t, "mock-cache-name", result[0].Name)
 	assert.Equal(t, "https://mock-cache-url", result[0].URL)
-	assert.Equal(t, "mock-cache-token", result[0].Token)
+	assert.Equal(t, "caller-token", result[0].Token)
+	// Remote-hub SA token is safe to cache and returned as-is.
+	assert.Equal(t, "mock-sa-token", result[1].Token)
+}
+
+// Regression test: a second caller within the cache TTL must receive its OWN
+// bearer token for the local-hub leg, not the token of the user who warmed
+// the cache.
+func TestGetFederatedConfig_localTokenNotSharedAcrossUsers(t *testing.T) {
+	cachedFedConfig = fedConfigCache{
+		lastUpdated: time.Now(),
+		fedConfig: []RemoteSearchService{
+			{Name: "global-hub", URL: "https://local", Token: ""},
+		},
+	}
+	ctx := context.Background()
+
+	reqA := &http.Request{Header: map[string][]string{"Authorization": {"Bearer admin-token"}}}
+	resA := getFederationConfig(ctx, reqA)
+	assert.Equal(t, "admin-token", resA[0].Token)
+
+	reqB := &http.Request{Header: map[string][]string{"Authorization": {"Bearer lowpriv-token"}}}
+	resB := getFederationConfig(ctx, reqB)
+	assert.Equal(t, "lowpriv-token", resB[0].Token,
+		"local-hub token must be bound to the current caller, not a prior cached caller")
+
+	// User A's earlier result must not have been mutated by User B's call.
+	assert.Equal(t, "admin-token", resA[0].Token)
+	// And the shared cache must not retain any per-user token.
+	assert.Equal(t, "", cachedFedConfig.fedConfig[0].Token)
 }
 
 func TestGetLocalSearchApiConfig(t *testing.T) {
