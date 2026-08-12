@@ -19,9 +19,11 @@ func TestAuthorizeWebSocketUpgrade(t *testing.T) {
 	})
 
 	r := httptest.NewRequest("GET", "https://localhost:4010/searchapi/graphql", nil)
-	// Set the Upgrade header to indicate WebSocket upgrade
+	// Full RFC-6455 opening handshake headers.
 	r.Header.Set("Upgrade", "websocket")
 	r.Header.Set("Connection", "Upgrade")
+	r.Header.Set("Sec-Websocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	r.Header.Set("Sec-Websocket-Version", "13")
 
 	response := httptest.NewRecorder()
 
@@ -33,26 +35,34 @@ func TestAuthorizeWebSocketUpgrade(t *testing.T) {
 	assert.Equal(t, http.StatusOK, response.Code, "WebSocket upgrade should bypass authorization")
 }
 
-// test WebSocket upgrade with lowercase header
-func TestAuthorizeWebSocketUpgradeLowercase(t *testing.T) {
-	handlerCalled := false
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handlerCalled = true
-		w.WriteHeader(http.StatusOK)
-	})
+// Regression test: a POST carrying every WebSocket handshake header is still
+// NOT a valid RFC-6455 handshake (wrong method) and must not take the
+// WebSocket bypass branch in AuthorizeUser.
+//
+// We verify via isWebSocketHandshake rather than invoking AuthorizeUser
+// directly because the normal authorization path requires a live database
+// connection (PopulateSharedCache panics without one).
+func TestAuthorizeSpoofedUpgradeHeaderNotSkipped(t *testing.T) {
+	r := httptest.NewRequest("POST", "https://localhost:4010/searchapi/graphql", nil)
+	r.Header.Set("Upgrade", "websocket")
+	r.Header.Set("Connection", "Upgrade")
+	r.Header.Set("Sec-Websocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	r.Header.Set("Sec-Websocket-Version", "13")
 
+	assert.False(t, isWebSocketHandshake(r),
+		"POST with full handshake headers must not be treated as a WS handshake")
+}
+
+// Regression: Connection header with "upgrade" as a substring of another token
+// (e.g. "xupgrade") must not bypass authorization.
+func TestAuthorizeConnectionSubstringNotSkipped(t *testing.T) {
 	r := httptest.NewRequest("GET", "https://localhost:4010/searchapi/graphql", nil)
-	// Set the Upgrade header with different casing (Go normalizes headers)
-	r.Header.Set("upgrade", "websocket")
-	
-	response := httptest.NewRecorder()
+	r.Header.Set("Upgrade", "websocket")
+	r.Header.Set("Connection", "xupgrade")
+	r.Header.Set("Sec-Websocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
 
-	authz := AuthorizeUser(nextHandler)
-	authz.ServeHTTP(response, r)
-
-	// Should pass through without authorization
-	assert.True(t, handlerCalled, "Handler should be called for WebSocket upgrade")
-	assert.Equal(t, http.StatusOK, response.Code, "WebSocket upgrade should bypass authorization")
+	assert.False(t, isWebSocketHandshake(r),
+		"Connection: xupgrade must not be treated as a valid upgrade token")
 }
 
 // test that non-WebSocket request doesn't skip authorization

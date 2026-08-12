@@ -148,7 +148,8 @@ func TestAuthenticateEmptyTokenUser(t *testing.T) {
 
 }
 
-// test WebSocket upgrade bypasses authentication
+// test that a genuine WebSocket handshake bypasses the HTTP auth middleware
+// (auth is enforced post-upgrade by WebSocketInitFunc).
 func TestAuthenticateWebSocketUpgrade(t *testing.T) {
 	// Track if the handler was called
 	handlerCalled := false
@@ -158,9 +159,11 @@ func TestAuthenticateWebSocketUpgrade(t *testing.T) {
 	})
 
 	r := httptest.NewRequest("GET", "https://localhost:4010/searchapi/graphql", nil)
-	// Set the Upgrade header to indicate WebSocket upgrade
+	// Full RFC-6455 opening handshake headers.
 	r.Header.Set("Upgrade", "websocket")
 	r.Header.Set("Connection", "Upgrade")
+	r.Header.Set("Sec-Websocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	r.Header.Set("Sec-Websocket-Version", "13")
 	// No authentication token provided
 
 	response := httptest.NewRecorder()
@@ -173,26 +176,71 @@ func TestAuthenticateWebSocketUpgrade(t *testing.T) {
 	assert.Equal(t, http.StatusOK, response.Code, "WebSocket upgrade should bypass authentication")
 }
 
-// test WebSocket upgrade with lowercase header
-func TestAuthenticateWebSocketUpgradeLowercase(t *testing.T) {
+// Regression test: a POST request that merely sets Upgrade: websocket is NOT a
+// WebSocket handshake and MUST NOT bypass authentication. This is the attack
+// vector against /federated.
+func TestAuthenticateSpoofedUpgradeHeaderRejected(t *testing.T) {
 	handlerCalled := false
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
-		w.WriteHeader(http.StatusOK)
 	})
 
-	r := httptest.NewRequest("GET", "https://localhost:4010/searchapi/graphql", nil)
-	// Set the Upgrade header with different casing
-	r.Header.Set("upgrade", "websocket") // lowercase key, but Go normalizes headers
-	
+	r := httptest.NewRequest("POST", "https://localhost:4010/federated", nil)
+	r.Header.Set("Upgrade", "websocket")
+	r.Header.Set("Connection", "Upgrade")
+	r.Header.Set("Sec-Websocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	r.Header.Set("Sec-Websocket-Version", "13")
+	// No authentication token provided
+
 	response := httptest.NewRecorder()
 
 	authen := AuthenticateUser(nextHandler)
 	authen.ServeHTTP(response, r)
 
-	// Should pass through without authentication
-	assert.True(t, handlerCalled, "Handler should be called for WebSocket upgrade")
-	assert.Equal(t, http.StatusOK, response.Code, "WebSocket upgrade should bypass authentication")
+	assert.False(t, handlerCalled, "Handler must not be called for spoofed Upgrade header on POST")
+	assert.Equal(t, http.StatusUnauthorized, response.Code)
+}
+
+// A bare Upgrade header without Connection:Upgrade and Sec-Websocket-Key is
+// not a valid handshake and must not bypass authentication.
+func TestAuthenticateIncompleteWebSocketHandshakeRejected(t *testing.T) {
+	handlerCalled := false
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	r := httptest.NewRequest("GET", "https://localhost:4010/searchapi/graphql", nil)
+	r.Header.Set("Upgrade", "websocket") // missing Connection + Sec-Websocket-Key
+
+	response := httptest.NewRecorder()
+
+	authen := AuthenticateUser(nextHandler)
+	authen.ServeHTTP(response, r)
+
+	assert.False(t, handlerCalled, "Handler must not be called for incomplete WS handshake")
+	assert.Equal(t, http.StatusUnauthorized, response.Code)
+}
+
+// Regression: Connection header containing "upgrade" as a substring of another
+// token (e.g. "xupgrade") must NOT be treated as a valid handshake.
+func TestAuthenticateConnectionSubstringRejected(t *testing.T) {
+	handlerCalled := false
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+	})
+
+	r := httptest.NewRequest("GET", "https://localhost:4010/searchapi/graphql", nil)
+	r.Header.Set("Upgrade", "websocket")
+	r.Header.Set("Connection", "xupgrade")
+	r.Header.Set("Sec-Websocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+
+	response := httptest.NewRecorder()
+
+	authen := AuthenticateUser(nextHandler)
+	authen.ServeHTTP(response, r)
+
+	assert.False(t, handlerCalled, "Handler must not be called when Connection token is a non-upgrade substring")
+	assert.Equal(t, http.StatusUnauthorized, response.Code)
 }
 
 // test non-WebSocket request still requires authentication

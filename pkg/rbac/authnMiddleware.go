@@ -13,12 +13,38 @@ type ContextKey string
 
 const ContextAuthTokenKey ContextKey = "authToken"
 
+// isWebSocketHandshake returns true only for a genuine RFC-6455 WebSocket
+// opening handshake (GET + Connection:Upgrade + Upgrade:websocket +
+// Sec-WebSocket-Key). The middleware skip is safe ONLY for such requests
+// because gqlgen's transport.Websocket re-authenticates the connection via
+// WebSocketInitFunc. A bare `Upgrade: websocket` header on a POST is NOT a
+// handshake and must not bypass authentication.
+func isWebSocketHandshake(r *http.Request) bool {
+	return r.Method == http.MethodGet &&
+		connectionHasUpgradeToken(r.Header.Get("Connection")) &&
+		strings.EqualFold(r.Header.Get("Upgrade"), "websocket") &&
+		r.Header.Get("Sec-Websocket-Key") != ""
+}
+
+// connectionHasUpgradeToken reports whether the Connection header value
+// contains an "upgrade" token per RFC 7230 §6.1 (comma-separated list).
+func connectionHasUpgradeToken(value string) bool {
+	for _, tok := range strings.Split(value, ",") {
+		if strings.EqualFold(strings.TrimSpace(tok), "upgrade") {
+			return true
+		}
+	}
+	return false
+}
+
 // AuthenticateUser verifies token (userid) with the TokenReview:
 func AuthenticateUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		// Skip authentication middleware for WebSocket connections
-		if r.Header.Get("Upgrade") == "websocket" {
+		// Skip authentication middleware ONLY for a genuine WebSocket handshake.
+		// gqlgen's transport.Websocket authenticates the connection via
+		// WebSocketInitFunc after the upgrade completes.
+		if isWebSocketHandshake(r) {
 			klog.V(1).Info("Skipping authentication middleware for WebSocket connection.")
 			next.ServeHTTP(w, r)
 			return

@@ -9,8 +9,8 @@ import (
 func AuthorizeUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		// Skip authorization middleware for WebSocket connections
-		if r.Header.Get("Upgrade") == "websocket" {
+		// Skip authorization middleware ONLY for a genuine WebSocket handshake.
+		if isWebSocketHandshake(r) {
 			klog.V(1).Info("Skipping authorization middleware for WebSocket connection.")
 			next.ServeHTTP(w, r)
 			return
