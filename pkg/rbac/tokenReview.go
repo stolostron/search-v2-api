@@ -43,19 +43,63 @@ func (c *Cache) GetTokenReview(ctx context.Context, token string) (*authv1.Token
 	c.tokenReviewsLock.Lock()
 	defer c.tokenReviewsLock.Unlock()
 
+	if c.tokenReviews == nil {
+		c.tokenReviews = map[string]*tokenReviewCache{}
+	}
+
+	// Evict all entries whose TTL has expired before doing anything else, so
+	// the map never retains stale data beyond the configured window.
+	c.evictExpiredTokenReviews()
+
 	// Check if a TokenReviewCacheRequest exists in the cache or create a new one.
 	tokenHash := hashToken(token)
 	cachedTR, tokenExists := c.tokenReviews[tokenHash]
 	if !tokenExists {
+		// Enforce the size cap before inserting: when we are at the limit,
+		// evict the single oldest entry to make room.
+		if len(c.tokenReviews) >= config.Cfg.AuthCacheMaxSize {
+			c.evictOldestTokenReview()
+		}
 		cachedTR = &tokenReviewCache{
 			authClient: c.getAuthClient(),
-		}
-		if c.tokenReviews == nil {
-			c.tokenReviews = map[string]*tokenReviewCache{}
 		}
 		c.tokenReviews[tokenHash] = cachedTR
 	}
 	return cachedTR.getTokenReview(token)
+}
+
+// evictExpiredTokenReviews removes all cache entries whose updatedAt timestamp
+// is older than the configured AuthCacheTTL. Must be called with tokenReviewsLock held.
+// The per-entry meta.lock is not acquired here because tokenReviewsLock already
+// serialises all access to the map and its entries at this call site.
+func (c *Cache) evictExpiredTokenReviews() {
+	ttl := time.Duration(config.Cfg.AuthCacheTTL) * time.Millisecond
+	cutoff := time.Now().Add(-ttl)
+	for key, entry := range c.tokenReviews {
+		if !entry.meta.updatedAt.IsZero() && entry.meta.updatedAt.Before(cutoff) {
+			delete(c.tokenReviews, key)
+			klog.V(7).Infof("Evicted expired TokenReview entry from cache.")
+		}
+	}
+}
+
+// evictOldestTokenReview removes the single cache entry with the earliest
+// updatedAt time. Must be called with tokenReviewsLock held.
+// The per-entry meta.lock is not acquired here because tokenReviewsLock already
+// serialises all access to the map and its entries at this call site.
+func (c *Cache) evictOldestTokenReview() {
+	var oldestKey string
+	var oldestTime time.Time
+	for key, entry := range c.tokenReviews {
+		if oldestKey == "" || entry.meta.updatedAt.Before(oldestTime) {
+			oldestKey = key
+			oldestTime = entry.meta.updatedAt
+		}
+	}
+	if oldestKey != "" {
+		delete(c.tokenReviews, oldestKey)
+		klog.V(7).Infof("Evicted oldest TokenReview entry to enforce cache size limit of %d.", config.Cfg.AuthCacheMaxSize)
+	}
 }
 
 // Get the resolved TokenReview from the cached tokenReviewCachedRequest object.
