@@ -18,6 +18,8 @@ unit-test:
 	go clean -cache -modcache  #  Avoids problem reading from cache in prow.
 	go test ./... -v -coverprofile cover.out -failfast
 
-sonar/go/prow::
+sonar/go/prow:
+	@echo "Overriding sonar/go/prow to clean cache."
 	go clean -cache -modcache
+	$(MAKE) -f /opt/build-harness/Makefile.prow $@
 
