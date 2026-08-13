@@ -17,3 +17,7 @@ lint:
 unit-test:
 	go clean -cache -modcache  #  Avoids problem reading from cache in prow.
 	go test ./... -v -coverprofile cover.out -failfast
+
+sonar/go/prow::
+	go clean -cache -modcache
+
