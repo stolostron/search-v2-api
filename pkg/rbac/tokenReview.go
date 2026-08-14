@@ -3,7 +3,11 @@ package rbac
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -13,12 +17,32 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// hashTokenKey is a process-local secret used to key the hashToken HMAC.
+// It is generated once at process startup and never persisted or exposed,
+// so cache keys derived from it cannot be precomputed or reversed offline.
+// It only needs to be stable for the lifetime of the process, since the
+// tokenReviews cache itself is in-memory only.
+var hashTokenKey = newHashTokenKey()
+
+func newHashTokenKey() []byte {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		// Extremely unlikely: crypto/rand failed to read from the OS CSPRNG.
+		// Fall back to a fixed key so the process can still start; this only
+		// weakens the secrecy of the HMAC key, not the correctness of the cache.
+		klog.Warning("Failed to generate random key for hashToken, using fallback key.", err)
+		for i := range key {
+			key[i] = byte(i)
+		}
+	}
+	return key
+}
+
 // Encapsulates a TokenReview to store in the cache.
 type tokenReviewCache struct {
 	meta cacheMetadata
 
 	authClient  v1.AuthenticationV1Interface // This allows tests to replace with mock client.
-	token       string
 	tokenReview *authv1.TokenReview
 }
 
@@ -29,29 +53,85 @@ func (c *Cache) IsValidToken(ctx context.Context, token string) (bool, error) {
 	return tr.Status.Authenticated, err
 }
 
+// hashToken returns a keyed HMAC-SHA256 hex digest of a raw token value.
+// Used as the cache key to avoid retaining bearer tokens in heap memory.
+// A per-process HMAC key (rather than a bare hash) is used because the
+// raw token is sensitive data; keying the hash prevents an attacker who
+// only observes the cache keys from precomputing or reversing them.
+func hashToken(token string) string {
+	mac := hmac.New(sha256.New, hashTokenKey)
+	mac.Write([]byte(token))
+	return fmt.Sprintf("%x", mac.Sum(nil))
+}
+
 // Get the TokenReview response for a given token.
 // Will use cached data if available and valid, otherwise starts a new request.
 func (c *Cache) GetTokenReview(ctx context.Context, token string) (*authv1.TokenReview, error) {
 	c.tokenReviewsLock.Lock()
 	defer c.tokenReviewsLock.Unlock()
 
+	if c.tokenReviews == nil {
+		c.tokenReviews = map[string]*tokenReviewCache{}
+	}
+
+	// Evict all entries whose TTL has expired before doing anything else, so
+	// the map never retains stale data beyond the configured window.
+	c.evictExpiredTokenReviews()
+
 	// Check if a TokenReviewCacheRequest exists in the cache or create a new one.
-	cachedTR, tokenExists := c.tokenReviews[token]
+	tokenHash := hashToken(token)
+	cachedTR, tokenExists := c.tokenReviews[tokenHash]
 	if !tokenExists {
+		// Enforce the size cap before inserting: when we are at the limit,
+		// evict the single oldest entry to make room.
+		if len(c.tokenReviews) >= config.Cfg.AuthCacheMaxSize {
+			c.evictOldestTokenReview()
+		}
 		cachedTR = &tokenReviewCache{
 			authClient: c.getAuthClient(),
-			token:      token,
 		}
-		if c.tokenReviews == nil {
-			c.tokenReviews = map[string]*tokenReviewCache{}
-		}
-		c.tokenReviews[token] = cachedTR
+		c.tokenReviews[tokenHash] = cachedTR
 	}
-	return cachedTR.getTokenReview()
+	return cachedTR.getTokenReview(token)
+}
+
+// evictExpiredTokenReviews removes all cache entries whose updatedAt timestamp
+// is older than the configured AuthCacheTTL. Must be called with tokenReviewsLock held.
+// The per-entry meta.lock is not acquired here because tokenReviewsLock already
+// serialises all access to the map and its entries at this call site.
+func (c *Cache) evictExpiredTokenReviews() {
+	ttl := time.Duration(config.Cfg.AuthCacheTTL) * time.Millisecond
+	cutoff := time.Now().Add(-ttl)
+	for key, entry := range c.tokenReviews {
+		if !entry.meta.updatedAt.IsZero() && entry.meta.updatedAt.Before(cutoff) {
+			delete(c.tokenReviews, key)
+			klog.V(7).Infof("Evicted expired TokenReview entry from cache.")
+		}
+	}
+}
+
+// evictOldestTokenReview removes the single cache entry with the earliest
+// updatedAt time. Must be called with tokenReviewsLock held.
+// The per-entry meta.lock is not acquired here because tokenReviewsLock already
+// serialises all access to the map and its entries at this call site.
+func (c *Cache) evictOldestTokenReview() {
+	var oldestKey string
+	var oldestTime time.Time
+	for key, entry := range c.tokenReviews {
+		if oldestKey == "" || entry.meta.updatedAt.Before(oldestTime) {
+			oldestKey = key
+			oldestTime = entry.meta.updatedAt
+		}
+	}
+	if oldestKey != "" {
+		delete(c.tokenReviews, oldestKey)
+		klog.V(7).Infof("Evicted oldest TokenReview entry to enforce cache size limit of %d.", config.Cfg.AuthCacheMaxSize)
+	}
 }
 
 // Get the resolved TokenReview from the cached tokenReviewCachedRequest object.
-func (trc *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
+// The raw token is passed transiently and never stored on the struct.
+func (trc *tokenReviewCache) getTokenReview(token string) (*authv1.TokenReview, error) {
 	// This ensures that only 1 process is updating the TokenReview data from API request.
 	trc.meta.lock.Lock()
 	defer trc.meta.lock.Unlock()
@@ -62,7 +142,7 @@ func (trc *tokenReviewCache) getTokenReview() (*authv1.TokenReview, error) {
 
 		tr := authv1.TokenReview{
 			Spec: authv1.TokenReviewSpec{
-				Token: trc.token,
+				Token: token,
 			},
 		}
 
