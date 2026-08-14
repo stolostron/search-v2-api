@@ -22,7 +22,7 @@ func Test_getEnv_default(t *testing.T) {
 
 // Should load string value from environment.
 func Test_getEnv(t *testing.T) {
-	os.Setenv("TEST_VARIABLE", "test-value")
+	_ = os.Setenv("TEST_VARIABLE", "test-value")
 	res := getEnv("TEST_VARIABLE", "default-value")
 
 	if res != "test-value" {
@@ -41,7 +41,7 @@ func Test_getEnvAsInt_default(t *testing.T) {
 
 // Should load int value from environment.
 func Test_getEnvAsInt(t *testing.T) {
-	os.Setenv("TEST_VARIABLE", "99")
+	_ = os.Setenv("TEST_VARIABLE", "99")
 	res := getEnvAsInt("TEST_VARIABLE", 0)
 
 	if res != 99 {
@@ -60,7 +60,7 @@ func Test_getEnvAsBool_default(t *testing.T) {
 
 // Should load bool value from environment.
 func Test_getEnvAsBool(t *testing.T) {
-	os.Setenv("TEST_VARIABLE", "true")
+	_ = os.Setenv("TEST_VARIABLE", "true")
 	res := getEnvAsBool("TEST_VARIABLE", false)
 
 	if !res {
@@ -96,9 +96,9 @@ func Test_PrintConfig(t *testing.T) {
 
 // Should validate that DB_NAME, DB_USER, and DB_PASS are required environment variables.
 func Test_Validate(t *testing.T) {
-	os.Setenv("DB_NAME", "test")
-	os.Setenv("DB_USER", "test")
-	os.Setenv("DB_PASS", "test")
+	_ = os.Setenv("DB_NAME", "test")
+	_ = os.Setenv("DB_USER", "test")
+	_ = os.Setenv("DB_PASS", "test")
 	conf := new()
 
 	result := conf.Validate()
@@ -106,21 +106,21 @@ func Test_Validate(t *testing.T) {
 		t.Errorf("Expected %v Got: %+v", nil, result)
 	}
 
-	os.Setenv("DB_PASS", "")
+	_ = os.Setenv("DB_PASS", "")
 	conf = new()
 	result = conf.Validate()
 	if result.Error() != "required environment DB_PASS is not set" {
 		t.Errorf("Expected %s Got: %s", "required environment DB_PASS is not set", result)
 	}
 
-	os.Setenv("DB_USER", "")
+	_ = os.Setenv("DB_USER", "")
 	conf = new()
 	result = conf.Validate()
 	if result.Error() != "required environment DB_USER is not set" {
 		t.Errorf("Expected %s Got: %s", "required environment DB_USER is not set", result)
 	}
 
-	os.Setenv("DB_NAME", "")
+	_ = os.Setenv("DB_NAME", "")
 	conf = new()
 	result = conf.Validate()
 	if result.Error() != "required environment DB_NAME is not set" {

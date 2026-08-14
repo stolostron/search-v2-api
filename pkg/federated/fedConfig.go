@@ -125,7 +125,9 @@ func getACMInstallNamespaces(localService RemoteSearchService) map[string]string
 		klog.Errorf("Error getting ACM install namespaces: %s", err)
 		return result
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 
 	// Read the response body.
 	body, err := io.ReadAll(resp.Body)
