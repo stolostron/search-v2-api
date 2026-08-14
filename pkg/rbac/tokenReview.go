@@ -3,6 +3,8 @@ package rbac
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -14,6 +16,27 @@ import (
 	v1 "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	"k8s.io/klog/v2"
 )
+
+// hashTokenKey is a process-local secret used to key the hashToken HMAC.
+// It is generated once at process startup and never persisted or exposed,
+// so cache keys derived from it cannot be precomputed or reversed offline.
+// It only needs to be stable for the lifetime of the process, since the
+// tokenReviews cache itself is in-memory only.
+var hashTokenKey = newHashTokenKey()
+
+func newHashTokenKey() []byte {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		// Extremely unlikely: crypto/rand failed to read from the OS CSPRNG.
+		// Fall back to a fixed key so the process can still start; this only
+		// weakens the secrecy of the HMAC key, not the correctness of the cache.
+		klog.Warning("Failed to generate random key for hashToken, using fallback key.", err)
+		for i := range key {
+			key[i] = byte(i)
+		}
+	}
+	return key
+}
 
 // Encapsulates a TokenReview to store in the cache.
 type tokenReviewCache struct {
@@ -30,11 +53,15 @@ func (c *Cache) IsValidToken(ctx context.Context, token string) (bool, error) {
 	return tr.Status.Authenticated, err
 }
 
-// hashToken returns the SHA-256 hex digest of a raw token value.
+// hashToken returns a keyed HMAC-SHA256 hex digest of a raw token value.
 // Used as the cache key to avoid retaining bearer tokens in heap memory.
+// A per-process HMAC key (rather than a bare hash) is used because the
+// raw token is sensitive data; keying the hash prevents an attacker who
+// only observes the cache keys from precomputing or reversing them.
 func hashToken(token string) string {
-	sum := sha256.Sum256([]byte(token))
-	return fmt.Sprintf("%x", sum)
+	mac := hmac.New(sha256.New, hashTokenKey)
+	mac.Write([]byte(token))
+	return fmt.Sprintf("%x", mac.Sum(nil))
 }
 
 // Get the TokenReview response for a given token.

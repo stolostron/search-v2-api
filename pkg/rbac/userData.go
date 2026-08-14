@@ -91,8 +91,6 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	if uid, userInfo = cache.GetUserUID(ctx); uid == rbacNoUidFound {
 		return user, fmt.Errorf("cannot find user with uid: %s", uid)
 	}
-	clientToken := ctx.Value(ContextAuthTokenKey).(string)
-
 	cache.usersLock.Lock()
 	defer cache.usersLock.Unlock()
 	cachedUserData, userDataExists := cache.users[uid] //check if userData cache for user already exists
@@ -147,7 +145,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	// Get cluster scoped resource access for the user.
 	if err == nil {
 		klog.V(5).Info("No errors on namespacedresources present for: ",
-			cache.tokenReviews[hashToken(clientToken)].tokenReview.Status.User.Username)
+			userInfo.Username)
 		userDataCache, err = user.getClusterScopedResources(ctx, cache)
 	}
 	return userDataCache, err
