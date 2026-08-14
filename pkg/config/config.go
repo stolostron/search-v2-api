@@ -22,6 +22,7 @@ type Config struct {
 	API_SERVER_URL         string // address for Kubernetes API Server
 	ApiDocumentation       bool   // Indicates if the API documentation is enabled.
 	AuthCacheTTL           int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
+	AuthCacheMaxSize       int    // Maximum number of entries in the TokenReview cache. Default: 100
 	SharedCacheTTL         int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
 	UserCacheTTL           int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
 	UserPermissionCacheTTL int    // Time-to-live (milliseconds) of UserPermissions cache. Default: 30 seconds
@@ -90,6 +91,7 @@ func new() *Config {
 		API_SERVER_URL:         getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
 		ApiDocumentation:       getEnvAsBool("API_DOCUMENTATION", false),
 		AuthCacheTTL:           getEnvAsInt("AUTH_CACHE_TTL", 60000),            // 1 minute
+		AuthCacheMaxSize:       getEnvAsInt("AUTH_CACHE_MAX_SIZE", 100),
 		SharedCacheTTL:         getEnvAsInt("SHARED_CACHE_TTL", 300000),         // 5 minutes
 		UserCacheTTL:           getEnvAsInt("USER_CACHE_TTL", 300000),           // 5 minutes
 		UserPermissionCacheTTL: getEnvAsInt("USER_PERMISSION_CACHE_TTL", 30000), // 30 seconds
