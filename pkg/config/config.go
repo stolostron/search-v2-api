@@ -20,6 +20,7 @@ type Config struct {
 	HubName                     string //Display Name of the cluster where ACM is deployed
 	API_SERVER_URL              string // address for Kubernetes API Server
 	AuthCacheTTL                int    // Time-to-live (milliseconds) of Authentication (TokenReview) cache.
+	AuthCacheMaxSize            int    // Maximum number of entries in the TokenReview cache. Default: 100
 	SharedCacheTTL              int    // Time-to-live (milliseconds) of common resources (shared across users) cache.
 	UserCacheTTL                int    // Time-to-live (milliseconds) of namespaced resources (specifc to users) cache.
 	ContextPath                 string
@@ -77,7 +78,8 @@ func new() *Config {
 	conf := &Config{
 		HubName:             getEnv("HUB_NAME", "global-hub"),
 		API_SERVER_URL:      getEnv("API_SERVER_URL", "https://kubernetes.default.svc"),
-		AuthCacheTTL:        getEnvAsInt("AUTH_CACHE_TTL", 60000),    // 1 minute
+		AuthCacheTTL:        getEnvAsInt("AUTH_CACHE_TTL", 60000), // 1 minute
+		AuthCacheMaxSize:    getEnvAsInt("AUTH_CACHE_MAX_SIZE", 100),
 		SharedCacheTTL:      getEnvAsInt("SHARED_CACHE_TTL", 300000), // 5 minutes
 		UserCacheTTL:        getEnvAsInt("USER_CACHE_TTL", 300000),   // 5 minutes
 		ContextPath:         getEnv("CONTEXT_PATH", "/searchapi"),
