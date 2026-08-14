@@ -30,7 +30,7 @@ func setupWatchToken(cache *Cache) *Cache {
 	if cache.tokenReviews == nil {
 		cache.tokenReviews = map[string]*tokenReviewCache{}
 	}
-	cache.tokenReviews["watch-token-123"] = &tokenReviewCache{
+	cache.tokenReviews[hashToken("watch-token-123")] = &tokenReviewCache{
 		meta:       cacheMetadata{updatedAt: time.Now()},
 		authClient: fake.NewSimpleClientset().AuthenticationV1(),
 		tokenReview: &authv1.TokenReview{
