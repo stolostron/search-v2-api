@@ -3,10 +3,12 @@ package rbac
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/stolostron/search-v2-api/pkg/config"
 	authv1 "k8s.io/api/authentication/v1"
 	fake "k8s.io/client-go/kubernetes/fake"
 )
@@ -42,7 +44,7 @@ func Test_IsValidToken_emptyCache(t *testing.T) {
 func Test_IsValidToken_usingCache(t *testing.T) {
 	// Initialize cache and set state.
 	mock_cache := newMockCache()
-	mock_cache.tokenReviews["1234567890"] = &tokenReviewCache{
+	mock_cache.tokenReviews[hashToken("1234567890")] = &tokenReviewCache{
 		meta: cacheMetadata{updatedAt: time.Now()},
 		tokenReview: &authv1.TokenReview{
 			Status: authv1.TokenReviewStatus{
@@ -67,10 +69,9 @@ func Test_IsValidToken_usingCache(t *testing.T) {
 func Test_IsValidToken_expiredCache(t *testing.T) {
 	// Initialize cache and set state to TokenReview updated 5 minutes ago.
 	mock_cache := newMockCache()
-	mock_cache.tokenReviews["1234567890-expired"] = &tokenReviewCache{
+	mock_cache.tokenReviews[hashToken("1234567890-expired")] = &tokenReviewCache{
 		authClient: fake.NewSimpleClientset().AuthenticationV1(),
 		meta:       cacheMetadata{updatedAt: time.Now().Add(time.Duration(-5) * time.Minute)},
-		token:      "1234567890-expired",
 		tokenReview: &authv1.TokenReview{
 			Status: authv1.TokenReviewStatus{
 				Authenticated: true,
@@ -89,8 +90,95 @@ func Test_IsValidToken_expiredCache(t *testing.T) {
 		t.Error("Received unexpected error from IsValidToken()", err)
 	}
 	// Verify that cache was updated within the last 1 millisecond.
-	if mock_cache.tokenReviews["1234567890-expired"].meta.updatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
+	if mock_cache.tokenReviews[hashToken("1234567890-expired")].meta.updatedAt.Before(time.Now().Add(time.Duration(-1) * time.Millisecond)) {
 		t.Error("Expected the cached TokenReview to be updated within the last millisecond.")
 	}
 
+}
+
+// Test_evictExpiredTokenReviews verifies that entries whose updatedAt is older
+// than the AuthCacheTTL are removed from the map the next time GetTokenReview
+// is called.
+func Test_evictExpiredTokenReviews(t *testing.T) {
+	mock_cache := newMockCache()
+
+	// Insert one expired entry and one fresh entry.
+	expiredHash := hashToken("expired-token")
+	freshHash := hashToken("fresh-token")
+	mock_cache.tokenReviews[expiredHash] = &tokenReviewCache{
+		authClient: mock_cache.authnClient,
+		meta:       cacheMetadata{updatedAt: time.Now().Add(-10 * time.Minute)},
+		tokenReview: &authv1.TokenReview{
+			Status: authv1.TokenReviewStatus{Authenticated: true},
+		},
+	}
+	mock_cache.tokenReviews[freshHash] = &tokenReviewCache{
+		authClient: mock_cache.authnClient,
+		meta:       cacheMetadata{updatedAt: time.Now()},
+		tokenReview: &authv1.TokenReview{
+			Status: authv1.TokenReviewStatus{Authenticated: true},
+		},
+	}
+
+	// Trigger a GetTokenReview call for any token — this runs eviction.
+	if _, err := mock_cache.GetTokenReview(context.TODO(), "trigger-eviction"); err != nil {
+		t.Fatalf("unexpected error from GetTokenReview: %v", err)
+	}
+
+	if _, stillPresent := mock_cache.tokenReviews[expiredHash]; stillPresent {
+		t.Error("Expected expired TokenReview entry to be evicted from the cache.")
+	}
+	if _, gone := mock_cache.tokenReviews[freshHash]; !gone {
+		t.Error("Expected fresh TokenReview entry to remain in the cache.")
+	}
+}
+
+// Test_tokenReviewCacheSizeCap verifies that the cache never exceeds
+// config.Cfg.AuthCacheMaxSize entries.
+func Test_tokenReviewCacheSizeCap(t *testing.T) {
+	mock_cache := newMockCache()
+	maxSize := config.Cfg.AuthCacheMaxSize
+
+	// Pre-fill the cache to exactly the maximum with entries that have a
+	// recent updatedAt so they are not expired during the test.
+	for i := 0; i < maxSize; i++ {
+		key := hashToken(fmt.Sprintf("existing-token-%d", i))
+		mock_cache.tokenReviews[key] = &tokenReviewCache{
+			authClient: mock_cache.authnClient,
+			meta:       cacheMetadata{updatedAt: time.Now()},
+			tokenReview: &authv1.TokenReview{
+				Status: authv1.TokenReviewStatus{Authenticated: true},
+			},
+		}
+	}
+
+	// Adding one more token should not grow the map beyond the cap.
+	if _, err := mock_cache.GetTokenReview(context.TODO(), "overflow-token"); err != nil {
+		t.Fatalf("unexpected error from GetTokenReview: %v", err)
+	}
+
+	if got := len(mock_cache.tokenReviews); got > maxSize {
+		t.Errorf("Expected tokenReviews cache size <= %d, got %d", maxSize, got)
+	}
+}
+
+// Test_hashToken_keyIsHashed asserts that GetTokenReview stores entries under the
+// SHA-256 hash of the token, not the raw token string.
+func Test_hashToken_keyIsHashed(t *testing.T) {
+	mock_cache := newMockCache()
+	token := "super-secret-bearer-token"
+
+	// Trigger a TokenReview — the fake client returns an unauthenticated result,
+	// but a cache entry is still created.
+	_, err := mock_cache.GetTokenReview(context.TODO(), token)
+	if err != nil {
+		t.Fatalf("unexpected error from GetTokenReview: %v", err)
+	}
+
+	if _, rawPresent := mock_cache.tokenReviews[token]; rawPresent {
+		t.Error("raw token must not be stored as a cache key")
+	}
+	if _, hashedPresent := mock_cache.tokenReviews[hashToken(token)]; !hashedPresent {
+		t.Error("SHA-256 hash of token must be used as the cache key")
+	}
 }
