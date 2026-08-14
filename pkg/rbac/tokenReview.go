@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -25,8 +26,15 @@ import (
 var hashTokenKey = newHashTokenKey()
 
 func newHashTokenKey() []byte {
+	return newHashTokenKeyFrom(rand.Reader)
+}
+
+// newHashTokenKeyFrom generates the HMAC key by reading from randReader.
+// Split out from newHashTokenKey so the CSPRNG-failure fallback path can be
+// exercised in tests without depending on crypto/rand actually failing.
+func newHashTokenKeyFrom(randReader io.Reader) []byte {
 	key := make([]byte, 32)
-	if _, err := rand.Read(key); err != nil {
+	if _, err := io.ReadFull(randReader, key); err != nil {
 		// Extremely unlikely: crypto/rand failed to read from the OS CSPRNG.
 		// Fall back to a fixed key so the process can still start; this only
 		// weakens the secrecy of the HMAC key, not the correctness of the cache.

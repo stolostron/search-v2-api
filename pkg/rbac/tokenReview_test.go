@@ -3,9 +3,11 @@ package rbac
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/stolostron/search-v2-api/pkg/config"
@@ -180,5 +182,22 @@ func Test_hashToken_keyIsHashed(t *testing.T) {
 	}
 	if _, hashedPresent := mock_cache.tokenReviews[hashToken(token)]; !hashedPresent {
 		t.Error("SHA-256 hash of token must be used as the cache key")
+	}
+}
+
+// Test_newHashTokenKeyFrom_fallback verifies that newHashTokenKeyFrom falls
+// back to a fixed, predictable key when the random source fails, rather than
+// panicking or returning a zero-length key. The success path is already
+// exercised by the hashTokenKey package-level var initialization.
+func Test_newHashTokenKeyFrom_fallback(t *testing.T) {
+	key := newHashTokenKeyFrom(iotest.ErrReader(errors.New("simulated CSPRNG failure")))
+
+	if len(key) != 32 {
+		t.Fatalf("Expected a 32-byte fallback key, got %d bytes", len(key))
+	}
+	for i, b := range key {
+		if b != byte(i) {
+			t.Errorf("Expected fallback key[%d] = %d, got %d", i, byte(i), b)
+		}
 	}
 }
