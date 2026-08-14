@@ -128,7 +128,7 @@ func (cache *Cache) GetUserDataCache(ctx context.Context,
 	// Get cluster scoped resource access for the user.
 	if err == nil {
 		klog.V(5).Info("No errors on namespacedresources present for: ",
-			cache.tokenReviews[clientToken].tokenReview.Status.User.Username)
+			userInfo.Username)
 		userDataCache, err = user.getClusterScopedResources(ctx, cache)
 	}
 	return userDataCache, err
