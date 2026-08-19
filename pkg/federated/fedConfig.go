@@ -32,13 +32,10 @@ type fedConfigCache struct {
 	fedConfig   []RemoteSearchService
 }
 
-var (
-	cachedFedConfig = fedConfigCache{
-		lastUpdated: time.Time{},
-		fedConfig:   []RemoteSearchService{},
-	}
-	cachedFedConfigLock sync.Mutex
-)
+var cachedFedConfig = fedConfigCache{
+	lastUpdated: time.Time{},
+	fedConfig:   []RemoteSearchService{},
+}
 
 var (
 	getKubeClient    = config.KubeClient       // Allows for mocking client in tests.
@@ -57,36 +54,16 @@ var (
 
 func getFederationConfig(ctx context.Context, request *http.Request) []RemoteSearchService {
 	cacheDuration := time.Duration(config.Cfg.Federation.ConfigCacheTTL) * time.Millisecond
-
-	cachedFedConfigLock.Lock()
 	if cachedFedConfig.lastUpdated.IsZero() || cachedFedConfig.lastUpdated.Add(cacheDuration).Before(time.Now()) {
 		klog.Infof("Refreshing federation config.")
 		cachedFedConfig.fedConfig = getFederationConfigFromSecret(ctx, request)
-		// Never persist a per-request bearer token in process-global state.
-		// The local-hub entry (index 0) is rebound to the current caller below.
-		if len(cachedFedConfig.fedConfig) > 0 {
-			cachedFedConfig.fedConfig[0].Token = ""
-		}
 		cachedFedConfig.lastUpdated = time.Now()
 	} else {
 		klog.Infof("Using cached federation config.")
 	}
-	// Return a per-request copy so concurrent callers cannot observe or
-	// mutate each other's credentials.
-	result := make([]RemoteSearchService, len(cachedFedConfig.fedConfig))
-	copy(result, cachedFedConfig.fedConfig)
-	cachedFedConfigLock.Unlock()
 
-	// The local-hub leg must always run as the CURRENT caller, never as the
-	// user who happened to populate the cache. Remote-hub entries use
-	// service-account tokens from the search-global secret and are safe to
-	// cache.
-	if len(result) > 0 {
-		result[0].Token = strings.TrimPrefix(request.Header.Get("Authorization"), "Bearer ")
-	}
-
-	logFederationConfig(result)
-	return result
+	logFederationConfig(cachedFedConfig.fedConfig)
+	return cachedFedConfig.fedConfig
 }
 
 func getLocalSearchApiConfig(ctx context.Context, request *http.Request) RemoteSearchService {
