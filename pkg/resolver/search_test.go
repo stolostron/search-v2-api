@@ -2358,3 +2358,101 @@ func Test_OrderBy_UidColumn(t *testing.T) {
 	assert.Contains(t, resolver.query, "\"uid\"", "Query should reference uid column directly")
 	assert.NotContains(t, resolver.query, "data->>'uid'", "Query should NOT extract uid from jsonb")
 }
+
+// Test_pruneOpenShiftGroupUsers tests that 'users' is removed only from OpenShift Groups.
+// Scenario: resources with different kind/apigroup combinations
+// Expected: 'users' is removed only for Group.user.openshift.io resources
+func Test_pruneOpenShiftGroupUsers(t *testing.T) {
+	tests := []struct {
+		name        string
+		kind        string
+		apigroup    string
+		users       []interface{}
+		expectUsers bool
+	}{
+		{
+			name:        "OpenShift Group has users removed",
+			kind:        "Group",
+			apigroup:    "user.openshift.io",
+			users:       []interface{}{"bob", "alice", "carol"},
+			expectUsers: false,
+		},
+		{
+			name:        "Non-Group kind keeps users",
+			kind:        "ConfigMap",
+			apigroup:    "user.openshift.io",
+			users:       []interface{}{"bob", "alice"},
+			expectUsers: true,
+		},
+		{
+			name:        "Group from another apigroup keeps users",
+			kind:        "Group",
+			apigroup:    "example.com",
+			users:       []interface{}{"bob", "alice"},
+			expectUsers: true,
+		},
+		{
+			name:        "OpenShift Group without users is a no-op",
+			kind:        "Group",
+			apigroup:    "user.openshift.io",
+			users:       nil,
+			expectUsers: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			data := map[string]interface{}{
+				"kind":      tc.kind,
+				"apigroup":  tc.apigroup,
+				"name":      "ldap-admins",
+				"userCount": float64(3),
+			}
+			if tc.users != nil {
+				data["users"] = tc.users
+			}
+
+			pruneOpenShiftGroupUsers(data)
+
+			if tc.expectUsers {
+				assert.Equal(t, tc.users, data["users"], "'users' must be left unchanged")
+			} else {
+				assert.NotContains(t, data, "users", "'users' must not be present on an OpenShift Group")
+			}
+			assert.Equal(t, "ldap-admins", data["name"], "other properties must be untouched")
+			assert.Equal(t, float64(3), data["userCount"], "other properties must be untouched")
+		})
+	}
+}
+
+// Test_ResolveItems_OmitsUsersFromOpenShiftGroup tests that resolveItems removes
+// the Group membership list before formatting the search response.
+// Scenario: an OpenShift Group row contains both 'users' and 'userCount'
+// Expected: 'users' is omitted from the result while 'userCount' and other properties remain
+func Test_ResolveItems_OmitsUsersFromOpenShiftGroup(t *testing.T) {
+	resolver, mockPool := newMockSearchResolver(t, &model.SearchInput{}, nil, rbac.UserData{}, nil)
+	mockRows := &MockRows{
+		columnHeaders: []string{"uid", "cluster", "data"},
+		mockData: []map[string]interface{}{{
+			"uid":     "local-cluster/group-1",
+			"cluster": "local-cluster",
+			"data": map[string]interface{}{
+				"kind":      "Group",
+				"apigroup":  "user.openshift.io",
+				"name":      "ldap-admins",
+				"userCount": float64(3),
+				"users":     []interface{}{"bob", "alice", "carol"},
+			},
+		}},
+	}
+	mockPool.EXPECT().Query(gomock.Any(), gomock.Any()).Return(mockRows, nil)
+
+	result, err := resolver.resolveItems()
+
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(result))
+	_, present := result[0]["users"]
+	assert.False(t, present, "'users' must not be returned for an OpenShift Group")
+	assert.Equal(t, "3", result[0]["userCount"], "'userCount' must still be returned")
+	assert.Equal(t, "ldap-admins", result[0]["name"], "other properties must be untouched")
+}

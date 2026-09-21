@@ -414,6 +414,15 @@ func (s *SearchResult) resolveUids() error {
 	}
 	return nil
 }
+
+// pruneOpenShiftGroupUsers removes the membership list from an OpenShift Group,
+// leaving a 'users' property on any other resource alone.
+func pruneOpenShiftGroupUsers(data map[string]interface{}) {
+	if data["kind"] == "Group" && data["apigroup"] == "user.openshift.io" {
+		delete(data, "users")
+	}
+}
+
 func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 	items := []map[string]interface{}{}
 	timer := prometheus.NewTimer(metrics.DBQueryDuration.WithLabelValues("resolveItemsFunc"))
@@ -450,6 +459,7 @@ func (s *SearchResult) resolveItems() ([]map[string]interface{}, error) {
 		if err != nil {
 			klog.Errorf("Error %s retrieving rows for query:%s", err.Error(), s.query)
 		}
+		pruneOpenShiftGroupUsers(data)
 		currItem := formatDataMap(data)
 		currItem["_uid"] = uid
 		currItem["cluster"] = cluster
