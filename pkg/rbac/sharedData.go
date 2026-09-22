@@ -141,11 +141,15 @@ func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[str
 		// If we have to modify cache.shared.ptCache, we have to first release the read lock, we can't wait for the defer
 		cache.shared.ptCache.lock.RUnlock()
 		// run query to refresh data
-		propTypes, err := cache.shared.getPropertyTypes(ctx)
+		// use singleFlight to ensure concurrent requests don't duplicate work from TOCTOU
+		res, err, _ := cache.singleFlight.Do("getPropertyTypes", func() (interface{}, error) {
+			return cache.shared.getPropertyTypes(ctx)
+		})
 		if err != nil {
 			klog.Errorf("Error retrieving property types. Error: [%+v]", err)
 			return map[string]string{}, err
 		} else {
+			propTypes := res.(map[string]string)
 			// Record property type for managedHub - for Global Search - https://issues.redhat.com/browse/ACM-10019
 			propTypes["managedHub"] = "string"
 			klog.V(6).Info("Successfully retrieved property types!")

@@ -8,6 +8,7 @@ import (
 	"github.com/driftprogramming/pgxpoolmock"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	db "github.com/stolostron/search-v2-api/pkg/database"
+	"golang.org/x/sync/singleflight"
 	authnv1 "k8s.io/client-go/kubernetes/typed/authentication/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -27,6 +28,7 @@ type Cache struct {
 	pool              pgxpoolmock.PgxPool // Database client
 	restConfig        *rest.Config
 	dbConnInitialized bool
+	singleFlight      singleflight.Group
 }
 
 func (c *Cache) GetDbConnInitialized() bool {
