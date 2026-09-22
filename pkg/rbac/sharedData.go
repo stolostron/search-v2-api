@@ -109,6 +109,7 @@ func (shared *SharedData) getPropertyTypes(ctx context.Context) (map[string]stri
 	// NOTE: we will have to do this for any property that is not in the data field,
 	// especially if new columns are added to the resources table.
 	propTypeMap["cluster"] = "string"
+	propTypeMap["managedHub"] = "string"
 
 	klog.Info("Successfully fetched property types from the database.")
 	//cache results:
@@ -150,8 +151,6 @@ func (cache *Cache) GetPropertyTypes(ctx context.Context, refresh bool) (map[str
 			return map[string]string{}, err
 		} else {
 			propTypes := res.(map[string]string)
-			// Record property type for managedHub - for Global Search - https://issues.redhat.com/browse/ACM-10019
-			propTypes["managedHub"] = "string"
 			klog.V(6).Info("Successfully retrieved property types!")
 
 			return propTypes, nil

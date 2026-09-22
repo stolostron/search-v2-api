@@ -3,6 +3,7 @@ package rbac
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -669,5 +670,64 @@ func Test_GetPropertyTypes_LockUsage(t *testing.T) {
 	// Verify managedHub is added in refresh path
 	if propTypes2["managedHub"] != "string" {
 		t.Error("Expected managedHub property to be added on refresh")
+	}
+}
+
+func Test_GetPropertyTypes_ConcurrentRefresh(t *testing.T) {
+	ctx := context.Background()
+	mockpool, mock_cache := mockResourcesListCache(t)
+
+	columns := []string{"key", "datatype"}
+	pgxRows := pgxpoolmock.NewRows(columns).
+		AddRow("kind", "string").
+		AddRow("name", "string").
+		ToPgxRows()
+
+	mockpool.EXPECT().Query(gomock.Any(),
+		gomock.Eq(`SELECT DISTINCT key, CASE  WHEN (jsonb_typeof(value) = 'string' AND value::text ~ '^"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}') THEN 'timestamp' ELSE jsonb_typeof(value) END AS "datatype" FROM "search"."resources", jsonb_each("data")`),
+		gomock.Eq([]interface{}{}),
+	).Return(pgxRows, nil).Times(1)
+
+	const numGoroutines = 50
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+	ready := make(chan struct{})
+	done := make(chan error, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			wg.Done()
+			<-ready
+			propTypes, err := mock_cache.GetPropertyTypes(ctx, true)
+			if err != nil {
+				done <- fmt.Errorf("error refreshing property types: %v", err)
+				return
+			}
+			if propTypes["managedHub"] != "string" {
+				done <- fmt.Errorf("expected managedHub to be present")
+				return
+			}
+			if propTypes["cluster"] != "string" {
+				done <- fmt.Errorf("expected cluster to be present")
+				return
+			}
+			done <- nil
+		}()
+	}
+
+	// wait for all goroutines to be started, block on ready until that happens, then launch all GetPropertyType funcs
+	wg.Wait()
+	close(ready)
+
+	timeout := time.After(2 * time.Second)
+	for i := 0; i < numGoroutines; i++ {
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Error(err)
+			}
+		case <-timeout:
+			t.Fatal("timeout waiting for concurrent refresh goroutines")
+		}
 	}
 }
