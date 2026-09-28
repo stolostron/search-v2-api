@@ -103,3 +103,65 @@ func Test_cacheValidation_managedClusterDeleted(t *testing.T) {
 	mock_cache.managedClusterDeleted(mock_managedCluster)
 	assert.Equal(t, map[string]struct{}{"b": {}}, mock_cache.shared.managedClusters)
 }
+
+// Reproduces the AB-BA deadlock between namespaceDeleted and GetUserDataCache->getNamespaces.
+//
+// namespaceDeleted acquires: nsCache.lock -> usersLock  (cacheValidation.go:160,173)
+// GetUserDataCache acquires: usersLock -> getNamespaces -> nsCache.lock  (userData.go:94,450 -> sharedData.go:272)
+//
+// If namespaceDeleted holds nsCache.lock while waiting for usersLock,
+// getNamespaces cannot acquire nsCache.lock — classic AB-BA deadlock.
+func Test_namespaceDeleted_DeadlockWithGetNamespaces(t *testing.T) {
+	cache := initMockCache()
+
+	nsObj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Namespace",
+			"metadata": map[string]interface{}{
+				"name": "a",
+			},
+		},
+	}
+
+	// Simulate GetUserDataCache holding usersLock (userData.go:94)
+	cache.usersLock.Lock()
+
+	started := make(chan struct{})
+	getNamespacesDone := make(chan struct{})
+	deleteDone := make(chan struct{})
+
+	// Goroutine A: namespaceDeleted acquires nsCache.lock, then tries usersLock
+	go func() {
+		close(started)
+		cache.namespaceDeleted(nsObj)
+		close(deleteDone)
+	}()
+
+	// Let goroutine A acquire nsCache.lock before we start goroutine B
+	<-started
+	time.Sleep(50 * time.Millisecond)
+
+	// Goroutine B: getNamespaces tries to acquire nsCache.lock.
+	// This is the path GetUserDataCache takes while holding usersLock.
+	go func() {
+		_, _ = cache.shared.getNamespaces(context.Background())
+		close(getNamespacesDone)
+	}()
+
+	// If there's no deadlock, getNamespaces completes because
+	// namespaceDeleted releases nsCache.lock before acquiring usersLock.
+	// If there IS a deadlock, both goroutines block forever:
+	//   A holds nsCache.lock, waits usersLock (held by us)
+	//   B waits nsCache.lock (held by A)
+	select {
+	case <-getNamespacesDone:
+		cache.usersLock.Unlock()
+		<-deleteDone
+	case <-time.After(3 * time.Second):
+		cache.usersLock.Unlock()
+		t.Fatal("AB-BA deadlock: namespaceDeleted holds nsCache.lock waiting for usersLock, " +
+			"getNamespaces waits for nsCache.lock while usersLock is held by GetUserDataCache")
+	}
+}
+
