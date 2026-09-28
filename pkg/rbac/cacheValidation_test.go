@@ -481,7 +481,7 @@ func Test_namespaceDeleted_DeadlockWithGetNamespaces(t *testing.T) {
 	// Goroutine B: getNamespaces tries to acquire nsCache.lock.
 	// This is the path GetUserDataCache takes while holding usersLock.
 	go func() {
-		cache.shared.getNamespaces(context.Background())
+		_, _ = cache.shared.getNamespaces(context.Background())
 		close(getNamespacesDone)
 	}()
 
