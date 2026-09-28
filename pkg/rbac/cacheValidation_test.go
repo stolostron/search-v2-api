@@ -4,6 +4,7 @@ package rbac
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
@@ -164,4 +165,3 @@ func Test_namespaceDeleted_DeadlockWithGetNamespaces(t *testing.T) {
 			"getNamespaces waits for nsCache.lock while usersLock is held by GetUserDataCache")
 	}
 }
-
