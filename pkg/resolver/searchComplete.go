@@ -95,16 +95,20 @@ func (s *SearchCompleteResult) searchCompleteQuery(ctx context.Context) {
 		}
 
 		// SELECT CLAUSE
+		// NOTE: Do not add ORDER BY for typeahead queries.
+		// PostgreSQL must sort all distinct values before LIMIT when ORDER BY is present,
+		// which is prohibitively slow on large datasets (see ACM-7830). We sort in-memory
+		// in getKeys() after reading the result set.
 		switch s.property {
 		case "cluster":
-			selectDs = ds.SelectDistinct(goqu.C(s.property)).Order(goqu.C(s.property).Asc())
+			selectDs = ds.SelectDistinct(goqu.C(s.property))
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
 			whereDs = append(whereDs, goqu.C(s.property).IsNotNull(),
 				goqu.C(s.property).Neq("")) // remove empty strings from results
 		default:
 			// "->" - get data as json object
 			// "->>" - get data as string
-			selectDs = ds.SelectDistinct(goqu.L(`"data"->?`, s.property)).Order(goqu.L(`"data"->?`, s.property).Asc())
+			selectDs = ds.SelectDistinct(goqu.L(`"data"->?`, s.property))
 			//Adding notNull clause to filter out NULL values and ORDER by sort results
 			whereDs = append(whereDs, goqu.L(`"data"->?`, s.property).IsNotNull())
 		}
