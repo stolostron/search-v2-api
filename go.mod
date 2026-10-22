@@ -14,6 +14,7 @@ require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/stolostron/cluster-lifecycle-api v0.0.0-20251215020237-f501ebc673a5
 	github.com/vektah/gqlparser/v2 v2.5.30
+	golang.org/x/sync v0.21.0
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 )
@@ -49,7 +50,6 @@ require (
 	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/oauth2 v0.28.0 // indirect
-	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/term v0.44.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
 	google.golang.org/protobuf v1.36.9 // indirect
@@ -67,7 +67,7 @@ require (
 	github.com/agnivade/levenshtein v1.2.1 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
-	github.com/gorilla/mux v1.8.0
+	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
