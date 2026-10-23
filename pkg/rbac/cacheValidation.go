@@ -148,7 +148,6 @@ func (c *Cache) namespaceAdded(obj *unstructured.Unstructured) {
 func (c *Cache) namespaceDeleted(obj *unstructured.Unstructured) {
 	// Delete from Namespaces shared cache.
 	c.shared.nsCache.lock.Lock()
-	defer c.shared.nsCache.lock.Unlock()
 	ns := obj.GetName()
 	newNamespaces := make([]string, 0)
 	for _, n := range c.shared.namespaces {
@@ -158,6 +157,7 @@ func (c *Cache) namespaceDeleted(obj *unstructured.Unstructured) {
 	}
 	c.shared.namespaces = newNamespaces
 	c.shared.nsCache.updatedAt = time.Now()
+	c.shared.nsCache.lock.Unlock()
 
 	// Delete from UserData cache
 	c.usersLock.Lock()
