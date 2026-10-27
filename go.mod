@@ -16,7 +16,7 @@ require (
 	github.com/vektah/gqlparser/v2 v2.5.30
 	golang.org/x/sync v0.21.0
 	k8s.io/klog/v2 v2.140.0
-	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
+	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
 )
 
 require (
