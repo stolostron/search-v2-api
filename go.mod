@@ -13,7 +13,7 @@ require (
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/prometheus/client_golang v1.25.0
 	github.com/stolostron/cluster-lifecycle-api v0.0.0-20251215020237-f501ebc673a5
-	github.com/vektah/gqlparser/v2 v2.5.30
+	github.com/vektah/gqlparser/v2 v2.5.64
 	golang.org/x/sync v0.23.0
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
@@ -64,7 +64,7 @@ require (
 )
 
 require (
-	github.com/agnivade/levenshtein v1.2.1 // indirect
+	github.com/agnivade/levenshtein v1.2.2 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/gorilla/mux v1.8.1
