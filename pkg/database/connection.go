@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v4"
-	pgxpool "github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5"
+	pgxpool "github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stolostron/search-v2-api/pkg/config"
 	"github.com/stolostron/search-v2-api/pkg/metrics"
 	"k8s.io/klog/v2"
