@@ -14,7 +14,7 @@ require (
 	github.com/prometheus/client_golang v1.25.0
 	github.com/stolostron/cluster-lifecycle-api v0.0.0-20251215020237-f501ebc673a5
 	github.com/vektah/gqlparser/v2 v2.5.64
-	golang.org/x/sync v0.23.0
+	golang.org/x/sync v0.24.0
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 )
