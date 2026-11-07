@@ -10,7 +10,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgconn v1.14.3
 	github.com/jackc/pgproto3/v2 v2.3.3
-	github.com/jackc/pgx/v4 v4.18.3
+	github.com/jackc/pgx/v5 v5.0.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/stolostron/cluster-lifecycle-api v0.0.0-20251215020237-f501ebc673a5
 	github.com/vektah/gqlparser/v2 v2.5.64
@@ -33,6 +33,8 @@ require (
 	github.com/google/gnostic-models v0.6.9 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
+	github.com/jackc/pgx/v4 v4.12.1-0.20210724153913-640aa07df17c // indirect
+	github.com/jackc/puddle/v2 v2.0.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
